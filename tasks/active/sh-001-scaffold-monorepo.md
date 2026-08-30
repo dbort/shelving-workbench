@@ -1,8 +1,8 @@
 ---
 id: sh-001
 title: "Scaffold monorepo with hardened CI and reproducible env (M0)"
-current_agent: user
-current_phase: user_signoff
+current_agent: implementer
+current_phase: implementation
 review_rejections: 0
 ---
 
@@ -20,8 +20,8 @@ task supersedes sh-002, which is abandoned.
 
 ## Status
 - [x] Planning
-- [x] Implementation
-- [x] Review
+- [ ] Implementation
+- [ ] Review
 - [ ] User sign-off
 
 ## Must Have
@@ -62,6 +62,14 @@ task supersedes sh-002, which is abandoned.
 - [x] `.github/workflows/scorecard.yml` runs the OpenSSF Scorecard action (SHA-pinned) on `branch_protection_rule`, a weekly `schedule`, and `push` to `main`; its `permissions` are limited to `security-events: write`, `id-token: write`, `contents: read`; it uploads SARIF results.
 - [x] `.github/dependabot.yml` enables the `github-actions` ecosystem (weekly) and the `pip` ecosystem (weekly) with a comment noting pixi is unsupported by Dependabot and `pixi.lock` is refreshed manually via `pixi update`.
 
+### Workflow linting
+- [ ] `tools/lint-workflows.sh` (`set -euo pipefail`) runs, from one invocation and failing on any sub-failure: `actionlint` over `.github/workflows/`; `zizmor` (offline mode) over `.github/workflows/`; an offline pin-format check asserting every `uses:` in `.github/workflows/*.yml` matches `owner/repo@<40-hex> # vX.Y.Z`; and `check-jsonschema --builtin-schema vendor.dependabot` over `.github/dependabot.yml`.
+- [ ] `pixi.toml` provides `actionlint`, `zizmor`, `check-jsonschema`, and `shellcheck` (all conda-forge) and a `[tasks]` entry `lint-workflows` whose body is exactly `tools/lint-workflows.sh`.
+- [ ] `.github/workflows/ci.yml` has a third job `workflows`: `runs-on: ubuntu-24.04`, `permissions: {contents: read}`, `step-security/harden-runner` (audit) first, SHA-pinned `actions/checkout` (`persist-credentials: false`) and `prefix-dev/setup-pixi` (lock frozen), then `pixi run lint-workflows`.
+- [ ] `pixi run lint-workflows` exits 0 against this repo's own workflow files; any zizmor finding is either fixed or suppressed with an inline `# zizmor: ignore[<rule>]` and a one-line reason.
+- [ ] `docs/github-actions-hardening.md` gains a section stating `pixi run lint-workflows` (`tools/lint-workflows.sh`) enforces this standard in CI, listing what each of the four checks covers.
+- [ ] `README.md` lists `pixi run lint-workflows` alongside the test tiers.
+
 ### Docs
 - [x] `docs/github-actions-hardening.md` documents the standard this task establishes (SHA pinning, `permissions: {}` + per-job grants, `pull_request` never `pull_request_target`, the injection rule, Dependabot coverage, harden-runner, Scorecard, pinned runner images) as the rule for all future workflow changes.
 - [x] `README.md` documents: `tools/install-deps.sh` (installs a pinned pixi for the host arch if absent, sets up the venv and the pixi env; links pixi's docs) as the primary setup; the bare `python -m venv` + `pip install -e .[dev]` path as the minimal core-only alternative; and `./test.sh --fast` / `--full` (or `pixi run fast` / `pixi run full`) as the tier interface, including the `freecadcmd` requirement for a bare `--full`.
@@ -69,12 +77,25 @@ task supersedes sh-002, which is abandoned.
 
 ## Frontier Advice
 
-RESUME NOTE: the `sh-001` branch already carries a first implementation pass
-(minimal scaffold, un-hardened `ci.yml` using micromamba, README with
-`pip install -e .[dev]` as the primary path, no pixi). Treat every Execution
-Plan step as "make the tree match the Must Have," modifying or replacing those
-existing files rather than assuming a clean tree. `tools/bootstrap-dev.sh` was
+RESUME NOTE: the `sh-001` branch already carries two full implementation passes
+plus a review approval and a `doc-hygiene` commit. The tree already satisfies
+every Must Have except the new **Workflow linting** section. Treat this pass as
+additive: build `tools/lint-workflows.sh`, wire it into `pixi.toml` and a third
+`ci.yml` job, document it, and leave everything already-checked alone unless
+`lint-workflows.sh` surfaces a real defect in it. `tools/bootstrap-dev.sh` was
 never created; do not add it.
+
+WORKFLOW LINTING: `tools/lint-workflows.sh` is the single entry point (also
+exposed as `pixi run lint-workflows`). It runs four checks, each fatal:
+`actionlint .github/workflows` (schema + `run:` shellcheck; needs `shellcheck`
+on PATH, which the pixi env provides), `zizmor --offline .github/workflows`
+(Actions security audit), an offline `grep`/regex pin check over
+`.github/workflows/*.yml` (every `uses:` is `owner/repo@<40-hex> # vX.Y.Z`), and
+`check-jsonschema --builtin-schema vendor.dependabot .github/dependabot.yml`.
+Run `zizmor` offline for determinism; do not pass a GitHub token. If `zizmor`
+flags something on the existing hardened workflows, prefer fixing it; only
+suppress with `# zizmor: ignore[rule]` plus a reason when the finding is a
+confirmed false positive.
 
 CRITICAL scope guard: STRUCTURE, ENVIRONMENT, and CI only. Do not implement the
 split-tree, spacing solver, carcass expansion, material catalog, scripted
@@ -200,4 +221,6 @@ action-SHA lookup or a conda solve that could not run.
 
 - [x] **Step 12** (`README.md`, `.claude/docs/friction-log.md`): `README.md` per Must Have. Remove the `2026-08-30` toolchain friction-log entry.
 
-- [x] **Step 13** (verification, no new files): Confirm `docs/roadmap.md` M0 reads `Task sh-001`; grep the tree to confirm no `ShelvingUnit`/solver/expansion/catalog/editor code; run `./test.sh --fast` green.
+- [ ] **Step 13** (`tools/lint-workflows.sh`, `pixi.toml`, `.github/workflows/ci.yml`, `docs/github-actions-hardening.md`, `README.md`): Create `tools/lint-workflows.sh` per the WORKFLOW LINTING Frontier Advice (four fatal checks, `set -euo pipefail`, `chmod +x`). Add `actionlint`, `zizmor`, `check-jsonschema`, `shellcheck` to `pixi.toml` `[dependencies]` and a `[tasks] lint-workflows = "tools/lint-workflows.sh"`; re-run `pixi install` and commit the updated `pixi.lock`. Add the `workflows` job to `ci.yml` (ubuntu-24.04, `contents: read`, harden-runner first, pinned `checkout` + `setup-pixi`, `pixi run lint-workflows`). Run `pixi run lint-workflows` and resolve every finding against the repo's own workflows. Add the enforcement section to `docs/github-actions-hardening.md` and the `pixi run lint-workflows` line to `README.md`.
+
+- [ ] **Step 14** (verification, no new files): Confirm `docs/roadmap.md` M0 reads `Task sh-001`; grep the tree to confirm no `ShelvingUnit`/solver/expansion/catalog/editor code; run `./test.sh --fast` green and `pixi run lint-workflows` green.
