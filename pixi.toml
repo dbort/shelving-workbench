@@ -1,0 +1,25 @@
+[workspace]
+name = "shelving-workbench"
+channels = ["conda-forge"]
+# CI runners are x86_64; the dev VM is aarch64. The lock must resolve for both.
+platforms = ["linux-64", "linux-aarch64"]
+
+[dependencies]
+freecad = "1.0.*"
+python = "3.12.*"
+ruff = "*"
+mypy = "*"
+pytest = "*"
+# Workflow-lint toolchain. shellcheck is here because actionlint shells out to
+# it to lint `run:` script bodies.
+actionlint = "*"
+zizmor = "*"
+check-jsonschema = "*"
+shellcheck = "*"
+
+# Thin wrappers over the authoritative harness. test.sh owns all tier logic;
+# these exist only so `pixi run fast` / `pixi run full` work inside the env.
+[tasks]
+fast = "./test.sh --fast"
+full = "./test.sh --full"
+lint-workflows = "tools/lint-workflows.sh"

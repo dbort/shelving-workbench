@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<package format="1" xmlns="https://wiki.freecad.org/Package_Metadata">
+  <name>Shelving</name>
+  <description>Parametric shelving workbench: design a unit as a flat front elevation and expand it into individually editable 3D plank solids.</description>
+  <version>0.0.1</version>
+  <date>2026-08-30</date>
+
+  <maintainer email="freecad@dbort.com">Dave Bort</maintainer>
+  <license file="LICENSE">MIT</license>
+
+  <url type="repository" branch="main">https://github.com/dbort/shelving-workbench</url>
+  <url type="bugtracker">https://github.com/dbort/shelving-workbench/issues</url>
+
+  <content>
+    <workbench>
+      <classname>ShelvingWorkbench</classname>
+      <subdirectory>freecad/shelving/</subdirectory>
+      <icon>freecad/shelving/resources/shelving.svg</icon>
+    </workbench>
+  </content>
+
+  <freecadmin>1.0</freecadmin>
+</package>

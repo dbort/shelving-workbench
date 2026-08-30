@@ -1,0 +1,15 @@
+# Dependabot does not support pixi, so pixi.lock is refreshed by hand with
+# `pixi update` (see docs/github-actions-hardening.md). The `pip` ecosystem
+# below tracks only the pyproject `dev` extra, which feeds the FreeCAD-free
+# path and CI's fast leg.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"

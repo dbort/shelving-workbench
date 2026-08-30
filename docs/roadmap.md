@@ -20,7 +20,7 @@ to `main`, never by the task's own implementation or review steps.
 
 ## M0 — Scaffold
 
-**Status:** Task sh-001
+**Status:** Done sh-001
 
 Monorepo skeleton, MIT `LICENSE`, `package.xml`, `test.sh` with both
 tiers wired, GitHub Actions running the fast tier and a full-tier job that
