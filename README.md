@@ -54,8 +54,8 @@ This skips pixi and FreeCAD entirely, so the full test tier is unavailable.
 The harness is `./test.sh`, with two tiers:
 
 ```sh
-./test.sh --full    # or: pixi run full   -- run everything
-./test.sh --fast    # or: pixi run fast   -- the FreeCAD-free subset
+./test.sh --full    # run everything          (alias: pixi run full)
+./test.sh --fast    # the FreeCAD-free subset  (alias: pixi run fast)
 ```
 
 `./test.sh --full` (equivalently `pixi run full`) is the single "run
