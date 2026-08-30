@@ -75,26 +75,3 @@ jobs:
           frozen: true
       - name: Full tier
         run: pixi run full
-
-  workflows:
-    # Lints .github/workflows/ against the hardening standard: actionlint,
-    # zizmor (offline), the uses:-pin format check, and the Dependabot schema.
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-    steps:
-      - name: Harden the runner
-        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
-        with:
-          egress-policy: audit
-      - name: Check out
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Set up pixi
-        uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2
-        with:
-          # Fail the job on a stale or missing pixi.lock instead of re-solving.
-          frozen: true
-      - name: Lint workflows
-        run: pixi run lint-workflows

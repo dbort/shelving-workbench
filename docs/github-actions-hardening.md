@@ -108,10 +108,13 @@ Scorecard dataset. Treat a dropping score as a regression to investigate.
 
 ## Enforcement: `pixi run lint-workflows`
 
-`tools/lint-workflows.sh` (exposed as `pixi run lint-workflows`, and run in
-CI by the `workflows` job in `ci.yml`) checks the rules above that can be
-machine-verified. It runs four checks from a single invocation; all four
-run every time and any failure fails the job:
+`tools/lint-workflows.sh` checks the rules above that can be
+machine-verified. `pixi run lint-workflows` is the standalone shortcut for
+running it by itself. In CI it runs as part of the `full` job: `pixi run
+full` invokes `./test.sh --full`, which calls `tools/lint-workflows.sh`
+after the fast-tier steps and before the FreeCAD smoke test. There is no
+dedicated workflow-lint job. It runs four checks from a single invocation;
+all four run every time and any failure fails the job:
 
 - **`actionlint`** over `.github/workflows/`: workflow-schema validation
   plus `shellcheck` on every `run:` script body. `shellcheck` comes from

@@ -54,25 +54,34 @@ This skips pixi and FreeCAD entirely, so the full test tier is unavailable.
 The harness is `./test.sh`, with two tiers:
 
 ```sh
-./test.sh --fast    # or: pixi run fast
-./test.sh --full    # or: pixi run full
+./test.sh --full    # or: pixi run full   -- run everything
+./test.sh --fast    # or: pixi run fast   -- the FreeCAD-free subset
 ```
 
-A third entry point, `pixi run lint-workflows` (`tools/lint-workflows.sh`),
-lints `.github/workflows/` against the hardening standard with `actionlint`,
-`zizmor`, a `uses:`-pin format check, and the Dependabot schema. It needs the
-pixi environment (it is not part of either `test.sh` tier) and also runs in CI.
-See [`docs/github-actions-hardening.md`](docs/github-actions-hardening.md).
+`./test.sh --full` (equivalently `pixi run full`) is the single "run
+everything" command. It is a strict superset of `--fast`: it runs the entire
+`--fast` sequence, then the workflow-hardening lint, then the FreeCAD smoke
+test, aborting at the first failure.
 
 - **`--fast`** runs a toolchain preflight, then `ruff check`,
   `ruff format --check`, `mypy` (strict, over `shelving_core`), the
   vendored-core drift check, and `pytest`. No FreeCAD. If `ruff`, `mypy`, or
   `pytest` is missing it names them, points at `tools/install-deps.sh`, and
   exits 3.
-- **`--full`** runs a headless smoke test through `freecadcmd` and requires
-  FreeCAD 1.0 or later on `PATH` (the pixi environment provides it; a
-  standalone FreeCAD install also works). It hard-fails with a non-zero exit
-  when `freecadcmd` is not found rather than skipping.
+- **`--full`** runs the `--fast` sequence, then `tools/lint-workflows.sh`,
+  then a headless smoke test through `freecadcmd`. Its preflight additionally
+  requires `actionlint`, `zizmor`, `check-jsonschema`, and `shellcheck` on
+  `PATH` (exit 3 if any is missing). It needs FreeCAD 1.0 or later on `PATH`
+  (the pixi environment provides it; a standalone FreeCAD install also works)
+  and hard-fails with a non-zero exit when `freecadcmd` is not found rather
+  than skipping.
+
+`pixi run lint-workflows` (`tools/lint-workflows.sh`) is a granular shortcut
+that runs just the workflow-hardening lint over `.github/workflows/`:
+`actionlint`, `zizmor`, a `uses:`-pin format check, and the Dependabot schema.
+It needs the pixi environment. `./test.sh --full` runs the same script, and CI
+reaches it through the `full` job. See
+[`docs/github-actions-hardening.md`](docs/github-actions-hardening.md).
 
 `pixi run fast` / `pixi run full` are thin wrappers that call `./test.sh` with
 the same flag from inside the pixi environment.
