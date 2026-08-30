@@ -1,8 +1,8 @@
 ---
 id: sh-001
 title: "Scaffold shelving-workbench monorepo (M0)"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 0
 ---
 
@@ -17,26 +17,26 @@ from a repo that lints, type-checks, tests, and loads in FreeCAD.
 
 ## Status
 - [x] Planning
-- [ ] Implementation
+- [x] Implementation
 - [ ] Review
 - [ ] User sign-off
 
 ## Must Have
-- [ ] `./test.sh --fast` exits 0 and runs, in order: `ruff check .`, `ruff format --check .`, `mypy` (strict, `shelving_core` only), the vendor-drift check, `pytest`.
-- [ ] `./test.sh --full` exits non-zero with a clear message when `freecadcmd` is not on `PATH`; when it is present, it runs a `freecadcmd` script that imports `freecad.shelving` and the vendored core and exits 0.
-- [ ] `ruff check .` and `ruff format --check .` report no issues.
-- [ ] `mypy` in strict mode over `shelving_core` reports no errors; `freecad/` is excluded from type-checking.
-- [ ] `pytest` collects at least two tests and all pass.
-- [ ] No file under `shelving_core/` contains `import FreeCAD`, `from FreeCAD`, `import FreeCADGui`, or `from FreeCADGui`; a pytest asserts this by scanning source and by importing every `shelving_core` submodule and checking `FreeCAD`/`FreeCADGui` never entered `sys.modules`.
-- [ ] `freecad/shelving/vendor/shelving_core/` exists and its contents byte-match `shelving_core/` with `tests/` and `__pycache__/` excluded; `tools/vendor-core.sh` regenerates it and a drift-check step (used by `--fast`) fails when it is stale.
-- [ ] `freecad/shelving/__init__.py` and `freecad/shelving/init_gui.py` exist; `init_gui.py` defines a `Gui.Workbench` subclass (`MenuText`, `ToolTip`, `Icon`, `Initialize`, `GetClassName` returning `"Gui::PythonWorkbench"`) and calls `Gui.addWorkbench(...)`, guarded so module import under `freecadcmd` (no GUI) does not raise.
-- [ ] `package.xml` is valid XML, Addon Manager `content` type `workbench`, `name` Shelving, `version` 0.0.1, `maintainer` email `freecad@dbort.com`, `license` MIT, repository url `https://github.com/dbort/shelving-workbench`, and declares `freecadmin` 1.0.
-- [ ] `LICENSE` is the MIT license text, holder `Dave Bort`, year 2026; `pyproject.toml` license and author metadata match.
-- [ ] `pyproject.toml` sets `requires-python = ">=3.11"`, builds `shelving_core`, and defines a `dev` extra with `ruff`, `mypy`, `pytest`.
-- [ ] `README.md` documents the dev setup (`pip install -e .[dev]`, `./test.sh --fast`) and an explicit `freecadcmd` (FreeCAD 1.0+) dependency for `./test.sh --full`, with a link to FreeCAD install instructions.
-- [ ] `.github/workflows/ci.yml` defines two jobs: one runs `./test.sh --fast` on a plain Python 3.11 setup; the other installs FreeCAD 1.0 from conda-forge (providing `freecadcmd`) and runs `./test.sh --full`.
-- [ ] No `ShelvingUnit`, solver, expansion, catalog, or task-panel code exists anywhere in the tree.
-- [ ] The `docs/roadmap.md` M0 **Status** line reads `Done sh-001`.
+- [x] `./test.sh --fast` exits 0 and runs, in order: `ruff check .`, `ruff format --check .`, `mypy` (strict, `shelving_core` only), the vendor-drift check, `pytest`.
+- [x] `./test.sh --full` exits non-zero with a clear message when `freecadcmd` is not on `PATH`; when it is present, it runs a `freecadcmd` script that imports `freecad.shelving` and the vendored core and exits 0.
+- [x] `ruff check .` and `ruff format --check .` report no issues.
+- [x] `mypy` in strict mode over `shelving_core` reports no errors; `freecad/` is excluded from type-checking.
+- [x] `pytest` collects at least two tests and all pass.
+- [x] No file under `shelving_core/` contains `import FreeCAD`, `from FreeCAD`, `import FreeCADGui`, or `from FreeCADGui`; a pytest asserts this by scanning source and by importing every `shelving_core` submodule and checking `FreeCAD`/`FreeCADGui` never entered `sys.modules`.
+- [x] `freecad/shelving/vendor/shelving_core/` exists and its contents byte-match `shelving_core/` with `tests/` and `__pycache__/` excluded; `tools/vendor-core.sh` regenerates it and a drift-check step (used by `--fast`) fails when it is stale.
+- [x] `freecad/shelving/__init__.py` and `freecad/shelving/init_gui.py` exist; `init_gui.py` defines a `Gui.Workbench` subclass (`MenuText`, `ToolTip`, `Icon`, `Initialize`, `GetClassName` returning `"Gui::PythonWorkbench"`) and calls `Gui.addWorkbench(...)`, guarded so module import under `freecadcmd` (no GUI) does not raise.
+- [x] `package.xml` is valid XML, Addon Manager `content` type `workbench`, `name` Shelving, `version` 0.0.1, `maintainer` email `freecad@dbort.com`, `license` MIT, repository url `https://github.com/dbort/shelving-workbench`, and declares `freecadmin` 1.0.
+- [x] `LICENSE` is the MIT license text, holder `Dave Bort`, year 2026; `pyproject.toml` license and author metadata match.
+- [x] `pyproject.toml` sets `requires-python = ">=3.11"`, builds `shelving_core`, and defines a `dev` extra with `ruff`, `mypy`, `pytest`.
+- [x] `README.md` documents the dev setup (`pip install -e .[dev]`, `./test.sh --fast`) and an explicit `freecadcmd` (FreeCAD 1.0+) dependency for `./test.sh --full`, with a link to FreeCAD install instructions.
+- [x] `.github/workflows/ci.yml` defines two jobs: one runs `./test.sh --fast` on a plain Python 3.11 setup; the other installs FreeCAD 1.0 from conda-forge (providing `freecadcmd`) and runs `./test.sh --full`.
+- [x] No `ShelvingUnit`, solver, expansion, catalog, or task-panel code exists anywhere in the tree.
+- [x] The `docs/roadmap.md` M0 **Status** line reads `Done sh-001`.
 
 ## Frontier Advice
 
@@ -117,18 +117,18 @@ CLAUDE.md.
 
 ## Execution Plan
 
-- [ ] **Step 1** (`pyproject.toml`, `LICENSE`, `README.md`, `.gitignore`): Create root project metadata. `pyproject.toml`: `hatchling` backend, `[project]` with `name = "shelving-workbench"`, `version = "0.0.1"`, `requires-python = ">=3.11"`, author `Dave Bort <freecad@dbort.com>`, `license = {text = "MIT"}`, `[project.optional-dependencies] dev = ["ruff", "mypy", "pytest"]`, `[tool.hatch.build.targets.wheel] packages = ["shelving_core"]`, plus `[tool.ruff]` (target `py311`, select `E`,`F`,`I`,`UP`,`B`) and `[tool.mypy]` (`strict = true`, `files = ["shelving_core"]`, `exclude = ["freecad/"]`). `LICENSE`: MIT text, `Copyright (c) 2026 Dave Bort`. `README.md`: one-paragraph project intro linking `docs/architecture.md` and `docs/roadmap.md`; a Development section (`pip install -e .[dev]`, `./test.sh --fast`); a Dependencies section stating `./test.sh --full` requires `freecadcmd` from FreeCAD 1.0+ with a link to `https://www.freecad.org/downloads.php` and a note that conda-forge `freecad` also provides it. `.gitignore`: standard Python (`__pycache__/`, `*.egg-info/`, `.mypy_cache/`, `.pytest_cache/`, `.ruff_cache/`, `dist/`, `build/`, `.venv/`).
+- [x] **Step 1** (`pyproject.toml`, `LICENSE`, `README.md`, `.gitignore`): Create root project metadata. `pyproject.toml`: `hatchling` backend, `[project]` with `name = "shelving-workbench"`, `version = "0.0.1"`, `requires-python = ">=3.11"`, author `Dave Bort <freecad@dbort.com>`, `license = {text = "MIT"}`, `[project.optional-dependencies] dev = ["ruff", "mypy", "pytest"]`, `[tool.hatch.build.targets.wheel] packages = ["shelving_core"]`, plus `[tool.ruff]` (target `py311`, select `E`,`F`,`I`,`UP`,`B`) and `[tool.mypy]` (`strict = true`, `files = ["shelving_core"]`, `exclude = ["freecad/"]`). `LICENSE`: MIT text, `Copyright (c) 2026 Dave Bort`. `README.md`: one-paragraph project intro linking `docs/architecture.md` and `docs/roadmap.md`; a Development section (`pip install -e .[dev]`, `./test.sh --fast`); a Dependencies section stating `./test.sh --full` requires `freecadcmd` from FreeCAD 1.0+ with a link to `https://www.freecad.org/downloads.php` and a note that conda-forge `freecad` also provides it. `.gitignore`: standard Python (`__pycache__/`, `*.egg-info/`, `.mypy_cache/`, `.pytest_cache/`, `.ruff_cache/`, `dist/`, `build/`, `.venv/`).
 
-- [ ] **Step 2** (`shelving_core/__init__.py`, `shelving_core/py.typed`, `shelving_core/tests/__init__.py`, `shelving_core/tests/test_smoke.py`, `shelving_core/tests/test_no_freecad.py`): `__init__.py` sets `__version__ = "0.0.1"` and a module docstring stating the no-FreeCAD invariant; no other logic. Add empty `py.typed`. `test_smoke.py`: `import shelving_core` and assert `shelving_core.__version__` is a non-empty `str`. `test_no_freecad.py`: (a) walk every `*.py` under the `shelving_core` package directory and assert none contains `import FreeCAD`, `from FreeCAD`, `import FreeCADGui`, or `from FreeCADGui`; (b) `importlib.import_module` every submodule found by `pkgutil.walk_packages`, then assert `"FreeCAD" not in sys.modules` and `"FreeCADGui" not in sys.modules`.
+- [x] **Step 2** (`shelving_core/__init__.py`, `shelving_core/py.typed`, `shelving_core/tests/__init__.py`, `shelving_core/tests/test_smoke.py`, `shelving_core/tests/test_no_freecad.py`): `__init__.py` sets `__version__ = "0.0.1"` and a module docstring stating the no-FreeCAD invariant; no other logic. Add empty `py.typed`. `test_smoke.py`: `import shelving_core` and assert `shelving_core.__version__` is a non-empty `str`. `test_no_freecad.py`: (a) walk every `*.py` under the `shelving_core` package directory and assert none contains `import FreeCAD`, `from FreeCAD`, `import FreeCADGui`, or `from FreeCADGui`; (b) `importlib.import_module` every submodule found by `pkgutil.walk_packages`, then assert `"FreeCAD" not in sys.modules` and `"FreeCADGui" not in sys.modules`.
 
-- [ ] **Step 3** (`freecad/__init__.py`, `freecad/shelving/__init__.py`, `freecad/shelving/init_gui.py`, `freecad/shelving/resources/shelving.svg`): `freecad/__init__.py` and `freecad/shelving/__init__.py` make importable packages (the latter with a docstring; no logic). `init_gui.py`: `try: import FreeCADGui as Gui / except ImportError: Gui = None`; define `class ShelvingWorkbench(Gui.Workbench if Gui else object)` with class attrs `MenuText = "Shelving"`, `ToolTip = "Parametric shelving layout"`, `Icon` pointing at the resources SVG, methods `Initialize(self)` (pass), `Activated`/`Deactivated` (pass), `GetClassName(self)` returning `"Gui::PythonWorkbench"`; then `if Gui is not None: Gui.addWorkbench(ShelvingWorkbench())`. `shelving.svg`: minimal placeholder icon.
+- [x] **Step 3** (`freecad/__init__.py`, `freecad/shelving/__init__.py`, `freecad/shelving/init_gui.py`, `freecad/shelving/resources/shelving.svg`): `freecad/__init__.py` and `freecad/shelving/__init__.py` make importable packages (the latter with a docstring; no logic). `init_gui.py`: `try: import FreeCADGui as Gui / except ImportError: Gui = None`; define `class ShelvingWorkbench(Gui.Workbench if Gui else object)` with class attrs `MenuText = "Shelving"`, `ToolTip = "Parametric shelving layout"`, `Icon` pointing at the resources SVG, methods `Initialize(self)` (pass), `Activated`/`Deactivated` (pass), `GetClassName(self)` returning `"Gui::PythonWorkbench"`; then `if Gui is not None: Gui.addWorkbench(ShelvingWorkbench())`. `shelving.svg`: minimal placeholder icon.
 
-- [ ] **Step 4** (`tools/vendor-core.sh`, `freecad/shelving/vendor/__init__.py`, `freecad/shelving/vendor/shelving_core/**`): `vendor-core.sh` starts `set -euo pipefail`, resolves repo root, removes `freecad/shelving/vendor/shelving_core/`, and copies `shelving_core/` into it excluding `tests/` and `__pycache__/` (`rsync -a --delete --exclude tests --exclude __pycache__` or `find`+`cp`). Add `--check` mode: copy into a `mktemp -d` and `diff -r` against the committed tree; on any diff, print the "run tools/vendor-core.sh and commit" message and `exit 1`. Run the script once to generate the committed vendored tree. Add `freecad/shelving/vendor/__init__.py`.
+- [x] **Step 4** (`tools/vendor-core.sh`, `freecad/shelving/vendor/__init__.py`, `freecad/shelving/vendor/shelving_core/**`): `vendor-core.sh` starts `set -euo pipefail`, resolves repo root, removes `freecad/shelving/vendor/shelving_core/`, and copies `shelving_core/` into it excluding `tests/` and `__pycache__/` (`rsync -a --delete --exclude tests --exclude __pycache__` or `find`+`cp`). Add `--check` mode: copy into a `mktemp -d` and `diff -r` against the committed tree; on any diff, print the "run tools/vendor-core.sh and commit" message and `exit 1`. Run the script once to generate the committed vendored tree. Add `freecad/shelving/vendor/__init__.py`.
 
-- [ ] **Step 5** (`test.sh`, `tools/freecad_smoke.py`): Replace the placeholder `test.sh`. `set -euo pipefail`; parse `$1` as `--fast` | `--full`, else print usage and `exit 2`. `--fast`: run `ruff check .`, `ruff format --check .`, `mypy`, `bash tools/vendor-core.sh --check`, `pytest shelving_core`, in that order, each failure aborting. `--full`: `command -v freecadcmd >/dev/null || { echo "ERROR: freecadcmd not found on PATH. FreeCAD 1.0+ is required for the full test tier; see README.md."; exit 1; }` then `freecadcmd tools/freecad_smoke.py`. `tools/freecad_smoke.py`: `import freecad.shelving`, `from freecad.shelving.vendor import shelving_core`, `print("shelving workbench import OK")`.
+- [x] **Step 5** (`test.sh`, `tools/freecad_smoke.py`): Replace the placeholder `test.sh`. `set -euo pipefail`; parse `$1` as `--fast` | `--full`, else print usage and `exit 2`. `--fast`: run `ruff check .`, `ruff format --check .`, `mypy`, `bash tools/vendor-core.sh --check`, `pytest shelving_core`, in that order, each failure aborting. `--full`: `command -v freecadcmd >/dev/null || { echo "ERROR: freecadcmd not found on PATH. FreeCAD 1.0+ is required for the full test tier; see README.md."; exit 1; }` then `freecadcmd tools/freecad_smoke.py`. `tools/freecad_smoke.py`: `import freecad.shelving`, `from freecad.shelving.vendor import shelving_core`, `print("shelving workbench import OK")`.
 
-- [ ] **Step 6** (`package.xml`): Author the Addon Manager metadata per the schema referenced in Frontier Advice: `name` Shelving, `version` 0.0.1, `description`, `maintainer` `Dave Bort` / `freecad@dbort.com`, `license` MIT (file `LICENSE`), `url` `repository` `https://github.com/dbort/shelving-workbench` and a `bugtracker` url, `content/workbench` with `classname` `ShelvingWorkbench`, `subdirectory` `freecad/shelving/`, `icon` `freecad/shelving/resources/shelving.svg`, and `<freecadmin>1.0</freecadmin>`.
+- [x] **Step 6** (`package.xml`): Author the Addon Manager metadata per the schema referenced in Frontier Advice: `name` Shelving, `version` 0.0.1, `description`, `maintainer` `Dave Bort` / `freecad@dbort.com`, `license` MIT (file `LICENSE`), `url` `repository` `https://github.com/dbort/shelving-workbench` and a `bugtracker` url, `content/workbench` with `classname` `ShelvingWorkbench`, `subdirectory` `freecad/shelving/`, `icon` `freecad/shelving/resources/shelving.svg`, and `<freecadmin>1.0</freecadmin>`.
 
-- [ ] **Step 7** (`.github/workflows/ci.yml`): Two jobs on `push` and `pull_request`. `fast`: checkout, `actions/setup-python` 3.11, `pip install -e .[dev]`, `./test.sh --fast`. `full`: checkout, `mamba-org/setup-micromamba` installing `freecad=1.0.*` and `python=3.11` from `conda-forge`, `pip install -e .`, `./test.sh --full` (run inside the micromamba shell so `freecadcmd` is on `PATH`). Pin action versions.
+- [x] **Step 7** (`.github/workflows/ci.yml`): Two jobs on `push` and `pull_request`. `fast`: checkout, `actions/setup-python` 3.11, `pip install -e .[dev]`, `./test.sh --fast`. `full`: checkout, `mamba-org/setup-micromamba` installing `freecad=1.0.*` and `python=3.11` from `conda-forge`, `pip install -e .`, `./test.sh --full` (run inside the micromamba shell so `freecadcmd` is on `PATH`). Pin action versions.
 
-- [ ] **Step 8** (`docs/roadmap.md`): Set the M0 **Status** line to `Done sh-001`. Leave all other milestones untouched.
+- [x] **Step 8** (`docs/roadmap.md`): Set the M0 **Status** line to `Done sh-001`. Leave all other milestones untouched.

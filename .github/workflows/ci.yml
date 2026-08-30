@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  fast:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e .[dev]
+      - run: ./test.sh --fast
+
+  full:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -el {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-name: shelving-ci
+          init-shell: bash
+          condarc: |
+            channels:
+              - conda-forge
+          create-args: >-
+            python=3.11
+            freecad=1.0.*
+      - run: pip install -e .
+      - run: ./test.sh --full

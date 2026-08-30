@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "shelving-workbench"
+version = "0.0.1"
+description = "Parametric shelving workbench for FreeCAD 1.0, with a pure-Python layout core."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Dave Bort", email = "freecad@dbort.com" }]
+
+[project.urls]
+Repository = "https://github.com/dbort/shelving-workbench"
+
+[project.optional-dependencies]
+dev = ["ruff", "mypy", "pytest"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["shelving_core"]
+
+[tool.ruff]
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+strict = true
+files = ["shelving_core"]
+exclude = ["freecad/"]
