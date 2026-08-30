@@ -1,8 +1,8 @@
 ---
 id: sh-001
 title: "Scaffold monorepo with hardened CI and reproducible env (M0)"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 1
 ---
 
@@ -40,6 +40,9 @@ task supersedes sh-002, which is abandoned.
 - [x] `pyproject.toml` sets `requires-python = ">=3.11"`, builds `shelving_core`, and defines a `dev` extra with `ruff`, `mypy`, `pytest`.
 - [x] No `ShelvingUnit`, solver, expansion, catalog, or task-panel code exists anywhere in the tree.
 - [x] `docs/roadmap.md` M0 **Status** line still reads `Task sh-001`; this task does not flip it to `Done` (that happens at merge, via `approve-task`).
+
+### Test harness
+- [x] `tests/test_harness_cli.py` (run by `--fast` via `pytest shelving_core tests`) covers `test.sh`'s exit-status contract: usage → 2, missing-tool preflight → 3 with names + pointer (both tiers, including `rsync`), and a source-scan for the exact `freecadcmd`-absent message + `exit 1`.
 
 ### Environment (pixi) and setup script
 - [x] `pixi.toml` declares the `conda-forge` channel, `freecad` pinned to `1.0.*`, the dev toolchain (`ruff`, `mypy`, `pytest`), Python `3.12.*`, and both `linux-64` and `linux-aarch64` in platforms (CI is x86_64, the dev VM is aarch64); it defines `[tasks]` `fast` and `full` whose bodies are exactly `./test.sh --fast` and `./test.sh --full` (thin wrappers, no tier logic).
@@ -243,3 +246,5 @@ action-SHA lookup or a conda solve that could not run.
 - [x] **Step 15** (`test.sh`, `.github/workflows/ci.yml`, `docs/github-actions-hardening.md`, `README.md`): Rework `test.sh --full` into a strict superset per the THIS PASS Frontier Advice: run the full `--fast` sequence, then `tools/lint-workflows.sh`, then the `freecadcmd` smoke, aborting at the first failure; extend the preflight to `actionlint`/`zizmor`/`check-jsonschema`/`shellcheck` (exit 3), keeping the `freecadcmd`-missing exit-1 + exact message. In `ci.yml`, delete the standalone `workflows` job, leaving `fast` and `full` only (`full` already runs `pixi run full`). Update the enforcement section of `docs/github-actions-hardening.md` (CI reaches `lint-workflows.sh` through the `full` job) and `README.md` (`./test.sh --full` / `pixi run full` is the one "run everything" command; `--fast` is the FreeCAD-free subset; `pixi run lint-workflows` a granular shortcut).
 
 - [x] **Step 16** (verification, no new files): Confirm `docs/roadmap.md` M0 reads `Task sh-001`; grep the tree for no `ShelvingUnit`/solver/expansion/catalog/editor code; run `./test.sh --fast` green (in `.venv`), `pixi run full` green (covers lint-workflows + FreeCAD), and confirm `./test.sh` with no args and with a bad flag still exit 2.
+
+- [x] **Step 17** (`tests/__init__.py`, `tests/test_harness_cli.py`, `test.sh`, `tools/lint-workflows.sh`, `.claude/docs/friction-log.md`): Round 1 review rework. Add a repo-root `tests/` package (not under `shelving_core/`, which ships in the wheel) with `test_harness_cli.py` covering `test.sh`'s CLI/exit-status contract: usage errors (no arg, `--bogus`, `--fast --full`) exit 2 with the usage line; `--fast`/`--full` under a stripped `PATH` exit 3 naming every missing preflight tool plus the `install-deps.sh` / `pixi shell` pointer; a source-scan for the exact `freecadcmd`-absent message followed by `exit 1`. Every subprocess call is shaped so `test.sh` exits before `run_fast` (which now runs `pytest shelving_core tests`), so the fast tier does not recurse. Point `run_fast` at `pytest shelving_core tests` (F1). Add `rsync` to both preflight lists in `test.sh` (N2). Widen `tools/lint-workflows.sh`'s pin-format check to glob `*.yml` and `*.yaml` (N1). Delete the `2026-08-30` friction-log entry about hand-building a `PATH` to review `test.sh`'s exit-status contract (F1 resolves it).

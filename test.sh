@@ -52,20 +52,22 @@ run_fast() {
 	ruff format --check .
 	mypy
 	bash tools/vendor-core.sh --check
-	pytest shelving_core
+	pytest shelving_core tests
 }
 
 [ "$#" -eq 1 ] || usage
 
 case "$1" in
 --fast)
-	preflight ruff mypy pytest
+	# rsync is listed because tools/vendor-core.sh --check shells out to it;
+	# a host without rsync should get the named-tool message, not a bare 127.
+	preflight ruff mypy pytest rsync
 	run_fast
 	;;
 --full)
 	# --full invokes every fast-tier tool plus the workflow-lint toolchain;
 	# preflight for all of them up front.
-	preflight ruff mypy pytest actionlint zizmor check-jsonschema shellcheck
+	preflight ruff mypy pytest rsync actionlint zizmor check-jsonschema shellcheck
 	run_fast
 	bash tools/lint-workflows.sh
 	if ! command -v freecadcmd >/dev/null 2>&1; then

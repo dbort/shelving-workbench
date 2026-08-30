@@ -37,10 +37,12 @@ run_check() {
 # network and no third-party tool: every `uses:` must name a full 40-hex
 # commit SHA with a trailing `# vX.Y.Z` release comment. The action reference
 # before `@` may carry extra path segments (e.g. github/codeql-action/upload-sarif).
+# Both `.yml` and `.yaml` are checked: actionlint and zizmor take the whole
+# directory, so a `.yaml` workflow must not slip past the pin check.
 check_pins() {
 	local pin_regex='^uses: [A-Za-z0-9._/-]+@[0-9a-f]{40} # v[0-9]+\.[0-9]+\.[0-9]+$'
 	local rc=0 file raw trimmed
-	for file in "$WORKFLOW_DIR"/*.yml; do
+	while IFS= read -r -d '' file; do
 		while IFS= read -r raw; do
 			# Normalise both `uses:` on its own line and `- uses:` list items.
 			trimmed="$(printf '%s' "$raw" | sed 's/^[[:space:]]*//; s/^-[[:space:]]*//; s/[[:space:]]*$//')"
@@ -49,7 +51,7 @@ check_pins() {
 				rc=1
 			fi
 		done < <(grep -E '^[[:space:]]*-?[[:space:]]*uses:' "$file" || true)
-	done
+	done < <(find "$WORKFLOW_DIR" -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) -print0)
 	return "$rc"
 }
 
