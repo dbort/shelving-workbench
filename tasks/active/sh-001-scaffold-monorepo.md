@@ -1,8 +1,8 @@
 ---
 id: sh-001
 title: "Scaffold monorepo with hardened CI and reproducible env (M0)"
-current_agent: user
-current_phase: user_signoff
+current_agent: implementer
+current_phase: implementation
 review_rejections: 0
 ---
 
@@ -20,15 +20,15 @@ task supersedes sh-002, which is abandoned.
 
 ## Status
 - [x] Planning
-- [x] Implementation
-- [x] Review
+- [ ] Implementation
+- [ ] Review
 - [ ] User sign-off
 
 ## Must Have
 
 ### Package skeleton
 - [x] `./test.sh --fast` exits 0 and runs, in order: the toolchain preflight, `ruff check .`, `ruff format --check .`, `mypy` (strict, `shelving_core` only), the vendor-drift check, `pytest`.
-- [x] `./test.sh --full` exits non-zero with a clear message when `freecadcmd` is not on `PATH`; when it is present, it runs a `freecadcmd` script that imports `freecad.shelving` and the vendored core and exits 0.
+- [ ] `./test.sh --full` is a strict superset of `--fast` and is the single "run everything" command: it runs the entire `--fast` sequence, then `tools/lint-workflows.sh`, then the `freecadcmd` smoke test, in that order (cheapest to slowest), aborting at the first failure. It preflights for every tool it invokes (`ruff`/`mypy`/`pytest` plus `actionlint`/`zizmor`/`check-jsonschema`/`shellcheck`); if any is missing it names them, points at `tools/install-deps.sh` and `pixi shell`, and exits 3. When `freecadcmd` specifically is missing it still emits the exact `ERROR: freecadcmd not found on PATH. FreeCAD 1.0+ is required for the full test tier; see README.md.` message and exits 1. On success it exits 0.
 - [x] `ruff check .` and `ruff format --check .` report no issues.
 - [x] `mypy` in strict mode over `shelving_core` reports no errors; `freecad/` is excluded from type-checking.
 - [x] `pytest` collects at least three tests and all pass.
@@ -56,8 +56,7 @@ task supersedes sh-002, which is abandoned.
 - [x] `runs-on` names a pinned runner image (`ubuntu-24.04`), not `ubuntu-latest`.
 - [x] `step-security/harden-runner` is the first step of every job, with `egress-policy: audit`.
 - [x] `ci.yml` has a `concurrency` group keyed on workflow + ref with `cancel-in-progress: true`.
-- [x] The CI `fast` job uses no pixi and no FreeCAD: it sets up a bare `python -m venv`, `pip install -e .[dev]`, and runs `./test.sh --fast` across a matrix of Python `3.11` and `3.12` (both must pass).
-- [x] The CI `full` job uses `prefix-dev/setup-pixi` (SHA-pinned, lock frozen) and runs `pixi run full`.
+- [ ] `.github/workflows/ci.yml` has exactly two jobs: `fast` (bare `python -m venv`, `pip install -e .[dev]`, `./test.sh --fast` across a Python `3.11`/`3.12` matrix, no pixi and no FreeCAD) and `full` (`prefix-dev/setup-pixi` SHA-pinned with the lock frozen, `pixi run full`). There is no standalone `workflows` job: `pixi run full` runs `./test.sh --full`, which already includes `tools/lint-workflows.sh`.
 - [x] No `run:` step interpolates `${{ github.event.* }}` or other attacker-controllable context directly into shell; a comment in `ci.yml` states this rule.
 - [x] `.github/workflows/scorecard.yml` runs the OpenSSF Scorecard action (SHA-pinned) on `branch_protection_rule`, a weekly `schedule`, and `push` to `main`; its `permissions` are limited to `security-events: write`, `id-token: write`, `contents: read`; it uploads SARIF results.
 - [x] `.github/dependabot.yml` enables the `github-actions` ecosystem (weekly) and the `pip` ecosystem (weekly) with a comment noting pixi is unsupported by Dependabot and `pixi.lock` is refreshed manually via `pixi update`.
@@ -65,25 +64,38 @@ task supersedes sh-002, which is abandoned.
 ### Workflow linting
 - [x] `tools/lint-workflows.sh` (`set -euo pipefail`) runs, from one invocation and failing on any sub-failure: `actionlint` over `.github/workflows/`; `zizmor` (offline mode) over `.github/workflows/`; an offline pin-format check asserting every `uses:` in `.github/workflows/*.yml` matches `owner/repo@<40-hex> # vX.Y.Z`; and `check-jsonschema --builtin-schema vendor.dependabot` over `.github/dependabot.yml`.
 - [x] `pixi.toml` provides `actionlint`, `zizmor`, `check-jsonschema`, and `shellcheck` (all conda-forge) and a `[tasks]` entry `lint-workflows` whose body is exactly `tools/lint-workflows.sh`.
-- [x] `.github/workflows/ci.yml` has a third job `workflows`: `runs-on: ubuntu-24.04`, `permissions: {contents: read}`, `step-security/harden-runner` (audit) first, SHA-pinned `actions/checkout` (`persist-credentials: false`) and `prefix-dev/setup-pixi` (lock frozen), then `pixi run lint-workflows`.
-- [x] `pixi run lint-workflows` exits 0 against this repo's own workflow files; any zizmor finding is either fixed or suppressed with an inline `# zizmor: ignore[<rule>]` and a one-line reason.
-- [x] `docs/github-actions-hardening.md` gains a section stating `pixi run lint-workflows` (`tools/lint-workflows.sh`) enforces this standard in CI, listing what each of the four checks covers.
-- [x] `README.md` lists `pixi run lint-workflows` alongside the test tiers.
+- [ ] `pixi run lint-workflows` (a granular shortcut for `tools/lint-workflows.sh`) exits 0 against this repo's own workflow files; any zizmor finding is either fixed or suppressed with an inline `# zizmor: ignore[<rule>]` and a one-line reason. `./test.sh --full` runs the same script and CI reaches it through the `full` job.
+- [ ] `docs/github-actions-hardening.md` gains a section stating that `tools/lint-workflows.sh` (run standalone as `pixi run lint-workflows`, and in CI via the `full` job's `./test.sh --full`) enforces this standard, listing what each of the four checks covers.
+- [ ] `README.md` presents `./test.sh --full` (or `pixi run full`) as the single "run everything" command and notes it is a superset of `--fast`; `pixi run lint-workflows` is listed as a granular shortcut.
 
 ### Docs
 - [x] `docs/github-actions-hardening.md` documents the standard this task establishes (SHA pinning, `permissions: {}` + per-job grants, `pull_request` never `pull_request_target`, the injection rule, Dependabot coverage, harden-runner, Scorecard, pinned runner images) as the rule for all future workflow changes.
-- [x] `README.md` documents: `tools/install-deps.sh` (installs a pinned pixi for the host arch if absent, sets up the venv and the pixi env; links pixi's docs) as the primary setup; the bare `python -m venv` + `pip install -e .[dev]` path as the minimal core-only alternative; and `./test.sh --fast` / `--full` (or `pixi run fast` / `pixi run full`) as the tier interface, including the `freecadcmd` requirement for a bare `--full`.
+- [x] `README.md` documents: `tools/install-deps.sh` (installs a pinned pixi for the host arch if absent, sets up the venv and the pixi env; links pixi's docs) as the primary setup; the bare `python -m venv` + `pip install -e .[dev]` path as the minimal core-only alternative; and `./test.sh --fast` (FreeCAD-free) vs `./test.sh --full` (everything) as the tier interface.
 - [x] The `2026-08-30` friction-log entry about getting the fast tier's toolchain into a fresh shell is removed from `.claude/docs/friction-log.md`.
 
 ## Frontier Advice
 
-RESUME NOTE: the `sh-001` branch already carries two full implementation passes
-plus a review approval and a `doc-hygiene` commit. The tree already satisfies
-every Must Have except the new **Workflow linting** section. Treat this pass as
-additive: build `tools/lint-workflows.sh`, wire it into `pixi.toml` and a third
-`ci.yml` job, document it, and leave everything already-checked alone unless
-`lint-workflows.sh` surfaces a real defect in it. `tools/bootstrap-dev.sh` was
-never created; do not add it.
+RESUME NOTE: the `sh-001` branch already carries three implementation passes
+plus review approvals and `doc-hygiene` commits. The tree satisfies every Must
+Have except the ones re-opened for this pass, which change `--full` into the
+single "run everything" command. Treat this pass as a targeted rework of
+`test.sh`, `ci.yml`, and the docs; leave everything else alone unless it breaks.
+`tools/bootstrap-dev.sh` was never created; do not add it.
+
+THIS PASS ("full means everything"):
+- `test.sh --full` becomes a strict superset of `--fast`. Order: run the full
+  `--fast` sequence, then `tools/lint-workflows.sh`, then the `freecadcmd` smoke
+  test. Abort at the first failure. So a lint/type/test regression or a bad
+  workflow file fails `--full` before FreeCAD is even touched.
+- `--full` preflights for `ruff`/`mypy`/`pytest` AND `actionlint`/`zizmor`/
+  `check-jsonschema`/`shellcheck`; any missing -> name them, point at
+  `tools/install-deps.sh` / `pixi shell`, exit 3. `freecadcmd` missing keeps its
+  own exact message and exit 1 (unchanged contract).
+- `pixi run full` stays a one-line wrapper over `./test.sh --full`; `pixi run
+  fast` and `pixi run lint-workflows` remain as granular shortcuts.
+- `ci.yml` drops the standalone `workflows` job. Two jobs remain: `fast` (bare
+  venv, matrix, FreeCAD-free) and `full` (pixi, `pixi run full` = everything).
+- Update `docs/github-actions-hardening.md` and `README.md` to match.
 
 WORKFLOW LINTING: `tools/lint-workflows.sh` is the single entry point (also
 exposed as `pixi run lint-workflows`). It runs four checks, each fatal:
@@ -122,13 +134,16 @@ diff exits 1 with a "run tools/vendor-core.sh and commit" message. Wired into
 or top-level `shelving_core/` to `sys.path`.
 
 `test.sh` STAYS AUTHORITATIVE for tier contents: `set -euo pipefail`, exactly
-one of `--fast`/`--full` (else usage, exit 2). `--fast` runs the preflight
+one of `--fast`/`--full` (else usage, exit 2). `--fast` runs its preflight
 (exit 3, names missing `ruff`/`mypy`/`pytest`, points at `tools/install-deps.sh`)
 then ruff, ruff format, mypy, `tools/vendor-core.sh --check`,
-`pytest shelving_core`. `--full` checks `command -v freecadcmd`; absent prints
-`ERROR: freecadcmd not found on PATH. FreeCAD 1.0+ is required for the full test
-tier; see README.md.` and exits 1; present runs
-`freecadcmd tools/freecad_smoke.py`. The `freecad_smoke.py` script prepends repo
+`pytest shelving_core`. `--full` is `--fast` plus more: it runs the entire
+`--fast` sequence, then `tools/lint-workflows.sh`, then the `freecadcmd` smoke
+test, aborting at the first failure. Its preflight additionally checks
+`actionlint`/`zizmor`/`check-jsonschema`/`shellcheck` (same exit-3 treatment).
+`freecadcmd` missing still prints `ERROR: freecadcmd not found on PATH. FreeCAD
+1.0+ is required for the full test tier; see README.md.` and exits 1; present
+runs `freecadcmd tools/freecad_smoke.py`. The `freecad_smoke.py` script prepends repo
 root to `sys.path` (with a comment that workbench code never does this), imports
 `freecad.shelving` and the vendored core, prints an OK line. pixi `[tasks]`
 `fast`/`full` are literally `./test.sh --fast` / `./test.sh --full` with no
@@ -205,7 +220,7 @@ action-SHA lookup or a conda solve that could not run.
 
 - [x] **Step 4** (`tools/vendor-core.sh`, `freecad/shelving/vendor/__init__.py`, `freecad/shelving/vendor/shelving_core/**`): `vendor-core.sh` with `set -euo pipefail`, repo-root resolution, the rsync copy, and `--check` mode (temp copy + `diff -r`, exit 1 + guidance on drift). Run it once to generate the committed vendored tree. Add `vendor/__init__.py`.
 
-- [x] **Step 5** (`test.sh`, `tools/freecad_smoke.py`): `test.sh` per Frontier Advice, including the `--fast` preflight. `freecad_smoke.py` per Frontier Advice.
+- [x] **Step 5** (`test.sh`, `tools/freecad_smoke.py`): `test.sh` per Frontier Advice, including the `--fast` preflight. `freecad_smoke.py` per Frontier Advice. (Reworked in Step 15: `--full` becomes a superset.)
 
 - [x] **Step 6** (`package.xml`): Addon Manager metadata (`xmlns` Package_Metadata, `format="1"`): `name` Shelving, `version` 0.0.1, `description`, `maintainer` `Dave Bort` / `freecad@dbort.com`, `license` MIT (`file="LICENSE"`), `url` `repository` `https://github.com/dbort/shelving-workbench` + a `bugtracker`, `content/workbench` (`classname` `ShelvingWorkbench`, `subdirectory` `freecad/shelving/`, `icon` the resources SVG), `<freecadmin>1.0</freecadmin>`.
 
@@ -223,4 +238,8 @@ action-SHA lookup or a conda solve that could not run.
 
 - [x] **Step 13** (`tools/lint-workflows.sh`, `pixi.toml`, `.github/workflows/ci.yml`, `docs/github-actions-hardening.md`, `README.md`): Create `tools/lint-workflows.sh` per the WORKFLOW LINTING Frontier Advice (four fatal checks, `set -euo pipefail`, `chmod +x`). Add `actionlint`, `zizmor`, `check-jsonschema`, `shellcheck` to `pixi.toml` `[dependencies]` and a `[tasks] lint-workflows = "tools/lint-workflows.sh"`; re-run `pixi install` and commit the updated `pixi.lock`. Add the `workflows` job to `ci.yml` (ubuntu-24.04, `contents: read`, harden-runner first, pinned `checkout` + `setup-pixi`, `pixi run lint-workflows`). Run `pixi run lint-workflows` and resolve every finding against the repo's own workflows. Add the enforcement section to `docs/github-actions-hardening.md` and the `pixi run lint-workflows` line to `README.md`.
 
-- [x] **Step 14** (verification, no new files): Confirm `docs/roadmap.md` M0 reads `Task sh-001`; grep the tree to confirm no `ShelvingUnit`/solver/expansion/catalog/editor code; run `./test.sh --fast` green and `pixi run lint-workflows` green.
+- [x] **Step 14** (verification of the prior pass): superseded by Step 16.
+
+- [ ] **Step 15** (`test.sh`, `.github/workflows/ci.yml`, `docs/github-actions-hardening.md`, `README.md`): Rework `test.sh --full` into a strict superset per the THIS PASS Frontier Advice: run the full `--fast` sequence, then `tools/lint-workflows.sh`, then the `freecadcmd` smoke, aborting at the first failure; extend the preflight to `actionlint`/`zizmor`/`check-jsonschema`/`shellcheck` (exit 3), keeping the `freecadcmd`-missing exit-1 + exact message. In `ci.yml`, delete the standalone `workflows` job, leaving `fast` and `full` only (`full` already runs `pixi run full`). Update the enforcement section of `docs/github-actions-hardening.md` (CI reaches `lint-workflows.sh` through the `full` job) and `README.md` (`./test.sh --full` / `pixi run full` is the one "run everything" command; `--fast` is the FreeCAD-free subset; `pixi run lint-workflows` a granular shortcut).
+
+- [ ] **Step 16** (verification, no new files): Confirm `docs/roadmap.md` M0 reads `Task sh-001`; grep the tree for no `ShelvingUnit`/solver/expansion/catalog/editor code; run `./test.sh --fast` green (in `.venv`), `pixi run full` green (covers lint-workflows + FreeCAD), and confirm `./test.sh` with no args and with a bad flag still exit 2.
