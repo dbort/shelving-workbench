@@ -1,8 +1,8 @@
 ---
 id: sh-001
 title: "Scaffold monorepo with hardened CI and reproducible env (M0)"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 0
 ---
 
@@ -20,52 +20,52 @@ task supersedes sh-002, which is abandoned.
 
 ## Status
 - [x] Planning
-- [ ] Implementation
+- [x] Implementation
 - [ ] Review
 - [ ] User sign-off
 
 ## Must Have
 
 ### Package skeleton
-- [ ] `./test.sh --fast` exits 0 and runs, in order: the toolchain preflight, `ruff check .`, `ruff format --check .`, `mypy` (strict, `shelving_core` only), the vendor-drift check, `pytest`.
-- [ ] `./test.sh --full` exits non-zero with a clear message when `freecadcmd` is not on `PATH`; when it is present, it runs a `freecadcmd` script that imports `freecad.shelving` and the vendored core and exits 0.
-- [ ] `ruff check .` and `ruff format --check .` report no issues.
-- [ ] `mypy` in strict mode over `shelving_core` reports no errors; `freecad/` is excluded from type-checking.
-- [ ] `pytest` collects at least three tests and all pass.
-- [ ] No file under `shelving_core/` contains `import FreeCAD`, `from FreeCAD`, `import FreeCADGui`, or `from FreeCADGui`; a pytest asserts this by scanning source and by importing every `shelving_core` submodule and checking `FreeCAD`/`FreeCADGui` never entered `sys.modules`.
-- [ ] `freecad/shelving/vendor/shelving_core/` exists and its contents byte-match `shelving_core/` with `tests/` and `__pycache__/` excluded; `tools/vendor-core.sh` regenerates it and a drift-check step (used by `--fast`) fails when it is stale.
-- [ ] `freecad/shelving/__init__.py` and `freecad/shelving/init_gui.py` exist; `init_gui.py` defines a `Gui.Workbench` subclass (`MenuText`, `ToolTip`, `Icon`, `Initialize`, `GetClassName` returning `"Gui::PythonWorkbench"`) and calls `Gui.addWorkbench(...)`, guarded so module import under `freecadcmd` (no GUI) does not raise.
-- [ ] `package.xml` is valid XML, Addon Manager `content` type `workbench`, `name` Shelving, `version` 0.0.1, `maintainer` email `freecad@dbort.com`, `license` MIT, repository url `https://github.com/dbort/shelving-workbench`, and declares `freecadmin` 1.0.
-- [ ] `LICENSE` is the MIT license text, holder `Dave Bort`, year 2026; `pyproject.toml` license and author metadata match.
-- [ ] `pyproject.toml` sets `requires-python = ">=3.11"`, builds `shelving_core`, and defines a `dev` extra with `ruff`, `mypy`, `pytest`.
-- [ ] No `ShelvingUnit`, solver, expansion, catalog, or task-panel code exists anywhere in the tree.
-- [ ] `docs/roadmap.md` M0 **Status** line still reads `Task sh-001`; this task does not flip it to `Done` (that happens at merge, via `approve-task`).
+- [x] `./test.sh --fast` exits 0 and runs, in order: the toolchain preflight, `ruff check .`, `ruff format --check .`, `mypy` (strict, `shelving_core` only), the vendor-drift check, `pytest`.
+- [x] `./test.sh --full` exits non-zero with a clear message when `freecadcmd` is not on `PATH`; when it is present, it runs a `freecadcmd` script that imports `freecad.shelving` and the vendored core and exits 0.
+- [x] `ruff check .` and `ruff format --check .` report no issues.
+- [x] `mypy` in strict mode over `shelving_core` reports no errors; `freecad/` is excluded from type-checking.
+- [x] `pytest` collects at least three tests and all pass.
+- [x] No file under `shelving_core/` contains `import FreeCAD`, `from FreeCAD`, `import FreeCADGui`, or `from FreeCADGui`; a pytest asserts this by scanning source and by importing every `shelving_core` submodule and checking `FreeCAD`/`FreeCADGui` never entered `sys.modules`.
+- [x] `freecad/shelving/vendor/shelving_core/` exists and its contents byte-match `shelving_core/` with `tests/` and `__pycache__/` excluded; `tools/vendor-core.sh` regenerates it and a drift-check step (used by `--fast`) fails when it is stale.
+- [x] `freecad/shelving/__init__.py` and `freecad/shelving/init_gui.py` exist; `init_gui.py` defines a `Gui.Workbench` subclass (`MenuText`, `ToolTip`, `Icon`, `Initialize`, `GetClassName` returning `"Gui::PythonWorkbench"`) and calls `Gui.addWorkbench(...)`, guarded so module import under `freecadcmd` (no GUI) does not raise.
+- [x] `package.xml` is valid XML, Addon Manager `content` type `workbench`, `name` Shelving, `version` 0.0.1, `maintainer` email `freecad@dbort.com`, `license` MIT, repository url `https://github.com/dbort/shelving-workbench`, and declares `freecadmin` 1.0.
+- [x] `LICENSE` is the MIT license text, holder `Dave Bort`, year 2026; `pyproject.toml` license and author metadata match.
+- [x] `pyproject.toml` sets `requires-python = ">=3.11"`, builds `shelving_core`, and defines a `dev` extra with `ruff`, `mypy`, `pytest`.
+- [x] No `ShelvingUnit`, solver, expansion, catalog, or task-panel code exists anywhere in the tree.
+- [x] `docs/roadmap.md` M0 **Status** line still reads `Task sh-001`; this task does not flip it to `Done` (that happens at merge, via `approve-task`).
 
 ### Environment (pixi) and setup script
-- [ ] `pixi.toml` declares the `conda-forge` channel, `freecad` pinned to `1.0.*`, the dev toolchain (`ruff`, `mypy`, `pytest`), Python `3.12.*`, and both `linux-64` and `linux-aarch64` in platforms (CI is x86_64, the dev VM is aarch64); it defines `[tasks]` `fast` and `full` whose bodies are exactly `./test.sh --fast` and `./test.sh --full` (thin wrappers, no tier logic).
-- [ ] `pixi.lock` is committed and consistent with `pixi.toml`, covering both platforms; generate it with `pixi install`. pixi and conda-forge are reachable in the implementation environment (`pixi` is on `PATH`). Do not hand-fabricate the lock; if a run genuinely cannot reach conda-forge, run `tools/install-deps.sh` first, and only then fall back to the friction-log route.
-- [ ] `tools/install-deps.sh` starts with `set -euo pipefail`; when `pixi` is not on `PATH` it installs a pinned pixi release for the host arch (`uname -m` → `x86_64`/`aarch64`), verifying the published `.sha256`, into `~/.local/bin`, and ensures `~/.local/bin` is on `PATH` via `~/.bashrc` and `~/.profile`; then it creates `.venv/` with `python3` if absent and installs `-e .[dev]` into it, then runs `pixi install`. Re-running it is a no-op, not an error.
-- [ ] `tools/bootstrap-dev.sh` does not exist; `tools/install-deps.sh` is the only setup script.
-- [ ] `./test.sh --fast` preflights for `ruff`, `mypy`, and `pytest` on `PATH` before invoking any of them; if any is missing it names them, tells the reader to run `tools/install-deps.sh` and activate `.venv` (or `pixi shell`), and exits with status 3. Status 2 stays reserved for usage errors; a real lint/type/test failure still surfaces that tool's own status.
+- [x] `pixi.toml` declares the `conda-forge` channel, `freecad` pinned to `1.0.*`, the dev toolchain (`ruff`, `mypy`, `pytest`), Python `3.12.*`, and both `linux-64` and `linux-aarch64` in platforms (CI is x86_64, the dev VM is aarch64); it defines `[tasks]` `fast` and `full` whose bodies are exactly `./test.sh --fast` and `./test.sh --full` (thin wrappers, no tier logic).
+- [x] `pixi.lock` is committed and consistent with `pixi.toml`, covering both platforms; generate it with `pixi install`. pixi and conda-forge are reachable in the implementation environment (`pixi` is on `PATH`). Do not hand-fabricate the lock; if a run genuinely cannot reach conda-forge, run `tools/install-deps.sh` first, and only then fall back to the friction-log route.
+- [x] `tools/install-deps.sh` starts with `set -euo pipefail`; when `pixi` is not on `PATH` it installs a pinned pixi release for the host arch (`uname -m` → `x86_64`/`aarch64`), verifying the published `.sha256`, into `~/.local/bin`, and ensures `~/.local/bin` is on `PATH` via `~/.bashrc` and `~/.profile`; then it creates `.venv/` with `python3` if absent and installs `-e .[dev]` into it, then runs `pixi install`. Re-running it is a no-op, not an error.
+- [x] `tools/bootstrap-dev.sh` does not exist; `tools/install-deps.sh` is the only setup script.
+- [x] `./test.sh --fast` preflights for `ruff`, `mypy`, and `pytest` on `PATH` before invoking any of them; if any is missing it names them, tells the reader to run `tools/install-deps.sh` and activate `.venv` (or `pixi shell`), and exits with status 3. Status 2 stays reserved for usage errors; a real lint/type/test failure still surfaces that tool's own status.
 
 ### GitHub Actions hardening
-- [ ] `.github/workflows/ci.yml` sets `permissions: {}` at workflow level; each job re-grants only what it needs (`contents: read`).
-- [ ] Every `uses:` in every workflow is pinned to a full 40-hex commit SHA with a trailing `# vX.Y.Z` comment. No `@vN` or `@branch` refs.
-- [ ] `actions/checkout` is invoked with `persist-credentials: false` everywhere.
-- [ ] Workflows trigger on `push` and `pull_request` only. No `pull_request_target` anywhere.
-- [ ] `runs-on` names a pinned runner image (`ubuntu-24.04`), not `ubuntu-latest`.
-- [ ] `step-security/harden-runner` is the first step of every job, with `egress-policy: audit`.
-- [ ] `ci.yml` has a `concurrency` group keyed on workflow + ref with `cancel-in-progress: true`.
-- [ ] The CI `fast` job uses no pixi and no FreeCAD: it sets up a bare `python -m venv`, `pip install -e .[dev]`, and runs `./test.sh --fast` across a matrix of Python `3.11` and `3.12` (both must pass).
-- [ ] The CI `full` job uses `prefix-dev/setup-pixi` (SHA-pinned, lock frozen) and runs `pixi run full`.
-- [ ] No `run:` step interpolates `${{ github.event.* }}` or other attacker-controllable context directly into shell; a comment in `ci.yml` states this rule.
-- [ ] `.github/workflows/scorecard.yml` runs the OpenSSF Scorecard action (SHA-pinned) on `branch_protection_rule`, a weekly `schedule`, and `push` to `main`; its `permissions` are limited to `security-events: write`, `id-token: write`, `contents: read`; it uploads SARIF results.
-- [ ] `.github/dependabot.yml` enables the `github-actions` ecosystem (weekly) and the `pip` ecosystem (weekly) with a comment noting pixi is unsupported by Dependabot and `pixi.lock` is refreshed manually via `pixi update`.
+- [x] `.github/workflows/ci.yml` sets `permissions: {}` at workflow level; each job re-grants only what it needs (`contents: read`).
+- [x] Every `uses:` in every workflow is pinned to a full 40-hex commit SHA with a trailing `# vX.Y.Z` comment. No `@vN` or `@branch` refs.
+- [x] `actions/checkout` is invoked with `persist-credentials: false` everywhere.
+- [x] Workflows trigger on `push` and `pull_request` only. No `pull_request_target` anywhere.
+- [x] `runs-on` names a pinned runner image (`ubuntu-24.04`), not `ubuntu-latest`.
+- [x] `step-security/harden-runner` is the first step of every job, with `egress-policy: audit`.
+- [x] `ci.yml` has a `concurrency` group keyed on workflow + ref with `cancel-in-progress: true`.
+- [x] The CI `fast` job uses no pixi and no FreeCAD: it sets up a bare `python -m venv`, `pip install -e .[dev]`, and runs `./test.sh --fast` across a matrix of Python `3.11` and `3.12` (both must pass).
+- [x] The CI `full` job uses `prefix-dev/setup-pixi` (SHA-pinned, lock frozen) and runs `pixi run full`.
+- [x] No `run:` step interpolates `${{ github.event.* }}` or other attacker-controllable context directly into shell; a comment in `ci.yml` states this rule.
+- [x] `.github/workflows/scorecard.yml` runs the OpenSSF Scorecard action (SHA-pinned) on `branch_protection_rule`, a weekly `schedule`, and `push` to `main`; its `permissions` are limited to `security-events: write`, `id-token: write`, `contents: read`; it uploads SARIF results.
+- [x] `.github/dependabot.yml` enables the `github-actions` ecosystem (weekly) and the `pip` ecosystem (weekly) with a comment noting pixi is unsupported by Dependabot and `pixi.lock` is refreshed manually via `pixi update`.
 
 ### Docs
-- [ ] `docs/github-actions-hardening.md` documents the standard this task establishes (SHA pinning, `permissions: {}` + per-job grants, `pull_request` never `pull_request_target`, the injection rule, Dependabot coverage, harden-runner, Scorecard, pinned runner images) as the rule for all future workflow changes.
-- [ ] `README.md` documents: `tools/install-deps.sh` (installs a pinned pixi for the host arch if absent, sets up the venv and the pixi env; links pixi's docs) as the primary setup; the bare `python -m venv` + `pip install -e .[dev]` path as the minimal core-only alternative; and `./test.sh --fast` / `--full` (or `pixi run fast` / `pixi run full`) as the tier interface, including the `freecadcmd` requirement for a bare `--full`.
-- [ ] The `2026-08-30` friction-log entry about getting the fast tier's toolchain into a fresh shell is removed from `.claude/docs/friction-log.md`.
+- [x] `docs/github-actions-hardening.md` documents the standard this task establishes (SHA pinning, `permissions: {}` + per-job grants, `pull_request` never `pull_request_target`, the injection rule, Dependabot coverage, harden-runner, Scorecard, pinned runner images) as the rule for all future workflow changes.
+- [x] `README.md` documents: `tools/install-deps.sh` (installs a pinned pixi for the host arch if absent, sets up the venv and the pixi env; links pixi's docs) as the primary setup; the bare `python -m venv` + `pip install -e .[dev]` path as the minimal core-only alternative; and `./test.sh --fast` / `--full` (or `pixi run fast` / `pixi run full`) as the tier interface, including the `freecadcmd` requirement for a bare `--full`.
+- [x] The `2026-08-30` friction-log entry about getting the fast tier's toolchain into a fresh shell is removed from `.claude/docs/friction-log.md`.
 
 ## Frontier Advice
 
@@ -176,28 +176,28 @@ action-SHA lookup or a conda solve that could not run.
 
 ## Execution Plan
 
-- [ ] **Step 1** (`pyproject.toml`, `LICENSE`, `.gitignore`): `hatchling` backend; `[project]` `name = "shelving-workbench"`, `version = "0.0.1"`, `requires-python = ">=3.11"`, author `Dave Bort <freecad@dbort.com>`, `license = {text = "MIT"}`; `[project.optional-dependencies] dev = ["ruff", "mypy", "pytest"]`; `[tool.hatch.build.targets.wheel] packages = ["shelving_core"]`; `[tool.ruff]` (target `py311`, select `E`,`F`,`I`,`UP`,`B`); `[tool.mypy]` (`strict = true`, `files = ["shelving_core"]`, `exclude = ["freecad/"]`). `LICENSE`: MIT, `Copyright (c) 2026 Dave Bort`. `.gitignore`: Python caches, `dist/`, `build/`, `*.egg-info/`, `.venv/`, `.pixi/`, `.ruff_cache/`, `.mypy_cache/`, `.pytest_cache/`.
+- [x] **Step 1** (`pyproject.toml`, `LICENSE`, `.gitignore`): `hatchling` backend; `[project]` `name = "shelving-workbench"`, `version = "0.0.1"`, `requires-python = ">=3.11"`, author `Dave Bort <freecad@dbort.com>`, `license = {text = "MIT"}`; `[project.optional-dependencies] dev = ["ruff", "mypy", "pytest"]`; `[tool.hatch.build.targets.wheel] packages = ["shelving_core"]`; `[tool.ruff]` (target `py311`, select `E`,`F`,`I`,`UP`,`B`); `[tool.mypy]` (`strict = true`, `files = ["shelving_core"]`, `exclude = ["freecad/"]`). `LICENSE`: MIT, `Copyright (c) 2026 Dave Bort`. `.gitignore`: Python caches, `dist/`, `build/`, `*.egg-info/`, `.venv/`, `.pixi/`, `.ruff_cache/`, `.mypy_cache/`, `.pytest_cache/`.
 
-- [ ] **Step 2** (`shelving_core/__init__.py`, `shelving_core/py.typed`, `shelving_core/tests/__init__.py`, `shelving_core/tests/test_smoke.py`, `shelving_core/tests/test_no_freecad.py`): `__init__.py` sets `__version__ = "0.0.1"` and a docstring stating the no-FreeCAD invariant; nothing else. Empty `py.typed`. `test_smoke.py` asserts `__version__` is a non-empty `str`. `test_no_freecad.py`: source scan for the four forbidden import forms (patterns built from fragments) plus a `pkgutil.walk_packages` import loop asserting `FreeCAD`/`FreeCADGui` absent from `sys.modules`.
+- [x] **Step 2** (`shelving_core/__init__.py`, `shelving_core/py.typed`, `shelving_core/tests/__init__.py`, `shelving_core/tests/test_smoke.py`, `shelving_core/tests/test_no_freecad.py`): `__init__.py` sets `__version__ = "0.0.1"` and a docstring stating the no-FreeCAD invariant; nothing else. Empty `py.typed`. `test_smoke.py` asserts `__version__` is a non-empty `str`. `test_no_freecad.py`: source scan for the four forbidden import forms (patterns built from fragments) plus a `pkgutil.walk_packages` import loop asserting `FreeCAD`/`FreeCADGui` absent from `sys.modules`.
 
-- [ ] **Step 3** (`freecad/__init__.py`, `freecad/shelving/__init__.py`, `freecad/shelving/init_gui.py`, `freecad/shelving/resources/shelving.svg`): namespace `__init__` files via `pkgutil.extend_path`; `init_gui.py` per Frontier Advice (guarded `Gui`, `ShelvingWorkbench` with `MenuText`/`ToolTip`/`Icon` and `Initialize`/`Activated`/`Deactivated`/`GetClassName`, guarded `addWorkbench`); a minimal placeholder SVG icon.
+- [x] **Step 3** (`freecad/__init__.py`, `freecad/shelving/__init__.py`, `freecad/shelving/init_gui.py`, `freecad/shelving/resources/shelving.svg`): namespace `__init__` files via `pkgutil.extend_path`; `init_gui.py` per Frontier Advice (guarded `Gui`, `ShelvingWorkbench` with `MenuText`/`ToolTip`/`Icon` and `Initialize`/`Activated`/`Deactivated`/`GetClassName`, guarded `addWorkbench`); a minimal placeholder SVG icon.
 
-- [ ] **Step 4** (`tools/vendor-core.sh`, `freecad/shelving/vendor/__init__.py`, `freecad/shelving/vendor/shelving_core/**`): `vendor-core.sh` with `set -euo pipefail`, repo-root resolution, the rsync copy, and `--check` mode (temp copy + `diff -r`, exit 1 + guidance on drift). Run it once to generate the committed vendored tree. Add `vendor/__init__.py`.
+- [x] **Step 4** (`tools/vendor-core.sh`, `freecad/shelving/vendor/__init__.py`, `freecad/shelving/vendor/shelving_core/**`): `vendor-core.sh` with `set -euo pipefail`, repo-root resolution, the rsync copy, and `--check` mode (temp copy + `diff -r`, exit 1 + guidance on drift). Run it once to generate the committed vendored tree. Add `vendor/__init__.py`.
 
-- [ ] **Step 5** (`test.sh`, `tools/freecad_smoke.py`): `test.sh` per Frontier Advice, including the `--fast` preflight. `freecad_smoke.py` per Frontier Advice.
+- [x] **Step 5** (`test.sh`, `tools/freecad_smoke.py`): `test.sh` per Frontier Advice, including the `--fast` preflight. `freecad_smoke.py` per Frontier Advice.
 
-- [ ] **Step 6** (`package.xml`): Addon Manager metadata (`xmlns` Package_Metadata, `format="1"`): `name` Shelving, `version` 0.0.1, `description`, `maintainer` `Dave Bort` / `freecad@dbort.com`, `license` MIT (`file="LICENSE"`), `url` `repository` `https://github.com/dbort/shelving-workbench` + a `bugtracker`, `content/workbench` (`classname` `ShelvingWorkbench`, `subdirectory` `freecad/shelving/`, `icon` the resources SVG), `<freecadmin>1.0</freecadmin>`.
+- [x] **Step 6** (`package.xml`): Addon Manager metadata (`xmlns` Package_Metadata, `format="1"`): `name` Shelving, `version` 0.0.1, `description`, `maintainer` `Dave Bort` / `freecad@dbort.com`, `license` MIT (`file="LICENSE"`), `url` `repository` `https://github.com/dbort/shelving-workbench` + a `bugtracker`, `content/workbench` (`classname` `ShelvingWorkbench`, `subdirectory` `freecad/shelving/`, `icon` the resources SVG), `<freecadmin>1.0</freecadmin>`.
 
-- [ ] **Step 7** (`pixi.toml`, `pixi.lock`): `pixi.toml` per Frontier Advice (`linux-64` + `linux-aarch64`). Run `pixi install` to generate and commit `pixi.lock` for both platforms. If a run truly cannot reach conda-forge, leave `pixi.toml` complete, add the friction-log entry, and do not fabricate the lock.
+- [x] **Step 7** (`pixi.toml`, `pixi.lock`): `pixi.toml` per Frontier Advice (`linux-64` + `linux-aarch64`). Run `pixi install` to generate and commit `pixi.lock` for both platforms. If a run truly cannot reach conda-forge, leave `pixi.toml` complete, add the friction-log entry, and do not fabricate the lock.
 
-- [ ] **Step 8** (`tools/install-deps.sh`): `set -euo pipefail`; repo-root `cd`; a pinned `PIXI_VERSION` variable (`v0.78.0`); if `command -v pixi` fails, arch-detect and install the pinned pixi release to `~/.local/bin` with `.sha256` verification and add `~/.local/bin` to `~/.bashrc`/`~/.profile` (per Frontier Advice); conditional `python3 -m venv .venv`; `.venv/bin/pip install -e .[dev]`; `pixi install`; closing `echo` about activating `.venv` or `pixi shell` and re-opening the shell if `~/.local/bin` was just added. Idempotent. `chmod +x`.
+- [x] **Step 8** (`tools/install-deps.sh`): `set -euo pipefail`; repo-root `cd`; a pinned `PIXI_VERSION` variable (`v0.78.0`); if `command -v pixi` fails, arch-detect and install the pinned pixi release to `~/.local/bin` with `.sha256` verification and add `~/.local/bin` to `~/.bashrc`/`~/.profile` (per Frontier Advice); conditional `python3 -m venv .venv`; `.venv/bin/pip install -e .[dev]`; `pixi install`; closing `echo` about activating `.venv` or `pixi shell` and re-opening the shell if `~/.local/bin` was just added. Idempotent. `chmod +x`.
 
-- [ ] **Step 9** (`.github/workflows/ci.yml`): `permissions: {}` top-level; `concurrency` group; triggers `push` + `pull_request`. Job `fast`: `runs-on: ubuntu-24.04`, `permissions: {contents: read}`, `harden-runner` (audit) first, `checkout` (SHA-pinned, `persist-credentials: false`), `setup-python` (SHA-pinned) over `strategy.matrix.python-version: ["3.11", "3.12"]`, `pip install -e .[dev]`, `./test.sh --fast`. Job `full`: `runs-on: ubuntu-24.04`, `permissions: {contents: read}`, `harden-runner` first, `checkout`, `prefix-dev/setup-pixi` (SHA-pinned, `frozen: true`), `pixi run full`. Comment stating the no-`${{ github.event.* }}`-in-`run` rule.
+- [x] **Step 9** (`.github/workflows/ci.yml`): `permissions: {}` top-level; `concurrency` group; triggers `push` + `pull_request`. Job `fast`: `runs-on: ubuntu-24.04`, `permissions: {contents: read}`, `harden-runner` (audit) first, `checkout` (SHA-pinned, `persist-credentials: false`), `setup-python` (SHA-pinned) over `strategy.matrix.python-version: ["3.11", "3.12"]`, `pip install -e .[dev]`, `./test.sh --fast`. Job `full`: `runs-on: ubuntu-24.04`, `permissions: {contents: read}`, `harden-runner` first, `checkout`, `prefix-dev/setup-pixi` (SHA-pinned, `frozen: true`), `pixi run full`. Comment stating the no-`${{ github.event.* }}`-in-`run` rule.
 
-- [ ] **Step 10** (`.github/workflows/scorecard.yml`, `.github/dependabot.yml`): Scorecard workflow per Must Have (SHA-pinned `ossf/scorecard-action` + `github/codeql-action/upload-sarif`; triggers `branch_protection_rule` + weekly `schedule` + `push` to `main`; `permissions` `security-events: write` / `id-token: write` / `contents: read`). `dependabot.yml`: `github-actions` weekly, `pip` weekly, comment on pixi being unsupported.
+- [x] **Step 10** (`.github/workflows/scorecard.yml`, `.github/dependabot.yml`): Scorecard workflow per Must Have (SHA-pinned `ossf/scorecard-action` + `github/codeql-action/upload-sarif`; triggers `branch_protection_rule` + weekly `schedule` + `push` to `main`; `permissions` `security-events: write` / `id-token: write` / `contents: read`). `dependabot.yml`: `github-actions` weekly, `pip` weekly, comment on pixi being unsupported.
 
-- [ ] **Step 11** (`docs/github-actions-hardening.md`): Document the standard established here as the rule for future workflow edits.
+- [x] **Step 11** (`docs/github-actions-hardening.md`): Document the standard established here as the rule for future workflow edits.
 
-- [ ] **Step 12** (`README.md`, `.claude/docs/friction-log.md`): `README.md` per Must Have. Remove the `2026-08-30` toolchain friction-log entry.
+- [x] **Step 12** (`README.md`, `.claude/docs/friction-log.md`): `README.md` per Must Have. Remove the `2026-08-30` toolchain friction-log entry.
 
-- [ ] **Step 13** (verification, no new files): Confirm `docs/roadmap.md` M0 reads `Task sh-001`; grep the tree to confirm no `ShelvingUnit`/solver/expansion/catalog/editor code; run `./test.sh --fast` green.
+- [x] **Step 13** (verification, no new files): Confirm `docs/roadmap.md` M0 reads `Task sh-001`; grep the tree to confirm no `ShelvingUnit`/solver/expansion/catalog/editor code; run `./test.sh --fast` green.

@@ -7,21 +7,66 @@ the elevation reflows the 3D. The layout math lives in a pure-Python core
 See [`docs/architecture.md`](docs/architecture.md) for the design of record and
 [`docs/roadmap.md`](docs/roadmap.md) for the milestone breakdown.
 
-## Development
+## Setup
+
+### Recommended: `tools/install-deps.sh`
 
 ```sh
-pip install -e .[dev]
-./test.sh --fast
+tools/install-deps.sh
 ```
 
-The fast tier runs `ruff check`, `ruff format --check`, `mypy` (strict, over
-`shelving_core`), the vendored-core drift check, and `pytest`. It needs no
-FreeCAD.
+The script is idempotent and provisions both environments:
 
-## Dependencies
+- **`.venv/`** — a bare virtualenv with the `dev` extra (`ruff`, `mypy`,
+  `pytest`). This is the FreeCAD-free path for working on `shelving_core`, and
+  the local equivalent of CI's fast leg.
+- **the pixi environment** — the dev toolchain plus FreeCAD 1.0, pinned by
+  `pixi.lock`. This is what the full test tier needs. If `pixi` is not already
+  on `PATH`, the script downloads a pinned release for the host architecture,
+  verifies its published `.sha256`, installs it into `~/.local/bin`, and adds
+  that directory to `~/.bashrc` and `~/.profile`. See the
+  [pixi documentation](https://pixi.sh) for the tool itself.
 
-`./test.sh --full` runs a headless smoke test through `freecadcmd` and requires
-FreeCAD 1.0 or later on `PATH`. Install it from
-<https://www.freecad.org/downloads.php>; the conda-forge `freecad` package also
-provides `freecadcmd`. The full tier hard-fails (non-zero exit) when
-`freecadcmd` is not found rather than skipping.
+Activate one environment before running the tests:
+
+```sh
+source .venv/bin/activate   # core-only
+pixi shell                  # FreeCAD included
+```
+
+If the script just installed pixi, open a new shell (or `source ~/.profile`)
+so `~/.local/bin` is on `PATH`.
+
+### Minimal: core-only virtualenv
+
+If you only need `shelving_core` and already have Python 3.11+:
+
+```sh
+python -m venv .venv
+.venv/bin/pip install -e ".[dev]"
+source .venv/bin/activate
+```
+
+This skips pixi and FreeCAD entirely, so the full test tier is unavailable.
+
+## Tests
+
+The harness is `./test.sh`, with two tiers:
+
+```sh
+./test.sh --fast    # or: pixi run fast
+./test.sh --full    # or: pixi run full
+```
+
+- **`--fast`** runs a toolchain preflight, then `ruff check`,
+  `ruff format --check`, `mypy` (strict, over `shelving_core`), the
+  vendored-core drift check, and `pytest`. No FreeCAD. If `ruff`, `mypy`, or
+  `pytest` is missing it names them, points at `tools/install-deps.sh`, and
+  exits 3.
+- **`--full`** runs a headless smoke test through `freecadcmd` and requires
+  FreeCAD 1.0 or later on `PATH` (the pixi environment provides it; a
+  standalone FreeCAD install also works). It hard-fails with a non-zero exit
+  when `freecadcmd` is not found rather than skipping.
+
+`pixi run fast` / `pixi run full` are thin wrappers that call `./test.sh` with
+the same flag from inside the pixi environment.

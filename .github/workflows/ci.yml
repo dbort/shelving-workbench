@@ -1,36 +1,77 @@
 name: CI
 
+# This repo's workflow-hardening rules are documented in
+# docs/github-actions-hardening.md and apply to every change here. In brief:
+#   * every `uses:` is pinned to a full 40-hex commit SHA with a `# vX.Y.Z`
+#     comment; no `@vN` or `@branch` refs;
+#   * the workflow token starts empty (`permissions: {}`) and each job
+#     re-grants only what it needs;
+#   * triggers are `push` and `pull_request` only, never `pull_request_target`;
+#   * no `run:` step interpolates `${{ github.event.* }}` or any other
+#     attacker-controllable context straight into the shell - route such values
+#     through `env:` and reference them as `"$VAR"`.
+
 on:
   push:
   pull_request:
 
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   fast:
-    runs-on: ubuntu-latest
+    # Deliberately pixi-free and FreeCAD-free: proves shelving_core installs
+    # from a bare venv and passes the fast tier with no FreeCAD present.
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Harden the runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
         with:
-          python-version: "3.11"
-      - run: pip install -e .[dev]
-      - run: ./test.sh --fast
+          egress-policy: audit
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Create venv and install
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -e ".[dev]"
+      - name: Fast tier
+        run: |
+          . .venv/bin/activate
+          ./test.sh --fast
 
   full:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash -el {0}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: mamba-org/setup-micromamba@v2
+      - name: Harden the runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
         with:
-          environment-name: shelving-ci
-          init-shell: bash
-          condarc: |
-            channels:
-              - conda-forge
-          create-args: >-
-            python=3.11
-            freecad=1.0.*
-      - run: pip install -e .
-      - run: ./test.sh --full
+          egress-policy: audit
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up pixi
+        uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2
+        with:
+          # Fail the job on a stale or missing pixi.lock instead of re-solving.
+          frozen: true
+      - name: Full tier
+        run: pixi run full

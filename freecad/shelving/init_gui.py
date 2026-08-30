@@ -1,9 +1,10 @@
 """Workbench registration for the Shelving Workbench.
 
-FreeCAD imports this module at GUI startup. Under ``freecadcmd`` there is no GUI
-and ``FreeCADGui`` cannot be imported, so the GUI base class and the
-``addWorkbench`` call are guarded: importing this module headless must not
-raise.
+FreeCAD imports this module at GUI startup. Under ``freecadcmd`` there is no GUI:
+``import FreeCADGui`` either fails outright or returns a stub without
+``Workbench``. Both cases collapse to ``Gui = None`` so the GUI base class and
+the ``addWorkbench`` call are skipped and importing this module headless does
+not raise.
 """
 
 import os
@@ -12,6 +13,10 @@ try:
     import FreeCADGui as Gui
 except ImportError:
     Gui = None
+else:
+    # freecadcmd exposes a FreeCADGui stub lacking the GUI classes.
+    if not hasattr(Gui, "Workbench"):
+        Gui = None
 
 _RESOURCE_DIR = os.path.join(os.path.dirname(__file__), "resources")
 
