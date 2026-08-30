@@ -1,9 +1,9 @@
 ---
 id: sh-001
 title: "Scaffold monorepo with hardened CI and reproducible env (M0)"
-current_agent: reviewer
-current_phase: review
-review_rejections: 0
+current_agent: implementer
+current_phase: implementation
+review_rejections: 1
 ---
 
 # sh-001: Scaffold monorepo with hardened CI and reproducible env (M0)
