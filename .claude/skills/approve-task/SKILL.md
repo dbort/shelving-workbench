@@ -35,6 +35,7 @@ A task branch can pick up commits after `dispatch-tasks`' post-review `doc-hygie
 ### Step 3: Finalize the task file (on branch `sh-XXX`)
 - Set `current_phase: done` in the frontmatter.
 - Check off `- [ ] User sign-off` under `## Status`.
+- If a `docs/roadmap.md` milestone's **Status** line reads `Task sh-XXX` for this id, change it to `Done sh-XXX` and `git add docs/roadmap.md` so it rides along in this step's commit. The roadmap convention puts this flip here, at merge — not in the task's own steps. Skip cleanly if no such line exists.
 - If `tasks/active/sh-XXX-REVIEW.md` exists, delete it. This normally shouldn't be necessary — the Reviewer already removes it on approval (`pipeline.md` § The rejection loop) — but check anyway rather than assume.
 - **Stage the edit before moving the file — do not skip this.** `git add tasks/active/sh-XXX-*.md` first. `git mv` moves whatever blob the index currently has for that path; if the frontmatter edit above is still unstaged when `git mv` runs, it silently moves the STALE pre-edit content instead of what's actually on disk, and the commit that follows records a task as `done` while its own file still says `user_signoff`. This is a real failure mode, not a hypothetical — the staging step exists because it happened.
 - `git mv tasks/active/sh-XXX-*.md tasks/completed/`.

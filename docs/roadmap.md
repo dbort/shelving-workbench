@@ -14,8 +14,9 @@ Every milestone carries a **Status** line, one of:
 - **Done sh-XXX** — the task merged to `main`. Record the id that
   delivered it.
 
-Update the milestone's Status line and the table below in the same change
-that creates the task or completes it.
+Set **Task sh-XXX** in the same change that creates the task file. The
+flip to **Done sh-XXX** is made by `approve-task` when the branch merges
+to `main`, never by the task's own implementation or review steps.
 
 ## M0 — Scaffold
 
