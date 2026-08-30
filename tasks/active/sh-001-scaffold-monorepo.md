@@ -2,7 +2,7 @@
 id: sh-001
 title: "Scaffold monorepo with hardened CI and reproducible env (M0)"
 current_agent: implementer
-current_phase: planning
+current_phase: implementation
 review_rejections: 0
 ---
 
@@ -19,7 +19,7 @@ Dependabot, harden-runner, OpenSSF Scorecard). No domain logic ships here. This
 task supersedes sh-002, which is abandoned.
 
 ## Status
-- [ ] Planning
+- [x] Planning
 - [ ] Implementation
 - [ ] Review
 - [ ] User sign-off
