@@ -28,4 +28,4 @@ Sweeping the log is a human-triggered act, like task sign-off: the user asks for
 
 ## Entries
 
-(none yet)
+- `2026-08-30` - **A way to get the fast tier's toolchain into a fresh shell**: reviewing sh-001 in an environment with no project virtualenv, `./test.sh --fast` died with `./test.sh: line 24: ruff: command not found` and exit 127. The message names neither the missing dependency set nor the fix, so the diagnosis took a detour through hunting for an existing venv, a `uv`/`pipx` install, and user-site binaries before landing on the README's `pip install -e .[dev]`. Workaround: built a throwaway venv outside the repo and installed the `dev` extra into it. Simpler if: `test.sh` preflighted for `ruff`/`mypy`/`pytest` and pointed at the install command, or the repo had a bootstrap script that provisions the dev environment.

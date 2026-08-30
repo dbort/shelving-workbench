@@ -1,8 +1,8 @@
 ---
 id: sh-001
 title: "Scaffold shelving-workbench monorepo (M0)"
-current_agent: reviewer
-current_phase: review
+current_agent: user
+current_phase: user_signoff
 review_rejections: 0
 ---
 
@@ -18,7 +18,7 @@ from a repo that lints, type-checks, tests, and loads in FreeCAD.
 ## Status
 - [x] Planning
 - [x] Implementation
-- [ ] Review
+- [x] Review
 - [ ] User sign-off
 
 ## Must Have
