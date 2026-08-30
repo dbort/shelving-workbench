@@ -2,7 +2,7 @@
 id: sh-001
 title: "Scaffold monorepo with hardened CI and reproducible env (M0)"
 current_agent: user
-current_phase: user_signoff
+current_phase: done
 review_rejections: 1
 ---
 
@@ -22,7 +22,7 @@ task supersedes sh-002, which is abandoned.
 - [x] Planning
 - [x] Implementation
 - [x] Review
-- [ ] User sign-off
+- [x] User sign-off
 
 ## Must Have
 
