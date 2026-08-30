@@ -19,7 +19,7 @@ that creates the task or completes it.
 
 ## M0 — Scaffold
 
-**Status:** Done sh-001
+**Status:** Task sh-001
 
 Monorepo skeleton, MIT `LICENSE`, `package.xml`, `test.sh` with both
 tiers wired, GitHub Actions running the fast tier and a full-tier job that

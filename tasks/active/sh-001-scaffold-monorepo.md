@@ -36,7 +36,7 @@ from a repo that lints, type-checks, tests, and loads in FreeCAD.
 - [x] `README.md` documents the dev setup (`pip install -e .[dev]`, `./test.sh --fast`) and an explicit `freecadcmd` (FreeCAD 1.0+) dependency for `./test.sh --full`, with a link to FreeCAD install instructions.
 - [x] `.github/workflows/ci.yml` defines two jobs: one runs `./test.sh --fast` on a plain Python 3.11 setup; the other installs FreeCAD 1.0 from conda-forge (providing `freecadcmd`) and runs `./test.sh --full`.
 - [x] No `ShelvingUnit`, solver, expansion, catalog, or task-panel code exists anywhere in the tree.
-- [x] The `docs/roadmap.md` M0 **Status** line reads `Done sh-001`.
+- [x] `docs/roadmap.md` M0 **Status** line still reads `Task sh-001`; this task does not flip it to `Done` (that happens at merge).
 
 ## Frontier Advice
 
@@ -131,4 +131,4 @@ CLAUDE.md.
 
 - [x] **Step 7** (`.github/workflows/ci.yml`): Two jobs on `push` and `pull_request`. `fast`: checkout, `actions/setup-python` 3.11, `pip install -e .[dev]`, `./test.sh --fast`. `full`: checkout, `mamba-org/setup-micromamba` installing `freecad=1.0.*` and `python=3.11` from `conda-forge`, `pip install -e .`, `./test.sh --full` (run inside the micromamba shell so `freecadcmd` is on `PATH`). Pin action versions.
 
-- [x] **Step 8** (`docs/roadmap.md`): Set the M0 **Status** line to `Done sh-001`. Leave all other milestones untouched.
+- [x] **Step 8** (`docs/roadmap.md`): Verify the M0 **Status** line reads `Task sh-001` and leave it unchanged. Do not set it to `Done` — `approve-task` makes that flip when the branch merges to `main`.
