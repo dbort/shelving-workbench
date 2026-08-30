@@ -92,8 +92,8 @@ queueing behind it.
 
 `.github/dependabot.yml` enables weekly updates for:
 
-- `github-actions` — SHA bumps for the pinned `uses:` refs above.
-- `pip` — the `pyproject.toml` `dev` extra, which feeds the FreeCAD-free
+- `github-actions`: SHA bumps for the pinned `uses:` refs above.
+- `pip`: the `pyproject.toml` `dev` extra, which feeds the FreeCAD-free
   install path and CI's fast leg.
 
 Dependabot has no pixi support, so `pixi.lock` is refreshed by hand with

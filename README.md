@@ -17,10 +17,10 @@ tools/install-deps.sh
 
 The script is idempotent and provisions both environments:
 
-- **`.venv/`** — a bare virtualenv with the `dev` extra (`ruff`, `mypy`,
+- **`.venv/`**: a bare virtualenv with the `dev` extra (`ruff`, `mypy`,
   `pytest`). This is the FreeCAD-free path for working on `shelving_core`, and
   the local equivalent of CI's fast leg.
-- **the pixi environment** — the dev toolchain plus FreeCAD 1.0, pinned by
+- **the pixi environment**: the dev toolchain plus FreeCAD 1.0, pinned by
   `pixi.lock`. This is what the full test tier needs. If `pixi` is not already
   on `PATH`, the script downloads a pinned release for the host architecture,
   verifies its published `.sha256`, installs it into `~/.local/bin`, and adds
