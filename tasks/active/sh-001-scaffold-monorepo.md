@@ -42,9 +42,9 @@ task supersedes sh-002, which is abandoned.
 - [ ] `docs/roadmap.md` M0 **Status** line still reads `Task sh-001`; this task does not flip it to `Done` (that happens at merge, via `approve-task`).
 
 ### Environment (pixi) and setup script
-- [ ] `pixi.toml` declares the `conda-forge` channel, `freecad` pinned to `1.0.*`, the dev toolchain (`ruff`, `mypy`, `pytest`), Python `3.12.*`, and at least `linux-64` in platforms; it defines `[tasks]` `fast` and `full` whose bodies are exactly `./test.sh --fast` and `./test.sh --full` (thin wrappers, no tier logic).
-- [ ] `pixi.lock` is committed and consistent with `pixi.toml`. If the implementation environment cannot generate it, see Frontier Advice: `pixi.toml` must still be complete and correct, a friction-log entry records that the lock must be committed from a connected machine, and the CI `full` job is the verification gate. Do not hand-fabricate the lock.
-- [ ] `tools/install-deps.sh` starts with `set -euo pipefail`, exits with a message pointing at pixi's install docs when `pixi` is not on `PATH` (it never installs pixi itself), then creates `.venv/` with `python3` if absent and installs `-e .[dev]` into it, then runs `pixi install`. Re-running it is a no-op, not an error.
+- [ ] `pixi.toml` declares the `conda-forge` channel, `freecad` pinned to `1.0.*`, the dev toolchain (`ruff`, `mypy`, `pytest`), Python `3.12.*`, and both `linux-64` and `linux-aarch64` in platforms (CI is x86_64, the dev VM is aarch64); it defines `[tasks]` `fast` and `full` whose bodies are exactly `./test.sh --fast` and `./test.sh --full` (thin wrappers, no tier logic).
+- [ ] `pixi.lock` is committed and consistent with `pixi.toml`, covering both platforms; generate it with `pixi install`. pixi and conda-forge are reachable in the implementation environment (`pixi` is on `PATH`). Do not hand-fabricate the lock; if a run genuinely cannot reach conda-forge, run `tools/install-deps.sh` first, and only then fall back to the friction-log route.
+- [ ] `tools/install-deps.sh` starts with `set -euo pipefail`; when `pixi` is not on `PATH` it installs a pinned pixi release for the host arch (`uname -m` → `x86_64`/`aarch64`), verifying the published `.sha256`, into `~/.local/bin`, and ensures `~/.local/bin` is on `PATH` via `~/.bashrc` and `~/.profile`; then it creates `.venv/` with `python3` if absent and installs `-e .[dev]` into it, then runs `pixi install`. Re-running it is a no-op, not an error.
 - [ ] `tools/bootstrap-dev.sh` does not exist; `tools/install-deps.sh` is the only setup script.
 - [ ] `./test.sh --fast` preflights for `ruff`, `mypy`, and `pytest` on `PATH` before invoking any of them; if any is missing it names them, tells the reader to run `tools/install-deps.sh` and activate `.venv` (or `pixi shell`), and exits with status 3. Status 2 stays reserved for usage errors; a real lint/type/test failure still surfaces that tool's own status.
 
@@ -64,7 +64,7 @@ task supersedes sh-002, which is abandoned.
 
 ### Docs
 - [ ] `docs/github-actions-hardening.md` documents the standard this task establishes (SHA pinning, `permissions: {}` + per-job grants, `pull_request` never `pull_request_target`, the injection rule, Dependabot coverage, harden-runner, Scorecard, pinned runner images) as the rule for all future workflow changes.
-- [ ] `README.md` documents: `tools/install-deps.sh` (requires pixi preinstalled, with a link to pixi's install docs) as the primary setup; the bare `python -m venv` + `pip install -e .[dev]` path as the minimal core-only alternative; and `./test.sh --fast` / `--full` as the tier interface, including the `freecadcmd` requirement for `--full`.
+- [ ] `README.md` documents: `tools/install-deps.sh` (installs a pinned pixi for the host arch if absent, sets up the venv and the pixi env; links pixi's docs) as the primary setup; the bare `python -m venv` + `pip install -e .[dev]` path as the minimal core-only alternative; and `./test.sh --fast` / `--full` (or `pixi run fast` / `pixi run full`) as the tier interface, including the `freecadcmd` requirement for a bare `--full`.
 - [ ] The `2026-08-30` friction-log entry about getting the fast tier's toolchain into a fresh shell is removed from `.claude/docs/friction-log.md`.
 
 ## Frontier Advice
@@ -119,20 +119,30 @@ other logic.
 `Gui.Workbench if Gui else object`. `import freecad.shelving` must succeed under
 `freecadcmd`; importing `init_gui` there must not raise.
 
-PIXI: `pixi.toml` `[project]` (name, `channels = ["conda-forge"]`, `platforms`
-including `linux-64`), `[dependencies]` `freecad = "1.0.*"`,
-`python = "3.12.*"`, `ruff`, `mypy`, `pytest`; `[tasks]` `fast`/`full` as above.
-Generate `pixi.lock` with `pixi install` (or `pixi lock`). IF pixi is not
-installed and cannot be obtained, or the solve cannot reach conda-forge here:
-still write a complete, correct `pixi.toml`; do NOT hand-fabricate `pixi.lock`;
-add a friction-log entry stating the lock must be generated on a connected
-machine and committed before merge; call this out in the handoff so the
-Reviewer knows the CI `full` job (which runs `setup-pixi` with the lock) is the
-verification point. `tools/install-deps.sh` REQUIRES pixi preinstalled and
-errors with a pointer to <https://pixi.sh/latest/#installation> if missing; it
-never installs pixi. "Always full" means it sets up BOTH the bare `.venv` (for
-the FreeCAD-free path and the CI fast leg's local equivalent) AND the pixi env.
-It supersedes sh-002's `bootstrap-dev.sh`; do not create that file.
+PIXI: `pixi.toml` `[project]` (name, `channels = ["conda-forge"]`,
+`platforms = ["linux-64", "linux-aarch64"]`), `[dependencies]`
+`freecad = "1.0.*"`, `python = "3.12.*"`, `ruff`, `mypy`, `pytest`; `[tasks]`
+`fast`/`full` as above. Generate `pixi.lock` with `pixi install`; it must
+resolve for both platforms. The dev VM already has `pixi` on `PATH`
+(`/usr/local/bin/pixi`, v0.78.0) and conda-forge is reachable, so this is a
+normal build step. Do NOT hand-fabricate `pixi.lock`. Only if a run genuinely
+cannot reach conda-forge: write a complete correct `pixi.toml`, add a
+friction-log entry that the lock must be generated on a connected machine, and
+note in the handoff that CI's `full` job (`setup-pixi` with the lock) is the
+verification point.
+
+`tools/install-deps.sh` is "always full": it sets up BOTH the bare `.venv`
+(pip `-e .[dev]`, for the FreeCAD-free path and the CI fast leg's local
+equivalent) AND the pixi env (`pixi install`). When `pixi` is missing it
+installs a pinned pixi release itself: detect arch with `uname -m`
+(`x86_64` -> `pixi-x86_64-unknown-linux-musl`,
+`aarch64` -> `pixi-aarch64-unknown-linux-musl`), download that asset and its
+`.sha256` from `https://github.com/prefix-dev/pixi/releases/download/<PINNED>/`,
+verify, `install -m 0755` the binary to `~/.local/bin/pixi`, and append
+`export PATH="$HOME/.local/bin:$PATH"` to `~/.bashrc` and `~/.profile` if not
+already present. Pin the pixi version as a shell variable at the top of the
+script (currently `v0.78.0`). It supersedes sh-002's `bootstrap-dev.sh`; do not
+create that file.
 
 CI HARDENING: pin every `uses:` to a 40-hex SHA with a `# vX.Y.Z` comment.
 Actions needed: `actions/checkout`, `actions/setup-python`,
@@ -154,8 +164,15 @@ Execution Plan.
 
 CLAUDE.md § Standing task-planning obligations lists no active entries.
 
-Friction log: record any workaround per CLAUDE.md, including an un-generatable
-`pixi.lock`, an offline action-SHA lookup, or a conda solve that could not run.
+DEV VM: aarch64, open network (PyPI + conda-forge + GitHub reachable),
+persistent `/workspace` and `$HOME`. `pixi` 0.78.0 is at `/usr/local/bin/pixi`.
+The Bash tool spawns non-login non-interactive shells with a frozen `PATH`, so
+edits to `~/.bashrc`/`~/.profile` only take effect in a new Claude Code
+session; call newly installed tools by absolute path or with an inline
+`export PATH` within the same command.
+
+Friction log: record any workaround per CLAUDE.md, including an offline
+action-SHA lookup or a conda solve that could not run.
 
 ## Execution Plan
 
@@ -171,9 +188,9 @@ Friction log: record any workaround per CLAUDE.md, including an un-generatable
 
 - [ ] **Step 6** (`package.xml`): Addon Manager metadata (`xmlns` Package_Metadata, `format="1"`): `name` Shelving, `version` 0.0.1, `description`, `maintainer` `Dave Bort` / `freecad@dbort.com`, `license` MIT (`file="LICENSE"`), `url` `repository` `https://github.com/dbort/shelving-workbench` + a `bugtracker`, `content/workbench` (`classname` `ShelvingWorkbench`, `subdirectory` `freecad/shelving/`, `icon` the resources SVG), `<freecadmin>1.0</freecadmin>`.
 
-- [ ] **Step 7** (`pixi.toml`, `pixi.lock`): `pixi.toml` per Frontier Advice. Generate `pixi.lock` via `pixi install`. If impossible here, leave `pixi.toml` complete, add the friction-log entry, and do not fabricate the lock.
+- [ ] **Step 7** (`pixi.toml`, `pixi.lock`): `pixi.toml` per Frontier Advice (`linux-64` + `linux-aarch64`). Run `pixi install` to generate and commit `pixi.lock` for both platforms. If a run truly cannot reach conda-forge, leave `pixi.toml` complete, add the friction-log entry, and do not fabricate the lock.
 
-- [ ] **Step 8** (`tools/install-deps.sh`): `set -euo pipefail`; repo-root `cd`; `command -v pixi` guard with the install-docs pointer; conditional `python3 -m venv .venv`; `.venv/bin/pip install -e .[dev]`; `pixi install`; closing `echo` about `source .venv/bin/activate` or `pixi shell`. Idempotent. `chmod +x`.
+- [ ] **Step 8** (`tools/install-deps.sh`): `set -euo pipefail`; repo-root `cd`; a pinned `PIXI_VERSION` variable (`v0.78.0`); if `command -v pixi` fails, arch-detect and install the pinned pixi release to `~/.local/bin` with `.sha256` verification and add `~/.local/bin` to `~/.bashrc`/`~/.profile` (per Frontier Advice); conditional `python3 -m venv .venv`; `.venv/bin/pip install -e .[dev]`; `pixi install`; closing `echo` about activating `.venv` or `pixi shell` and re-opening the shell if `~/.local/bin` was just added. Idempotent. `chmod +x`.
 
 - [ ] **Step 9** (`.github/workflows/ci.yml`): `permissions: {}` top-level; `concurrency` group; triggers `push` + `pull_request`. Job `fast`: `runs-on: ubuntu-24.04`, `permissions: {contents: read}`, `harden-runner` (audit) first, `checkout` (SHA-pinned, `persist-credentials: false`), `setup-python` (SHA-pinned) over `strategy.matrix.python-version: ["3.11", "3.12"]`, `pip install -e .[dev]`, `./test.sh --fast`. Job `full`: `runs-on: ubuntu-24.04`, `permissions: {contents: read}`, `harden-runner` first, `checkout`, `prefix-dev/setup-pixi` (SHA-pinned, `frozen: true`), `pixi run full`. Comment stating the no-`${{ github.event.* }}`-in-`run` rule.
 
