@@ -58,6 +58,12 @@ The harness is `./test.sh`, with two tiers:
 ./test.sh --full    # or: pixi run full
 ```
 
+A third entry point, `pixi run lint-workflows` (`tools/lint-workflows.sh`),
+lints `.github/workflows/` against the hardening standard with `actionlint`,
+`zizmor`, a `uses:`-pin format check, and the Dependabot schema. It needs the
+pixi environment (it is not part of either `test.sh` tier) and also runs in CI.
+See [`docs/github-actions-hardening.md`](docs/github-actions-hardening.md).
+
 - **`--fast`** runs a toolchain preflight, then `ruff check`,
   `ruff format --check`, `mypy` (strict, over `shelving_core`), the
   vendored-core drift check, and `pytest`. No FreeCAD. If `ruff`, `mypy`, or

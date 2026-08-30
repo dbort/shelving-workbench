@@ -105,3 +105,28 @@ Dependabot has no pixi support, so `pixi.lock` is refreshed by hand with
 `branch_protection_rule`, a weekly `schedule`, and `push` to `main`. It
 uploads SARIF results to code scanning and publishes to the public
 Scorecard dataset. Treat a dropping score as a regression to investigate.
+
+## Enforcement: `pixi run lint-workflows`
+
+`tools/lint-workflows.sh` (exposed as `pixi run lint-workflows`, and run in
+CI by the `workflows` job in `ci.yml`) checks the rules above that can be
+machine-verified. It runs four checks from a single invocation; all four
+run every time and any failure fails the job:
+
+- **`actionlint`** over `.github/workflows/`: workflow-schema validation
+  plus `shellcheck` on every `run:` script body. `shellcheck` comes from
+  the pixi environment, which is why it is a `pixi.toml` dependency.
+- **`zizmor --offline`** over `.github/workflows/`: the Actions security
+  audit (dangerous triggers, template injection, credential persistence,
+  excessive permissions, and similar). It runs offline for determinism and
+  takes no GitHub token. A genuine finding is fixed; a confirmed false
+  positive is suppressed with an inline `# zizmor: ignore[<rule>]` comment
+  and a one-line reason.
+- **`uses:` pin format**: an offline check that every `uses:` line matches
+  `owner/repo@<40-hex> # vX.Y.Z`, enforcing the SHA-pinning rule above
+  without a network round-trip. It does not verify that the SHA belongs to
+  the named release; Dependabot and review cover that.
+- **`check-jsonschema --builtin-schema vendor.dependabot`** over
+  `.github/dependabot.yml`: validates the Dependabot config against its
+  published schema so a typo there fails CI rather than being silently
+  ignored by GitHub.
