@@ -15,7 +15,7 @@ authors = [{ name = "Dave Bort", email = "freecad@dbort.com" }]
 Repository = "https://github.com/dbort/shelving-workbench"
 
 [project.optional-dependencies]
-dev = ["ruff", "mypy", "pytest"]
+dev = ["ruff", "mypy", "pytest", "jsonschema"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["shelving_core"]

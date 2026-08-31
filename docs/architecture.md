@@ -95,14 +95,20 @@ GUI, and it is enforced: `shelving_core` importing anything from
 
 ### The split-tree
 
-A `Unit` holds outer dimensions, a default material reference, a depth,
+A `Carcass` holds outer dimensions, a depth, a default panel thickness,
 and a root `Bay`. A `Bay` is either:
 
-- a **leaf**: an open compartment, optionally with a material or depth
-  override; or
-- a **split**: an orientation (horizontal or vertical), a divider node
-  (its own material/thickness, inherited from the unit default unless
-  overridden), a `SplitRule`, and two child `Bay`s.
+- a **leaf**: an open compartment; or
+- a **split**: an orientation (horizontal or vertical), an ordered list of
+  two or more child `Bay`s, one `SplitRule` per child, and one fewer
+  `Divider` than children (one per gap between consecutive children).
+
+`Carcass` carries a `default_thickness_mm`, used both for the carcass
+panels and as the thickness of any `Divider` that does not set its own,
+until M2 introduces the material catalog.
+
+Lengths are plain `float` fields whose names carry an `_mm` suffix; there
+is no dedicated units type.
 
 Every node carries a UUID assigned at creation and preserved across all
 edits. Serialisation is a JSON object mirroring this structure, stored on
@@ -132,10 +138,10 @@ size; its sibling keeps whatever rule it had and absorbs the slack.
 
 ### Carcass expansion
 
-`expand(unit, catalog) -> list[PlankSpec]` walks the tree and emits one
+`expand(carcass, catalog) -> list[PlankSpec]` walks the tree and emits one
 `PlankSpec` per physical plank: the two outer sides, top, bottom, every
 divider, and (later) the back. A `PlankSpec` is `(uuid, role, size as a
-3-tuple, placement, material_ref, grain)` in the unit's local frame.
+3-tuple, placement, material_ref, grain)` in the carcass's local frame.
 
 The default carcass rule (sides continuous, everything else captured
 between them) sets each joint's default lap order. A per-joint override

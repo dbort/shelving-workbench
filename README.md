@@ -7,6 +7,10 @@ the elevation reflows the 3D. The layout math lives in a pure-Python core
 See [`docs/architecture.md`](docs/architecture.md) for the design of record and
 [`docs/roadmap.md`](docs/roadmap.md) for the milestone breakdown.
 
+To eyeball a solved layout, run `pixi run demo` (or `python tools/layout_demo.py`
+from an activated environment): it builds a sample nested carcass, runs the
+spacing solver, and prints the resulting rectangle for every bay and divider.
+
 ## Setup
 
 ### Recommended: `tools/install-deps.sh`
