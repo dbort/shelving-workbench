@@ -1,9 +1,9 @@
 ---
 id: sh-003
 title: "Layout engine: Carcass split-tree, JSON Schema, spacing solver (M1)"
-current_agent: reviewer
-current_phase: review
-review_rejections: 0
+current_agent: implementer
+current_phase: implementation
+review_rejections: 1
 ---
 
 # sh-003: Layout engine: Carcass split-tree, JSON Schema, spacing solver (M1)
@@ -44,7 +44,7 @@ materials, no 3D; those arrive in M2 and M3.
 
 ### Solver (`shelving_core/solver.py`)
 - [x] Defines: `Rect` (frozen dataclass, fields `x_mm: float`, `z_mm: float`, `width_mm: float`, `height_mm: float`); `SolvedLayout` (frozen dataclass wrapping `rect_by_id: Mapping[str, Rect]`, with `__getitem__` so `layout[node_id]` returns the `Rect`); module constant `EPS_MM: float = 1e-6`; `SolveErrorReason = Literal["overflow", "no_slack_absorber", "nonpositive_opening"]`; exception `LayoutSolveError(Exception)` with attributes `node_id: str`, `reason: SolveErrorReason`, `detail: Mapping[str, float]`.
-- [x] `solve(carcass: Carcass) -> SolvedLayout` is a thin orchestrator: it calls small, individually testable helpers and does not inline the geometry. At minimum: `_interior_rect(carcass) -> Rect` (carcass inset), `distribute(...)` (below), a `_place(bay, rect, out)` recursion, and `_effective_thicknesses(split, default_thickness_mm) -> list[float]`.
+- [ ] `solve(carcass: Carcass) -> SolvedLayout` is a thin orchestrator: it calls small, individually testable helpers and does not inline the geometry. At minimum: `_interior_rect(carcass) -> Rect` (carcass inset), `distribute(...)` (below), a `_place(bay, rect, out)` recursion, and `_effective_thicknesses(split, default_thickness_mm) -> list[float]`.
 - [x] `distribute(axis_span_mm: float, rules: Sequence[SplitRule], divider_thicknesses_mm: Sequence[float], *, node_id: str) -> list[float]` is a pure function with no dependency on `Rect`, the tree, or `Carcass`. It returns one opening size per rule. It raises `LayoutSolveError(reason="overflow", node_id=node_id, ...)` when `sum(divider_thicknesses_mm) > axis_span_mm + EPS_MM` or when `slack < -EPS_MM`, and `LayoutSolveError(reason="no_slack_absorber", node_id=node_id, ...)` when there are no `Weighted`/`Fill` rules and `abs(slack) > EPS_MM`. It does NOT check for nonpositive openings; `_place` does that against the child bay id.
 - [x] Distribution math: effective divider thickness is `divider.thickness_mm` if not `None` else `carcass.default_thickness_mm`; `available_mm = axis_span_mm - sum(divider_thicknesses_mm)`; `fixed_sum_mm = sum(r.size_mm for Fixed rules)`; driven rules are `Weighted` and `Fill`, `Fill` counting as weight `1.0`; `slack_mm = available_mm - fixed_sum_mm`; each driven opening gets `weight / total_weight * slack_mm`, each fixed opening gets its `size_mm`. Float millimetres, no rounding, no `Decimal`.
 - [x] `_interior_rect` insets the exterior by `default_thickness_mm` on all four sides: `Rect(x_mm=t, z_mm=t, width_mm=width_mm - 2*t, height_mm=height_mm - 2*t)`. If the inset width or height is `<= EPS_MM`, raise `LayoutSolveError(node_id=<root bay id>, reason="overflow", detail=...)`.
@@ -59,7 +59,7 @@ materials, no 3D; those arrive in M2 and M3.
 - [x] `mypy --strict` reports no errors over `shelving_core` (including the new modules and the `TypedDict`s); `ruff check .` and `ruff format --check .` report nothing.
 
 ### Demo and docs
-- [x] `tools/layout_demo.py` builds a sample nested `Carcass` (at least two split levels; a mix of `Fixed`, `Weighted`, and `Fill` rules; at least one `>= 3`-child split), calls `solve`, and prints an indented tree: each node's short id, kind, solved `Rect`, and (for split children) the rule. `python tools/layout_demo.py` exits 0. It is not part of the `shelving_core` package (repo-root `tools/`, like `tests/`).
+- [ ] `tools/layout_demo.py` builds a sample nested `Carcass` (at least two split levels; a mix of `Fixed`, `Weighted`, and `Fill` rules; at least one `>= 3`-child split), calls `solve`, and prints an indented tree: each node's short id, kind, solved `Rect`, and (for split children) the rule. `python tools/layout_demo.py` exits 0. It is not part of the `shelving_core` package (repo-root `tools/`, like `tests/`).
 - [x] `pixi.toml` gains a `[tasks]` entry `demo` whose body is exactly `python tools/layout_demo.py`. The existing `fast` / `full` / `lint-workflows` tasks are untouched.
 - [x] `README.md` mentions `pixi run demo` (or `python tools/layout_demo.py`) as the way to eyeball a solved layout.
 - [x] `docs/architecture.md` "### The split-tree" section: rewritten for N-ary splits (an orientation, an ordered list of two or more child `Bay`s, one `SplitRule` per child, one fewer `Divider` than children); the core type renamed from `Unit` to `Carcass` wherever that subsection refers to the data model (leave the FreeCAD `ShelvingUnit` object references alone); a sentence stating `Carcass` carries `default_thickness_mm`, used both for the carcass panels and as the divider default, until M2 introduces materials; a note that lengths use `_mm`-suffixed float fields. Rename `Unit` to `Carcass` in the "### The spacing solver" and "### Carcass expansion" subsections too where they name the core type. No other restyling.
