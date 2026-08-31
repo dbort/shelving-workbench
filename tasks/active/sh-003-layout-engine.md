@@ -2,7 +2,7 @@
 id: sh-003
 title: "Layout engine: Carcass split-tree, JSON Schema, spacing solver (M1)"
 current_agent: implementer
-current_phase: planning
+current_phase: implementation
 review_rejections: 0
 ---
 
@@ -18,7 +18,7 @@ raising a structured error when a layout cannot be satisfied. No FreeCAD, no
 materials, no 3D; those arrive in M2 and M3.
 
 ## Status
-- [ ] Planning
+- [x] Planning
 - [ ] Implementation
 - [ ] Review
 - [ ] User sign-off
