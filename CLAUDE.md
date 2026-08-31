@@ -52,6 +52,15 @@ explicitly opt out of (with the reason stated in the task's
 whenever a bug reveals a class of work that future tasks keep getting
 wrong.
 
+- **Typed Python:** new or changed Python uses precise types. No bare
+  `Any`, and no bare `dict`/`list`/`tuple`/`set` in function signatures or
+  public attributes; reach for `TypedDict`, `NewType`, `Protocol`,
+  generics, `Mapping`/`Sequence`, and `Literal` instead. `Any` is
+  allowed only where a boundary genuinely erases the type (parsing
+  arbitrary external JSON, a third-party API that is itself untyped), and
+  then with a comment saying why. `mypy --strict` over the changed code
+  must pass.
+
 <!-- Example shape for future entries:
 
 - **Config parity:** any task adding an env var a deploy-managed service
