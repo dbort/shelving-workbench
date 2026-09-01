@@ -2,7 +2,7 @@
 id: sh-004
 title: "SVG rendering of a solved layout"
 current_agent: implementer
-current_phase: planning
+current_phase: implementation
 review_rejections: 0
 blocked_by: [sh-003]
 ---
@@ -17,7 +17,7 @@ later the editor and docs) can show the nested rectangles instead of a wall of
 flag that writes one.
 
 ## Status
-- [ ] Planning
+- [x] Planning
 - [ ] Implementation
 - [ ] Review
 - [ ] User sign-off
