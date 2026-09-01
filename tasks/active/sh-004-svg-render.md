@@ -113,7 +113,7 @@ Friction log: record any workaround per `CLAUDE.md`.
 
 - [x] **Step 2** (`shelving_core/tests/test_svg.py`): Tests per the Must Have "Tests" bullet: XML parse, root + viewBox, rect and text counts for a known sample, the explicit y-flip coordinate assertion for the 100x100 case, a `>= 3`-child split's rect counts, and determinism (`to_svg` called twice is equal).
 
-- [ ] **Step 3** (`tools/layout_demo.py`): Add the `argparse` `--svg PATH` flag per DEMO CLI; write the SVG and print a confirmation line when given; leave the text dump unconditional. Update the module docstring (replace "There is no command line"). Remove any local rule-label helper in favor of `shelving_core.svg._rule_label`.
+- [x] **Step 3** (`tools/layout_demo.py`): Add the `argparse` `--svg PATH` flag per DEMO CLI; write the SVG and print a confirmation line when given; leave the text dump unconditional. Update the module docstring (replace "There is no command line"). Remove any local rule-label helper in favor of `shelving_core.svg._rule_label`.
 
 - [ ] **Step 4** (`tests/test_layout_demo.py`): Extend the existing repo-root test with a `--svg` case: subprocess-run `python tools/layout_demo.py --svg <tmp>`, assert exit 0, file exists and non-empty, parses as XML, root is the SVG element. Keep the existing assertions.
 
