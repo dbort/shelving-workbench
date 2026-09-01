@@ -2,7 +2,7 @@
 id: sh-004
 title: "SVG rendering of a solved layout"
 current_agent: user
-current_phase: user_signoff
+current_phase: done
 review_rejections: 0
 blocked_by: [sh-003]
 ---
@@ -20,7 +20,7 @@ flag that writes one.
 - [x] Planning
 - [x] Implementation
 - [x] Review
-- [ ] User sign-off
+- [x] User sign-off
 
 ## Must Have
 
