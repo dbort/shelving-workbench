@@ -2,7 +2,7 @@
 id: sh-007
 title: "Document the freecadcmd headless-script contract"
 current_agent: user
-current_phase: user_signoff
+current_phase: done
 review_rejections: 0
 ---
 
@@ -18,7 +18,7 @@ contract in `docs/freecadcmd-notes.md`.
 - [x] Planning
 - [x] Implementation
 - [x] Review
-- [ ] User sign-off
+- [x] User sign-off
 
 ## Must Have
 - [x] `docs/freecadcmd-notes.md` exists and documents these three behaviors, each with a sentence on the consequence and a pointer to the file that handles it:
