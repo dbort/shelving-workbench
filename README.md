@@ -41,6 +41,10 @@ source .venv/bin/activate   # core-only
 pixi shell                  # FreeCAD included
 ```
 
+Repo-root scripts such as `tools/layout_demo.py` also need an activated
+environment (or a `pixi run` prefix): they import `shelving_core` from the
+environment and carry no `sys.path` shim of their own.
+
 If the script just installed pixi, open a new shell (or `source ~/.profile`)
 so `~/.local/bin` is on `PATH`.
 

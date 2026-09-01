@@ -1,8 +1,8 @@
 ---
 id: sh-005
 title: "Dev-environment robustness: editable pixi install, venv-drift preflight"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 0
 ---
 
@@ -18,7 +18,7 @@ pixi env and adds a dev-extra check to the fast-tier preflight.
 
 ## Status
 - [x] Planning
-- [ ] Implementation
+- [x] Implementation
 - [ ] Review
 - [ ] User sign-off
 
@@ -66,14 +66,14 @@ Record any NEW workaround per `CLAUDE.md`.
 
 ## Execution Plan
 
-- [ ] **Step 1** (`pixi.toml`, `pixi.lock`): Add the editable local install of `shelving-workbench` to the pixi environment per PIXI EDITABLE INSTALL. Run `pixi install`; verify `pixi run python -c "import shelving_core"` resolves to the checkout; commit the regenerated `pixi.lock` (both platforms).
+- [x] **Step 1** (`pixi.toml`, `pixi.lock`): Add the editable local install of `shelving-workbench` to the pixi environment per PIXI EDITABLE INSTALL. Run `pixi install`; verify `pixi run python -c "import shelving_core"` resolves to the checkout; commit the regenerated `pixi.lock` (both platforms).
 
-- [ ] **Step 2** (`test.sh`): Extend `preflight_fast` with the dev-extra distribution check per the Must Have and PREFLIGHT CHECK: read `[project.optional-dependencies].dev` from `pyproject.toml` with `tomllib`, check each with `importlib.metadata.distribution`, exit 3 with the named-missing message pointing at `tools/install-deps.sh`. Runs before `ruff`/`mypy`/`pytest`.
+- [x] **Step 2** (`test.sh`): Extend `preflight_fast` with the dev-extra distribution check per the Must Have and PREFLIGHT CHECK: read `[project.optional-dependencies].dev` from `pyproject.toml` with `tomllib`, check each with `importlib.metadata.distribution`, exit 3 with the named-missing message pointing at `tools/install-deps.sh`. Runs before `ruff`/`mypy`/`pytest`.
 
-- [ ] **Step 3** (`tools/layout_demo.py`): Remove the `_REPO_ROOT` / `sys.path.insert` bootstrap. Update the module docstring to state the activated-environment requirement. Leave everything else (argparse `--svg`, the text dump, `rule_label` import) unchanged.
+- [x] **Step 3** (`tools/layout_demo.py`): Remove the `_REPO_ROOT` / `sys.path.insert` bootstrap. Update the module docstring to state the activated-environment requirement. Leave everything else (argparse `--svg`, the text dump, `rule_label` import) unchanged.
 
-- [ ] **Step 4** (`README.md`): Note that repo-root scripts like `tools/layout_demo.py` require an activated environment.
+- [x] **Step 4** (`README.md`): Note that repo-root scripts like `tools/layout_demo.py` require an activated environment.
 
-- [ ] **Step 5** (`.claude/docs/friction-log.md`): Delete the two `2026-08-31` entries.
+- [x] **Step 5** (`.claude/docs/friction-log.md`): Delete the two `2026-08-31` entries.
 
-- [ ] **Step 6** (verification, no new files): `./test.sh --fast` green; `pixi run full` green; `pixi run demo` and `python tools/layout_demo.py` (in an activated `.venv`) exit 0; `pytest tests/test_layout_demo.py` passes. Simulate a stale env (a `PATH`/venv missing `jsonschema`) and confirm the preflight exits 3 naming it.
+- [x] **Step 6** (verification, no new files): `./test.sh --fast` green; `pixi run full` green; `pixi run demo` and `python tools/layout_demo.py` (in an activated `.venv`) exit 0; `pytest tests/test_layout_demo.py` passes. Simulate a stale env (a `PATH`/venv missing `jsonschema`) and confirm the preflight exits 3 naming it.

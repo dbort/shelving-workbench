@@ -24,3 +24,9 @@ fast = "./test.sh --fast"
 full = "./test.sh --full"
 lint-workflows = "tools/lint-workflows.sh"
 demo = "python tools/layout_demo.py"
+
+# The project installs itself editable so `import shelving_core` resolves to the
+# checkout under `pixi run` / `pixi shell` with no per-script sys.path shim. This
+# is the project, not a third-party dependency.
+[pypi-dependencies]
+shelving-workbench = { path = ".", editable = true }

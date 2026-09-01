@@ -15,8 +15,9 @@
 # freecadcmd is absent; it does not skip.
 #
 # Exit status: 2 is reserved for usage errors, 3 for a failed preflight (a
-# required tool is missing). Any other non-zero status is the underlying
-# lint/type/test tool's own.
+# required tool is missing from PATH, or the active environment is out of sync
+# with pyproject.toml's [dev] extra). Any other non-zero status is the
+# underlying lint/type/test tool's own.
 #
 set -euo pipefail
 
@@ -45,9 +46,47 @@ preflight() {
 	fi
 }
 
+# Confirm every distribution named in pyproject.toml's
+# [project.optional-dependencies].dev is present in the active environment. A
+# .venv provisioned before a dependency was added to the extra still imports
+# fine for unrelated code, so without this check a stale env first surfaces as a
+# pytest collection error deep in the run instead of one actionable message.
+# Metadata lookup only: no import side effects, no network.
+preflight_dev_extra() {
+	python3 - <<'PY'
+import importlib.metadata as metadata
+import re
+import sys
+import tomllib
+
+with open("pyproject.toml", "rb") as handle:
+    dev = tomllib.load(handle)["project"]["optional-dependencies"]["dev"]
+
+missing = []
+for spec in dev:
+    # Strip any version/marker/extra suffix to leave the bare distribution name,
+    # which is what importlib.metadata resolves against.
+    name = re.split(r"[<>=!~;\[\s]", spec, maxsplit=1)[0].strip()
+    try:
+        metadata.distribution(name)
+    except metadata.PackageNotFoundError:
+        missing.append(name)
+
+if missing:
+    print(
+        f"dev environment is out of sync with the [dev] extra: {', '.join(missing)}. "
+        "Run tools/install-deps.sh.",
+        file=sys.stderr,
+    )
+    sys.exit(3)
+PY
+}
+
 # The fast-tier sequence, factored out so --full can run it verbatim as its
-# first stage.
+# first stage. The dev-extra check runs first so a stale environment fails
+# before ruff/mypy/pytest are invoked.
 run_fast() {
+	preflight_dev_extra
 	ruff check .
 	ruff format --check .
 	mypy

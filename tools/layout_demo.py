@@ -1,6 +1,7 @@
 """Build a sample nested Carcass, solve it, and print the solved layout.
 
-Run from the repo root:
+Run inside an activated environment (``source .venv/bin/activate``, ``pixi
+shell``, or via ``pixi run``), which puts ``shelving_core`` on the import path:
 
     python tools/layout_demo.py                 (or: pixi run demo)
     python tools/layout_demo.py --svg out.svg   (or: pixi run demo -- --svg out.svg)
@@ -11,22 +12,12 @@ tree, one line per node with its short id, kind, solved rectangle
 split, the ``SplitRule`` that positioned it. With ``--svg PATH``, the solved
 layout is also written to ``PATH`` as an SVG elevation and a confirmation line
 is printed.
-
-The repo root is put on ``sys.path`` so the script runs the same whether or not
-``shelving_core`` is installed into the active environment (the pixi env, for
-one, imports it straight from the checkout).
 """
 
 import argparse
-import os
 import pathlib
-import sys
 
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _REPO_ROOT not in sys.path:
-    sys.path.insert(0, _REPO_ROOT)
-
-from shelving_core.layout import (  # noqa: E402
+from shelving_core.layout import (
     Bay,
     Carcass,
     Divider,
@@ -38,8 +29,8 @@ from shelving_core.layout import (  # noqa: E402
     SplitRule,
     Weighted,
 )
-from shelving_core.solver import Rect, SolvedLayout, solve  # noqa: E402
-from shelving_core.svg import rule_label, to_svg  # noqa: E402
+from shelving_core.solver import Rect, SolvedLayout, solve
+from shelving_core.svg import rule_label, to_svg
 
 
 def _sample_carcass() -> Carcass:
