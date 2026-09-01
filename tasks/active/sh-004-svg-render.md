@@ -1,8 +1,8 @@
 ---
 id: sh-004
 title: "SVG rendering of a solved layout"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 0
 blocked_by: [sh-003]
 ---
@@ -18,7 +18,7 @@ flag that writes one.
 
 ## Status
 - [x] Planning
-- [ ] Implementation
+- [x] Implementation
 - [ ] Review
 - [ ] User sign-off
 
@@ -52,13 +52,13 @@ flag that writes one.
 - [x] `bash tools/vendor-core.sh` is re-run and the refreshed `freecad/shelving/vendor/shelving_core/svg.py` committed so `bash tools/vendor-core.sh --check` (in `--fast`) passes.
 
 ### Cleanup (Round 2 — reviewer sign-off notes)
-- [ ] `shelving_core/svg.py`: `_rule_label` gains a public alias (either rename it to `rule_label` and keep a `_rule_label` re-export for any internal callers, or add `rule_label = _rule_label`). `tools/layout_demo.py` imports the public name. No underscore-prefixed name is imported across module boundaries.
-- [ ] `shelving_core/svg.py`: the internal walk collects a bare `Rect` per divider (or keeps `(id, Rect)` and actually uses the id at the emit site) — no field is collected and then discarded.
-- [ ] `shelving_core/tests/test_svg.py`: a test feeds a `Leaf` whose `id` contains `<`, `>`, `&`, and `"` and asserts the rendered SVG (a) still parses and (b) contains the escaped forms, not the raw characters — pinning `_xml_escape`.
-- [ ] `shelving_core/tests/test_svg.py`: a test calls `to_svg(carcass, layout, scale=2.0)` and asserts the `width`/`height` attributes are `viewBox` extents times 2 while the `viewBox` itself is unchanged from the `scale=1.0` render.
-- [ ] `shelving_core/tests/test_svg.py`: the duplicated `assert len(_rects_by_class(root, "leaf")) == n_leaves` (asserted twice in one test) is reduced to one.
-- [ ] `.gitignore` includes `.DS_Store` (macOS Finder detritus; contributors open the demo SVG in Finder / Quick Look).
-- [ ] `bash tools/vendor-core.sh` re-run and the refreshed `freecad/shelving/vendor/shelving_core/svg.py` committed (the `_rule_label` alias and walk-tuple change touch it).
+- [x] `shelving_core/svg.py`: `_rule_label` gains a public alias (either rename it to `rule_label` and keep a `_rule_label` re-export for any internal callers, or add `rule_label = _rule_label`). `tools/layout_demo.py` imports the public name. No underscore-prefixed name is imported across module boundaries.
+- [x] `shelving_core/svg.py`: the internal walk collects a bare `Rect` per divider (or keeps `(id, Rect)` and actually uses the id at the emit site) — no field is collected and then discarded.
+- [x] `shelving_core/tests/test_svg.py`: a test feeds a `Leaf` whose `id` contains `<`, `>`, `&`, and `"` and asserts the rendered SVG (a) still parses and (b) contains the escaped forms, not the raw characters — pinning `_xml_escape`.
+- [x] `shelving_core/tests/test_svg.py`: a test calls `to_svg(carcass, layout, scale=2.0)` and asserts the `width`/`height` attributes are `viewBox` extents times 2 while the `viewBox` itself is unchanged from the `scale=1.0` render.
+- [x] `shelving_core/tests/test_svg.py`: the duplicated `assert len(_rects_by_class(root, "leaf")) == n_leaves` (asserted twice in one test) is reduced to one.
+- [x] `.gitignore` includes `.DS_Store` (macOS Finder detritus; contributors open the demo SVG in Finder / Quick Look).
+- [x] `bash tools/vendor-core.sh` re-run and the refreshed `freecad/shelving/vendor/shelving_core/svg.py` committed (the `_rule_label` alias and walk-tuple change touch it).
 
 ### Scope guard
 - [x] SVG only: no STL, no PNG, no new runtime or dev dependency. No FreeCAD import in `shelving_core/`. `shelving_core/svg.py` does not recompute a solve; it consumes the passed `SolvedLayout`.
@@ -135,4 +135,4 @@ Friction log: record any workaround per `CLAUDE.md`.
 
 - [x] **Step 5** (`README.md`, vendored copy): Update the demo paragraph in `README.md` to mention `pixi run demo -- --svg layout.svg` and opening the result with Quick Look or a browser. Run `bash tools/vendor-core.sh` and commit the refreshed `freecad/shelving/vendor/shelving_core/svg.py`. Confirm `./test.sh --fast` and `pixi run full` are green and `pixi run demo -- --svg /tmp/demo.svg` writes a parseable file.
 
-- [ ] **Step 6** (`shelving_core/svg.py`, `shelving_core/tests/test_svg.py`, `tools/layout_demo.py`, `.gitignore`, vendored copy): Apply the "### Cleanup (Round 2 — reviewer sign-off notes)" items: public `rule_label` alias + demo import updated; divider walk collects a bare `Rect` (no discarded field); new `test_svg.py` tests for `_xml_escape` (a `<`/`>`/`&`/`"` id) and for `scale=2.0` (width/height scaled, viewBox unchanged); drop the one duplicated leaf-count assertion; add `.DS_Store` to `.gitignore`. Re-run `bash tools/vendor-core.sh` and commit the refreshed vendored `svg.py`. Confirm `./test.sh --fast` and `pixi run full` green.
+- [x] **Step 6** (`shelving_core/svg.py`, `shelving_core/tests/test_svg.py`, `tools/layout_demo.py`, `.gitignore`, vendored copy): Apply the "### Cleanup (Round 2 — reviewer sign-off notes)" items: public `rule_label` alias + demo import updated; divider walk collects a bare `Rect` (no discarded field); new `test_svg.py` tests for `_xml_escape` (a `<`/`>`/`&`/`"` id) and for `scale=2.0` (width/height scaled, viewBox unchanged); drop the one duplicated leaf-count assertion; add `.DS_Store` to `.gitignore`. Re-run `bash tools/vendor-core.sh` and commit the refreshed vendored `svg.py`. Confirm `./test.sh --fast` and `pixi run full` green.

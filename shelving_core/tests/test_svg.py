@@ -107,7 +107,6 @@ def test_rect_and_label_counts_for_a_known_tree() -> None:
     assert len(_rects_by_class(root, "leaf")) == n_leaves
 
     texts = root.findall(_tag("text"))
-    assert len(_rects_by_class(root, "leaf")) == n_leaves
     label_texts = [t for t in texts if t.get("class") == "label"]
     title_texts = [t for t in texts if t.get("class") == "title"]
     assert len(label_texts) == n_leaves
@@ -167,3 +166,42 @@ def test_output_is_deterministic() -> None:
     carcass = _nested_sample()
     layout = solve(carcass)
     assert to_svg(carcass, layout) == to_svg(carcass, layout)
+
+
+def test_markup_metacharacters_in_an_id_are_xml_escaped() -> None:
+    raw_id = 'x<a>&"y'
+    carcass = Carcass(
+        width_mm=100.0,
+        height_mm=100.0,
+        depth_mm=50.0,
+        default_thickness_mm=10.0,
+        root=Leaf(id=raw_id),
+    )
+    svg = to_svg(carcass, solve(carcass))
+
+    # Still well-formed with the metacharacters carried through the label text.
+    root = ET.fromstring(svg)
+
+    # The escaped forms are present and the raw run never appears in a text node.
+    assert "&lt;" in svg
+    assert "&gt;" in svg
+    assert "&amp;" in svg
+    assert "&quot;" in svg
+    assert raw_id not in svg
+
+    (label,) = [t for t in root.findall(_tag("text")) if t.get("class") == "label"]
+    short_id_tspan = label.findall(_tag("tspan"))[1]
+    assert short_id_tspan.text == raw_id[:8]
+
+
+def test_scale_grows_size_attributes_but_leaves_viewbox_untouched() -> None:
+    carcass = _nested_sample()
+    layout = solve(carcass)
+    base = ET.fromstring(to_svg(carcass, layout, scale=1.0))
+    scaled = ET.fromstring(to_svg(carcass, layout, scale=2.0))
+
+    assert scaled.get("viewBox") == base.get("viewBox")
+
+    _, _, view_w, view_h = (base.get("viewBox") or "").split()
+    assert float(scaled.get("width", "nan")) == pytest.approx(2.0 * float(view_w))
+    assert float(scaled.get("height", "nan")) == pytest.approx(2.0 * float(view_h))

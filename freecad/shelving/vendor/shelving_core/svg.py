@@ -47,7 +47,7 @@ def _xml_escape(text: str) -> str:
     return escape(text, {'"': "&quot;"})
 
 
-def _rule_label(rule: SplitRule) -> str:
+def rule_label(rule: SplitRule) -> str:
     """Human-readable one-liner for the rule that positioned a bay.
 
     ``Fixed 400 mm`` / ``Weighted 2`` / ``Fill``. Exhaustive over the
@@ -83,7 +83,7 @@ def _walk(
     bay: Bay,
     rule: SplitRule | None,
     layout: SolvedLayout,
-    dividers_out: list[tuple[str, Rect]],
+    dividers_out: list[Rect],
     leaves_out: list[tuple[str, Rect, SplitRule | None]],
 ) -> None:
     """Pre-order walk collecting divider and leaf placements.
@@ -92,7 +92,8 @@ def _walk(
     split, or ``None`` for the carcass root. ``Split`` nodes contribute no rect
     of their own (their area is the union of their children); each child is
     visited in list order, with the divider that follows it appended right
-    after so z-order stays deterministic.
+    after so z-order stays deterministic. Dividers carry no label, so only their
+    placed ``Rect`` is collected; leaves keep their id for the short-id label.
     """
     match bay:
         case Leaf():
@@ -101,8 +102,7 @@ def _walk(
             for index, child in enumerate(bay.children):
                 _walk(child, bay.rules[index], layout, dividers_out, leaves_out)
                 if index < len(bay.dividers):
-                    divider = bay.dividers[index]
-                    dividers_out.append((divider.id, layout[divider.id]))
+                    dividers_out.append(layout[bay.dividers[index].id])
 
 
 def _rect_line(
@@ -183,7 +183,7 @@ def to_svg(
     view_w = carcass.width_mm + 2.0 * margin_mm
     view_h = carcass.height_mm + 2.0 * margin_mm + title_band_mm
 
-    dividers: list[tuple[str, Rect]] = []
+    dividers: list[Rect] = []
     leaves: list[tuple[str, Rect, SplitRule | None]] = []
     _walk(carcass.root, None, layout, dividers, leaves)
 
@@ -202,7 +202,7 @@ def to_svg(
     parts.append(
         _rect_line("carcass", outline, carcass.height_mm, margin_mm, title_band_mm)
     )
-    for _divider_id, rect in dividers:
+    for rect in dividers:
         parts.append(
             _rect_line("divider", rect, carcass.height_mm, margin_mm, title_band_mm)
         )
@@ -215,7 +215,7 @@ def to_svg(
             leaf_id[:8],
         ]
         if rule is not None:
-            label_lines.append(_rule_label(rule))
+            label_lines.append(rule_label(rule))
         parts.append(
             _label_line(
                 label_lines,

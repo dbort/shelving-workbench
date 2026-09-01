@@ -39,7 +39,7 @@ from shelving_core.layout import (  # noqa: E402
     Weighted,
 )
 from shelving_core.solver import Rect, SolvedLayout, solve  # noqa: E402
-from shelving_core.svg import _rule_label, to_svg  # noqa: E402
+from shelving_core.svg import rule_label, to_svg  # noqa: E402
 
 
 def _sample_carcass() -> Carcass:
@@ -80,7 +80,7 @@ def _print_bay(
 ) -> None:
     indent = "  " * depth
     kind = "split" if isinstance(bay, Split) else "leaf"
-    suffix = f"  rule={_rule_label(rule)}" if rule is not None else ""
+    suffix = f"  rule={rule_label(rule)}" if rule is not None else ""
     print(f"{indent}{bay.id[:8]} {kind} rect={_fmt_rect(layout[bay.id])}{suffix}")
     if isinstance(bay, Split):
         for index, child in enumerate(bay.children):
