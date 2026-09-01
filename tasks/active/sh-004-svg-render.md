@@ -111,7 +111,7 @@ Friction log: record any workaround per `CLAUDE.md`.
 
 - [x] **Step 1** (`shelving_core/svg.py`): Implement `to_svg`, `_rule_label`, `_svg_x`/`_svg_y`, and an XML-escape helper per the Must Have and Frontier Advice. Pure, stdlib-only, fully typed, deterministic output. Pre-order tree walk collecting elements, then emit carcass outline / dividers / leaves+labels / title in that order inside one `<svg>` with a mm `viewBox` and a `<style>` block.
 
-- [ ] **Step 2** (`shelving_core/tests/test_svg.py`): Tests per the Must Have "Tests" bullet: XML parse, root + viewBox, rect and text counts for a known sample, the explicit y-flip coordinate assertion for the 100x100 case, a `>= 3`-child split's rect counts, and determinism (`to_svg` called twice is equal).
+- [x] **Step 2** (`shelving_core/tests/test_svg.py`): Tests per the Must Have "Tests" bullet: XML parse, root + viewBox, rect and text counts for a known sample, the explicit y-flip coordinate assertion for the 100x100 case, a `>= 3`-child split's rect counts, and determinism (`to_svg` called twice is equal).
 
 - [ ] **Step 3** (`tools/layout_demo.py`): Add the `argparse` `--svg PATH` flag per DEMO CLI; write the SVG and print a confirmation line when given; leave the text dump unconditional. Update the module docstring (replace "There is no command line"). Remove any local rule-label helper in favor of `shelving_core.svg._rule_label`.
 
