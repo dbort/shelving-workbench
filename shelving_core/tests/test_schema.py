@@ -6,10 +6,11 @@ keep the schema honest against the model.
 """
 
 import json
+from collections.abc import Mapping
 from importlib.resources import files
 from typing import Any
 
-import jsonschema  # type: ignore[import-untyped]
+import jsonschema  # type: ignore[import-untyped]  # untyped third-party API
 import pytest
 from jsonschema import Draft202012Validator
 
@@ -25,9 +26,11 @@ from shelving_core.layout import (
 )
 
 
-def _schema() -> dict[str, Any]:
+def _schema() -> Mapping[str, object]:
+    # Parsed JSON handed only to the untyped jsonschema API; its internal shape
+    # is jsonschema's contract, not this suite's, so it stays at object.
     text = files("shelving_core").joinpath("layout.schema.json").read_text()
-    loaded: dict[str, Any] = json.loads(text)
+    loaded: Mapping[str, object] = json.loads(text)
     return loaded
 
 
@@ -78,8 +81,10 @@ def test_to_dict_output_validates_against_schema(carcass: Carcass) -> None:
 
 
 def _valid_doc() -> dict[str, Any]:
-    # A plain, freely mutable dict (not the CarcassDoc TypedDict) so each helper
-    # below can corrupt one field without fighting the type checker.
+    # Parsed external JSON is a genuine type-erasing boundary, and the corruption
+    # helpers below subscript through several levels, so this is Any rather than
+    # object: a plain, freely mutable dict (not the CarcassDoc TypedDict) that
+    # each helper can corrupt one field of without fighting the type checker.
     loaded: dict[str, Any] = json.loads(_nested_carcass().to_json())
     return loaded
 

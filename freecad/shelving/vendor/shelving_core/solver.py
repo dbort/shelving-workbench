@@ -92,9 +92,11 @@ def distribute(
     in proportion to weight (``Fill`` is weight 1). Raises
     :class:`LayoutSolveError` with ``reason="overflow"`` when the dividers alone
     exceed the span or the fixed sizes leave negative slack, and
-    ``reason="no_slack_absorber"`` when there is leftover slack but no driven
-    rule to absorb it. It does not check for nonpositive openings; ``_place``
-    does that against the child bay id.
+    ``reason="no_slack_absorber"`` when there is leftover positive slack but no
+    driven rule to absorb it. Overflow is checked first, so an all-``Fixed``
+    split whose sizes exceed the span reports ``"overflow"``, not
+    ``"no_slack_absorber"``. It does not check for nonpositive openings;
+    ``_place`` does that against the child bay id.
     """
     dividers_total_mm = sum(divider_thicknesses_mm)
     if dividers_total_mm > axis_span_mm + EPS_MM:
@@ -110,17 +112,21 @@ def distribute(
     fixed_sum_mm = sum(rule.size_mm for rule in rules if isinstance(rule, Fixed))
     slack_mm = available_mm - fixed_sum_mm
     driven = [rule for rule in rules if isinstance(rule, (Weighted, Fill))]
-    if not driven:
-        if abs(slack_mm) > EPS_MM:
-            raise LayoutSolveError(
-                node_id,
-                "no_slack_absorber",
-                {"slack_mm": slack_mm, "available_mm": available_mm},
-            )
-    elif slack_mm < -EPS_MM:
+    # Negative slack is an overflow regardless of whether a driven rule exists,
+    # so this precedes the no_slack_absorber check: an all-Fixed split that
+    # overruns the span reports the more informative "overflow" reason.
+    if slack_mm < -EPS_MM:
         raise LayoutSolveError(
             node_id,
             "overflow",
+            {"slack_mm": slack_mm, "available_mm": available_mm},
+        )
+    # no_slack_absorber is the underfill case only: leftover positive slack and
+    # no Weighted/Fill rule to take it up.
+    if not driven and slack_mm > EPS_MM:
+        raise LayoutSolveError(
+            node_id,
+            "no_slack_absorber",
             {"slack_mm": slack_mm, "available_mm": available_mm},
         )
     total_weight = sum(_driven_weight(rule) for rule in driven)
@@ -165,68 +171,79 @@ def _effective_thicknesses(split: Split, default_thickness_mm: float) -> list[fl
     ]
 
 
-def solve(carcass: Carcass) -> SolvedLayout:
-    """Place every ``Leaf``, ``Split``, and ``Divider`` id in one :class:`Rect`."""
-    out: dict[str, Rect] = {}
+def _place(
+    bay: Bay, rect: Rect, out: dict[str, Rect], default_thickness_mm: float
+) -> None:
+    """Record one :class:`Rect` per node id in the subtree rooted at ``bay``.
 
-    def _place(bay: Bay, rect: Rect) -> None:
-        match bay:
-            case Leaf():
-                out[bay.id] = rect
-            case Split():
-                out[bay.id] = rect
-                thicknesses_mm = _effective_thicknesses(
-                    bay, carcass.default_thickness_mm
-                )
-                horizontal = bay.orientation is Orientation.HORIZONTAL
-                axis_span_mm = rect.height_mm if horizontal else rect.width_mm
-                sizes_mm = distribute(
-                    axis_span_mm, bay.rules, thicknesses_mm, node_id=bay.id
-                )
-                for size_mm, child in zip(sizes_mm, bay.children, strict=True):
-                    if size_mm <= EPS_MM:
-                        raise LayoutSolveError(
-                            child.id,
-                            "nonpositive_opening",
-                            {"size_mm": size_mm},
-                        )
-                cursor_mm = rect.z_mm if horizontal else rect.x_mm
-                for index, child in enumerate(bay.children):
-                    size_mm = sizes_mm[index]
+    ``out`` is mutated in place. A ``HORIZONTAL`` split shares its rect's
+    ``height_mm`` along Z; a ``VERTICAL`` split shares its ``width_mm`` along X.
+    Children are laid from the low edge in list order, each filling the parent's
+    cross axis; every divider fills the gap between two consecutive children.
+    ``default_thickness_mm`` resolves any ``Divider`` that does not set its own
+    thickness. A resolved opening ``<= EPS_MM`` raises
+    :class:`LayoutSolveError` against that child bay's id.
+    """
+    match bay:
+        case Leaf():
+            out[bay.id] = rect
+        case Split():
+            out[bay.id] = rect
+            thicknesses_mm = _effective_thicknesses(bay, default_thickness_mm)
+            horizontal = bay.orientation is Orientation.HORIZONTAL
+            axis_span_mm = rect.height_mm if horizontal else rect.width_mm
+            sizes_mm = distribute(
+                axis_span_mm, bay.rules, thicknesses_mm, node_id=bay.id
+            )
+            for size_mm, child in zip(sizes_mm, bay.children, strict=True):
+                if size_mm <= EPS_MM:
+                    raise LayoutSolveError(
+                        child.id,
+                        "nonpositive_opening",
+                        {"size_mm": size_mm},
+                    )
+            cursor_mm = rect.z_mm if horizontal else rect.x_mm
+            for index, child in enumerate(bay.children):
+                size_mm = sizes_mm[index]
+                if horizontal:
+                    child_rect = Rect(
+                        x_mm=rect.x_mm,
+                        z_mm=cursor_mm,
+                        width_mm=rect.width_mm,
+                        height_mm=size_mm,
+                    )
+                else:
+                    child_rect = Rect(
+                        x_mm=cursor_mm,
+                        z_mm=rect.z_mm,
+                        width_mm=size_mm,
+                        height_mm=rect.height_mm,
+                    )
+                _place(child, child_rect, out, default_thickness_mm)
+                cursor_mm += size_mm
+                if index < len(thicknesses_mm):
+                    thickness_mm = thicknesses_mm[index]
                     if horizontal:
-                        child_rect = Rect(
+                        divider_rect = Rect(
                             x_mm=rect.x_mm,
                             z_mm=cursor_mm,
                             width_mm=rect.width_mm,
-                            height_mm=size_mm,
+                            height_mm=thickness_mm,
                         )
                     else:
-                        child_rect = Rect(
+                        divider_rect = Rect(
                             x_mm=cursor_mm,
                             z_mm=rect.z_mm,
-                            width_mm=size_mm,
+                            width_mm=thickness_mm,
                             height_mm=rect.height_mm,
                         )
-                    _place(child, child_rect)
-                    cursor_mm += size_mm
-                    if index < len(thicknesses_mm):
-                        thickness_mm = thicknesses_mm[index]
-                        if horizontal:
-                            divider_rect = Rect(
-                                x_mm=rect.x_mm,
-                                z_mm=cursor_mm,
-                                width_mm=rect.width_mm,
-                                height_mm=thickness_mm,
-                            )
-                        else:
-                            divider_rect = Rect(
-                                x_mm=cursor_mm,
-                                z_mm=rect.z_mm,
-                                width_mm=thickness_mm,
-                                height_mm=rect.height_mm,
-                            )
-                        out[bay.dividers[index].id] = divider_rect
-                        cursor_mm += thickness_mm
+                    out[bay.dividers[index].id] = divider_rect
+                    cursor_mm += thickness_mm
 
-    _place(carcass.root, _interior_rect(carcass))
+
+def solve(carcass: Carcass) -> SolvedLayout:
+    """Place every ``Leaf``, ``Split``, and ``Divider`` id in one :class:`Rect`."""
+    interior_rect = _interior_rect(carcass)
+    out: dict[str, Rect] = {}
+    _place(carcass.root, interior_rect, out, carcass.default_thickness_mm)
     return SolvedLayout(rect_by_id=out)

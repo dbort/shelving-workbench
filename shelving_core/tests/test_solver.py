@@ -16,6 +16,7 @@ from shelving_core.solver import (
     LayoutSolveError,
     Rect,
     SolvedLayout,
+    _place,
     distribute,
     solve,
 )
@@ -98,6 +99,26 @@ def test_distribute_weighted_ratio() -> None:
     ) == pytest.approx([600.0, 300.0], abs=1e-6)
 
 
+def test_distribute_all_fixed_exact_is_ok() -> None:
+    assert distribute(
+        100.0, [Fixed(30.0), Fixed(50.0)], [20.0], node_id="x"
+    ) == pytest.approx([30.0, 50.0], abs=1e-6)
+
+
+def test_distribute_all_fixed_overflow_reports_overflow() -> None:
+    with pytest.raises(LayoutSolveError) as excinfo:
+        distribute(100.0, [Fixed(80.0), Fixed(60.0)], [0.0], node_id="x")
+    assert excinfo.value.reason == "overflow"
+    assert excinfo.value.node_id == "x"
+
+
+def test_distribute_all_fixed_underfill_reports_no_slack_absorber() -> None:
+    with pytest.raises(LayoutSolveError) as excinfo:
+        distribute(100.0, [Fixed(20.0), Fixed(30.0)], [0.0], node_id="x")
+    assert excinfo.value.reason == "no_slack_absorber"
+    assert excinfo.value.node_id == "x"
+
+
 def test_distribute_overflow_raises() -> None:
     with pytest.raises(LayoutSolveError) as excinfo:
         distribute(100.0, [Fixed(200.0), Fill()], [0.0], node_id="x")
@@ -110,6 +131,27 @@ def test_distribute_no_slack_absorber_raises() -> None:
         distribute(100.0, [Fixed(30.0), Fixed(40.0)], [0.0], node_id="x")
     assert excinfo.value.reason == "no_slack_absorber"
     assert excinfo.value.node_id == "x"
+
+
+def test_place_records_child_and_divider_rects_from_a_literal_rect() -> None:
+    split = Split(
+        orientation=Orientation.VERTICAL,
+        children=[Leaf(id="l"), Leaf(id="r")],
+        rules=[Fixed(200.0), Fill()],
+        dividers=[Divider(thickness_mm=20.0, id="dv")],
+        id="s",
+    )
+    out: dict[str, Rect] = {}
+    _place(
+        split,
+        Rect(x_mm=0.0, z_mm=0.0, width_mm=600.0, height_mm=900.0),
+        out,
+        0.0,
+    )
+    _assert_rect(out["s"], 0.0, 0.0, 600.0, 900.0)
+    _assert_rect(out["l"], 0.0, 0.0, 200.0, 900.0)
+    _assert_rect(out["dv"], 200.0, 0.0, 20.0, 900.0)
+    _assert_rect(out["r"], 220.0, 0.0, 380.0, 900.0)
 
 
 def test_nested_horizontal_then_vertical_geometry() -> None:

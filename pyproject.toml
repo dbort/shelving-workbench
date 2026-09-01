@@ -28,5 +28,5 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.mypy]
 strict = true
-files = ["shelving_core"]
+files = ["shelving_core", "tools/layout_demo.py"]
 exclude = ["freecad/"]

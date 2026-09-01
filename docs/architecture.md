@@ -27,7 +27,7 @@ workbench identifier.
   captured) is an overridable per-joint attribute; the carcass rule is
   only the default.
 - A recursive split layout: any bay is either a leaf or is divided
-  horizontally or vertically into two child bays.
+  horizontally or vertically into two or more child bays.
 - A modal task-panel elevation editor with: split a bay H or V, drag a
   split, type an exact opening dimension (fractional-inch input
   accepted). Delete removes a split and merges its bays.
@@ -68,7 +68,7 @@ form" the workbench produces.
 | Component type | Python workbench, Addon-Manager-installable; core deliverable is a set of scripted objects |
 | Source of truth | The parametric model (split-tree + params + material refs) is the only source of truth; 3D is a pure projection, regenerated on every change |
 | 3D edits | Downstream features that reference a generated plank survive regeneration as long as that plank still exists; direct edits to plank geometry do not round-trip |
-| Layout model | Recursive binary split-tree; a bay is a leaf or is split H/V at a rule-driven position |
+| Layout model | Recursive N-ary split-tree; a bay is a leaf or is split H/V into two or more child bays at rule-driven positions |
 | Split rule | Each split stores a rule (fixed size / weight / fill), not an absolute coordinate. A fixed rule's number is the clear opening on its reference side. Absolute positions are derived and cached |
 | Constraint priority | Each span is driving or driven; the solver holds driving values and distributes slack to driven ones. Default: exterior dimensions drive, interior openings are driven |
 | Over-constraint | Hard error. The unit produces no shape and enters the standard FreeCAD error state until the input is corrected. The editor validates input to make this a backstop, not the normal path |
