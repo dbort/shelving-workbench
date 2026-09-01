@@ -284,7 +284,7 @@ old interface: `test.sh`, `--fast`, `--full`, `.venv`, `[dev]`,
   `friction-log.md` `2026-08-30` entry's `./test.sh --fast` to `pixi run tests`.
   Finish with the PIPELINE CONTRACT grep returning empty.
 
-- [ ] **Step 8** (`README.md`): Rewrite `## Setup` to the pixi-only path and
+- [x] **Step 8** (`README.md`): Rewrite `## Setup` to the pixi-only path and
   delete the "Minimal: core-only virtualenv" subsection and the activation
   block. Rewrite `## Tests` to the conceptual description per the Must Have (no
   flag/step enumeration, no tier or subset language). Remove every
