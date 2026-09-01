@@ -4,8 +4,8 @@
 and the ``pixi run demo`` task, with the sh-003 Must Have requiring it to exit
 0. Lint and ``mypy --strict`` are the only other things that touch it, so its
 runtime behavior gets real coverage here instead of being re-derived by hand
-each review round. A refactor of ``solve``, of the ``sys.path`` bootstrap, or
-of any name the demo imports trips this test.
+each review round. A refactor of ``solve`` or of any name the demo imports
+trips this test.
 
 It runs the script as a subprocess under the current interpreter from the repo
 root, the same way ``python tools/layout_demo.py`` and ``pixi run demo`` do.
