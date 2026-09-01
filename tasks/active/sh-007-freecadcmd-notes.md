@@ -2,7 +2,7 @@
 id: sh-007
 title: "Document the freecadcmd headless-script contract"
 current_agent: implementer
-current_phase: planning
+current_phase: implementation
 review_rejections: 0
 ---
 
@@ -15,7 +15,7 @@ later milestones write a lot of `freecadcmd`-facing code, so this captures the
 contract in `docs/freecadcmd-notes.md`.
 
 ## Status
-- [ ] Planning
+- [x] Planning
 - [ ] Implementation
 - [ ] Review
 - [ ] User sign-off
