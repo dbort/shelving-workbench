@@ -2,12 +2,8 @@
 #
 # One-shot developer environment setup for the Shelving Workbench.
 #
-# Provisions both supported paths and is safe to re-run (each step is a no-op
-# when already satisfied):
-#
-#   * a bare .venv/ with the `dev` extra - the FreeCAD-free core workflow, and
-#     the local equivalent of CI's fast leg;
-#   * the pixi environment (FreeCAD included) - what the full test tier needs.
+# Provisions the pixi environment (dev toolchain plus FreeCAD 1.0) and is safe
+# to re-run: each step is a no-op when already satisfied.
 #
 # When pixi is not already on PATH it downloads a pinned release for the host
 # architecture, verifies its published .sha256, installs it into ~/.local/bin,
@@ -26,6 +22,9 @@ pixi_installed_now=0
 
 add_local_bin_to_rc() {
 	local rc="$1"
+	# The rc file must receive $HOME and $PATH literally, to be expanded by the
+	# future shell that sources it, not by this script.
+	# shellcheck disable=SC2016
 	local line='export PATH="$HOME/.local/bin:$PATH"'
 	if [ ! -f "$rc" ] || ! grep -qxF "$line" "$rc"; then
 		printf '\n# added by tools/install-deps.sh\n%s\n' "$line" >>"$rc"
@@ -72,19 +71,12 @@ case ":$PATH:" in
 *) export PATH="$LOCAL_BIN:$PATH" ;;
 esac
 
-if [ ! -d .venv ]; then
-	python3 -m venv .venv
-fi
-.venv/bin/pip install -e ".[dev]"
-
 pixi install
 
 echo
 echo "Setup complete."
-echo "  core-only environment:  source .venv/bin/activate"
-echo "  FreeCAD environment:    pixi shell"
-echo "  run the test tiers:     ./test.sh --fast   ./test.sh --full"
-echo "                          (or: pixi run fast / pixi run full)"
+echo "  enter the environment:  pixi shell"
+echo "  run the checks:         pixi run tests"
 if [ "$pixi_installed_now" -eq 1 ]; then
 	echo
 	echo "pixi was installed to ${LOCAL_BIN}. Open a new shell (or run"

@@ -254,7 +254,7 @@ old interface: `test.sh`, `--fast`, `--full`, `.venv`, `[dev]`,
   `prefix-dev/setup-pixi` (`frozen: true`), `run: pixi run tests`. Keep the
   top-of-file hardening comment block verbatim.
 
-- [ ] **Step 4** (`tools/install-deps.sh`): Remove the
+- [x] **Step 4** (`tools/install-deps.sh`): Remove the
   `if [ ! -d .venv ]; then python3 -m venv .venv; fi` block and the
   `.venv/bin/pip install -e ".[dev]"` line. Keep `install_pinned_pixi`, the
   make-pixi-callable-now `PATH` shim, and `pixi install`. Update the header
