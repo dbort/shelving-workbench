@@ -3,8 +3,8 @@
 `freecadcmd` runs a Python script inside a FreeCAD interpreter with no GUI.
 The full test tier uses it for `tools/freecad_smoke.py`, and later
 milestones add more headless scripts for CI checks. Three of its behaviors
-differ from a plain `python script.py` run and have caught this project
-before; each is handled in the code cited below.
+differ from a plain `python script.py` run; each is handled in the code
+cited below.
 
 ## The script's exit status is discarded
 
