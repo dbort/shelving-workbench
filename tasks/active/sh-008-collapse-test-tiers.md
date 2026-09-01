@@ -238,7 +238,7 @@ old interface: `test.sh`, `--fast`, `--full`, `.venv`, `[dev]`,
   `python3 tools/check_lock_paths.py` and confirm exit 0 (regenerate from clean
   per DEPENDENCY MOVES if the self-install pin went absolute).
 
-- [ ] **Step 2** (`tools/run-tests.sh` new, `test.sh` removed): Create
+- [x] **Step 2** (`tools/run-tests.sh` new, `test.sh` removed): Create
   `tools/run-tests.sh` per the Must Have and SINGLE-SCRIPT SHAPE advice: shebang,
   `set -euo pipefail`, repo-root `cd` from `tools/`, no-arg guard (exit 2), a
   `command -v freecadcmd` guard (exit 1 with a `pixi run tests` hint), then the
