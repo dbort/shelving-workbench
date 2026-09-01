@@ -115,6 +115,6 @@ Friction log: record any workaround per `CLAUDE.md`.
 
 - [x] **Step 3** (`tools/layout_demo.py`): Add the `argparse` `--svg PATH` flag per DEMO CLI; write the SVG and print a confirmation line when given; leave the text dump unconditional. Update the module docstring (replace "There is no command line"). Remove any local rule-label helper in favor of `shelving_core.svg._rule_label`.
 
-- [ ] **Step 4** (`tests/test_layout_demo.py`): Extend the existing repo-root test with a `--svg` case: subprocess-run `python tools/layout_demo.py --svg <tmp>`, assert exit 0, file exists and non-empty, parses as XML, root is the SVG element. Keep the existing assertions.
+- [x] **Step 4** (`tests/test_layout_demo.py`): Extend the existing repo-root test with a `--svg` case: subprocess-run `python tools/layout_demo.py --svg <tmp>`, assert exit 0, file exists and non-empty, parses as XML, root is the SVG element. Keep the existing assertions.
 
 - [ ] **Step 5** (`README.md`, vendored copy): Update the demo paragraph in `README.md` to mention `pixi run demo -- --svg layout.svg` and opening the result with Quick Look or a browser. Run `bash tools/vendor-core.sh` and commit the refreshed `freecad/shelving/vendor/shelving_core/svg.py`. Confirm `./test.sh --fast` and `pixi run full` are green and `pixi run demo -- --svg /tmp/demo.svg` writes a parseable file.
