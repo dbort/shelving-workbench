@@ -1,10 +1,9 @@
 # Writing `freecadcmd` headless scripts
 
 `freecadcmd` runs a Python script inside a FreeCAD interpreter with no GUI.
-The full test tier uses it for `tools/freecad_smoke.py`, and later
-milestones add more headless scripts for CI checks. Three of its behaviors
-differ from a plain `python script.py` run; each is handled in the code
-cited below.
+`pixi run tests` uses it for `tools/freecad_smoke.py`, and later milestones
+add more headless scripts for CI checks. Three of its behaviors differ from
+a plain `python script.py` run; each is handled in the code cited below.
 
 ## The script's exit status is discarded
 
@@ -14,9 +13,10 @@ shell with status 0. A headless script that needs to report pass or fail
 must print a marker line on success and have its caller grep stdout for
 that line, because the return code carries no signal.
 
-`test.sh` does this: its `--full` tier captures the smoke script's output
-and greps for `shelving workbench import OK`, treating a missing marker as
-failure. See `test.sh` and the marker `tools/freecad_smoke.py` prints.
+`tools/run-tests.sh` does this: it captures the smoke script's output and
+greps for `shelving workbench import OK`, treating a missing marker as
+failure. See `tools/run-tests.sh` and the marker `tools/freecad_smoke.py`
+prints.
 
 ## FreeCAD freezes the `freecad` namespace package's `__path__`
 

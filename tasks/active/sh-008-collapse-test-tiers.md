@@ -291,7 +291,7 @@ old interface: `test.sh`, `--fast`, `--full`, `.venv`, `[dev]`,
   `pixi run lint-workflows` mention. Update the demo paragraph near the top to
   `pixi run demo` forms only.
 
-- [ ] **Step 9** (`docs/architecture.md`, `docs/github-actions-hardening.md`,
+- [x] **Step 9** (`docs/architecture.md`, `docs/github-actions-hardening.md`,
   `docs/freecadcmd-notes.md`, `docs/roadmap.md`): Swap every `test.sh` /
   `--fast` / `--full` / `pixi run lint-workflows` reference for
   `tools/run-tests.sh` / `pixi run tests` / `bash tools/lint-workflows.sh`.

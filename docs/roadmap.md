@@ -22,9 +22,9 @@ to `main`, never by the task's own implementation or review steps.
 
 **Status:** Done sh-001
 
-Monorepo skeleton, MIT `LICENSE`, `package.xml`, `test.sh` with both
-tiers wired, GitHub Actions running the fast tier and a full-tier job that
-installs FreeCAD 1.0 and imports the (empty) workbench.
+Monorepo skeleton, MIT `LICENSE`, `package.xml`, the `pixi run tests`
+check harness wired up, and a GitHub Actions job that runs it in a
+FreeCAD 1.0 environment and imports the (empty) workbench.
 
 *Verify:* CI is green; `freecadcmd` loads the workbench with no errors.
 

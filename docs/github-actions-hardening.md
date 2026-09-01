@@ -93,8 +93,8 @@ queueing behind it.
 `.github/dependabot.yml` enables weekly updates for:
 
 - `github-actions`: SHA bumps for the pinned `uses:` refs above.
-- `pip`: the `pyproject.toml` `dev` extra, which feeds the FreeCAD-free
-  install path and CI's fast leg.
+- `pip`: Python dependencies declared in `pyproject.toml`. The conda-side
+  toolchain and FreeCAD come from pixi, which Dependabot cannot see.
 
 Dependabot has no pixi support, so `pixi.lock` is refreshed by hand with
 `pixi update` when the conda-side toolchain needs to move.
@@ -106,15 +106,15 @@ Dependabot has no pixi support, so `pixi.lock` is refreshed by hand with
 uploads SARIF results to code scanning and publishes to the public
 Scorecard dataset. Treat a dropping score as a regression to investigate.
 
-## Enforcement: `pixi run lint-workflows`
+## Enforcement: the workflow lint
 
 `tools/lint-workflows.sh` checks the rules above that can be
-machine-verified. `pixi run lint-workflows` is the standalone shortcut for
-running it by itself. In CI it runs as part of the `full` job: `pixi run
-full` invokes `./test.sh --full`, which calls `tools/lint-workflows.sh`
-after the fast-tier steps and before the FreeCAD smoke test. There is no
-dedicated workflow-lint job. It runs four checks from a single invocation;
-all four run every time and any failure fails the job:
+machine-verified. `pixi run tests` calls it after the unit suite and
+before the FreeCAD smoke test, so CI covers it with no dedicated
+workflow-lint job; a human wanting only this lint runs
+`bash tools/lint-workflows.sh` from inside `pixi shell`. It runs four
+checks from a single invocation; all four run every time and any failure
+fails the job:
 
 - **`actionlint`** over `.github/workflows/`: workflow-schema validation
   plus `shellcheck` on every `run:` script body. `shellcheck` comes from
