@@ -4,8 +4,8 @@
 exit 3 plus fixed message as a contract: a stale environment must produce one
 actionable line, not a pytest collection error. Agents branch on that exit code,
 so the message text and status are pinned here instead of re-derived by hand
-each review round. The name-extraction rules (version specifiers, markers,
-extras, ``@`` direct references) are exercised directly.
+each review round. These tests exercise the name-extraction rules directly:
+version specifiers, markers, extras, and ``@`` direct references.
 """
 
 import subprocess

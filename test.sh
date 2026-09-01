@@ -14,11 +14,11 @@
 # workflow file fails before FreeCAD is touched. The full tier hard-fails when
 # freecadcmd is absent; it does not skip.
 #
-# Exit status: 2 is reserved for usage errors, 3 for a failed preflight (a
+# Exit status: 2 is reserved for usage errors, 3 for a failed preflight: a
 # required tool is missing from PATH, or the active environment is out of sync
-# with pyproject.toml's [dev] extra). A machine-specific pixi.lock (absolute
-# path pin) fails with status 1 from tools/check_lock_paths.py. Any other
-# non-zero status is the underlying lint/type/test tool's own.
+# with pyproject.toml's [dev] extra. A machine-specific pixi.lock, one that pins
+# a package by absolute path, fails with status 1 from tools/check_lock_paths.py.
+# Any other non-zero status is the underlying lint/type/test tool's own.
 #
 set -euo pipefail
 

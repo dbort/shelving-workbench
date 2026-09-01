@@ -1,11 +1,11 @@
 """Fast-tier coverage of ``tools/check_lock_paths.py``, the pixi.lock path guard.
 
 The repo's editable self-install lands in ``pixi.lock`` as a path entry. pixi
-0.78 can write it either absolute (``- pypi: /workspace``, machine-specific,
-breaks CI's ``frozen`` install) or repo-relative (``- pypi: ./``). ``./test.sh
---fast`` runs this helper so a regression to an absolute pin fails on the next
-``pixi install`` rather than in CI. This module pins the detection rules and
-checks the real committed ``pixi.lock`` stays clean.
+0.78 can write it absolute (``- pypi: /workspace``) or repo-relative (``- pypi:
+./``). An absolute pin is machine-specific and breaks CI's ``frozen`` install.
+``./test.sh --fast`` runs this helper so a regression to an absolute pin fails
+on the next ``pixi install`` rather than in CI. This module pins the detection
+rules and checks the real committed ``pixi.lock`` stays clean.
 """
 
 import subprocess
