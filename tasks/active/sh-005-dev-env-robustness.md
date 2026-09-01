@@ -1,9 +1,9 @@
 ---
 id: sh-005
 title: "Dev-environment robustness: editable pixi install, venv-drift preflight"
-current_agent: reviewer
-current_phase: review
-review_rejections: 0
+current_agent: implementer
+current_phase: implementation
+review_rejections: 1
 ---
 
 # sh-005: Dev-environment robustness: editable pixi install, venv-drift preflight
