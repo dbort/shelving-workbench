@@ -227,7 +227,7 @@ old interface: `test.sh`, `--fast`, `--full`, `.venv`, `[dev]`,
 
 ## Execution Plan
 
-- [ ] **Step 1** (`pixi.toml`, `pyproject.toml`, `pixi.lock`): In `pixi.toml`,
+- [x] **Step 1** (`pixi.toml`, `pyproject.toml`, `pixi.lock`): In `pixi.toml`,
   add `jsonschema = "*"` and `rsync = "*"` to `[dependencies]`; in `[tasks]`
   remove `fast`, `full`, and `lint-workflows`, add `tests =
   "tools/run-tests.sh"`, leave `demo`; rewrite the comment above `[tasks]` to
