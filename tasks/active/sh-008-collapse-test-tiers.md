@@ -247,7 +247,7 @@ old interface: `test.sh`, `--fast`, `--full`, `.venv`, `[dev]`,
   mention of former tiers or a hypothetical future split. `chmod +x
   tools/run-tests.sh`. `git rm test.sh`.
 
-- [ ] **Step 3** (`.github/workflows/ci.yml`): Delete the `fast` job entirely.
+- [x] **Step 3** (`.github/workflows/ci.yml`): Delete the `fast` job entirely.
   Keep one job (id `tests` or similar): `runs-on: ubuntu-24.04`,
   `permissions: { contents: read }`, `harden-runner` first, SHA-pinned
   `actions/checkout` (`persist-credentials: false`), SHA-pinned
