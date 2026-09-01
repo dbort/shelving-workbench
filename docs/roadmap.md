@@ -30,7 +30,7 @@ installs FreeCAD 1.0 and imports the (empty) workbench.
 
 ## M1 — Layout engine, no FreeCAD
 
-**Status:** Planned
+**Status:** Done sh-003
 
 `shelving_core.layout` and `shelving_core.solver`: split-tree types,
 JSON round-trip, the spacing solver with fixed / weighted / fill,

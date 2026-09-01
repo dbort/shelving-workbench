@@ -27,7 +27,7 @@ workbench identifier.
   captured) is an overridable per-joint attribute; the carcass rule is
   only the default.
 - A recursive split layout: any bay is either a leaf or is divided
-  horizontally or vertically into two child bays.
+  horizontally or vertically into two or more child bays.
 - A modal task-panel elevation editor with: split a bay H or V, drag a
   split, type an exact opening dimension (fractional-inch input
   accepted). Delete removes a split and merges its bays.
@@ -68,7 +68,7 @@ form" the workbench produces.
 | Component type | Python workbench, Addon-Manager-installable; core deliverable is a set of scripted objects |
 | Source of truth | The parametric model (split-tree + params + material refs) is the only source of truth; 3D is a pure projection, regenerated on every change |
 | 3D edits | Downstream features that reference a generated plank survive regeneration as long as that plank still exists; direct edits to plank geometry do not round-trip |
-| Layout model | Recursive binary split-tree; a bay is a leaf or is split H/V at a rule-driven position |
+| Layout model | Recursive N-ary split-tree; a bay is a leaf or is split H/V into two or more child bays at rule-driven positions |
 | Split rule | Each split stores a rule (fixed size / weight / fill), not an absolute coordinate. A fixed rule's number is the clear opening on its reference side. Absolute positions are derived and cached |
 | Constraint priority | Each span is driving or driven; the solver holds driving values and distributes slack to driven ones. Default: exterior dimensions drive, interior openings are driven |
 | Over-constraint | Hard error. The unit produces no shape and enters the standard FreeCAD error state until the input is corrected. The editor validates input to make this a backstop, not the normal path |
@@ -95,14 +95,20 @@ GUI, and it is enforced: `shelving_core` importing anything from
 
 ### The split-tree
 
-A `Unit` holds outer dimensions, a default material reference, a depth,
+A `Carcass` holds outer dimensions, a depth, a default panel thickness,
 and a root `Bay`. A `Bay` is either:
 
-- a **leaf**: an open compartment, optionally with a material or depth
-  override; or
-- a **split**: an orientation (horizontal or vertical), a divider node
-  (its own material/thickness, inherited from the unit default unless
-  overridden), a `SplitRule`, and two child `Bay`s.
+- a **leaf**: an open compartment; or
+- a **split**: an orientation (horizontal or vertical), an ordered list of
+  two or more child `Bay`s, one `SplitRule` per child, and one fewer
+  `Divider` than children (one per gap between consecutive children).
+
+`Carcass` carries a `default_thickness_mm`, used both for the carcass
+panels and as the thickness of any `Divider` that does not set its own,
+until M2 introduces the material catalog.
+
+Lengths are plain `float` fields whose names carry an `_mm` suffix; there
+is no dedicated units type.
 
 Every node carries a UUID assigned at creation and preserved across all
 edits. Serialisation is a JSON object mirroring this structure, stored on
@@ -132,10 +138,10 @@ size; its sibling keeps whatever rule it had and absorbs the slack.
 
 ### Carcass expansion
 
-`expand(unit, catalog) -> list[PlankSpec]` walks the tree and emits one
+`expand(carcass, catalog) -> list[PlankSpec]` walks the tree and emits one
 `PlankSpec` per physical plank: the two outer sides, top, bottom, every
 divider, and (later) the back. A `PlankSpec` is `(uuid, role, size as a
-3-tuple, placement, material_ref, grain)` in the unit's local frame.
+3-tuple, placement, material_ref, grain)` in the carcass's local frame.
 
 The default carcass rule (sides continuous, everything else captured
 between them) sets each joint's default lap order. A per-joint override
