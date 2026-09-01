@@ -262,7 +262,7 @@ old interface: `test.sh`, `--fast`, `--full`, `.venv`, `[dev]`,
   `source .venv/bin/activate` line; end with `pixi run tests`). Keep it
   idempotent.
 
-- [ ] **Step 5** (`git rm` three files): Delete `tools/check_dev_extra.py`,
+- [x] **Step 5** (`git rm` three files): Delete `tools/check_dev_extra.py`,
   `tests/test_check_dev_extra.py`, `tests/test_harness_cli.py`. Confirm nothing
   else imports them (`git grep check_dev_extra`, `git grep test_harness_cli`).
 
