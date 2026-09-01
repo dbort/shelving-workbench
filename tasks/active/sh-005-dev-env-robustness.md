@@ -2,7 +2,7 @@
 id: sh-005
 title: "Dev-environment robustness: editable pixi install, venv-drift preflight"
 current_agent: implementer
-current_phase: planning
+current_phase: implementation
 review_rejections: 0
 ---
 
@@ -17,7 +17,7 @@ added to the `dev` extra. This task installs `shelving_core` editable into the
 pixi env and adds a dev-extra check to the fast-tier preflight.
 
 ## Status
-- [ ] Planning
+- [x] Planning
 - [ ] Implementation
 - [ ] Review
 - [ ] User sign-off
