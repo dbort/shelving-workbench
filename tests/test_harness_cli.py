@@ -1,11 +1,10 @@
 """Fast-tier coverage of ``test.sh``'s CLI and exit-status contract.
 
 ``test.sh`` is the task pipeline's test harness and agents branch on its exit
-codes: 2 for a usage error, 3 for a failed tool preflight, 1 (with an exact
-message) when ``freecadcmd`` is absent, and any other non-zero status straight
-from the underlying lint/type/test tool. Those behaviors are load-bearing, so
-they get real coverage here instead of being re-derived by hand each review
-round.
+codes: 2 for a usage error, 3 for a failed tool preflight, and any other
+non-zero status straight from the underlying lint/type/test tool. Those
+behaviors are load-bearing, so they get real coverage here instead of being
+re-derived by hand each review round.
 
 RECURSION SAFETY: ``test.sh``'s fast sequence runs ``pytest shelving_core
 tests``, which re-enters this file. Every subprocess call below therefore
@@ -13,9 +12,7 @@ either passes arguments that fail ``test.sh``'s usage check (exit 2, reached
 before any tool runs) or runs it under a stripped ``PATH`` that makes the
 preflight abort (exit 3) before the fast sequence starts. Nothing here invokes
 ``./test.sh --fast`` or ``--full`` with a ``PATH`` that could let the harness
-reach ``pytest``. The ``freecadcmd``-absent branch, which needs a live
-non-FreeCAD environment to execute, is checked by scanning ``test.sh``'s
-source, the same technique as ``shelving_core/tests/test_no_freecad.py``.
+reach ``pytest``.
 """
 
 import os
@@ -30,12 +27,21 @@ TEST_SH = REPO_ROOT / "test.sh"
 
 USAGE_LINE = "usage: test.sh --fast | --full"
 
-FAST_TOOLS = ("ruff", "mypy", "pytest", "rsync")
-FULL_TOOLS = FAST_TOOLS + ("actionlint", "zizmor", "check-jsonschema", "shellcheck")
-
-FREECAD_MISSING_MESSAGE = (
-    "ERROR: freecadcmd not found on PATH. FreeCAD 1.0+ is required for "
-    "the full test tier; see README.md."
+FAST_TOOLS = (
+    # Keep sorted.
+    "mypy",
+    "pytest",
+    "python3",
+    "rsync",
+    "ruff",
+)
+FULL_TOOLS = FAST_TOOLS + (
+    # Keep sorted.
+    "actionlint",
+    "check-jsonschema",
+    "freecadcmd",
+    "shellcheck",
+    "zizmor",
 )
 
 _BASH = shutil.which("bash") or "bash"
@@ -96,16 +102,3 @@ def test_full_preflight_names_missing_tools(stripped_path_env):
         assert tool in result.stderr
     assert "tools/install-deps.sh" in result.stderr
     assert "pixi shell" in result.stderr
-
-
-def test_source_has_exact_freecadcmd_missing_message_then_exit_1():
-    # Source scan, not execution: reaching this branch needs a live env with no
-    # FreeCAD, and running test.sh far enough to hit it would re-enter pytest.
-    lines = TEST_SH.read_text(encoding="utf-8").splitlines()
-    idx = next(
-        (i for i, line in enumerate(lines) if FREECAD_MISSING_MESSAGE in line), None
-    )
-    assert idx is not None, f"exact freecadcmd-missing message not found in {TEST_SH}"
-    assert any("exit 1" in line for line in lines[idx : idx + 5]), (
-        "expected `exit 1` within a few lines of the freecadcmd-missing message"
-    )
