@@ -266,7 +266,7 @@ old interface: `test.sh`, `--fast`, `--full`, `.venv`, `[dev]`,
   `tests/test_check_dev_extra.py`, `tests/test_harness_cli.py`. Confirm nothing
   else imports them (`git grep check_dev_extra`, `git grep test_harness_cli`).
 
-- [ ] **Step 6** (`tools/check_lock_paths.py`, `tests/test_check_lock_paths.py`,
+- [x] **Step 6** (`tools/check_lock_paths.py`, `tests/test_check_lock_paths.py`,
   `tools/freecad_smoke.py`, `tools/layout_demo.py`): Docstring/comment-only.
   Replace `./test.sh --fast` / `./test.sh --full` with `pixi run tests`; drop
   `.venv`, "activated environment", and "`[dev]` extra" phrasings in favor of

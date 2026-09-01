@@ -1,10 +1,10 @@
 """Build a sample nested Carcass, solve it, and print the solved layout.
 
-Run inside an activated environment (``source .venv/bin/activate``, ``pixi
-shell``, or via ``pixi run``), which puts ``shelving_core`` on the import path:
+Run through the pixi environment, which puts ``shelving_core`` on the import
+path:
 
-    python tools/layout_demo.py                 (or: pixi run demo)
-    python tools/layout_demo.py --svg out.svg   (or: pixi run demo -- --svg out.svg)
+    pixi run demo
+    pixi run demo -- --svg out.svg
 
 The sample tree is defined in code. The output is always an indented walk of the
 tree, one line per node with its short id, kind, solved rectangle
