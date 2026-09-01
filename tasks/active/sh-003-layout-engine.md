@@ -1,8 +1,8 @@
 ---
 id: sh-003
 title: "Layout engine: Carcass split-tree, JSON Schema, spacing solver (M1)"
-current_agent: reviewer
-current_phase: review
+current_agent: user
+current_phase: user_signoff
 review_rejections: 1
 ---
 
@@ -20,7 +20,7 @@ materials, no 3D; those arrive in M2 and M3.
 ## Status
 - [x] Planning
 - [x] Implementation
-- [ ] Review
+- [x] Review
 - [ ] User sign-off
 
 ## Must Have
