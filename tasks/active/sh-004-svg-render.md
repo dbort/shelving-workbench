@@ -1,8 +1,8 @@
 ---
 id: sh-004
 title: "SVG rendering of a solved layout"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 0
 blocked_by: [sh-003]
 ---
@@ -18,41 +18,41 @@ flag that writes one.
 
 ## Status
 - [x] Planning
-- [ ] Implementation
+- [x] Implementation
 - [ ] Review
 - [ ] User sign-off
 
 ## Must Have
 
 ### Renderer (`shelving_core/svg.py`)
-- [ ] `to_svg(carcass: Carcass, layout: SolvedLayout, *, scale: float = 1.0, margin_mm: float = 20.0, font_size_mm: float = 12.0) -> str` is a pure function (stdlib only) returning a complete SVG document string. It reads the tree from `carcass` (for structure, ids, and the rule that positioned each child) and the placed rectangles from `layout`. It never calls `solve` and never touches the filesystem.
-- [ ] Output is a single `<svg xmlns="http://www.w3.org/2000/svg" ...>` element with a `viewBox="0 0 W H"` in millimetre units (`W = carcass.width_mm + 2*margin_mm`, `H = carcass.height_mm + 2*margin_mm + title band`) and `width`/`height` attributes equal to the viewBox extents times `scale`. One SVG user unit is one millimetre.
-- [ ] Y is flipped from solver space (origin front-bottom-left, +z up) to SVG space (+y down) by a helper: a rect at solver `(x_mm, z_mm, w_mm, h_mm)` draws at SVG `x = margin_mm + x_mm`, `y = margin_mm + (carcass.height_mm - z_mm - h_mm)` (plus the title band offset). All rects and text use this mapping; no mirrored text.
-- [ ] Draws, in this order: the carcass outline rect (class `carcass`); one filled rect per `Divider` id (class `divider`); one stroked rect per `Leaf` id (class `leaf`). It does NOT draw a rect for `Split` nodes (their area is the union of their children). Element order within each kind follows a deterministic pre-order tree walk, not `dict` iteration order.
-- [ ] Each `Leaf` gets a centered `<text class="label">` with three `<tspan>` lines: `{width_mm:g} x {height_mm:g} mm`, the leaf's short id (`id[:8]`), and the `SplitRule` that positioned it rendered by a `_rule_label(rule) -> str` helper (`Fixed 400 mm` / `Weighted 2` / `Fill`). The root `Leaf` of a carcass with no split has no rule line.
-- [ ] A title `<text class="title">` above the drawing reads `Carcass {width_mm:g} x {height_mm:g} x {depth_mm:g} mm, default thickness {default_thickness_mm:g} mm`.
-- [ ] A `<style>` block defines the `carcass` / `divider` / `leaf` / `label` / `title` classes (carcass: no fill, dark stroke; divider: solid mid-grey fill; leaf: faint fill, thin stroke; label/title: readable sans-serif at `font_size_mm`). No inline presentation attributes beyond geometry.
-- [ ] All text content (rule labels, the title) is XML-escaped for `& < > "` by a small helper. `to_svg(c, l) == to_svg(c, l)` for the same inputs (fully deterministic; floats formatted with a fixed spec, no `repr`).
-- [ ] `to_svg` assumes `layout` is a complete solve of `carcass`; a `carcass` node id absent from `layout` is a programmer error and may raise `KeyError`.
-- [ ] Fully typed per CLAUDE.md "Typed Python": no bare `Any`/`dict`/`list` in signatures; helpers annotated; `shelving_core/svg.py` imports only from `shelving_core.layout`, `shelving_core.solver`, and the standard library. `mypy --strict` clean.
+- [x] `to_svg(carcass: Carcass, layout: SolvedLayout, *, scale: float = 1.0, margin_mm: float = 20.0, font_size_mm: float = 12.0) -> str` is a pure function (stdlib only) returning a complete SVG document string. It reads the tree from `carcass` (for structure, ids, and the rule that positioned each child) and the placed rectangles from `layout`. It never calls `solve` and never touches the filesystem.
+- [x] Output is a single `<svg xmlns="http://www.w3.org/2000/svg" ...>` element with a `viewBox="0 0 W H"` in millimetre units (`W = carcass.width_mm + 2*margin_mm`, `H = carcass.height_mm + 2*margin_mm + title band`) and `width`/`height` attributes equal to the viewBox extents times `scale`. One SVG user unit is one millimetre.
+- [x] Y is flipped from solver space (origin front-bottom-left, +z up) to SVG space (+y down) by a helper: a rect at solver `(x_mm, z_mm, w_mm, h_mm)` draws at SVG `x = margin_mm + x_mm`, `y = margin_mm + (carcass.height_mm - z_mm - h_mm)` (plus the title band offset). All rects and text use this mapping; no mirrored text.
+- [x] Draws, in this order: the carcass outline rect (class `carcass`); one filled rect per `Divider` id (class `divider`); one stroked rect per `Leaf` id (class `leaf`). It does NOT draw a rect for `Split` nodes (their area is the union of their children). Element order within each kind follows a deterministic pre-order tree walk, not `dict` iteration order.
+- [x] Each `Leaf` gets a centered `<text class="label">` with three `<tspan>` lines: `{width_mm:g} x {height_mm:g} mm`, the leaf's short id (`id[:8]`), and the `SplitRule` that positioned it rendered by a `_rule_label(rule) -> str` helper (`Fixed 400 mm` / `Weighted 2` / `Fill`). The root `Leaf` of a carcass with no split has no rule line.
+- [x] A title `<text class="title">` above the drawing reads `Carcass {width_mm:g} x {height_mm:g} x {depth_mm:g} mm, default thickness {default_thickness_mm:g} mm`.
+- [x] A `<style>` block defines the `carcass` / `divider` / `leaf` / `label` / `title` classes (carcass: no fill, dark stroke; divider: solid mid-grey fill; leaf: faint fill, thin stroke; label/title: readable sans-serif at `font_size_mm`). No inline presentation attributes beyond geometry.
+- [x] All text content (rule labels, the title) is XML-escaped for `& < > "` by a small helper. `to_svg(c, l) == to_svg(c, l)` for the same inputs (fully deterministic; floats formatted with a fixed spec, no `repr`).
+- [x] `to_svg` assumes `layout` is a complete solve of `carcass`; a `carcass` node id absent from `layout` is a programmer error and may raise `KeyError`.
+- [x] Fully typed per CLAUDE.md "Typed Python": no bare `Any`/`dict`/`list` in signatures; helpers annotated; `shelving_core/svg.py` imports only from `shelving_core.layout`, `shelving_core.solver`, and the standard library. `mypy --strict` clean.
 
 ### Demo (`tools/layout_demo.py`)
-- [ ] Gains an `argparse` CLI with one optional argument `--svg PATH`. With `--svg`, after solving it writes `to_svg(carcass, solved)` to `PATH` (UTF-8) and prints one confirmation line naming the path; the text tree dump still prints as before. Without `--svg`, behavior is unchanged.
-- [ ] The module docstring is updated: it now has a command line (the "There is no command line" sentence is replaced with the `--svg` description). The `if _REPO_ROOT not in sys.path` guard stays.
-- [ ] If `tools/layout_demo.py` carries its own rule-label helper, it is removed in favor of importing `_rule_label` from `shelving_core.svg` (single source).
+- [x] Gains an `argparse` CLI with one optional argument `--svg PATH`. With `--svg`, after solving it writes `to_svg(carcass, solved)` to `PATH` (UTF-8) and prints one confirmation line naming the path; the text tree dump still prints as before. Without `--svg`, behavior is unchanged.
+- [x] The module docstring is updated: it now has a command line (the "There is no command line" sentence is replaced with the `--svg` description). The `if _REPO_ROOT not in sys.path` guard stays.
+- [x] If `tools/layout_demo.py` carries its own rule-label helper, it is removed in favor of importing `_rule_label` from `shelving_core.svg` (single source).
 
 ### Tests
-- [ ] `shelving_core/tests/test_svg.py`: `to_svg` output parses with `xml.etree.ElementTree.fromstring`; the root is the SVG element with a `viewBox`; for a known sample the `<rect>` count equals `n_leaves + n_dividers + 1`; there is one label `<text>` per leaf plus the title. For a 100x100 carcass, thickness 10, one `HORIZONTAL` `[Fill, Fill]` split: assert both leaf rects' SVG `x`/`y`/`width`/`height`, proving the y-flip (the child at higher solver `z` is drawn nearer the top of the SVG). A `>= 3`-child split renders 3 leaf rects and 2 divider rects. `to_svg` is called twice on the same input and the strings are equal.
-- [ ] `tests/test_layout_demo.py` (repo-root, from sh-003) is extended: run `python tools/layout_demo.py --svg <tmp path>`, assert exit 0, the file exists and is non-empty, `ElementTree.fromstring` parses it, and its root tag is the SVG element. The existing no-arg assertions stay.
-- [ ] `./test.sh --fast` exits 0; `pixi run full` / `./test.sh --full` green; `pixi run demo -- --svg <tmp>` writes a parseable SVG and exits 0.
-- [ ] `mypy --strict` clean over `shelving_core` (incl. `svg.py`) and `tools/layout_demo.py`; `ruff check .` and `ruff format --check .` clean.
+- [x] `shelving_core/tests/test_svg.py`: `to_svg` output parses with `xml.etree.ElementTree.fromstring`; the root is the SVG element with a `viewBox`; for a known sample the `<rect>` count equals `n_leaves + n_dividers + 1`; there is one label `<text>` per leaf plus the title. For a 100x100 carcass, thickness 10, one `HORIZONTAL` `[Fill, Fill]` split: assert both leaf rects' SVG `x`/`y`/`width`/`height`, proving the y-flip (the child at higher solver `z` is drawn nearer the top of the SVG). A `>= 3`-child split renders 3 leaf rects and 2 divider rects. `to_svg` is called twice on the same input and the strings are equal.
+- [x] `tests/test_layout_demo.py` (repo-root, from sh-003) is extended: run `python tools/layout_demo.py --svg <tmp path>`, assert exit 0, the file exists and is non-empty, `ElementTree.fromstring` parses it, and its root tag is the SVG element. The existing no-arg assertions stay.
+- [x] `./test.sh --fast` exits 0; `pixi run full` / `./test.sh --full` green; `pixi run demo -- --svg <tmp>` writes a parseable SVG and exits 0.
+- [x] `mypy --strict` clean over `shelving_core` (incl. `svg.py`) and `tools/layout_demo.py`; `ruff check .` and `ruff format --check .` clean.
 
 ### Docs and vendoring
-- [ ] `README.md`: the demo paragraph mentions `pixi run demo -- --svg layout.svg` (or `python tools/layout_demo.py --svg layout.svg`) writes an SVG elevation, and that it opens with Quick Look (spacebar in Finder) or any browser.
-- [ ] `bash tools/vendor-core.sh` is re-run and the refreshed `freecad/shelving/vendor/shelving_core/svg.py` committed so `bash tools/vendor-core.sh --check` (in `--fast`) passes.
+- [x] `README.md`: the demo paragraph mentions `pixi run demo -- --svg layout.svg` (or `python tools/layout_demo.py --svg layout.svg`) writes an SVG elevation, and that it opens with Quick Look (spacebar in Finder) or any browser.
+- [x] `bash tools/vendor-core.sh` is re-run and the refreshed `freecad/shelving/vendor/shelving_core/svg.py` committed so `bash tools/vendor-core.sh --check` (in `--fast`) passes.
 
 ### Scope guard
-- [ ] SVG only: no STL, no PNG, no new runtime or dev dependency. No FreeCAD import in `shelving_core/`. `shelving_core/svg.py` does not recompute a solve; it consumes the passed `SolvedLayout`.
+- [x] SVG only: no STL, no PNG, no new runtime or dev dependency. No FreeCAD import in `shelving_core/`. `shelving_core/svg.py` does not recompute a solve; it consumes the passed `SolvedLayout`.
 
 ## Frontier Advice
 
@@ -117,4 +117,4 @@ Friction log: record any workaround per `CLAUDE.md`.
 
 - [x] **Step 4** (`tests/test_layout_demo.py`): Extend the existing repo-root test with a `--svg` case: subprocess-run `python tools/layout_demo.py --svg <tmp>`, assert exit 0, file exists and non-empty, parses as XML, root is the SVG element. Keep the existing assertions.
 
-- [ ] **Step 5** (`README.md`, vendored copy): Update the demo paragraph in `README.md` to mention `pixi run demo -- --svg layout.svg` and opening the result with Quick Look or a browser. Run `bash tools/vendor-core.sh` and commit the refreshed `freecad/shelving/vendor/shelving_core/svg.py`. Confirm `./test.sh --fast` and `pixi run full` are green and `pixi run demo -- --svg /tmp/demo.svg` writes a parseable file.
+- [x] **Step 5** (`README.md`, vendored copy): Update the demo paragraph in `README.md` to mention `pixi run demo -- --svg layout.svg` and opening the result with Quick Look or a browser. Run `bash tools/vendor-core.sh` and commit the refreshed `freecad/shelving/vendor/shelving_core/svg.py`. Confirm `./test.sh --fast` and `pixi run full` are green and `pixi run demo -- --svg /tmp/demo.svg` writes a parseable file.

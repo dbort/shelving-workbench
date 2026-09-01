@@ -10,6 +10,9 @@ See [`docs/architecture.md`](docs/architecture.md) for the design of record and
 To eyeball a solved layout, run `pixi run demo` (or `python tools/layout_demo.py`
 from an activated environment): it builds a sample nested carcass, runs the
 spacing solver, and prints the resulting rectangle for every bay and divider.
+Add `pixi run demo -- --svg layout.svg` (or `python tools/layout_demo.py --svg
+layout.svg`) to also write the solved layout as an SVG elevation, which opens
+with Quick Look (spacebar in Finder) or any browser.
 
 ## Setup
 
