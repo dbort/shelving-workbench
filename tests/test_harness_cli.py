@@ -30,7 +30,7 @@ TEST_SH = REPO_ROOT / "test.sh"
 
 USAGE_LINE = "usage: test.sh --fast | --full"
 
-FAST_TOOLS = ("ruff", "mypy", "pytest", "rsync")
+FAST_TOOLS = ("python3", "ruff", "mypy", "pytest", "rsync")
 FULL_TOOLS = FAST_TOOLS + ("actionlint", "zizmor", "check-jsonschema", "shellcheck")
 
 FREECAD_MISSING_MESSAGE = (

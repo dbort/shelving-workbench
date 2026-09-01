@@ -16,8 +16,9 @@
 #
 # Exit status: 2 is reserved for usage errors, 3 for a failed preflight (a
 # required tool is missing from PATH, or the active environment is out of sync
-# with pyproject.toml's [dev] extra). Any other non-zero status is the
-# underlying lint/type/test tool's own.
+# with pyproject.toml's [dev] extra). A machine-specific pixi.lock (absolute
+# path pin) fails with status 1 from tools/check_lock_paths.py. Any other
+# non-zero status is the underlying lint/type/test tool's own.
 #
 set -euo pipefail
 
@@ -51,42 +52,26 @@ preflight() {
 # .venv provisioned before a dependency was added to the extra still imports
 # fine for unrelated code, so without this check a stale env first surfaces as a
 # pytest collection error deep in the run instead of one actionable message.
-# Metadata lookup only: no import side effects, no network.
+# The helper does metadata lookup only: no import side effects, no network, and
+# it exits 3 (the missing-tool code) with a fixed message when a name is absent.
 preflight_dev_extra() {
-	python3 - <<'PY'
-import importlib.metadata as metadata
-import re
-import sys
-import tomllib
+	python3 tools/check_dev_extra.py
+}
 
-with open("pyproject.toml", "rb") as handle:
-    dev = tomllib.load(handle)["project"]["optional-dependencies"]["dev"]
-
-missing = []
-for spec in dev:
-    # Strip any version/marker/extra suffix to leave the bare distribution name,
-    # which is what importlib.metadata resolves against.
-    name = re.split(r"[<>=!~;\[\s]", spec, maxsplit=1)[0].strip()
-    try:
-        metadata.distribution(name)
-    except metadata.PackageNotFoundError:
-        missing.append(name)
-
-if missing:
-    print(
-        f"dev environment is out of sync with the [dev] extra: {', '.join(missing)}. "
-        "Run tools/install-deps.sh.",
-        file=sys.stderr,
-    )
-    sys.exit(3)
-PY
+# Guard against pixi.lock pinning the editable self-install (or anything else) by
+# an absolute filesystem path, which resolves only on the machine that wrote the
+# lock and breaks CI's frozen install. Catches a regression on the next
+# pixi install rather than in CI.
+preflight_lock_paths() {
+	python3 tools/check_lock_paths.py
 }
 
 # The fast-tier sequence, factored out so --full can run it verbatim as its
-# first stage. The dev-extra check runs first so a stale environment fails
-# before ruff/mypy/pytest are invoked.
+# first stage. The dev-extra and lock-path checks run first so a stale
+# environment or a machine-specific lock fails before ruff/mypy/pytest.
 run_fast() {
 	preflight_dev_extra
+	preflight_lock_paths
 	ruff check .
 	ruff format --check .
 	mypy
@@ -98,15 +83,16 @@ run_fast() {
 
 case "$1" in
 --fast)
-	# rsync is listed because tools/vendor-core.sh --check shells out to it;
-	# a host without rsync should get the named-tool message, not a bare 127.
-	preflight ruff mypy pytest rsync
+	# python3 runs the dev-extra and lock-path preflight helpers; rsync is
+	# listed because tools/vendor-core.sh --check shells out to it. A host
+	# missing either should get the named-tool message, not a bare 127.
+	preflight python3 ruff mypy pytest rsync
 	run_fast
 	;;
 --full)
 	# --full invokes every fast-tier tool plus the workflow-lint toolchain;
 	# preflight for all of them up front.
-	preflight ruff mypy pytest rsync actionlint zizmor check-jsonschema shellcheck
+	preflight python3 ruff mypy pytest rsync actionlint zizmor check-jsonschema shellcheck
 	run_fast
 	bash tools/lint-workflows.sh
 	if ! command -v freecadcmd >/dev/null 2>&1; then

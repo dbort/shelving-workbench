@@ -1,8 +1,8 @@
 ---
 id: sh-005
 title: "Dev-environment robustness: editable pixi install, venv-drift preflight"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 1
 ---
 
@@ -77,3 +77,17 @@ Record any NEW workaround per `CLAUDE.md`.
 - [x] **Step 5** (`.claude/docs/friction-log.md`): Delete the two `2026-08-31` entries.
 
 - [x] **Step 6** (verification, no new files): `./test.sh --fast` green; `pixi run full` green; `pixi run demo` and `python tools/layout_demo.py` (in an activated `.venv`) exit 0; `pytest tests/test_layout_demo.py` passes. Simulate a stale env (a `PATH`/venv missing `jsonschema`) and confirm the preflight exits 3 naming it.
+
+## Round 2 Notes (review-rejection round 1)
+
+- **F1 resolved.** pixi 0.78 CAN write a repo-relative path for a `[pypi-dependencies]` path entry. The absolute `- pypi: /workspace` was an artifact of the incremental lock `pixi add --editable .` seeded. `pixi lock` with the existing lock present treats it as "already up-to-date" and keeps the absolute string; deleting the lock and regenerating from a clean state (`rm pixi.lock && pixi lock`) rewrites all three references to `- pypi: ./`. The clean regen also refreshed ~a dozen conda packages to current conda-forge builds (build-number bumps plus `zizmor` 1.29.0 -> 1.30.0) for both `linux-64` and `linux-aarch64`; both tiers pass on the refreshed lock. Hand-editing the three lines was rejected as fragile (would invalidate pixi's lock content hash and re-trigger a solve anyway).
+- **F1 guard:** `tools/check_lock_paths.py` (typed, `mypy --strict`-clean) scans `pixi.lock` for any package-location key pinned to an absolute path or `file://` URI; `test.sh`'s `run_fast` invokes it as `preflight_lock_paths` before ruff/mypy/pytest, exiting 1 with the offending lines. Covered by `tests/test_check_lock_paths.py`, including a case asserting the committed `pixi.lock` is clean.
+- **F2 resolved** via the helper route: the `preflight_dev_extra` heredoc moved into `tools/check_dev_extra.py` (typed, `mypy --strict`-clean); `test.sh` calls it. `tests/test_check_dev_extra.py` unit-tests name extraction (specifiers, markers, extras, `@` direct refs), missing-distribution detection in input order, and pins the exact message `dev environment is out of sync with the [dev] extra: <names>. Run tools/install-deps.sh.` with exit status 3, both via `main()` and via a subprocess CLI call.
+- **N1:** `python3` added to both `preflight` tool lists (`--fast` and `--full`) and to `FAST_TOOLS` in `tests/test_harness_cli.py`.
+- **N2:** `@` added to the requirement-name split class, now `_NAME_END = re.compile(r"[<>=!~;\[@\s]")` in `tools/check_dev_extra.py`.
+
+- [x] **Step 7** (`tools/check_dev_extra.py`, `test.sh`, `tests/test_check_dev_extra.py`, `pyproject.toml`): F2 + N2. Extract the dev-extra check to a typed helper, wire `test.sh` to it, add the helper to mypy `files`, unit-test message and exit code.
+- [x] **Step 8** (`tools/check_lock_paths.py`, `test.sh`, `tests/test_check_lock_paths.py`, `pyproject.toml`, `pixi.lock`): F1. Regenerate `pixi.lock` from clean so the self-install pins `./`; add the typed absolute-path guard, wire it into `run_fast`, add to mypy `files`, test it.
+- [x] **Step 9** (`test.sh`, `tests/test_harness_cli.py`): N1. Add `python3` to both preflight tool lists and to `FAST_TOOLS`.
+- [x] **Step 10** (`.claude/docs/friction-log.md`): add the Bash-tool-PATH entry at the top of `## Entries` (user-requested this round).
+- [x] **Step 11** (verification): re-run both tiers, the demo two ways, the layout-demo test, the two new test modules, the stale-env and absolute-lock simulations; `mypy --strict` / `ruff` clean.
