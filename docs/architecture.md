@@ -255,7 +255,8 @@ CI runs from the first milestone and covers both layers:
   or conda) running `freecadcmd` smoke tests: create a unit, recompute,
   assert plank count and bounding boxes; edit a property, recompute,
   assert the reflow; edit a catalog thickness, recompute, assert
-  dependent planks changed.
+  dependent planks changed. See [`freecadcmd-notes.md`](freecadcmd-notes.md)
+  for the headless `freecadcmd` behaviors these scripts work around.
 
 The core carries the load. Every geometric rule (solver distribution,
 lap-order effects, over-constraint failure, serialisation round-trips) is
