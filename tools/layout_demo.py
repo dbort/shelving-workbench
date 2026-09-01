@@ -2,19 +2,24 @@
 
 Run from the repo root:
 
-    python tools/layout_demo.py     (or: pixi run demo)
+    python tools/layout_demo.py                 (or: pixi run demo)
+    python tools/layout_demo.py --svg out.svg   (or: pixi run demo -- --svg out.svg)
 
-There is no command line: the sample tree is defined in code. The output is an
-indented walk of the tree, one line per node with its short id, kind, solved
-rectangle ``(x, z, width, height)`` in millimetres, and, for a node that sits
-under a split, the ``SplitRule`` that positioned it.
+The sample tree is defined in code. The output is always an indented walk of the
+tree, one line per node with its short id, kind, solved rectangle
+``(x, z, width, height)`` in millimetres, and, for a node that sits under a
+split, the ``SplitRule`` that positioned it. With ``--svg PATH``, the solved
+layout is also written to ``PATH`` as an SVG elevation and a confirmation line
+is printed.
 
 The repo root is put on ``sys.path`` so the script runs the same whether or not
 ``shelving_core`` is installed into the active environment (the pixi env, for
 one, imports it straight from the checkout).
 """
 
+import argparse
 import os
+import pathlib
 import sys
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -34,6 +39,7 @@ from shelving_core.layout import (  # noqa: E402
     Weighted,
 )
 from shelving_core.solver import Rect, SolvedLayout, solve  # noqa: E402
+from shelving_core.svg import rule_label, to_svg  # noqa: E402
 
 
 def _sample_carcass() -> Carcass:
@@ -69,22 +75,12 @@ def _fmt_rect(rect: Rect) -> str:
     return f"({rect.x_mm:.1f},{rect.z_mm:.1f},{rect.width_mm:.1f},{rect.height_mm:.1f})"
 
 
-def _rule_label(rule: SplitRule) -> str:
-    match rule:
-        case Fixed(size_mm=size_mm):
-            return f"fixed {size_mm:.1f}mm"
-        case Weighted(weight=weight):
-            return f"weighted {weight:g}"
-        case Fill():
-            return "fill"
-
-
 def _print_bay(
     bay: Bay, layout: SolvedLayout, depth: int, rule: SplitRule | None
 ) -> None:
     indent = "  " * depth
     kind = "split" if isinstance(bay, Split) else "leaf"
-    suffix = f"  rule={_rule_label(rule)}" if rule is not None else ""
+    suffix = f"  rule={rule_label(rule)}" if rule is not None else ""
     print(f"{indent}{bay.id[:8]} {kind} rect={_fmt_rect(layout[bay.id])}{suffix}")
     if isinstance(bay, Split):
         for index, child in enumerate(bay.children):
@@ -98,6 +94,15 @@ def _print_bay(
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--svg",
+        type=pathlib.Path,
+        default=None,
+        help="also write the solved layout to this path as an SVG elevation",
+    )
+    args = parser.parse_args()
+
     carcass = _sample_carcass()
     layout = solve(carcass)
     print(
@@ -106,6 +111,11 @@ def main() -> None:
         f"{carcass.default_thickness_mm:.0f} mm"
     )
     _print_bay(carcass.root, layout, 0, None)
+
+    svg_path: pathlib.Path | None = args.svg
+    if svg_path is not None:
+        svg_path.write_text(to_svg(carcass, layout), encoding="utf-8")
+        print(f"wrote {svg_path}")
 
 
 if __name__ == "__main__":
