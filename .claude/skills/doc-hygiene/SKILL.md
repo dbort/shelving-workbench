@@ -5,7 +5,7 @@ Sweep the repo's code comments and markdown docs for two distinct problems and f
 1. **Content rot** — stale references, comments that just restate the code next to them, LLM throat-clearing/marketing fluff.
 2. **AI-writing-style tells** — filler adverbs, em-dashes, passive voice, formulaic contrast/negative-listing/rhetorical-setup structures.
 
-Every target file gets both passes, in that order (content first, since fixing style around content that's about to be deleted is wasted work), followed by a verification pass that checks no genuine technical fact was lost along the way, and a final sanity check running the repo's fast checks. It never commits — it ends with a summary; committing is a separate, explicit ask.
+Every target file gets both passes, in that order (content first, since fixing style around content that's about to be deleted is wasted work), followed by a verification pass that checks no genuine technical fact was lost along the way, and a final sanity check running the repo's checks. It never commits — it ends with a summary; committing is a separate, explicit ask.
 
 A distilled subset of these rules lives in `CLAUDE.md` § Writing style by destination
 so agents generate cleaner text up front; this skill remains the
@@ -183,9 +183,9 @@ return results
 Read every group's `verifyReport`. If any file is flagged, look at it yourself (`git diff -- <file>`) and decide: revert the specific hunk that lost real content, or accept it if the flag turns out to be a false positive. Don't skip this — a flagged verify report is exactly the case this pipeline stage exists to catch.
 
 ### Step 5: Final sanity check
-Run the fast checks (`.claude/docs/pipeline.md` § Verification commands), in order, stopping at the first failure.
+Run the checks (`.claude/docs/pipeline.md` § Verification commands), in order, stopping at the first failure.
 
-If the repo has cheap config-validation commands relevant to files this sweep touched (e.g. a compose/manifest `config --quiet` style check) that the fast tier doesn't already cover, run those too — pure validation only, nothing that starts services. An unavailable validator means the check is skipped and noted, not a failure.
+If the repo has cheap config-validation commands relevant to files this sweep touched (e.g. a compose/manifest `config --quiet` style check) that `pixi run tests` doesn't already cover, run those too — pure validation only, nothing that starts services. An unavailable validator means the check is skipped and noted, not a failure.
 
 **If any check fails: stop and report to the human. Do not auto-fix, do not run formatters or lint auto-fixers to paper over it.** A comment-only pass shouldn't be able to break the build or formatting; if it did, a subagent touched more than a comment, and that deserves a look before anything proceeds.
 

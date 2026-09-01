@@ -272,7 +272,7 @@ old interface: `test.sh`, `--fast`, `--full`, `.venv`, `[dev]`,
   `.venv`, "activated environment", and "`[dev]` extra" phrasings in favor of
   "the pixi environment" / `pixi run demo`. No code changes.
 
-- [ ] **Step 7** (`.claude/docs/pipeline.md`, `.claude/agents/implementer.md`,
+- [x] **Step 7** (`.claude/docs/pipeline.md`, `.claude/agents/implementer.md`,
   `.claude/agents/reviewer.md`, `.claude/skills/approve-task/SKILL.md`,
   `.claude/skills/doc-hygiene/SKILL.md`, `.claude/skills/dispatch-tasks/SKILL.md`,
   `docs/agent-usage.md`, `.claude/docs/friction-log.md`): Per PIPELINE CONTRACT,

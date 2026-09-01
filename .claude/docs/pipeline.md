@@ -20,36 +20,30 @@ here. Don't split preemptively.
 ## Verification commands
 
 The one place the repo's check commands are defined; agents and skills
-reference this section rather than naming commands themselves. Edit the
-lists below to match this repo's tooling — the tier semantics stay fixed.
+reference this section rather than naming a command themselves. Edit the
+command below to match this repo's tooling.
 
-**Fast checks** — build, lint, and tests that need no live infrastructure.
-Must be cheap enough to run many times per task. Run in order; a failure
-of any command is a failure of the tier.
-
-```sh
-./test.sh --fast
-```
-
-**Full checks** — slow or live-infrastructure checks (containers, real
-databases, live endpoints). May be an empty list if the repo has no such
-tier yet; agents treat an empty list as "tier passes trivially".
+**The checks** — one command is the repo's whole verification surface:
+static analysis, the `shelving_core` unit suite, repository-consistency
+checks, the workflow-hardening lint, and a headless FreeCAD import smoke.
+It runs its steps in order and aborts at the first failure. A few seconds
+end to end, so it is cheap enough to run many times per task.
 
 ```sh
-./test.sh --full
+pixi run tests
 ```
 
 Who runs what:
-- The Implementer runs the fast checks after each Execution Plan step.
-- The Reviewer runs both tiers, on every review, unconditionally.
-- `approve-task` runs both tiers on the merged result before committing
+- The Implementer runs the checks after each Execution Plan step.
+- The Reviewer runs the checks, on every review, unconditionally.
+- `approve-task` runs the checks on the merged result before committing
   the merge.
-- `doc-hygiene`'s sanity check runs the fast checks.
+- `doc-hygiene`'s sanity check runs the checks.
 
 If a task's work can only be verified by a live-infrastructure check that
-the fast tier can't express, that check belongs as a durable test in the
-full tier's harness — not as a one-off shell command that evaporates after
-the session that ran it.
+`pixi run tests` does not yet express, that check belongs as a durable
+automated test inside `pixi run tests` — not as a one-off shell command
+that evaporates after the session that ran it.
 
 ## Phases
 
@@ -60,8 +54,8 @@ full cycle:
 |---|---|---|
 | `planning` | Planner + human | The Planner (via the `new-task` skill) interviews the user in depth and generates the task file. Human-gated: the user must approve the generated file before the Planner sets `current_phase: implementation`. |
 | `implementation` | Implementer | Executes the task file's `## Execution Plan` steps in order on the task's `sh-XXX` branch, then hands off to `review`. |
-| `review` | Reviewer | Diffs the branch against `main`, runs both verification tiers itself via Bash (§ Verification commands), and either approves (→ `user_signoff`) or rejects (see the rejection loop below). |
-| `user_signoff` | Human | The user tests the branch manually, then runs `/approve-task sh-XXX` — invoking that skill against a task IS the sign-off act. It finalizes the task file, re-sweeps with `doc-hygiene`, and merges into `main` only after the merged result passes both verification tiers. |
+| `review` | Reviewer | Diffs the branch against `main`, runs the checks itself via Bash (§ Verification commands), and either approves (→ `user_signoff`) or rejects (see the rejection loop below). |
+| `user_signoff` | Human | The user tests the branch manually, then runs `/approve-task sh-XXX` — invoking that skill against a task IS the sign-off act. It finalizes the task file, re-sweeps with `doc-hygiene`, and merges into `main` only after the merged result passes the checks. |
 | `blocked_needs_human` | Human | Dead end for the automated pipeline: the rejection cap was hit. The user fixes the code, clarifies the task file, or resets `review_rejections: 0` and demotes to `implementation` for another run. |
 | `done` | — | Terminal. The task file moves to `tasks/completed/` (done by `approve-task`). A `done` task still sitting in `tasks/active/` is an anomaly worth flagging. |
 
@@ -180,9 +174,8 @@ not new work.
   resumes on the same branch; never create a second branch for one task.
 - **Never commit task work directly to `main`.** Work lands on `main` only
   via `approve-task` merging a `sh-XXX` branch, and that merge
-  commits only after both verification tiers (§ Verification commands)
-  pass on the merged result — a broken merge never enters `main`'s
-  history.
+  commits only after the checks (§ Verification commands) pass on the
+  merged result — a broken merge never enters `main`'s history.
 - A task's phase-transition commits live on its `sh-XXX`
   branch, not `main`. The working tree's copy of a task file is stale for
   any task whose branch isn't currently checked out; read authoritative
