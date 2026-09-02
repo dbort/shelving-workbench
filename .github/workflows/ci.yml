@@ -41,4 +41,8 @@ jobs:
           # Fail the job on a stale or missing pixi.lock instead of re-solving.
           frozen: true
       - name: Run the checks
+        env:
+          # Rate-limit headroom for the online action-pin check (see
+          # docs/github-actions-hardening.md). Read-only, expires with the job.
+          GITHUB_TOKEN: ${{ github.token }}
         run: pixi run tests

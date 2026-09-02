@@ -50,4 +50,5 @@ checkout; both put `shelving_core` on the import path for scripts such as
 
 It runs inside the pixi environment, which supplies every tool including
 FreeCAD. To run only the workflow lint, use `bash tools/lint-workflows.sh` from
-inside `pixi shell`.
+inside `pixi shell`. For offline work, `pixi run tests -- --offline` skips the
+checks that need network access.

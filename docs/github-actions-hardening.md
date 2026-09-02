@@ -25,6 +25,16 @@ When adding or bumping an action, resolve the SHA from the release tag
 yourself (GitHub's "releases" page, or the API) rather than trusting a
 value pasted from documentation.
 
+The workflow lint verifies this correspondence online: for every `uses:`
+it resolves the `# vX.Y.Z` tag against the GitHub API, follows an
+annotated tag to its target commit, and fails if that commit is not the
+pinned SHA. A mismatch, a missing tag, a rate-limit response, or an
+unreachable API all fail the run: there is no quiet pass when the check
+cannot confirm a pin. CI runs it with the job's `GITHUB_TOKEN` for
+rate-limit headroom. Offline local work that cannot reach the API runs
+`pixi run tests -- --offline`, which skips this check and any other that
+needs the network.
+
 ## Start with no permissions, grant per job
 
 Each workflow sets `permissions: {}` at the top level, which drops the
@@ -110,28 +120,27 @@ Scorecard dataset. Treat a dropping score as a regression to investigate.
 
 ## Enforcement: the workflow lint
 
-`tools/lint-workflows.sh` checks the rules above that can be
-machine-verified. `pixi run tests` calls it after the unit suite and
-before the FreeCAD smoke test, so CI covers it with no dedicated
-workflow-lint job; a human wanting only this lint runs
-`bash tools/lint-workflows.sh` from inside `pixi shell`. It runs four
-checks from a single invocation; all four run every time and any failure
-fails the job:
+`tools/lint-workflows.sh` enforces the machine-verifiable rules from this
+document. `pixi run tests` runs it after the unit suite and before the
+FreeCAD smoke test, so CI needs no dedicated workflow-lint job; to run
+only this lint, call `bash tools/lint-workflows.sh` from inside
+`pixi shell`.
 
-- **`actionlint`** over `.github/workflows/`: workflow-schema validation
-  plus `shellcheck` on every `run:` script body. `shellcheck` comes from
-  the pixi environment, which is why it is a `pixi.toml` dependency.
-- **`zizmor --offline`** over `.github/workflows/`: the Actions security
-  audit (dangerous triggers, template injection, credential persistence,
-  excessive permissions, and similar). It runs offline for determinism and
-  takes no GitHub token. A genuine finding is fixed; a confirmed false
-  positive is suppressed with an inline `# zizmor: ignore[<rule>]` comment
-  and a one-line reason.
-- **`uses:` pin format**: an offline check that every `uses:` line matches
-  `owner/repo@<40-hex> # vX.Y.Z`, enforcing the SHA-pinning rule above
-  without a network round-trip. It does not verify that the SHA belongs to
-  the named release; Dependabot and review cover that.
-- **`check-jsonschema --builtin-schema vendor.dependabot`** over
-  `.github/dependabot.yml`: validates the Dependabot config against its
-  published schema so a typo there fails CI rather than being silently
-  ignored by GitHub.
+One invocation drives five tools: `actionlint`, `zizmor`, an inline
+`uses:` pin-format regex, `check-jsonschema` against the vendored
+Dependabot schema, and `tools/check_action_pins.py`. All five run every
+time and any failure fails the run. Three things about that are not
+visible from the code:
+
+- **`zizmor` suppressions.** A confirmed false positive is silenced with
+  an inline `# zizmor: ignore[<rule>]` comment carrying a one-line reason.
+  A genuine finding is fixed, never suppressed.
+- **Offline versus online.** `actionlint`, `zizmor --offline`, the
+  pin-format regex, and the Dependabot schema check are offline and
+  deterministic, so the lint stays reproducible without network access.
+  Only `check_action_pins.py` uses the network: it confirms each pinned
+  SHA is the commit its `# vX.Y.Z` tag names, is fatal on any network
+  failure (mismatch, missing tag, rate limit, persistent 5xx, unreachable
+  API), and `pixi run tests -- --offline` is the only way to skip it.
+- **`shellcheck` is a `pixi.toml` dependency** because `actionlint` shells
+  out to it to lint every `run:` script body.

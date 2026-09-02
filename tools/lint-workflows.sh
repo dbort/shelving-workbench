@@ -1,17 +1,13 @@
 #!/usr/bin/env bash
 #
-# Lint the GitHub Actions workflows against this repo's hardening standard.
+# Lint the GitHub Actions workflows against this repo's hardening standard
+# (see docs/github-actions-hardening.md). One invocation runs every check and
+# exits non-zero if any of them fails.
 #
-# One invocation, four fatal checks (see docs/github-actions-hardening.md):
-#
-#   1. actionlint over .github/workflows/       - schema + `run:` shellcheck
-#   2. zizmor --offline over .github/workflows/ - Actions security audit
-#   3. an offline pin-format check              - every `uses:` is
-#                                                 owner/repo@<40-hex> # vX.Y.Z
-#   4. check-jsonschema vendor.dependabot       - .github/dependabot.yml schema
-#
-# All four run every time; the script exits non-zero if any of them fails.
-# zizmor runs offline for determinism and takes no GitHub token.
+# All but one check run offline and need no GitHub token. The exception
+# resolves each pinned SHA against the GitHub API and is fatal on a network
+# failure, unless SHELVING_OFFLINE=1 (set by `pixi run tests -- --offline`)
+# makes it skip itself before the first request.
 #
 set -euo pipefail
 
@@ -33,7 +29,7 @@ run_check() {
 	fi
 }
 
-# 3. Offline pin-format check. Kept as a shell function so it runs with no
+# Offline pin-format check. Kept as a shell function so it runs with no
 # network and no third-party tool: every `uses:` must name a full 40-hex
 # commit SHA with a trailing `# vX.Y.Z` release comment. The action reference
 # before `@` may carry extra path segments (e.g. github/codeql-action/upload-sarif).
@@ -59,6 +55,8 @@ run_check "actionlint" actionlint
 run_check "zizmor (offline)" zizmor --offline "$WORKFLOW_DIR"
 run_check "uses: pin format" check_pins
 run_check "dependabot schema" check-jsonschema --builtin-schema vendor.dependabot "$DEPENDABOT"
+# Online check: SHELVING_OFFLINE threads through the environment, no new argument.
+run_check "action pin SHAs" python3 tools/check_action_pins.py
 
 if [ "$status" -ne 0 ]; then
 	echo "workflow lint: FAILED" >&2

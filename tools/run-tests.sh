@@ -2,13 +2,24 @@
 #
 # The Shelving Workbench check harness: the single command that gates a merge.
 # Run it as `pixi run tests`; the checks below assume that environment's tools.
+# The lone option, `--offline` (`pixi run tests -- --offline`), exports
+# SHELVING_OFFLINE=1 so network-dependent checks skip themselves instead of
+# failing on an unreachable service.
 #
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-if [ "$#" -ne 0 ]; then
-	echo "usage: run-tests.sh (no arguments)" >&2
+case "${1:-}" in
+	"") ;;
+	--offline) export SHELVING_OFFLINE=1 ;;
+	*)
+		echo "usage: run-tests.sh [--offline]" >&2
+		exit 2
+		;;
+esac
+if [ "$#" -gt 1 ]; then
+	echo "usage: run-tests.sh [--offline]" >&2
 	exit 2
 fi
 
