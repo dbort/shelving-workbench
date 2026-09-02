@@ -69,9 +69,9 @@ def _css_rules(style_text: str) -> list[tuple[str, str]]:
 
 
 def _effective_fill(rect: ET.Element) -> str | None:
-    """The colour a divider rect actually renders: its inline ``style`` fill if
-    present, else its ``fill`` attribute. No stylesheet rule applies to divider
-    rects, so nothing outranks these."""
+    """The colour a divider rect renders: its inline ``style`` fill if present,
+    else its ``fill`` attribute. No stylesheet rule applies to divider rects, so
+    nothing outranks these."""
     style = rect.get("style")
     if style:
         for decl in style.split(";"):
@@ -136,8 +136,8 @@ def test_output_parses_and_root_is_svg_with_viewbox() -> None:
     view_box = root.get("viewBox")
     assert view_box is not None
     # W = width + 2*margin. H = height + 2*margin + title band (2*font_size) +
-    # legend band ((n_materials + 1) rows of 1.2*font_size + a bottom margin):
-    # 1800 + 40 + 24 + (3 * 14.4 + 20) = 1927.2.
+    # legend band, which is (n_materials + 1) rows of 1.2*font_size plus a
+    # bottom margin: 1800 + 40 + 24 + (3 * 14.4 + 20) = 1927.2.
     assert view_box == "0 0 940.000 1927.200"
     assert root.get("width") == "940.000"
     assert root.get("height") == "1927.200"
@@ -194,7 +194,7 @@ def test_dividers_are_filled_by_their_resolved_material_colour() -> None:
 def test_no_stylesheet_rule_sets_fill_on_divider_rects() -> None:
     # An SVG <style> rule outranks a fill= presentation attribute regardless of
     # specificity, so a `fill` on any selector that matches <rect class="divider">
-    # would repaint every divider one colour (the round-2 defect this guards).
+    # would repaint every divider one colour: the regression this test guards against.
     carcass = _nested_sample()
     root = ET.fromstring(to_svg(carcass, solve(carcass, CATALOG), CATALOG))
     divider_selectors = {".divider", "rect", "rect.divider", "*"}

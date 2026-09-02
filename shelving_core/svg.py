@@ -111,9 +111,9 @@ def _walk(
     split, or ``None`` for the carcass root. ``Split`` nodes contribute no rect
     of their own (their area is the union of their children); each child is
     visited in list order, with the divider that follows it appended right
-    after so z-order stays deterministic. Each divider's placed ``Rect`` and
-    resolved material id (its own ``material``, else ``default_material``) are
-    collected; leaves keep their id for the short-id label.
+    after so z-order stays deterministic. The walk records each divider's
+    placed ``Rect`` and resolved material id (its own ``material``, else
+    ``default_material``); leaves keep their id for the short-id label.
     """
     match bay:
         case Leaf():
@@ -220,10 +220,8 @@ def _legend_block(
     title_band_mm: float,
     font_size_mm: float,
 ) -> list[str]:
-    """Material legend below the elevation: a heading then one row per id.
-
-    Rows follow ``used_ids`` order (ascending material id), each a colour swatch
-    plus ``name``, ``thickness_mm``, and ``material_type``.
+    """Material legend below the elevation: a heading then one row per id, in
+    ``used_ids`` order (ascending material id) so the output stays deterministic.
     """
     line_height_mm = font_size_mm * _LINE_HEIGHT_FACTOR
     top_mm = margin_mm + title_band_mm + carcass_height_mm + margin_mm
