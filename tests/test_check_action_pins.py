@@ -188,7 +188,11 @@ def start_mock() -> Iterator[StartMock]:
 
     def _start(mode: MockMode) -> _MockServer:
         server = _MockServer(("127.0.0.1", 0), mode, _expected_commits())
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        # serve_forever's default 0.5s poll_interval is what server.shutdown()
+        # waits on at teardown; a short interval keeps each test from paying it.
+        thread = threading.Thread(
+            target=lambda: server.serve_forever(poll_interval=0.01), daemon=True
+        )
         thread.start()
         servers.append(server)
         return server
