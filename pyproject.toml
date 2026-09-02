@@ -25,10 +25,6 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.mypy]
 strict = true
-# tests/test_check_action_pins.py imports tools.check_action_pins while the
-# helper is also listed here by path; without an explicit package base mypy
-# resolves the file under two module names and refuses to run.
-explicit_package_bases = true
 files = [
     "shelving_core",
     "tools/layout_demo.py",
