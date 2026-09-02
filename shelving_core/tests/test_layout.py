@@ -12,6 +12,10 @@ from shelving_core.layout import (
     Split,
     Weighted,
 )
+from shelving_core.materials import MaterialId
+
+PLY = MaterialId("ply18")
+MDF = MaterialId("mdf12")
 
 
 def _sample_carcass() -> Carcass:
@@ -21,8 +25,8 @@ def _sample_carcass() -> Carcass:
         children=[Leaf(id="b"), Leaf(id="c"), Leaf(id="d")],
         rules=[Fill(), Weighted(2.0), Fixed(150.0)],
         dividers=[
-            Divider(thickness_mm=None, id="dv1"),
-            Divider(thickness_mm=12.0, id="dv2"),
+            Divider(material=None, id="dv1"),
+            Divider(material=MDF, lap="through", id="dv2"),
         ],
         id="inner",
     )
@@ -30,15 +34,16 @@ def _sample_carcass() -> Carcass:
         orientation=Orientation.HORIZONTAL,
         children=[Leaf(id="a"), inner],
         rules=[Fixed(400.0), Fill()],
-        dividers=[Divider(thickness_mm=None, id="dv0")],
+        dividers=[Divider(material=None, id="dv0")],
         id="root",
     )
     return Carcass(
         width_mm=900.0,
         height_mm=1800.0,
         depth_mm=300.0,
-        default_thickness_mm=18.0,
+        default_material=PLY,
         root=root,
+        id="unit-1",
     )
 
 
@@ -78,7 +83,7 @@ def test_carcass_width_must_be_positive() -> None:
             width_mm=0.0,
             height_mm=1800.0,
             depth_mm=300.0,
-            default_thickness_mm=18.0,
+            default_material=PLY,
             root=Leaf(),
         )
 
@@ -89,7 +94,7 @@ def test_carcass_height_must_be_positive() -> None:
             width_mm=900.0,
             height_mm=-1.0,
             depth_mm=300.0,
-            default_thickness_mm=18.0,
+            default_material=PLY,
             root=Leaf(),
         )
 
@@ -100,18 +105,18 @@ def test_carcass_depth_must_be_positive() -> None:
             width_mm=900.0,
             height_mm=1800.0,
             depth_mm=0.0,
-            default_thickness_mm=18.0,
+            default_material=PLY,
             root=Leaf(),
         )
 
 
-def test_carcass_default_thickness_must_be_nonnegative() -> None:
-    with pytest.raises(ValueError, match="default_thickness_mm"):
+def test_carcass_default_material_must_be_nonempty() -> None:
+    with pytest.raises(ValueError, match="default_material"):
         Carcass(
             width_mm=900.0,
             height_mm=1800.0,
             depth_mm=300.0,
-            default_thickness_mm=-0.1,
+            default_material=MaterialId(""),
             root=Leaf(),
         )
 
@@ -126,13 +131,15 @@ def test_weighted_weight_must_be_positive() -> None:
         Weighted(0.0)
 
 
-def test_divider_thickness_must_be_nonnegative() -> None:
-    with pytest.raises(ValueError, match="thickness_mm"):
-        Divider(thickness_mm=-1.0)
+def test_divider_defaults_have_no_material_or_lap() -> None:
+    divider = Divider()
+    assert divider.material is None
+    assert divider.lap is None
 
 
-def test_divider_thickness_none_is_allowed() -> None:
-    assert Divider(thickness_mm=None).thickness_mm is None
+def test_divider_lap_must_be_a_known_value() -> None:
+    with pytest.raises(ValueError, match="lap"):
+        Divider(lap="mitre")  # type: ignore[arg-type]  # negative test
 
 
 def test_json_round_trip_preserves_ids_and_structure() -> None:
@@ -144,6 +151,9 @@ def test_json_round_trip_preserves_ids_and_structure() -> None:
     restored_json = Carcass.from_json(carcass.to_json())
     assert restored_json == carcass
 
+    assert restored.id == "unit-1"
+    assert restored.default_material == "ply18"
+
     root = restored.root
     assert isinstance(root, Split)
     assert root.id == "root"
@@ -152,8 +162,10 @@ def test_json_round_trip_preserves_ids_and_structure() -> None:
     assert isinstance(inner, Split)
     assert [child.id for child in inner.children] == ["b", "c", "d"]
     assert [divider.id for divider in inner.dividers] == ["dv1", "dv2"]
-    assert inner.dividers[0].thickness_mm is None
-    assert inner.dividers[1].thickness_mm == 12.0
+    assert inner.dividers[0].material is None
+    assert inner.dividers[0].lap is None
+    assert inner.dividers[1].material == "mdf12"
+    assert inner.dividers[1].lap == "through"
     assert isinstance(inner.rules[1], Weighted)
     assert isinstance(inner.rules[2], Fixed)
 
@@ -177,10 +189,11 @@ def test_from_dict_rejects_unknown_bay_kind() -> None:
             {
                 "schema_version": 1,
                 "carcass": {
+                    "id": "u",
                     "width_mm": 900.0,
                     "height_mm": 1800.0,
                     "depth_mm": 300.0,
-                    "default_thickness_mm": 18.0,
+                    "default_material": "ply18",
                     "root": {"kind": "triple", "id": "x"},
                 },
             }
@@ -193,10 +206,11 @@ def test_from_dict_rejects_unknown_rule_type() -> None:
             {
                 "schema_version": 1,
                 "carcass": {
+                    "id": "u",
                     "width_mm": 900.0,
                     "height_mm": 1800.0,
                     "depth_mm": 300.0,
-                    "default_thickness_mm": 18.0,
+                    "default_material": "ply18",
                     "root": {
                         "kind": "split",
                         "id": "r",
@@ -206,7 +220,7 @@ def test_from_dict_rejects_unknown_rule_type() -> None:
                             {"kind": "leaf", "id": "b"},
                         ],
                         "rules": [{"type": "fill"}, {"type": "elastic"}],
-                        "dividers": [{"id": "d", "thickness_mm": None}],
+                        "dividers": [{"id": "d"}],
                     },
                 },
             }
@@ -219,6 +233,7 @@ def test_from_dict_rejects_structurally_malformed_doc() -> None:
             {
                 "schema_version": 1,
                 "carcass": {
+                    "id": "u",
                     "width_mm": 900.0,
                     "height_mm": 1800.0,
                     "depth_mm": 300.0,

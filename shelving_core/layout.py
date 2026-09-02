@@ -1,7 +1,8 @@
 """Split-tree data model for a shelving ``Carcass`` and its JSON form.
 
-A ``Carcass`` is the shelving box: outer dimensions, a default panel thickness,
-and a root ``Bay``. A ``Bay`` is either a ``Leaf`` (an open compartment) or a
+A ``Carcass`` is the shelving box: outer dimensions, a default material
+reference, and a root ``Bay``. A ``Bay`` is either a ``Leaf`` (an open
+compartment) or a
 ``Split`` (an orientation, an ordered list of two or more child bays, one
 ``SplitRule`` per child, and one fewer ``Divider`` than children).
 
@@ -17,6 +18,8 @@ import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Literal, TypedDict
+
+from shelving_core.materials import MaterialId
 
 SCHEMA_VERSION: int = 1
 
@@ -72,17 +75,20 @@ class Leaf:
 class Divider:
     """The panel between two consecutive split children.
 
-    ``thickness_mm`` of ``None`` means "inherit ``Carcass.default_thickness_mm``";
-    the solver resolves it, this model keeps the ``None`` verbatim.
+    ``material`` of ``None`` means "inherit ``Carcass.default_material``"; the
+    solver resolves the id to a thickness, this model keeps the ``None``
+    verbatim. ``lap`` is a reserved per-joint lap-order override (which member
+    runs continuous through the joint); nothing reads it yet.
     """
 
-    thickness_mm: float | None = None
+    material: MaterialId | None = None
+    lap: Literal["captured", "through"] | None = None
     id: str = field(default_factory=new_id)
 
     def __post_init__(self) -> None:
-        if self.thickness_mm is not None and self.thickness_mm < 0:
+        if self.lap not in (None, "captured", "through"):
             raise ValueError(
-                f"Divider.thickness_mm must be None or >= 0, got {self.thickness_mm}"
+                f"Divider.lap must be None, 'captured', or 'through', got {self.lap!r}"
             )
 
 
@@ -122,13 +128,20 @@ Bay = Leaf | Split
 
 @dataclass
 class Carcass:
-    """The shelving box: outer dimensions, a default thickness, and a root bay."""
+    """The shelving box: outer dimensions, a default material, and a root bay.
+
+    ``default_material`` is a catalog id; its thickness applies to the shell
+    panels and to any ``Divider`` that sets no ``material`` of its own. ``id``
+    is this unit's persistent identity, assigned once and preserved across
+    edits.
+    """
 
     width_mm: float
     height_mm: float
     depth_mm: float
-    default_thickness_mm: float
+    default_material: MaterialId
     root: Bay
+    id: str = field(default_factory=new_id)
 
     def __post_init__(self) -> None:
         if self.width_mm <= 0:
@@ -137,20 +150,18 @@ class Carcass:
             raise ValueError(f"Carcass.height_mm must be > 0, got {self.height_mm}")
         if self.depth_mm <= 0:
             raise ValueError(f"Carcass.depth_mm must be > 0, got {self.depth_mm}")
-        if self.default_thickness_mm < 0:
-            raise ValueError(
-                f"Carcass.default_thickness_mm must be >= 0, got "
-                f"{self.default_thickness_mm}"
-            )
+        if not self.default_material:
+            raise ValueError("Carcass.default_material must be non-empty")
 
     def to_dict(self) -> "CarcassDoc":
         return {
             "schema_version": 1,
             "carcass": {
+                "id": self.id,
                 "width_mm": self.width_mm,
                 "height_mm": self.height_mm,
                 "depth_mm": self.depth_mm,
-                "default_thickness_mm": self.default_thickness_mm,
+                "default_material": str(self.default_material),
                 "root": _bay_to_doc(self.root),
             },
         }
@@ -177,8 +188,9 @@ class Carcass:
             width_mm=_req_number(body, "width_mm"),
             height_mm=_req_number(body, "height_mm"),
             depth_mm=_req_number(body, "depth_mm"),
-            default_thickness_mm=_req_number(body, "default_thickness_mm"),
+            default_material=MaterialId(_req_str(body, "default_material")),
             root=_bay_from_doc(body.get("root")),
+            id=_req_str(body, "id"),
         )
 
     @classmethod
@@ -208,7 +220,8 @@ RuleDoc = FixedRuleDoc | WeightedRuleDoc | FillRuleDoc
 
 class DividerDoc(TypedDict):
     id: str
-    thickness_mm: float | None
+    material: str | None
+    lap: Literal["captured", "through"] | None
 
 
 class LeafDoc(TypedDict):
@@ -229,10 +242,11 @@ BayDoc = LeafDoc | SplitDoc
 
 
 class CarcassBody(TypedDict):
+    id: str
     width_mm: float
     height_mm: float
     depth_mm: float
-    default_thickness_mm: float
+    default_material: str
     root: BayDoc
 
 
@@ -260,7 +274,11 @@ def _rule_to_doc(rule: SplitRule) -> RuleDoc:
 
 
 def _divider_to_doc(divider: Divider) -> DividerDoc:
-    return {"id": divider.id, "thickness_mm": divider.thickness_mm}
+    return {
+        "id": divider.id,
+        "material": None if divider.material is None else str(divider.material),
+        "lap": divider.lap,
+    }
 
 
 def _bay_to_doc(bay: Bay) -> BayDoc:
@@ -339,16 +357,35 @@ def _rule_from_doc(node: object) -> SplitRule:
 def _divider_from_doc(node: object) -> Divider:
     obj = _as_mapping(node, "divider")
     divider_id = _req_str(obj, "id")
-    if "thickness_mm" not in obj:
-        raise ValueError("missing required key 'thickness_mm'")
-    raw = obj["thickness_mm"]
-    if raw is None:
-        return Divider(thickness_mm=None, id=divider_id)
-    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
-        raise ValueError(
-            f"divider 'thickness_mm' must be a number or null, got {raw!r}"
-        )
-    return Divider(thickness_mm=float(raw), id=divider_id)
+    return Divider(
+        material=_divider_material_from_doc(obj),
+        lap=_divider_lap_from_doc(obj),
+        id=divider_id,
+    )
+
+
+def _divider_material_from_doc(obj: Mapping[str, object]) -> MaterialId | None:
+    if "material" not in obj or obj["material"] is None:
+        return None
+    value = obj["material"]
+    if not isinstance(value, str):
+        raise ValueError(f"divider 'material' must be a string or null, got {value!r}")
+    return MaterialId(value)
+
+
+def _divider_lap_from_doc(
+    obj: Mapping[str, object],
+) -> Literal["captured", "through"] | None:
+    if "lap" not in obj or obj["lap"] is None:
+        return None
+    value = obj["lap"]
+    if value == "captured":
+        return "captured"
+    if value == "through":
+        return "through"
+    raise ValueError(
+        f"divider 'lap' must be 'captured', 'through', or null, got {value!r}"
+    )
 
 
 def _bay_from_doc(node: object) -> Bay:

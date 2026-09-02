@@ -229,8 +229,7 @@ def to_svg(
 
     title = (
         f"Carcass {carcass.width_mm:g} x {carcass.height_mm:g} x "
-        f"{carcass.depth_mm:g} mm, default thickness "
-        f"{carcass.default_thickness_mm:g} mm"
+        f"{carcass.depth_mm:g} mm"
     )
     parts.append(
         f'  <text class="title" x="{_fmt(margin_mm)}" '

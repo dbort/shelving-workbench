@@ -22,10 +22,24 @@ from shelving_core.layout import (
     Split,
     Weighted,
 )
+from shelving_core.materials import Catalog, MaterialEntry, MaterialId
 from shelving_core.solver import solve
 from shelving_core.svg import to_svg
 
 SVG_NS = "http://www.w3.org/2000/svg"
+
+SHELL_10 = MaterialId("shell10")
+SHELL_18 = MaterialId("shell18")
+CATALOG = Catalog(
+    entries={
+        SHELL_10: MaterialEntry(
+            id=SHELL_10, name="10 mm", thickness_mm=10.0, material_type="test"
+        ),
+        SHELL_18: MaterialEntry(
+            id=SHELL_18, name="18 mm", thickness_mm=18.0, material_type="test"
+        ),
+    }
+)
 
 
 def _tag(name: str) -> str:
@@ -49,7 +63,7 @@ def _flat_fill_carcass(orientation: Orientation, n_children: int) -> Carcass:
         width_mm=100.0,
         height_mm=100.0,
         depth_mm=50.0,
-        default_thickness_mm=10.0,
+        default_material=SHELL_10,
         root=root,
     )
 
@@ -78,14 +92,14 @@ def _nested_sample() -> Carcass:
         width_mm=900.0,
         height_mm=1800.0,
         depth_mm=300.0,
-        default_thickness_mm=18.0,
+        default_material=SHELL_18,
         root=root,
     )
 
 
 def test_output_parses_and_root_is_svg_with_viewbox() -> None:
     carcass = _nested_sample()
-    root = ET.fromstring(to_svg(carcass, solve(carcass)))
+    root = ET.fromstring(to_svg(carcass, solve(carcass, CATALOG)))
     assert root.tag == _tag("svg")
     view_box = root.get("viewBox")
     assert view_box is not None
@@ -97,7 +111,7 @@ def test_output_parses_and_root_is_svg_with_viewbox() -> None:
 
 def test_rect_and_label_counts_for_a_known_tree() -> None:
     carcass = _nested_sample()
-    root = ET.fromstring(to_svg(carcass, solve(carcass)))
+    root = ET.fromstring(to_svg(carcass, solve(carcass, CATALOG)))
 
     n_leaves = 4
     n_dividers = 3
@@ -111,8 +125,7 @@ def test_rect_and_label_counts_for_a_known_tree() -> None:
     title_texts = [t for t in texts if t.get("class") == "title"]
     assert len(label_texts) == n_leaves
     assert len(title_texts) == 1
-    assert title_texts[0].text is not None
-    assert title_texts[0].text.startswith("Carcass 900 x 1800 x 300 mm")
+    assert title_texts[0].text == "Carcass 900 x 1800 x 300 mm"
 
     # Every label carries its three lines: dimensions, short id, rule.
     for label in label_texts:
@@ -125,10 +138,10 @@ def test_root_leaf_without_a_split_has_no_rule_line() -> None:
         width_mm=100.0,
         height_mm=100.0,
         depth_mm=50.0,
-        default_thickness_mm=10.0,
+        default_material=SHELL_10,
         root=Leaf(id="only"),
     )
-    root = ET.fromstring(to_svg(carcass, solve(carcass)))
+    root = ET.fromstring(to_svg(carcass, solve(carcass, CATALOG)))
     (label,) = [t for t in root.findall(_tag("text")) if t.get("class") == "label"]
     tspans = label.findall(_tag("tspan"))
     assert [t.text for t in tspans] == ["80 x 80 mm", "only"]
@@ -136,7 +149,7 @@ def test_root_leaf_without_a_split_has_no_rule_line() -> None:
 
 def test_y_flip_places_higher_z_nearer_the_top() -> None:
     carcass = _flat_fill_carcass(Orientation.HORIZONTAL, 2)
-    root = ET.fromstring(to_svg(carcass, solve(carcass)))
+    root = ET.fromstring(to_svg(carcass, solve(carcass, CATALOG)))
     low, high = _rects_by_class(root, "leaf")
 
     # Interior 80x80 at solver (10, 10); 80 mm split minus a 10 mm divider is
@@ -157,14 +170,14 @@ def test_y_flip_places_higher_z_nearer_the_top() -> None:
 
 def test_three_way_split_renders_three_leaves_and_two_dividers() -> None:
     carcass = _flat_fill_carcass(Orientation.VERTICAL, 3)
-    root = ET.fromstring(to_svg(carcass, solve(carcass)))
+    root = ET.fromstring(to_svg(carcass, solve(carcass, CATALOG)))
     assert len(_rects_by_class(root, "leaf")) == 3
     assert len(_rects_by_class(root, "divider")) == 2
 
 
 def test_output_is_deterministic() -> None:
     carcass = _nested_sample()
-    layout = solve(carcass)
+    layout = solve(carcass, CATALOG)
     assert to_svg(carcass, layout) == to_svg(carcass, layout)
 
 
@@ -174,10 +187,10 @@ def test_markup_metacharacters_in_an_id_are_xml_escaped() -> None:
         width_mm=100.0,
         height_mm=100.0,
         depth_mm=50.0,
-        default_thickness_mm=10.0,
+        default_material=SHELL_10,
         root=Leaf(id=raw_id),
     )
-    svg = to_svg(carcass, solve(carcass))
+    svg = to_svg(carcass, solve(carcass, CATALOG))
 
     # Still well-formed with the metacharacters carried through the label text.
     root = ET.fromstring(svg)
@@ -196,7 +209,7 @@ def test_markup_metacharacters_in_an_id_are_xml_escaped() -> None:
 
 def test_scale_grows_size_attributes_but_leaves_viewbox_untouched() -> None:
     carcass = _nested_sample()
-    layout = solve(carcass)
+    layout = solve(carcass, CATALOG)
     base = ET.fromstring(to_svg(carcass, layout, scale=1.0))
     scaled = ET.fromstring(to_svg(carcass, layout, scale=2.0))
 
