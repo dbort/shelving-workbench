@@ -3,7 +3,8 @@
 # requirement explicit and independent of zizmor's default, which the workflow
 # lint would otherwise rely on. The `# vX.Y.Z` comment beside each SHA is
 # checked separately by tools/check_action_pins.py; zizmor does not inspect it.
-# See docs/github-actions-hardening.md.
+# See docs/github-actions-hardening.md. This config's effect on zizmor 1.30.0
+# was checked in commit 743672f (see its removed tests/test_zizmor_pin_policy.py).
 rules:
   unpinned-uses:
     config:

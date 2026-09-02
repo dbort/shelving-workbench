@@ -142,7 +142,13 @@ fails the run. Three things about that are not visible from the code:
   is silenced with an inline `# zizmor: ignore[<rule>]` comment carrying a
   one-line reason; a genuine finding is fixed, never suppressed.
   `zizmor.yml` sets the `unpinned-uses` blanket policy to `hash-pin`, so a
-  tag or branch `uses:` fails the audit.
+  tag or branch `uses:` fails the audit. That the policy file is loaded and
+  its key path honored (rather than the run silently coasting on zizmor
+  1.30.0's matching default) was checked against zizmor 1.30.0 in commit
+  `743672f`, whose since-removed `tests/test_zizmor_pin_policy.py` drove a
+  tag pin through the real config, a policy-flipped config, and a missing
+  config. That coverage was dropped afterward: it tested a third-party
+  tool's behavior, not this repo's code.
 - **Offline versus online.** `actionlint`, `zizmor --offline`, the
   Dependabot schema check, and `check_action_pins.py`'s `# vX.Y.Z`
   comment check are offline and deterministic, so the lint stays

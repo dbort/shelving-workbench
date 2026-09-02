@@ -31,6 +31,5 @@ files = [
     "tools/check_lock_paths.py",
     "tools/check_action_pins.py",
     "tests/test_check_action_pins.py",
-    "tests/test_zizmor_pin_policy.py",
 ]
 exclude = ["freecad/"]
