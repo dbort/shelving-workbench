@@ -276,8 +276,8 @@ right children.
   on every drag step needs a check on a large unit; a debounce or a
   cheaper preview path may be needed.
 - **FreeCAD 1.0 API drift.** Minor releases occasionally move scripted
-  object and ViewProvider details. The full CI tier is the early-warning
-  system.
+  object and ViewProvider details. `pixi run tests` in CI is the
+  early-warning system.
 - **Child recompute order.** `App::Part` children recompute needs to be
   ordered so planks rebuild after the container writes their specs;
   verify rather than assume.

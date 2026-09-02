@@ -9,12 +9,13 @@
 #   2. ruff check .                - lint
 #   3. ruff format --check .       - formatting
 #   4. mypy                        - strict type check (see pyproject.toml)
-#   5. tools/vendor-core.sh --check - the vendored shelving_core copy is in sync
-#   6. pytest shelving_core tests  - the unit suite
-#   7. tools/lint-workflows.sh     - GitHub Actions hardening lint
-#   8. freecadcmd tools/freecad_smoke.py - headless FreeCAD import smoke
+#   5. shellcheck tools/*.sh       - lint the repo's own shell scripts
+#   6. tools/vendor-core.sh --check - the vendored shelving_core copy is in sync
+#   7. pytest shelving_core tests  - the unit suite
+#   8. tools/lint-workflows.sh     - GitHub Actions hardening lint
+#   9. freecadcmd tools/freecad_smoke.py - headless FreeCAD import smoke
 #
-# Step 8 greps stdout for a marker line instead of trusting an exit status:
+# Step 9 greps stdout for a marker line instead of trusting an exit status:
 # freecadcmd exits 0 no matter what the script does (see sh-007 and
 # docs/freecadcmd-notes.md), so the printed "shelving workbench import OK" line
 # is the only pass signal.
@@ -44,6 +45,7 @@ python3 tools/check_lock_paths.py
 ruff check .
 ruff format --check .
 mypy
+shellcheck tools/*.sh
 bash tools/vendor-core.sh --check
 pytest shelving_core tests
 bash tools/lint-workflows.sh

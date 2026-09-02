@@ -1,8 +1,8 @@
 ---
 id: sh-008
 title: "Collapse the test tiers into one pixi-run harness, drop .venv"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 1
 ---
 

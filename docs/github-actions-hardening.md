@@ -93,8 +93,10 @@ queueing behind it.
 `.github/dependabot.yml` enables weekly updates for:
 
 - `github-actions`: SHA bumps for the pinned `uses:` refs above.
-- `pip`: Python dependencies declared in `pyproject.toml`. The conda-side
-  toolchain and FreeCAD come from pixi, which Dependabot cannot see.
+- `pip`: Python dependencies declared in `pyproject.toml`. That set is
+  empty today, so the entry exists to catch dependencies added to
+  `[project.dependencies]` later. The conda-side toolchain and FreeCAD come
+  from pixi, which Dependabot cannot see.
 
 Dependabot has no pixi support, so `pixi.lock` is refreshed by hand with
 `pixi update` when the conda-side toolchain needs to move.
