@@ -94,7 +94,10 @@ prose, regardless of any conversational-brevity rules in effect. Distilled
 from `doc-hygiene`'s rules (`.claude/skills/doc-hygiene/SKILL.md`; keep the
 two in sync):
 - Comments explain *why* (non-obvious rationale, tradeoff, constraint) —
-  never restate the adjacent code.
+  never restate the adjacent code. Do not open a file or function with a
+  comment that lists the steps or sections below it; keep the one or two
+  non-obvious points, each on the line it explains. Assume an expert
+  reader of the language.
 - State current behavior as though it has always been this way; no
   reader-memory framing ("works exactly as before", "no longer requires",
   "used to"). A "(see sh-XXX)" pointer stays only when it
