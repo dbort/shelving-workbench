@@ -51,30 +51,25 @@ _PIN_RE = re.compile(
 
 
 class Pin(NamedTuple):
-    """One SHA-pinned ``uses:`` entry from a workflow file.
-
-    ``file`` carries the workflow's path relative to the repo
-    (``.github/workflows/ci.yml``), so a failure line points straight at the
-    file to edit rather than a bare basename.
-    """
+    """One SHA-pinned ``uses:`` entry from a workflow file."""
 
     repo: str
     tag: str
     sha: str
+    # Path relative to the repo (``.github/workflows/ci.yml``), so a failure
+    # line points at the file to edit rather than a bare basename.
     file: str
 
 
 class FetchResult(NamedTuple):
-    """An HTTP response reduced to what pin resolution needs.
+    """An HTTP response reduced to what pin resolution needs."""
 
-    ``status`` is ``0`` for a connection-level failure so ``classify_status``
-    can treat "never got an answer" as one more fatal case. ``body`` is ``None``
-    when a response arrived but its payload was not JSON (a proxy or captive
-    portal answering 200 with HTML), which pin resolution reports as fatal
-    rather than crashing on the parse.
-    """
-
+    # ``0`` for a connection-level failure, so ``classify_status`` can treat
+    # "never got an answer" as one more fatal case.
     status: int
+    # ``None`` when a response arrived but its payload was not JSON (a proxy or
+    # captive portal answering 200 with HTML); pin resolution reports that as
+    # fatal rather than crashing on the parse.
     body: Mapping[str, object] | None
 
 
@@ -185,7 +180,7 @@ def _fetch_catching(fetch: Fetch, url: str) -> FetchResult:
 
 
 def _require_json(result: FetchResult, what: str) -> Mapping[str, object]:
-    """The parsed body, or a fatal reason when a 200 carried a non-JSON payload."""
+    """The parsed body; raises ``ResolveError`` when the payload was not JSON."""
     if result.body is None:
         raise ResolveError(f"unparseable response (HTTP {result.status}) for {what}")
     return result.body

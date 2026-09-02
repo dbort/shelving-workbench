@@ -3,9 +3,9 @@
 The module is built from small, injectable pieces so its behaviour can be
 pinned without a network round-trip or a mock HTTP server: ``resolve_commit``
 and ``main`` take a ``fetch`` callable, ``offline_mode`` reads one environment
-variable, and ``classify_status`` / ``auth_headers`` are pure. The live GitHub
-call still happens for real when ``pixi run tests`` runs on a networked host;
-these tests never touch the network and finish in well under a second.
+variable, and ``classify_status`` / ``auth_headers`` are pure. ``pixi run tests``
+still makes the live GitHub call on a networked host; these tests never touch the
+network and finish in well under a second.
 """
 
 from __future__ import annotations
