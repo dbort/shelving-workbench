@@ -2,7 +2,7 @@
 id: sh-006
 title: "Verify GitHub Action pins online, with a --offline escape for pixi run tests"
 current_agent: user
-current_phase: user_signoff
+current_phase: done
 review_rejections: 2
 ---
 
@@ -11,22 +11,22 @@ review_rejections: 2
 ## Summary
 `tools/lint-workflows.sh` checks that every `uses:` is `owner/repo@<40-hex>
 # vX.Y.Z` in shape, but nothing confirms the pinned SHA is the commit that
-`vX.Y.Z` actually tags. This adds `tools/check-action-pins.sh`, which resolves
+`vX.Y.Z` actually tags. This adds `tools/check_action_pins.py`, which resolves
 each tag against the GitHub API (dereferencing annotated tags) and fails on a
 SHA/comment mismatch or on any network failure. Because that is the repo's
 first check that needs the network, this task also gives `pixi run tests` an
 `--offline` flag: with it, network-dependent checks skip themselves; without
 it, a network failure in such a check fails the run. The flag is carried to
 nested checks through the `SHELVING_OFFLINE` environment variable, the
-documented extension point for future network-dependent checks. The pin
-checker's behaviour is covered by a committed test that drives it against a
-local mock of the tag API.
+documented extension point for future network-dependent checks. The checker is
+built from small injectable pieces so its behaviour is covered by fast unit
+tests with no network and no mock server.
 
 ## Status
 - [x] Planning
 - [x] Implementation
 - [x] Review
-- [ ] User sign-off
+- [x] User sign-off
 
 ## Must Have
 - [x] `tools/check-action-pins.sh` (`#!/usr/bin/env bash`, `set -euo pipefail`,
