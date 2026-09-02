@@ -31,9 +31,9 @@ workbench identifier.
 - A modal task-panel elevation editor with: split a bay H or V, drag a
   split, type an exact opening dimension (fractional-inch input
   accepted). Delete removes a split and merges its bays.
-- A document-level material catalog. The only required field per stock
-  entry is actual thickness. Editing an entry reflows every plank that
-  references it.
+- A document-level material catalog. The required fields per stock
+  entry are actual thickness and material type. Editing an entry reflows
+  every plank that references it.
 - Per-plank 3D solids, individually selectable and taggable, each
   carrying a material reference, a grain-direction value, and a
   human-readable `Label`.
@@ -95,8 +95,8 @@ GUI, and it is enforced: `shelving_core` importing anything from
 
 ### The split-tree
 
-A `Carcass` holds outer dimensions, a depth, a default panel thickness,
-and a root `Bay`. A `Bay` is either:
+A `Carcass` holds outer dimensions, a depth, a default material
+reference, and a root `Bay`. A `Bay` is either:
 
 - a **leaf**: an open compartment; or
 - a **split**: an orientation (horizontal or vertical), an ordered list of

@@ -2,9 +2,9 @@
 
 A ``Carcass`` is the shelving box: outer dimensions, a default material
 reference, and a root ``Bay``. A ``Bay`` is either a ``Leaf`` (an open
-compartment) or a
-``Split`` (an orientation, an ordered list of two or more child bays, one
-``SplitRule`` per child, and one fewer ``Divider`` than children).
+compartment) or a ``Split`` (an orientation, an ordered list of two or more
+child bays, one ``SplitRule`` per child, and one fewer ``Divider`` than
+children).
 
 The JSON form is a stable interop contract, published as
 ``layout.schema.json`` beside this module. ``Carcass.from_dict`` rebuilds a tree

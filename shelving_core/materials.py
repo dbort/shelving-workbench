@@ -97,7 +97,7 @@ class Catalog:
 
     @classmethod
     def from_dict(cls, data: Mapping[str, object]) -> "Catalog":
-        # Parsed external JSON is a genuine type-erasing boundary: every value
+        # Parsed external JSON is a type-erasing boundary: every value
         # arrives as ``object`` and is narrowed with isinstance before it
         # reaches a constructor.
         version = data.get("schema_version")

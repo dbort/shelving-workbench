@@ -249,8 +249,8 @@ def test_divider_material_overrides_the_carcass_default_thickness() -> None:
         ),
         CATALOG,
     )
-    # Interior width 636 - 2*18 = 600; a 20 mm divider (from T20, not the T18
-    # default) leaves 600 - 200 - 20 = 380 for the fill child.
+    # Interior width 636 - 2*18 = 600; the 20 mm divider from T20 overrides the
+    # T18 default, so 600 - 200 - 20 = 380 is left for the fill child.
     _assert_rect(layout["dv"], 218.0, 18.0, 20.0, 364.0)
     _assert_rect(layout["r"], 238.0, 18.0, 380.0, 364.0)
 
