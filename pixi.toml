@@ -10,6 +10,11 @@ python = "3.12.*"
 ruff = "*"
 mypy = "*"
 pytest = "*"
+# Imported by shelving_core/tests/test_schema.py to validate the layout JSON
+# schema.
+jsonschema = "*"
+# tools/vendor-core.sh --check shells out to rsync for its dry-run diff.
+rsync = "*"
 # Workflow-lint toolchain. shellcheck is here because actionlint shells out to
 # it to lint `run:` script bodies.
 actionlint = "*"
@@ -17,12 +22,12 @@ zizmor = "*"
 check-jsonschema = "*"
 shellcheck = "*"
 
-# Thin wrappers over the authoritative harness. test.sh owns all tier logic;
-# these exist only so `pixi run fast` / `pixi run full` work inside the env.
+# `pixi run tests` is the repo's single authoritative check command: it runs
+# tools/run-tests.sh, which chains static analysis, the shelving_core unit
+# suite, the repository-consistency checks, the workflow-hardening lint, and the
+# headless FreeCAD import smoke. `demo` renders a sample solved layout.
 [tasks]
-fast = "./test.sh --fast"
-full = "./test.sh --full"
-lint-workflows = "tools/lint-workflows.sh"
+tests = "tools/run-tests.sh"
 demo = "python tools/layout_demo.py"
 
 # The project installs itself editable so `import shelving_core` resolves to the

@@ -242,27 +242,29 @@ freecad/shelving/         the workbench
   tests/                    freecadcmd smoke tests
 package.xml                 Addon Manager metadata
 LICENSE                     MIT
-test.sh                     --fast / --full entry points
+tools/run-tests.sh          the check harness
 ```
 
 ## Testing and CI
 
-CI runs from the first milestone and covers both layers:
+`pixi run tests` (which runs `tools/run-tests.sh`) is the whole check
+surface, and CI runs exactly that command from the first milestone. In one
+ordered pass it covers ruff, a strict type check, and pytest over
+`shelving_core`; the repository-consistency checks; the workflow-hardening
+lint; and, in a FreeCAD 1.0 environment, a headless `freecadcmd` import
+smoke.
 
-- **Fast tier** (`./test.sh --fast`): ruff, a type check, and pytest over
-  `shelving_core`. No FreeCAD. Runs on every push.
-- **Full tier** (`./test.sh --full`): a FreeCAD 1.0 environment (AppImage
-  or conda) running `freecadcmd` smoke tests: create a unit, recompute,
-  assert plank count and bounding boxes; edit a property, recompute,
-  assert the reflow; edit a catalog thickness, recompute, assert
-  dependent planks changed. See [`freecadcmd-notes.md`](freecadcmd-notes.md)
-  for the headless `freecadcmd` behaviors these scripts work around.
+From M2 the `freecadcmd` step runs full smoke tests: create a unit,
+recompute, assert plank count and bounding boxes; edit a property,
+recompute, assert the reflow; edit a catalog thickness, recompute, assert
+dependent planks changed. See [`freecadcmd-notes.md`](freecadcmd-notes.md)
+for the headless `freecadcmd` behaviors these scripts work around.
 
 The core carries the load. Every geometric rule (solver distribution,
 lap-order effects, over-constraint failure, serialisation round-trips) is
-a core pytest. The FreeCAD tier checks that the adapter wires the core to
-real objects and that reconciliation adds, updates, and removes the right
-children.
+a core pytest. The FreeCAD checks confirm that the adapter wires the core
+to real objects and that reconciliation adds, updates, and removes the
+right children.
 
 ## Open questions and risks
 
@@ -274,8 +276,8 @@ children.
   on every drag step needs a check on a large unit; a debounce or a
   cheaper preview path may be needed.
 - **FreeCAD 1.0 API drift.** Minor releases occasionally move scripted
-  object and ViewProvider details. The full CI tier is the early-warning
-  system.
+  object and ViewProvider details. `pixi run tests` in CI is the
+  early-warning system.
 - **Child recompute order.** `App::Part` children recompute needs to be
   ordered so planks rebuild after the container writes their specs;
   verify rather than assume.

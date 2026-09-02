@@ -14,9 +14,6 @@ authors = [{ name = "Dave Bort", email = "freecad@dbort.com" }]
 [project.urls]
 Repository = "https://github.com/dbort/shelving-workbench"
 
-[project.optional-dependencies]
-dev = ["ruff", "mypy", "pytest", "jsonschema"]
-
 [tool.hatch.build.targets.wheel]
 packages = ["shelving_core"]
 
@@ -31,7 +28,6 @@ strict = true
 files = [
     "shelving_core",
     "tools/layout_demo.py",
-    "tools/check_dev_extra.py",
     "tools/check_lock_paths.py",
 ]
 exclude = ["freecad/"]

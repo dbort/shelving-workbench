@@ -7,7 +7,7 @@ writes that entry as the absolute path of the machine it ran on
 (``rm pixi.lock && pixi lock``) writes it repo-relative (``- pypi: ./``). CI
 installs with ``frozen: true`` and replays the lock without re-solving, so an
 absolute path that exists only on the author's machine breaks every other
-checkout. ``./test.sh --fast`` runs this so the next ``pixi install`` that
+checkout. ``pixi run tests`` runs this so the next ``pixi install`` that
 reintroduces one fails immediately instead of in CI.
 """
 
@@ -17,8 +17,8 @@ import sys
 from collections.abc import Sequence
 
 # Lock keys whose value is a package location. Text scan rather than a YAML
-# parse: the fast tier's environments (an activated ``.venv`` built from the
-# [dev] extra, or the pixi env) are not guaranteed a YAML library.
+# parse: this check depends only on the standard library, so it runs even when
+# the pixi environment is half-provisioned or a YAML package is absent.
 _LOCATION_KEY = re.compile(
     r"^\s*(?:- )?(pypi|conda|url|path|source|git):\s*(\S.*?)\s*$"
 )

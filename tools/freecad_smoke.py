@@ -1,10 +1,10 @@
-"""Headless import smoke test for the full test tier.
+"""Headless import smoke test, the last step of ``pixi run tests``.
 
-Run by ``./test.sh --full`` via ``freecadcmd tools/freecad_smoke.py``. It checks
-that the workbench package, its GUI-registration module, and the vendored core
-import cleanly inside a FreeCAD interpreter, then prints the OK line that
-``test.sh`` greps for. ``freecadcmd`` does not propagate a script's exit status,
-so that printed line, not an exit code, is the success signal.
+Run via ``freecadcmd tools/freecad_smoke.py``. It checks that the workbench
+package, its GUI-registration module, and the vendored core import cleanly
+inside a FreeCAD interpreter, then prints the OK line that
+``tools/run-tests.sh`` greps for. ``freecadcmd`` does not propagate a script's
+exit status, so that printed line, not an exit code, is the success signal.
 
 The repo root is added to ``sys.path`` and merged into the already-initialised
 ``freecad`` namespace package's ``__path__`` here because M0 installs only

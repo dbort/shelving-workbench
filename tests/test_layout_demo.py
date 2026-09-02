@@ -1,4 +1,4 @@
-"""Fast-tier coverage of ``tools/layout_demo.py``'s run-and-print contract.
+"""Coverage of ``tools/layout_demo.py``'s run-and-print contract.
 
 ``tools/layout_demo.py`` is a documented entry point: wired into ``README.md``
 and the ``pixi run demo`` task, with the sh-003 Must Have requiring it to exit

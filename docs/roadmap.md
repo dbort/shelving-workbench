@@ -22,9 +22,9 @@ to `main`, never by the task's own implementation or review steps.
 
 **Status:** Done sh-001
 
-Monorepo skeleton, MIT `LICENSE`, `package.xml`, `test.sh` with both
-tiers wired, GitHub Actions running the fast tier and a full-tier job that
-installs FreeCAD 1.0 and imports the (empty) workbench.
+Monorepo skeleton, MIT `LICENSE`, `package.xml`, the `pixi run tests`
+check harness wired up, and a GitHub Actions job that runs it in a
+FreeCAD 1.0 environment and imports the (empty) workbench.
 
 *Verify:* CI is green; `freecadcmd` loads the workbench with no errors.
 
@@ -63,7 +63,8 @@ property or from the Python console.
 
 *Verify in FreeCAD:* create a unit from the toolbar; change `Width`,
 `Height`, `Depth`, and `DefaultMaterial` in the property editor and watch
-planks reflow; full-tier smoke test asserts plank count and bounding box.
+planks reflow; a headless FreeCAD test in `pixi run tests` asserts plank
+count and bounding box.
 
 ## M4 — Material catalog
 
@@ -74,7 +75,8 @@ command, and the per-plank `Material` override. Editing a catalog entry
 reflows dependent planks.
 
 *Verify in FreeCAD:* change a stock thickness in the catalog, recompute,
-see every plank using it change; full-tier test asserts the reflow.
+see every plank using it change; a headless FreeCAD test in `pixi run tests`
+asserts the reflow.
 
 ## M5 — The 2.5D editor
 

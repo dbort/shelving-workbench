@@ -1,7 +1,7 @@
 # Skill: Approve & Merge a Task
 
 ## Purpose
-Perform the User (Sign-off) step of the `tasks/active/*.md` pipeline (`.claude/docs/pipeline.md` § Phases) for a task sitting at `current_phase = "user_signoff"`: finalize its task file, re-sweep its branch for doc/comment rot introduced since the last `doc-hygiene` pass, merge it into `main` only after confirming the merged result actually passes both verification tiers, then clean up the branch.
+Perform the User (Sign-off) step of the `tasks/active/*.md` pipeline (`.claude/docs/pipeline.md` § Phases) for a task sitting at `current_phase = "user_signoff"`: finalize its task file, re-sweep its branch for doc/comment rot introduced since the last `doc-hygiene` pass, merge it into `main` only after confirming the merged result actually passes the checks, then clean up the branch.
 
 Invoking this skill against a specific task IS the human sign-off act. There is no separate confirmation prompt inside this skill — deciding to run `/approve-task sh-XXX` is the approval; the skill's job is to execute it correctly, not to re-ask whether you meant it.
 
@@ -29,7 +29,7 @@ A task branch can pick up commits after `dispatch-tasks`' post-review `doc-hygie
 - Find the most recent `doc-hygiene:`-prefixed commit on this branch: `git log --format='%H %s' sh-XXX | grep -m1 '^[0-9a-f]\+ doc-hygiene:'`.
   - Found: invoke the `doc-hygiene` skill with `--diff=<that commit's SHA>` — scopes the sweep to only what changed since that pass, not the whole branch.
   - Not found (no `doc-hygiene` pass ever ran on this branch): invoke with `--diff=main` instead, matching what the first pass would have used.
-- `doc-hygiene` never commits on its own, and runs its own sanity check (the fast checks) before reporting (see its `SKILL.md`). If it made edits and its sanity check passed, commit them: `doc-hygiene: pre-merge pass on sh-XXX`. If its sanity check failed, stop here and flag it prominently — don't carry unverified edits into Step 3.
+- `doc-hygiene` never commits on its own, and runs its own sanity check (the checks, `pipeline.md` § Verification commands) before reporting (see its `SKILL.md`). If it made edits and its sanity check passed, commit them: `doc-hygiene: pre-merge pass on sh-XXX`. If its sanity check failed, stop here and flag it prominently — don't carry unverified edits into Step 3.
 - If it found nothing to fix, that's a normal outcome, not a failure. Note it and continue.
 
 ### Step 3: Finalize the task file (on branch `sh-XXX`)
@@ -48,7 +48,7 @@ A task branch can pick up commits after `dispatch-tasks`' post-review `doc-hygie
 - `git merge --no-commit --no-ff sh-XXX`.
   - Conflicts: stop immediately. Report which files conflict. Leave the repo in git's ordinary conflict state — don't attempt automatic resolution and don't `--abort` on the human's behalf; they may want to resolve it in place.
   - Clean: `main`'s working tree and index now hold the merged result, nothing committed yet — this is the load-bearing property that makes the next step safe. A failure here can never land in `main`'s history, because nothing has been committed to it yet.
-- Run both verification tiers, fast then full (`pipeline.md` § Verification commands).
+- Run the checks (`pipeline.md` § Verification commands).
   - All pass: `git commit -m "Merge sh-XXX: <title from the task's frontmatter>"`, then `git branch -d sh-XXX` (plain `-d`, never `-D` — it refuses unless the branch is genuinely fully merged, which is the actual safety property here, not a formality). Report success.
   - Any fail: `git merge --abort`, which restores `main` to exactly its pre-merge state. Report the failure prominently (which check, its output) and stop. Do not delete `sh-XXX` — its Step 2/3 commits stand as-is. Once the underlying issue is fixed (on `sh-XXX`, or on `main` if something else regressed it), re-invoking `/approve-task sh-XXX` resumes at Step 4 via Step 1's retry-state check.
 
