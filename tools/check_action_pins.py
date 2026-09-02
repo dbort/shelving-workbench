@@ -10,7 +10,13 @@ There are exactly two outcomes: verified (every pin resolved and matched) or
 fatal. A mismatch, a missing tag, a rate-limit response, a 5xx that persists
 after retries, and a connection failure are all fatal; there is no exit-0 path
 for a network failure. The one exception is ``SHELVING_OFFLINE=1``, which skips
-the check before any network call.
+the online resolution before any network call.
+
+A SHA-pinned ``uses:`` whose trailing comment is not a clean ``# vX.Y.Z``, or
+whose SHA is not lower-case hex, is fatal too, and this check runs offline,
+before ``SHELVING_OFFLINE`` is consulted: ``zizmor``'s ``unpinned-uses`` audit
+guarantees the SHA, but not the release comment that the resolution below and
+Dependabot both read.
 
 Environment:
   SHELVING_OFFLINE          1 = skip (offline); unset/empty = run; any other
@@ -31,7 +37,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import NamedTuple
 
@@ -49,6 +55,12 @@ _PIN_RE = re.compile(
     r"^uses:\s*([A-Za-z0-9._/-]+)@([0-9a-f]{40})\s+#\s+v([0-9]+\.[0-9]+\.[0-9]+)$"
 )
 
+# Any `uses:` pinned to a 40-char hex string, upper- or lower-case, whatever the
+# trailing comment. A line matching this but not `_PIN_RE` is a SHA pin whose
+# `# vX.Y.Z` comment is missing or malformed, or whose SHA is not the lower-case
+# form the API resolution and Dependabot expect.
+_SHA_USES_RE = re.compile(r"^uses:\s*[A-Za-z0-9._/-]+@[0-9a-fA-F]{40}(?:\s.*)?$")
+
 
 class Pin(NamedTuple):
     """One SHA-pinned ``uses:`` entry from a workflow file."""
@@ -59,6 +71,15 @@ class Pin(NamedTuple):
     # Path relative to the repo (``.github/workflows/ci.yml``), so a failure
     # line points at the file to edit rather than a bare basename.
     file: str
+
+
+class MalformedPin(NamedTuple):
+    """A ``uses:`` SHA pin that ``_PIN_RE`` rejects, kept for the failure list."""
+
+    # Repo-relative path, as on ``Pin``.
+    file: str
+    # The offending line, normalised (leading ``- `` and whitespace stripped).
+    line: str
 
 
 class FetchResult(NamedTuple):
@@ -84,27 +105,56 @@ class OfflineConfigError(Exception):
     """``SHELVING_OFFLINE`` held a value other than unset, empty, or ``1``."""
 
 
-def workflow_pins(directory: Path) -> tuple[Pin, ...]:
-    """Every SHA-pinned action under ``directory``, path segment stripped.
+def _uses_lines(directory: Path) -> Iterator[tuple[str, str]]:
+    """``(<repo-relative file>, <line>)`` for every ``uses:`` line under ``directory``.
 
-    Both ``.yml`` and ``.yaml`` are read so a ``.yaml`` workflow cannot slip
-    past. ``- uses:`` list items and bare ``uses:`` keys are both recognised.
+    ``- uses:`` list items and bare ``uses:`` keys both yield with the leading
+    ``- `` and surrounding whitespace stripped, so ``workflow_pins`` and
+    ``malformed_version_comments`` match one normalised form and cannot drift
+    apart. Both ``.yml`` and ``.yaml`` are read so a ``.yaml`` workflow cannot
+    slip past.
     """
-    pins: list[Pin] = []
-    paths = sorted([*directory.glob("*.yml"), *directory.glob("*.yaml")])
-    for path in paths:
+    rel_dir = f"{directory.parent.name}/{directory.name}"
+    for path in sorted([*directory.glob("*.yml"), *directory.glob("*.yaml")]):
         for raw in path.read_text(encoding="utf-8").splitlines():
             line = raw.strip()
             if line.startswith("-"):
                 line = line[1:].strip()
-            match = _PIN_RE.match(line)
-            if match is None:
-                continue
-            ref, sha, version = match.group(1), match.group(2), match.group(3)
-            repo = "/".join(ref.split("/")[:2])
-            rel = f"{directory.parent.name}/{directory.name}/{path.name}"
-            pins.append(Pin(repo, f"v{version}", sha, rel))
+            if line.startswith("uses:"):
+                yield f"{rel_dir}/{path.name}", line
+
+
+def workflow_pins(directory: Path) -> tuple[Pin, ...]:
+    """Every action under ``directory`` pinned as ``<sha> # vX.Y.Z``, path stripped.
+
+    A ``uses:`` line not in that exact form is skipped;
+    ``malformed_version_comments`` is what fails a SHA pin among them.
+    """
+    pins: list[Pin] = []
+    for rel, line in _uses_lines(directory):
+        match = _PIN_RE.match(line)
+        if match is None:
+            continue
+        ref, sha, version = match.group(1), match.group(2), match.group(3)
+        repo = "/".join(ref.split("/")[:2])
+        pins.append(Pin(repo, f"v{version}", sha, rel))
     return tuple(pins)
+
+
+def malformed_version_comments(directory: Path) -> tuple[MalformedPin, ...]:
+    """SHA-pinned ``uses:`` lines under ``directory`` that ``_PIN_RE`` rejects.
+
+    ``zizmor``'s ``unpinned-uses`` audit rejects a ``uses:`` that is not pinned
+    to a full commit SHA; this covers the part it leaves alone. A SHA pin whose
+    release comment is absent or malformed, or whose SHA is upper-case, drops
+    out of ``workflow_pins``, goes unresolved, and leaves Dependabot without the
+    tag it bumps.
+    """
+    return tuple(
+        MalformedPin(rel, line)
+        for rel, line in _uses_lines(directory)
+        if _SHA_USES_RE.match(line) and not _PIN_RE.match(line)
+    )
 
 
 def classify_status(status: int, base: str, what: str) -> str | None:
@@ -288,10 +338,20 @@ def main(
     sleep: Callable[[float], None] = time.sleep,
     retry_sleep: float = 1.0,
 ) -> int:
-    """Resolve every workflow pin; return 0 only when all of them verify."""
+    """Return 0 only when every pin carries a ``# vX.Y.Z`` comment and resolves."""
     if list(argv):
         print(f"{NAME}: unexpected argument: {argv[0]}", file=sys.stderr)
         return 2
+
+    malformed = malformed_version_comments(_WORKFLOW_DIR)
+    if malformed:
+        print(f"{NAME}: FAILED", file=sys.stderr)
+        for bad in malformed:
+            print(
+                f"  {bad.file}: not a '<lower-case sha> # vX.Y.Z' pin: {bad.line}",
+                file=sys.stderr,
+            )
+        return 1
 
     try:
         offline = offline_mode()
