@@ -1,9 +1,9 @@
 ---
 id: sh-006
 title: "Verify GitHub Action pins online, with a --offline escape for pixi run tests"
-current_agent: reviewer
-current_phase: review
-review_rejections: 0
+current_agent: implementer
+current_phase: implementation
+review_rejections: 1
 ---
 
 # sh-006: Verify GitHub Action pins online, with a --offline escape for pixi run tests
