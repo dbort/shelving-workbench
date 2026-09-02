@@ -29,5 +29,6 @@ files = [
     "shelving_core",
     "tools/layout_demo.py",
     "tools/check_lock_paths.py",
+    "tests/test_check_action_pins.py",
 ]
 exclude = ["freecad/"]

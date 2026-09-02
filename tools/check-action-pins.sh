@@ -56,8 +56,6 @@ fi
 WORKDIR="$(mktemp -d)"
 trap 'rm -rf "${WORKDIR}"' EXIT
 
-RESOLVE_ERR=""
-
 # http_get URL OUTFILE: write the response body to OUTFILE and print the final
 # HTTP status to stdout ("000" for a connection-level failure). A 5xx response
 # is retried up to twice with a short sleep before its status is returned.
@@ -87,17 +85,19 @@ http_get() {
 	done
 }
 
-# classify_status STATUS WHAT: return 0 for 200, otherwise set RESOLVE_ERR to a
-# human-readable reason and return 1.
+# classify_status STATUS WHAT: return 0 for 200, otherwise print a
+# human-readable reason and return 1. resolve_commit runs in a command
+# substitution, so the reason travels back to the caller on stdout, not through
+# a variable.
 classify_status() {
 	local status="$1" what="$2"
 	case "$status" in
 		200) return 0 ;;
-		000) RESOLVE_ERR="cannot reach ${BASE} for ${what}: connection failed" ;;
-		403 | 429) RESOLVE_ERR="rate limited (HTTP ${status}) for ${what}; set GH_TOKEN or GITHUB_TOKEN to raise the API quota" ;;
-		404) RESOLVE_ERR="tag not found (HTTP 404) for ${what}" ;;
-		5??) RESOLVE_ERR="server error (HTTP ${status}) for ${what} after retries" ;;
-		*) RESOLVE_ERR="unexpected HTTP ${status} for ${what}" ;;
+		000) echo "cannot reach ${BASE} for ${what}: connection failed" ;;
+		403 | 429) echo "rate limited (HTTP ${status}) for ${what}; set GH_TOKEN or GITHUB_TOKEN to raise the API quota" ;;
+		404) echo "tag not found (HTTP 404) for ${what}" ;;
+		5??) echo "server error (HTTP ${status}) for ${what} after retries" ;;
+		*) echo "unexpected HTTP ${status} for ${what}" ;;
 	esac
 	return 1
 }
@@ -112,8 +112,8 @@ o = d["object"]
 print(o["type"], o["sha"])' "$1"
 }
 
-# resolve_commit OWNER/REPO TAG: print the commit SHA that TAG names, or set
-# RESOLVE_ERR and return 1.
+# resolve_commit OWNER/REPO TAG: on success print the commit SHA that TAG names
+# and return 0; on failure print the reason and return 1.
 resolve_commit() {
 	local repo="$1" tag="$2"
 	local body="${WORKDIR}/ref.json" status otype osha
@@ -124,7 +124,7 @@ resolve_commit() {
 	osha=""
 	read -r otype osha < <(json_object_fields "$body" 2>/dev/null) || true
 	if [ -z "$otype" ] || [ -z "$osha" ]; then
-		RESOLVE_ERR="unexpected API response resolving ${repo} ref ${tag}"
+		echo "unexpected API response resolving ${repo} ref ${tag}"
 		return 1
 	fi
 
@@ -140,14 +140,14 @@ resolve_commit() {
 		tsha=""
 		read -r _ tsha < <(json_object_fields "$tbody" 2>/dev/null) || true
 		if [ -z "$tsha" ]; then
-			RESOLVE_ERR="unexpected API response dereferencing ${repo} tag object for ${tag}"
+			echo "unexpected API response dereferencing ${repo} tag object for ${tag}"
 			return 1
 		fi
 		printf '%s\n' "$tsha"
 		return 0
 	fi
 
-	RESOLVE_ERR="unexpected tag object type '${otype}' for ${repo}@${tag}"
+	echo "unexpected tag object type '${otype}' for ${repo}@${tag}"
 	return 1
 }
 
@@ -188,14 +188,14 @@ while [ "$i" -lt "$n" ]; do
 	tag="${pin_tag[$i]}"
 	sha="${pin_sha[$i]}"
 	file="${pin_file[$i]}"
-	if commit="$(resolve_commit "$repo" "$tag")"; then
-		if [ "$commit" = "$sha" ]; then
+	if out="$(resolve_commit "$repo" "$tag")"; then
+		if [ "$out" = "$sha" ]; then
 			verified=$((verified + 1))
 		else
-			failures+=("${file}: ${repo}@${tag} is pinned at ${sha} but the tag resolves to ${commit}")
+			failures+=("${file}: ${repo}@${tag} is pinned at ${sha} but the tag resolves to ${out}")
 		fi
 	else
-		failures+=("${file}: ${repo}@${tag}: ${RESOLVE_ERR}")
+		failures+=("${file}: ${repo}@${tag}: ${out}")
 	fi
 	i=$((i + 1))
 done
