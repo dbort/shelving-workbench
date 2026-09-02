@@ -2,7 +2,7 @@
 id: sh-008
 title: "Collapse the test tiers into one pixi-run harness, drop .venv"
 current_agent: user
-current_phase: user_signoff
+current_phase: done
 review_rejections: 1
 ---
 
@@ -22,7 +22,7 @@ former tiers ran in about a second, so the split earned nothing.
 - [x] Planning
 - [x] Implementation
 - [x] Review
-- [ ] User sign-off
+- [x] User sign-off
 
 ## Must Have
 - [x] `test.sh` no longer exists at the repo root. Its replacement is
