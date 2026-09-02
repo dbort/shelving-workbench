@@ -1,354 +1,327 @@
-"""Behavioural coverage of ``tools/check-action-pins.sh``.
+"""Unit coverage of ``tools/check_action_pins.py``.
 
-The script resolves each SHA-pinned action's ``# vX.Y.Z`` tag against the
-GitHub API. Running it against the live API would make the suite depend on
-GitHub being reachable and on the live tag graph, so these tests point
-``GITHUB_API_URL`` at a local mock of the two endpoints it calls
-(``/repos/<owner>/<repo>/git/ref/tags/<tag>`` and ``.../git/tags/<sha>``) and
-assert the script's outcome for each shape of response. The mock counts
-requests so the offline case can prove no call was made.
-
-Every case builds its own subprocess environment. ``pixi run tests --
---offline`` exports ``SHELVING_OFFLINE=1`` into pytest's own environment, so a
-case that needs the check to run must drop that variable rather than inherit
-it.
+The module is built from small, injectable pieces so its behaviour can be
+pinned without a network round-trip or a mock HTTP server: ``resolve_commit``
+and ``main`` take a ``fetch`` callable, ``offline_mode`` reads one environment
+variable, and ``classify_status`` / ``auth_headers`` are pure. The live GitHub
+call still happens for real when ``pixi run tests`` runs on a networked host;
+these tests never touch the network and finish in well under a second.
 """
 
 from __future__ import annotations
 
-import hashlib
-import http.server
-import json
-import os
-import re
-import subprocess
-import threading
-from collections.abc import Iterator, Mapping
+import urllib.error
+import urllib.parse
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Literal, NamedTuple, Protocol
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-SCRIPT = REPO_ROOT / "tools" / "check-action-pins.sh"
-WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
-
-ZERO_SHA = "0" * 40
-
-
-def _tag_object_sha(repo: str, tag: str) -> str:
-    """Stand-in SHA for an annotated tag's tag object, unique per ``(repo, tag)``.
-
-    Keeping it distinct per pin means the dereference endpoint can map a tag
-    object back to exactly one commit, so two pins of the same ``owner/repo``
-    at different tags cannot answer with a shared SHA.
-    """
-    return hashlib.sha1(f"{repo}@{tag}".encode()).hexdigest()
-
-
-# Mirrors the script's own line filter: a `uses:` pin with a full commit SHA
-# and a `# vX.Y.Z` release comment.
-_PIN_RE = re.compile(
-    r"uses:\s*([A-Za-z0-9._/-]+)@([0-9a-f]{40})\s+#\s+v([0-9]+\.[0-9]+\.[0-9]+)\s*$"
+from tools.check_action_pins import (
+    FetchResult,
+    OfflineConfigError,
+    Pin,
+    ResolveError,
+    auth_headers,
+    classify_status,
+    main,
+    offline_mode,
+    resolve_commit,
+    workflow_pins,
 )
 
-MockMode = Literal["lightweight", "annotated", "mismatch", "not_found", "server_error"]
+WORKFLOW_DIR = Path(__file__).resolve().parent.parent / ".github" / "workflows"
+
+SHA_A = "a" * 40
+SHA_B = "b" * 40
+SHA_C = "c" * 40
 
 
-class Pin(NamedTuple):
-    """One resolved ``uses:`` pin from a workflow file."""
+@pytest.fixture(autouse=True)
+def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Drop the variables the module reads so ``--offline`` cannot leak in.
 
-    workflow: str
-    repo: str
-    tag: str
-    sha: str
-
-
-def workflow_pins() -> tuple[Pin, ...]:
-    """Every SHA-pinned action across ``.github/workflows/``, path segment stripped."""
-    pins: list[Pin] = []
-    paths = sorted([*WORKFLOW_DIR.glob("*.yml"), *WORKFLOW_DIR.glob("*.yaml")])
-    for path in paths:
-        for raw in path.read_text(encoding="utf-8").splitlines():
-            line = raw.strip().lstrip("-").strip()
-            match = _PIN_RE.match(line)
-            if match is None:
-                continue
-            ref, sha, version = match.group(1), match.group(2), match.group(3)
-            repo = "/".join(ref.split("/")[:2])
-            pins.append(Pin(path.name, repo, f"v{version}", sha))
-    return tuple(pins)
-
-
-def _expected_commits() -> Mapping[tuple[str, str], str]:
-    return {(pin.repo, pin.tag): pin.sha for pin in workflow_pins()}
-
-
-class _MockServer(http.server.HTTPServer):
-    """HTTP server that answers the tag endpoints and counts requests."""
-
-    def __init__(
-        self,
-        address: tuple[str, int],
-        mode: MockMode,
-        commits: Mapping[tuple[str, str], str],
-    ) -> None:
-        super().__init__(address, _Handler)
-        self.mode: MockMode = mode
-        self.commits: Mapping[tuple[str, str], str] = commits
-        self.request_count: int = 0
-        # Every ``Authorization`` header value the mock has received, in order
-        # (``None`` when a request carried none). The token-host guard test
-        # asserts this stays all-``None`` for a non-github API base.
-        self.authorizations: list[str | None] = []
-
-    @property
-    def base_url(self) -> str:
-        return f"http://127.0.0.1:{self.server_port}"
-
-
-class _Handler(http.server.BaseHTTPRequestHandler):
-    def log_message(self, format: str, *args: object) -> None:
-        """Silence the per-request stderr logging (matches the base signature)."""
-
-    def _reply(self, status: int, payload: Mapping[str, object]) -> None:
-        body = json.dumps(payload).encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
-
-    def do_GET(self) -> None:  # http.server dispatches on this exact name
-        server = self.server
-        assert isinstance(server, _MockServer)
-        server.request_count += 1
-        server.authorizations.append(self.headers.get("Authorization"))
-
-        parts = self.path.strip("/").split("/")
-        # /repos/<owner>/<repo>/git/ref/tags/<tag>
-        if (
-            len(parts) == 7
-            and parts[0] == "repos"
-            and parts[3:6] == ["git", "ref", "tags"]
-        ):
-            repo = f"{parts[1]}/{parts[2]}"
-            tag = parts[6]
-            commit = server.commits.get((repo, tag), ZERO_SHA)
-            self._reply_ref(server.mode, repo, tag, commit)
-            return
-        # /repos/<owner>/<repo>/git/tags/<sha>
-        if len(parts) == 6 and parts[0] == "repos" and parts[3:5] == ["git", "tags"]:
-            repo = f"{parts[1]}/{parts[2]}"
-            object_sha = parts[5]
-            commit = next(
-                (
-                    sha
-                    for (pin_repo, pin_tag), sha in server.commits.items()
-                    if pin_repo == repo
-                    and _tag_object_sha(pin_repo, pin_tag) == object_sha
-                ),
-                ZERO_SHA,
-            )
-            self._reply(
-                200,
-                {"sha": object_sha, "object": {"sha": commit, "type": "commit"}},
-            )
-            return
-        self._reply(404, {"message": "unhandled path"})
-
-    def _reply_ref(self, mode: MockMode, repo: str, tag: str, commit: str) -> None:
-        if mode == "not_found":
-            self._reply(404, {"message": "Not Found"})
-            return
-        if mode == "server_error":
-            self._reply(500, {"message": "server error"})
-            return
-        ref = f"refs/tags/{tag}"
-        if mode == "annotated":
-            self._reply(
-                200,
-                {
-                    "ref": ref,
-                    "object": {"sha": _tag_object_sha(repo, tag), "type": "tag"},
-                },
-            )
-            return
-        sha = ZERO_SHA if mode == "mismatch" else commit
-        self._reply(200, {"ref": ref, "object": {"sha": sha, "type": "commit"}})
-
-
-class StartMock(Protocol):
-    def __call__(self, mode: MockMode) -> _MockServer: ...
-
-
-@pytest.fixture
-def start_mock() -> Iterator[StartMock]:
-    servers: list[_MockServer] = []
-
-    def _start(mode: MockMode) -> _MockServer:
-        server = _MockServer(("127.0.0.1", 0), mode, _expected_commits())
-        # serve_forever's default 0.5s poll_interval is what server.shutdown()
-        # waits on at teardown; a short interval keeps each test from paying it.
-        thread = threading.Thread(
-            target=lambda: server.serve_forever(poll_interval=0.01), daemon=True
-        )
-        thread.start()
-        servers.append(server)
-        return server
-
-    yield _start
-
-    for server in servers:
-        server.shutdown()
-        server.server_close()
-
-
-def _run(
-    *,
-    api_url: str,
-    offline: bool = False,
-    shelving_offline: str | None = None,
-    gh_token: str | None = None,
-    github_token: str | None = None,
-) -> subprocess.CompletedProcess[str]:
-    """Drive the script as a subprocess with an explicit environment.
-
-    ``SHELVING_OFFLINE``, ``GH_TOKEN``, and ``GITHUB_TOKEN`` are stripped from
-    the inherited environment by default so ``pixi run tests -- --offline``
-    cannot leak ``SHELVING_OFFLINE=1`` in and no ambient token reaches the
-    mock. A case opts back in through ``shelving_offline`` (any raw value, for
-    the value-guard test) or ``gh_token`` / ``github_token`` (for the
-    token-host guard test).
+    ``pixi run tests -- --offline`` exports ``SHELVING_OFFLINE=1`` into the
+    pytest process; a token may sit in the ambient environment too. Every case
+    that wants one sets it explicitly.
     """
-    env: dict[str, str] = {
-        key: value
-        for key, value in os.environ.items()
-        if key not in {"SHELVING_OFFLINE", "GH_TOKEN", "GITHUB_TOKEN"}
-    }
-    env["GITHUB_API_URL"] = api_url
-    env["CHECK_ACTION_PINS_RETRY_SLEEP"] = "0"
-    if offline:
-        env["SHELVING_OFFLINE"] = "1"
-    if shelving_offline is not None:
-        env["SHELVING_OFFLINE"] = shelving_offline
-    if gh_token is not None:
-        env["GH_TOKEN"] = gh_token
-    if github_token is not None:
-        env["GITHUB_TOKEN"] = github_token
-    return subprocess.run(
-        ["bash", str(SCRIPT)],
-        capture_output=True,
-        text=True,
-        timeout=60,
-        env=env,
+    for name in ("SHELVING_OFFLINE", "GH_TOKEN", "GITHUB_TOKEN"):
+        monkeypatch.delenv(name, raising=False)
+
+
+# --------------------------------------------------------------------------- #
+# workflow_pins
+# --------------------------------------------------------------------------- #
+
+
+def test_workflow_pins_parses_both_extensions_and_strips_path_segments(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "ci.yml").write_text(
+        "jobs:\n"
+        "  build:\n"
+        "    steps:\n"
+        f"      - uses: actions/checkout@{SHA_A} # v4.2.2\n"
+        f"      - uses: github/codeql-action/upload-sarif@{SHA_B} # v3.28.1\n"
+        "      - uses: actions/setup-python@v5\n"
+        "      - name: not a uses line\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "release.yaml").write_text(
+        f"      - uses: step-security/harden-runner@{SHA_C} # v2.10.4\n",
+        encoding="utf-8",
+    )
+
+    pins = workflow_pins(tmp_path)
+
+    assert isinstance(pins, tuple)
+    assert pins == (
+        Pin("actions/checkout", "v4.2.2", SHA_A, "ci.yml"),
+        Pin("github/codeql-action", "v3.28.1", SHA_B, "ci.yml"),
+        Pin("step-security/harden-runner", "v2.10.4", SHA_C, "release.yaml"),
     )
 
 
-def test_all_pins_verified_against_lightweight_tags(start_mock: StartMock) -> None:
-    server = start_mock("lightweight")
-    result = _run(api_url=server.base_url)
+def test_workflow_pins_ignores_unpinned_and_mis_commented_lines(tmp_path: Path) -> None:
+    (tmp_path / "wf.yml").write_text(
+        f"      - uses: actions/checkout@{SHA_A}  # pinned but no version\n"
+        "      - uses: actions/checkout@v4\n"
+        "      - run: echo uses: not/a@pin\n",
+        encoding="utf-8",
+    )
 
-    assert result.returncode == 0, result.stderr
-    count = len(workflow_pins())
-    assert f"check-action-pins: verified {count}/{count} pins" in result.stdout
-    assert server.request_count == count
-
-
-def test_annotated_tag_is_dereferenced_to_its_commit(start_mock: StartMock) -> None:
-    server = start_mock("annotated")
-    result = _run(api_url=server.base_url)
-
-    assert result.returncode == 0, result.stderr
-    count = len(workflow_pins())
-    assert f"verified {count}/{count} pins" in result.stdout
-    # One ref lookup plus one tag-object dereference per pin.
-    assert server.request_count == 2 * count
+    assert workflow_pins(tmp_path) == ()
 
 
-def test_mismatched_sha_is_fatal_and_names_the_offender(
-    start_mock: StartMock,
+# --------------------------------------------------------------------------- #
+# classify_status
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    ("status", "needle"),
+    [
+        (0, "connection failed"),
+        (403, "rate limited"),
+        (429, "rate limited"),
+        (404, "tag not found"),
+        (500, "server error"),
+        (503, "server error"),
+        (418, "unexpected HTTP 418"),
+    ],
+)
+def test_classify_status_returns_a_reason_for_every_failure_class(
+    status: int, needle: str
 ) -> None:
-    server = start_mock("mismatch")
-    result = _run(api_url=server.base_url)
-
-    assert result.returncode != 0
-    # Every pin fails in this mode; the run must report them all, not just the
-    # first, so each pin's repo and pinned SHA has to appear on stderr.
-    for pin in workflow_pins():
-        assert pin.repo in result.stderr, pin
-        assert pin.sha in result.stderr, pin
-    assert ZERO_SHA in result.stderr
-    assert "verified" not in result.stdout
+    reason = classify_status(status, "owner/repo@v1.0.0")
+    assert reason is not None
+    assert needle in reason
+    assert "owner/repo@v1.0.0" in reason
 
 
-def test_missing_tag_is_fatal(start_mock: StartMock) -> None:
-    server = start_mock("not_found")
-    result = _run(api_url=server.base_url)
-
-    assert result.returncode != 0
-    assert "404" in result.stderr
-    assert "verified" not in result.stdout
+def test_classify_status_200_is_the_verified_path() -> None:
+    assert classify_status(200, "owner/repo@v1.0.0") is None
 
 
-def test_persistent_server_error_is_fatal_after_retries(
-    start_mock: StartMock,
+def test_classify_status_rate_limit_names_the_token_fix() -> None:
+    reason = classify_status(403, "owner/repo@v1.0.0")
+    assert reason is not None
+    assert "GH_TOKEN" in reason
+    assert "GITHUB_TOKEN" in reason
+
+
+# --------------------------------------------------------------------------- #
+# resolve_commit
+# --------------------------------------------------------------------------- #
+
+
+def test_resolve_commit_reads_a_lightweight_tag_directly() -> None:
+    calls: list[str] = []
+
+    def fetch(url: str) -> FetchResult:
+        calls.append(url)
+        return FetchResult(200, {"object": {"type": "commit", "sha": SHA_A}})
+
+    assert resolve_commit(fetch, "https://api", "actions/checkout", "v4.2.2") == SHA_A
+    assert calls == ["https://api/repos/actions/checkout/git/ref/tags/v4.2.2"]
+
+
+def test_resolve_commit_follows_an_annotated_tag_to_its_commit() -> None:
+    calls: list[str] = []
+
+    def fetch(url: str) -> FetchResult:
+        calls.append(url)
+        if "/git/ref/tags/" in url:
+            return FetchResult(200, {"object": {"type": "tag", "sha": "TAGOBJ"}})
+        return FetchResult(200, {"object": {"type": "commit", "sha": SHA_B}})
+
+    result = resolve_commit(fetch, "https://api", "ossf/scorecard-action", "v2.4.0")
+
+    assert result == SHA_B
+    assert calls == [
+        "https://api/repos/ossf/scorecard-action/git/ref/tags/v2.4.0",
+        "https://api/repos/ossf/scorecard-action/git/tags/TAGOBJ",
+    ]
+
+
+def test_resolve_commit_turns_a_404_into_a_fatal_reason() -> None:
+    def fetch(url: str) -> FetchResult:
+        return FetchResult(404, {"message": "Not Found"})
+
+    with pytest.raises(ResolveError) as caught:
+        resolve_commit(fetch, "https://api", "actions/checkout", "v9.9.9")
+    assert "404" in str(caught.value)
+
+
+def test_resolve_commit_turns_a_connection_error_into_a_fatal_reason() -> None:
+    def fetch(url: str) -> FetchResult:
+        raise urllib.error.URLError("connection refused")
+
+    with pytest.raises(ResolveError) as caught:
+        resolve_commit(fetch, "https://api", "actions/checkout", "v4.2.2")
+    assert "connection failed" in str(caught.value)
+
+
+def test_resolve_commit_rejects_an_unexpected_payload_shape() -> None:
+    def fetch(url: str) -> FetchResult:
+        return FetchResult(200, {"unexpected": True})
+
+    with pytest.raises(ResolveError) as caught:
+        resolve_commit(fetch, "https://api", "actions/checkout", "v4.2.2")
+    assert "unexpected API response" in str(caught.value)
+
+
+# --------------------------------------------------------------------------- #
+# offline_mode  (and the guard's effect inside main)
+# --------------------------------------------------------------------------- #
+
+
+def test_offline_mode_runs_when_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SHELVING_OFFLINE", raising=False)
+    assert offline_mode() is False
+
+
+def test_offline_mode_runs_when_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SHELVING_OFFLINE", "")
+    assert offline_mode() is False
+
+
+def test_offline_mode_skips_when_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SHELVING_OFFLINE", "1")
+    assert offline_mode() is True
+
+
+@pytest.mark.parametrize("value", ["0", "true"])
+def test_offline_mode_rejects_any_other_value(
+    monkeypatch: pytest.MonkeyPatch, value: str
 ) -> None:
-    server = start_mock("server_error")
-    result = _run(api_url=server.base_url)
-
-    assert result.returncode != 0
-    assert "500" in result.stderr
-    # Initial attempt plus two retries for every pin.
-    assert server.request_count == 3 * len(workflow_pins())
+    monkeypatch.setenv("SHELVING_OFFLINE", value)
+    with pytest.raises(OfflineConfigError) as caught:
+        offline_mode()
+    assert "SHELVING_OFFLINE must be unset or 1" in str(caught.value)
 
 
-def test_unreachable_api_is_fatal() -> None:
-    result = _run(api_url="http://127.0.0.1:1")
-
-    assert result.returncode != 0
-    assert "check-action-pins: FAILED" in result.stderr
-    assert "verified" not in result.stdout
+def _exploding_fetch(url: str) -> FetchResult:
+    raise AssertionError(f"fetch must not be called: {url}")
 
 
-def test_offline_skips_before_any_network_call(start_mock: StartMock) -> None:
-    server = start_mock("lightweight")
-    result = _run(api_url=server.base_url, offline=True)
-
-    assert result.returncode == 0
-    assert "check-action-pins: skipped (SHELVING_OFFLINE)" in result.stderr
-    assert server.request_count == 0
-
-
-def test_shelving_offline_zero_is_a_usage_error(start_mock: StartMock) -> None:
-    """``SHELVING_OFFLINE=0`` must fail loudly, never silently enable offline mode."""
-    server = start_mock("lightweight")
-    result = _run(api_url=server.base_url, shelving_offline="0")
-
-    assert result.returncode != 0
-    assert "check-action-pins: SHELVING_OFFLINE must be unset or 1" in result.stderr
-    # The value guard is the script's first action, so it fires before any pin
-    # is resolved.
-    assert server.request_count == 0
-
-
-def test_gh_token_is_never_sent_to_a_non_github_host(start_mock: StartMock) -> None:
-    """A token set in the environment must not reach a redirected API base."""
-    server = start_mock("lightweight")
-    result = _run(api_url=server.base_url, gh_token="gh-secret-value")
-
-    assert result.returncode == 0, result.stderr
-    assert server.request_count == len(workflow_pins())
-    assert server.authorizations
-    assert all(value is None for value in server.authorizations), server.authorizations
-
-
-def test_github_token_is_never_sent_to_a_non_github_host(
-    start_mock: StartMock,
+def test_main_skips_without_fetching_when_offline(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    server = start_mock("lightweight")
-    result = _run(api_url=server.base_url, github_token="github-secret-value")
+    monkeypatch.setenv("SHELVING_OFFLINE", "1")
 
-    assert result.returncode == 0, result.stderr
-    assert server.authorizations
-    assert all(value is None for value in server.authorizations), server.authorizations
+    assert main([], fetch=_exploding_fetch, retry_sleep=0.0) == 0
+
+    captured = capsys.readouterr()
+    assert "check-action-pins: skipped (SHELVING_OFFLINE)" in captured.err
+
+
+def test_main_errors_without_fetching_on_an_illegal_offline_value(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("SHELVING_OFFLINE", "0")
+
+    assert main([], fetch=_exploding_fetch, retry_sleep=0.0) == 2
+
+    captured = capsys.readouterr()
+    assert "SHELVING_OFFLINE must be unset or 1" in captured.err
+
+
+# --------------------------------------------------------------------------- #
+# auth_headers
+# --------------------------------------------------------------------------- #
+
+
+def test_auth_headers_sends_the_bearer_only_to_the_real_github_api() -> None:
+    env: Mapping[str, str] = {"GH_TOKEN": "secret"}
+    assert auth_headers("https://api.github.com", env) == {
+        "Authorization": "Bearer secret"
+    }
+
+
+def test_auth_headers_falls_back_to_github_token() -> None:
+    env: Mapping[str, str] = {"GITHUB_TOKEN": "secret"}
+    assert auth_headers("https://api.github.com", env) == {
+        "Authorization": "Bearer secret"
+    }
+
+
+@pytest.mark.parametrize(
+    "base",
+    [
+        "http://127.0.0.1:8080",
+        "https://ghe.example.com",
+        "https://api.github.com.evil.com",
+    ],
+)
+def test_auth_headers_withholds_the_bearer_from_any_other_host(base: str) -> None:
+    env: Mapping[str, str] = {"GH_TOKEN": "secret", "GITHUB_TOKEN": "secret"}
+    assert auth_headers(base, env) == {}
+
+
+def test_auth_headers_empty_without_a_token() -> None:
+    assert auth_headers("https://api.github.com", {}) == {}
+
+
+# --------------------------------------------------------------------------- #
+# main  (end to end against a stub fetch, over the repo's real workflow pins)
+# --------------------------------------------------------------------------- #
+
+
+def _ref_url_repo_and_tag(url: str) -> tuple[str, str]:
+    parts = urllib.parse.urlsplit(url).path.strip("/").split("/")
+    return f"{parts[1]}/{parts[2]}", parts[6]
+
+
+def test_main_reports_verified_n_of_n_when_every_pin_matches(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    expected = {(pin.repo, pin.tag): pin.sha for pin in workflow_pins(WORKFLOW_DIR)}
+
+    def stub(url: str) -> FetchResult:
+        repo, tag = _ref_url_repo_and_tag(url)
+        commit = expected[(repo, tag)]
+        return FetchResult(200, {"object": {"type": "commit", "sha": commit}})
+
+    assert main([], fetch=stub, retry_sleep=0.0) == 0
+
+    # A repo pinned at the same tag in two workflows is two pins but one
+    # (repo, tag) key, so count pins, not the lookup table.
+    total = len(workflow_pins(WORKFLOW_DIR))
+    line = f"check-action-pins: verified {total}/{total} pins"
+    assert line in capsys.readouterr().out
+
+
+def test_main_fails_and_names_every_offender_when_no_pin_matches(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def stub(url: str) -> FetchResult:
+        return FetchResult(200, {"object": {"type": "commit", "sha": "f" * 40}})
+
+    assert main([], fetch=stub, retry_sleep=0.0) != 0
+
+    captured = capsys.readouterr()
+    assert "verified" not in captured.out
+    for pin in workflow_pins(WORKFLOW_DIR):
+        assert pin.repo in captured.err, pin
+        assert pin.sha in captured.err, pin

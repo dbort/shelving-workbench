@@ -278,7 +278,7 @@ mode. `pixi run tests -- --offline` exports `SHELVING_OFFLINE=1` for
 offline local work. Without it, the check fails the run rather than
 passing quietly on any network problem: an unreachable host, a rate-limit
 response, or a persistent server error. The action-pin verifier
-`tools/check-action-pins.sh`, run from the workflow lint, is the only
+`tools/check_action_pins.py`, run from the workflow lint, is the only
 network-dependent check today. A future one, such as an integration test
 against a live service, follows the same contract.
 

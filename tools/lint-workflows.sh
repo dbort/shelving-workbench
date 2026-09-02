@@ -9,7 +9,7 @@
 #   3. an offline pin-format check              - every `uses:` is
 #                                                 owner/repo@<40-hex> # vX.Y.Z
 #   4. check-jsonschema vendor.dependabot       - .github/dependabot.yml schema
-#   5. check-action-pins.sh                     - each pinned SHA is the commit
+#   5. check_action_pins.py                     - each pinned SHA is the commit
 #                                                 its `# vX.Y.Z` tag names
 #
 # Checks 1-4 run offline and take no GitHub token; check 5 calls the GitHub API
@@ -64,7 +64,7 @@ run_check "zizmor (offline)" zizmor --offline "$WORKFLOW_DIR"
 run_check "uses: pin format" check_pins
 run_check "dependabot schema" check-jsonschema --builtin-schema vendor.dependabot "$DEPENDABOT"
 # Online check: SHELVING_OFFLINE threads through the environment, no new argument.
-run_check "action pin SHAs" bash tools/check-action-pins.sh
+run_check "action pin SHAs" python3 tools/check_action_pins.py
 
 if [ "$status" -ne 0 ]; then
 	echo "workflow lint: FAILED" >&2
