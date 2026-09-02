@@ -25,6 +25,16 @@ When adding or bumping an action, resolve the SHA from the release tag
 yourself (GitHub's "releases" page, or the API) rather than trusting a
 value pasted from documentation.
 
+The workflow lint verifies this correspondence online: for every `uses:`
+it resolves the `# vX.Y.Z` tag against the GitHub API, follows an
+annotated tag to its target commit, and fails if that commit is not the
+pinned SHA. A mismatch, a missing tag, a rate-limit response, or an
+unreachable API all fail the run: there is no quiet pass when the check
+cannot confirm a pin. CI runs it with the job's `GITHUB_TOKEN` for
+rate-limit headroom. Offline local work that cannot reach the API runs
+`pixi run tests -- --offline`, which skips this check and any other that
+needs the network.
+
 ## Start with no permissions, grant per job
 
 Each workflow sets `permissions: {}` at the top level, which drops the
@@ -114,8 +124,8 @@ Scorecard dataset. Treat a dropping score as a regression to investigate.
 machine-verified. `pixi run tests` calls it after the unit suite and
 before the FreeCAD smoke test, so CI covers it with no dedicated
 workflow-lint job; a human wanting only this lint runs
-`bash tools/lint-workflows.sh` from inside `pixi shell`. It runs four
-checks from a single invocation; all four run every time and any failure
+`bash tools/lint-workflows.sh` from inside `pixi shell`. It runs five
+checks from a single invocation; all five run every time and any failure
 fails the job:
 
 - **`actionlint`** over `.github/workflows/`: workflow-schema validation
@@ -129,9 +139,15 @@ fails the job:
   and a one-line reason.
 - **`uses:` pin format**: an offline check that every `uses:` line matches
   `owner/repo@<40-hex> # vX.Y.Z`, enforcing the SHA-pinning rule above
-  without a network round-trip. It does not verify that the SHA belongs to
-  the named release; Dependabot and review cover that.
+  without a network round-trip. Whether the SHA is the commit the tag
+  names is the next check's job.
 - **`check-jsonschema --builtin-schema vendor.dependabot`** over
   `.github/dependabot.yml`: validates the Dependabot config against its
   published schema so a typo there fails CI rather than being silently
   ignored by GitHub.
+- **`check-action-pins.sh`**: for every `uses:`, resolves the `# vX.Y.Z`
+  tag against the GitHub API, dereferences an annotated tag to its target
+  commit, and fails if that commit is not the pinned SHA. This is the one
+  check that needs the network. A mismatch, a missing tag, a rate-limit
+  response, a persistent 5xx, or an unreachable API all fail the run.
+  `pixi run tests -- --offline` skips it.
