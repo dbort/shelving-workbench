@@ -34,6 +34,11 @@ class Orientation(enum.StrEnum):
     VERTICAL = "vertical"
 
 
+class LapOrder(enum.StrEnum):
+    CAPTURED = "captured"
+    THROUGH = "through"
+
+
 @dataclass
 class Fixed:
     """Rule: the child opening takes exactly ``size_mm``. Drives the layout."""
@@ -73,23 +78,15 @@ class Leaf:
 
 @dataclass
 class Divider:
-    """The panel between two consecutive split children.
+    """The panel between two consecutive split children."""
 
-    ``material`` of ``None`` means "inherit ``Carcass.default_material``"; the
-    solver resolves the id to a thickness, this model keeps the ``None``
-    verbatim. ``lap`` is a reserved per-joint lap-order override (which member
-    runs continuous through the joint); nothing reads it yet.
-    """
-
+    # ``None`` inherits ``Carcass.default_material``; the solver resolves the id
+    # to a thickness, this model keeps the ``None`` verbatim.
     material: MaterialId | None = None
-    lap: Literal["captured", "through"] | None = None
+    # Reserved per-joint lap-order override (which member runs continuous
+    # through the joint); no layout or expansion code reads it in M2.
+    lap: LapOrder | None = None
     id: str = field(default_factory=new_id)
-
-    def __post_init__(self) -> None:
-        if self.lap not in (None, "captured", "through"):
-            raise ValueError(
-                f"Divider.lap must be None, 'captured', or 'through', got {self.lap!r}"
-            )
 
 
 @dataclass
@@ -263,6 +260,14 @@ def _orientation_tag(orientation: Orientation) -> Literal["horizontal", "vertica
             return "vertical"
 
 
+def _lap_tag(lap: LapOrder) -> Literal["captured", "through"]:
+    match lap:
+        case LapOrder.CAPTURED:
+            return "captured"
+        case LapOrder.THROUGH:
+            return "through"
+
+
 def _rule_to_doc(rule: SplitRule) -> RuleDoc:
     match rule:
         case Fixed(size_mm=size_mm):
@@ -277,7 +282,7 @@ def _divider_to_doc(divider: Divider) -> DividerDoc:
     return {
         "id": divider.id,
         "material": None if divider.material is None else str(divider.material),
-        "lap": divider.lap,
+        "lap": None if divider.lap is None else _lap_tag(divider.lap),
     }
 
 
@@ -373,19 +378,19 @@ def _divider_material_from_doc(obj: Mapping[str, object]) -> MaterialId | None:
     return MaterialId(value)
 
 
-def _divider_lap_from_doc(
-    obj: Mapping[str, object],
-) -> Literal["captured", "through"] | None:
+def _divider_lap_from_doc(obj: Mapping[str, object]) -> LapOrder | None:
     if "lap" not in obj or obj["lap"] is None:
         return None
     value = obj["lap"]
-    if value == "captured":
-        return "captured"
-    if value == "through":
-        return "through"
-    raise ValueError(
-        f"divider 'lap' must be 'captured', 'through', or null, got {value!r}"
-    )
+    match value:
+        case "captured":
+            return LapOrder.CAPTURED
+        case "through":
+            return LapOrder.THROUGH
+        case _:
+            raise ValueError(
+                f"divider 'lap' must be 'captured', 'through', or null, got {value!r}"
+            )
 
 
 def _bay_from_doc(node: object) -> Bay:

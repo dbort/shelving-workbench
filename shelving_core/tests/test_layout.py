@@ -7,6 +7,7 @@ from shelving_core.layout import (
     Divider,
     Fill,
     Fixed,
+    LapOrder,
     Leaf,
     Orientation,
     Split,
@@ -26,7 +27,7 @@ def _sample_carcass() -> Carcass:
         rules=[Fill(), Weighted(2.0), Fixed(150.0)],
         dividers=[
             Divider(material=None, id="dv1"),
-            Divider(material=MDF, lap="through", id="dv2"),
+            Divider(material=MDF, lap=LapOrder.THROUGH, id="dv2"),
         ],
         id="inner",
     )
@@ -137,11 +138,6 @@ def test_divider_defaults_have_no_material_or_lap() -> None:
     assert divider.lap is None
 
 
-def test_divider_lap_must_be_a_known_value() -> None:
-    with pytest.raises(ValueError, match="lap"):
-        Divider(lap="mitre")  # type: ignore[arg-type]  # negative test
-
-
 def test_json_round_trip_preserves_ids_and_structure() -> None:
     carcass = _sample_carcass()
 
@@ -165,7 +161,7 @@ def test_json_round_trip_preserves_ids_and_structure() -> None:
     assert inner.dividers[0].material is None
     assert inner.dividers[0].lap is None
     assert inner.dividers[1].material == "mdf12"
-    assert inner.dividers[1].lap == "through"
+    assert inner.dividers[1].lap is LapOrder.THROUGH
     assert isinstance(inner.rules[1], Weighted)
     assert isinstance(inner.rules[2], Fixed)
 
@@ -221,6 +217,33 @@ def test_from_dict_rejects_unknown_rule_type() -> None:
                         ],
                         "rules": [{"type": "fill"}, {"type": "elastic"}],
                         "dividers": [{"id": "d"}],
+                    },
+                },
+            }
+        )
+
+
+def test_from_dict_rejects_unknown_lap_string() -> None:
+    with pytest.raises(ValueError, match="lap"):
+        Carcass.from_dict(
+            {
+                "schema_version": 1,
+                "carcass": {
+                    "id": "u",
+                    "width_mm": 900.0,
+                    "height_mm": 1800.0,
+                    "depth_mm": 300.0,
+                    "default_material": "ply18",
+                    "root": {
+                        "kind": "split",
+                        "id": "r",
+                        "orientation": "horizontal",
+                        "children": [
+                            {"kind": "leaf", "id": "a"},
+                            {"kind": "leaf", "id": "b"},
+                        ],
+                        "rules": [{"type": "fill"}, {"type": "fill"}],
+                        "dividers": [{"id": "d", "lap": "mitre"}],
                     },
                 },
             }

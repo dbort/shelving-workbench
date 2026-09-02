@@ -19,6 +19,7 @@ from shelving_core.layout import (
     Divider,
     Fill,
     Fixed,
+    LapOrder,
     Leaf,
     Orientation,
     Split,
@@ -45,7 +46,7 @@ def _nested_carcass() -> Carcass:
         rules=[Fill(), Weighted(2.0), Fixed(150.0)],
         dividers=[
             Divider(material=None, id="dv1"),
-            Divider(material=MDF, lap="through", id="dv2"),
+            Divider(material=MDF, lap=LapOrder.THROUGH, id="dv2"),
         ],
         id="inner",
     )

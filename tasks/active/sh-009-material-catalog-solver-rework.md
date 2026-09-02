@@ -1,8 +1,8 @@
 ---
 id: sh-009
 title: "Material catalog + solver rework (M2, part 1)"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 0
 ---
 
@@ -20,7 +20,7 @@ for milestone M2; `shelving_core.expand` and `PlankSpec` are sh-010.
 
 ## Status
 - [x] Planning
-- [ ] Implementation
+- [x] Implementation
 - [ ] Review
 - [ ] User sign-off
 
@@ -243,14 +243,14 @@ Friction log: record any workaround per `CLAUDE.md` in
 
 ### Round 2 — sign-off refinements (same `sh-009` branch, on top of steps 1-8)
 
-- [ ] **Step 9** (`shelving_core/layout.py`): Add `class LapOrder(enum.StrEnum)` (`CAPTURED = "captured"`, `THROUGH = "through"`) next to `Orientation`. Change `Divider.lap` to `LapOrder | None`; delete the `__post_init__` `lap` guard. `to_dict` emits `lap`'s string value; `_divider_lap_from_doc` returns `LapOrder` and raises `ValueError` on an unknown string. `layout.schema.json` unchanged (wire form is the same lowercase string / `null`). Re-run `bash tools/vendor-core.sh`.
+- [x] **Step 9** (`shelving_core/layout.py`): Add `class LapOrder(enum.StrEnum)` (`CAPTURED = "captured"`, `THROUGH = "through"`) next to `Orientation`. Change `Divider.lap` to `LapOrder | None`; delete the `__post_init__` `lap` guard. `to_dict` emits `lap`'s string value; `_divider_lap_from_doc` returns `LapOrder` and raises `ValueError` on an unknown string. `layout.schema.json` unchanged (wire form is the same lowercase string / `null`). Re-run `bash tools/vendor-core.sh`.
 
-- [ ] **Step 10** (`shelving_core/layout.py`, `shelving_core/materials.py`, `shelving_core/solver.py`): Move the `Divider` `material` / `lap` and `MaterialEntry` `thickness_mm` / `nominal_thickness` per-field notes out of the class docstrings onto `#` comments on the fields. Trim `solve`'s docstring to the `KeyError` contract only. Reorder `_place`'s docstring prose to match its parameter order. Re-run `bash tools/vendor-core.sh`.
+- [x] **Step 10** (`shelving_core/layout.py`, `shelving_core/materials.py`, `shelving_core/solver.py`): Move the `Divider` `material` / `lap` and `MaterialEntry` `thickness_mm` / `nominal_thickness` per-field notes out of the class docstrings onto `#` comments on the fields. Trim `solve`'s docstring to the `KeyError` contract only. Reorder `_place`'s docstring prose to match its parameter order. Re-run `bash tools/vendor-core.sh`.
 
-- [ ] **Step 11** (`shelving_core/svg.py`, `shelving_core/tests/test_svg.py`): Add the `catalog` parameter to `to_svg`. Fuller title (default material name + thickness). Deterministic per-material colour on divider rects (fixed palette, `sorted` `MaterialId` assignment over the ids in use). Per-divider material + thickness label. Legend block listing the materials used, same order, with swatch / `name` / `thickness_mm` / `material_type`. Keep output byte-deterministic. Rework `test_svg.py` per Must Have "Tests — reworked" (catalog arg, title text, per-material fill, legend contents + order, determinism). Re-run `bash tools/vendor-core.sh`.
+- [x] **Step 11** (`shelving_core/svg.py`, `shelving_core/tests/test_svg.py`): Add the `catalog` parameter to `to_svg`. Fuller title (default material name + thickness). Deterministic per-material colour on divider rects (fixed palette, `sorted` `MaterialId` assignment over the ids in use). Per-divider material + thickness label. Legend block listing the materials used, same order, with swatch / `name` / `thickness_mm` / `material_type`. Keep output byte-deterministic. Rework `test_svg.py` per Must Have "Tests — reworked" (catalog arg, title text, per-material fill, legend contents + order, determinism). Re-run `bash tools/vendor-core.sh`.
 
-- [ ] **Step 12** (`tools/layout_demo.py`, `tests/test_layout_demo.py`): Print the catalog block before the tree; header trailing text `default material <name> (<thickness_mm> mm)`; per-divider `material="<name>" <thickness_mm>mm` tag; pass the catalog to `to_svg`. Update `tests/test_layout_demo.py` (header text, catalog-block rows, divider `material=` tag). `python tools/layout_demo.py` exits 0.
+- [x] **Step 12** (`tools/layout_demo.py`, `tests/test_layout_demo.py`): Print the catalog block before the tree; header trailing text `default material <name> (<thickness_mm> mm)`; per-divider `material="<name>" <thickness_mm>mm` tag; pass the catalog to `to_svg`. Update `tests/test_layout_demo.py` (header text, catalog-block rows, divider `material=` tag). `python tools/layout_demo.py` exits 0.
 
-- [ ] **Step 13** (`shelving_core/tests/test_layout.py`, `shelving_core/tests/test_schema.py`): `Divider(lap=...)` uses `LapOrder.*`. Drop the constructor-level `lap` negative test; add a `from_dict` test that an unknown `lap` string raises `ValueError`. Extend the round-trip assertion to cover `lap` as `None` and as a `LapOrder` member. `test_schema.py` sample docs keep the lowercase-string `lap` wire form.
+- [x] **Step 13** (`shelving_core/tests/test_layout.py`, `shelving_core/tests/test_schema.py`): `Divider(lap=...)` uses `LapOrder.*`. Drop the constructor-level `lap` negative test; add a `from_dict` test that an unknown `lap` string raises `ValueError`. Extend the round-trip assertion to cover `lap` as `None` and as a `LapOrder` member. `test_schema.py` sample docs keep the lowercase-string `lap` wire form.
 
-- [ ] **Step 14** (`shelving_core/tests/`, `docs/architecture.md`, task file): If `docs/architecture.md` names `Divider.lap` as a bare string literal anywhere, update it to name the `LapOrder` enum (otherwise no doc change). Run `pixi run tests` green; run `bash tools/vendor-core.sh` and confirm the drift check passes. Re-check `## Status` Implementation, set `current_phase: review` / `current_agent: reviewer`, commit on `sh-009`, hand to review.
+- [x] **Step 14** (`shelving_core/tests/`, `docs/architecture.md`, task file): If `docs/architecture.md` names `Divider.lap` as a bare string literal anywhere, update it to name the `LapOrder` enum (otherwise no doc change). Run `pixi run tests` green; run `bash tools/vendor-core.sh` and confirm the drift check passes. Re-check `## Status` Implementation, set `current_phase: review` / `current_agent: reviewer`, commit on `sh-009`, hand to review. (`architecture.md` names lap only conceptually, in the sh-010-owned "### Carcass expansion" section, so no doc change.)

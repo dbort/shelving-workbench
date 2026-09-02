@@ -29,18 +29,16 @@ MATERIALS_SCHEMA_VERSION: int = 1
 
 @dataclass(frozen=True)
 class MaterialEntry:
-    """One stock entry: an id, descriptive fields, and the actual thickness.
-
-    ``thickness_mm`` is the measured panel thickness the solver subtracts for
-    dividers and the carcass shell. ``nominal_thickness`` is a free human label
-    for the callout thickness (``'3/4"'``, ``'18 mm'``), not a millimetre value,
-    hence no ``_mm`` suffix; ``None`` when unset.
-    """
+    """One stock entry in a catalog: an id, descriptive fields, and a thickness."""
 
     id: MaterialId
     name: str
+    # Measured panel thickness the solver subtracts for dividers and the
+    # carcass shell.
     thickness_mm: float
     material_type: str
+    # Free human label for the callout thickness (``'3/4"'``, ``'18 mm'``), not
+    # a millimetre value, hence no ``_mm`` suffix; ``None`` when unset.
     nominal_thickness: str | None = None
 
     def __post_init__(self) -> None:

@@ -190,13 +190,14 @@ def _place(
 ) -> None:
     """Record one :class:`Rect` per node id in the subtree rooted at ``bay``.
 
-    ``out`` is mutated in place. A ``HORIZONTAL`` split shares its rect's
-    ``height_mm`` along Z; a ``VERTICAL`` split shares its ``width_mm`` along X.
-    Children are laid from the low edge in list order, each filling the parent's
-    cross axis; every divider fills the gap between two consecutive children.
-    ``catalog`` and ``default_thickness_mm`` resolve each ``Divider``'s
-    thickness (its own material, or the carcass default). A resolved opening
-    ``<= EPS_MM`` raises :class:`LayoutSolveError` against that child bay's id.
+    A ``HORIZONTAL`` split shares its ``rect``'s ``height_mm`` along Z; a
+    ``VERTICAL`` split shares its ``width_mm`` along X. Children are laid from
+    the low edge in list order, each filling the parent's cross axis; every
+    divider fills the gap between two consecutive children. ``out`` is mutated
+    in place. ``catalog`` and ``default_thickness_mm`` resolve each
+    ``Divider``'s thickness (its own material, or the carcass default). A
+    resolved opening ``<= EPS_MM`` raises :class:`LayoutSolveError` against that
+    child bay's id.
     """
     match bay:
         case Leaf():
@@ -260,11 +261,9 @@ def _place(
 def solve(carcass: Carcass, catalog: Catalog) -> SolvedLayout:
     """Place every ``Leaf``, ``Split``, and ``Divider`` id in one :class:`Rect`.
 
-    Panel thickness comes from ``catalog``: the carcass shell and any
-    ``Divider`` without its own ``material`` use
-    ``catalog[carcass.default_material].thickness_mm``. A ``default_material``
-    or ``Divider.material`` id absent from ``catalog`` raises ``KeyError`` from
-    :meth:`Catalog.__getitem__`, not :class:`LayoutSolveError`.
+    A ``default_material`` or ``Divider.material`` id absent from ``catalog``
+    raises ``KeyError`` from :meth:`Catalog.__getitem__`, not
+    :class:`LayoutSolveError`.
     """
     default_thickness_mm = catalog[carcass.default_material].thickness_mm
     interior_rect = _interior_rect(carcass, default_thickness_mm)
