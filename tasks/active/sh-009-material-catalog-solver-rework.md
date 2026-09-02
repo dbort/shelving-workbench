@@ -1,8 +1,8 @@
 ---
 id: sh-009
 title: "Material catalog + solver rework (M2, part 1)"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 0
 ---
 
@@ -20,7 +20,7 @@ for milestone M2; `shelving_core.expand` and `PlankSpec` are sh-010.
 
 ## Status
 - [x] Planning
-- [ ] Implementation
+- [x] Implementation
 - [ ] Review
 - [ ] User sign-off
 
@@ -269,8 +269,8 @@ Friction log: record any workaround per `CLAUDE.md` in
 
 ### Round 3 — SVG colour render fix (same `sh-009` branch, on top of steps 1-14)
 
-- [ ] **Step 15** (`shelving_core/svg.py`): In `_style_block`, drop `fill: #888888` from the `.divider` rule (keep `stroke: none`); every divider rect already carries an explicit per-material `fill` presentation attribute, which now renders. Confirm no other emitted `<style>` selector sets `fill` on divider rects. Regenerate the demo SVG (`pixi run demo -- --svg /tmp/…/x.svg`) and eyeball that the two sample materials produce two divider colours. Re-run `bash tools/vendor-core.sh`.
+- [x] **Step 15** (`shelving_core/svg.py`): In `_style_block`, drop `fill: #888888` from the `.divider` rule (keep `stroke: none`); every divider rect already carries an explicit per-material `fill` presentation attribute, which now renders. Confirm no other emitted `<style>` selector sets `fill` on divider rects. Regenerate the demo SVG (`pixi run demo -- --svg /tmp/…/x.svg`) and eyeball that the two sample materials produce two divider colours. Re-run `bash tools/vendor-core.sh`.
 
-- [ ] **Step 16** (`shelving_core/tests/test_svg.py`): Add the render-not-just-source assertions per Must Have: the `<style>` block has no `fill` on `.divider`; a two-material case yields two distinct effective divider fills (read from each divider rect's `fill` / `style`, since no stylesheet rule applies). Keep the existing determinism / legend-order / title-text assertions. Re-run `bash tools/vendor-core.sh`.
+- [x] **Step 16** (`shelving_core/tests/test_svg.py`): Add the render-not-just-source assertions per Must Have: the `<style>` block has no `fill` on `.divider`; a two-material case yields two distinct effective divider fills (read from each divider rect's `fill` / `style`, since no stylesheet rule applies). Keep the existing determinism / legend-order / title-text assertions. Re-run `bash tools/vendor-core.sh`.
 
-- [ ] **Step 17**: `pixi run tests` green; `bash tools/vendor-core.sh` drift check passes. Re-check `## Status` Implementation, set `current_phase: review` / `current_agent: reviewer`, commit on `sh-009`, hand to review.
+- [x] **Step 17**: `pixi run tests` green; `bash tools/vendor-core.sh` drift check passes. Re-check `## Status` Implementation, set `current_phase: review` / `current_agent: reviewer`, commit on `sh-009`, hand to review.

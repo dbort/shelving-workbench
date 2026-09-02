@@ -195,7 +195,7 @@ def _style_block(font_size_mm: float) -> list[str]:
     return [
         "  <style>",
         "    .carcass { fill: none; stroke: #333333; stroke-width: 2; }",
-        "    .divider { fill: #888888; stroke: none; }",
+        "    .divider { stroke: none; }",
         "    .leaf { fill: #f2f2f2; fill-opacity: 0.4; "
         "stroke: #666666; stroke-width: 1; }",
         "    .label { font-family: sans-serif; font-size: "

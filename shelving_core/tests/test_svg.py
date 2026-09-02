@@ -51,6 +51,36 @@ def _texts_by_class(root: ET.Element, css_class: str) -> list[ET.Element]:
     return [t for t in root.findall(_tag("text")) if t.get("class") == css_class]
 
 
+def _style_text(root: ET.Element) -> str:
+    style = root.find(_tag("style"))
+    assert style is not None and style.text is not None
+    return style.text
+
+
+def _css_rules(style_text: str) -> list[tuple[str, str]]:
+    """(selector, declaration-body) pairs from the flat ``<style>`` block."""
+    rules: list[tuple[str, str]] = []
+    for chunk in style_text.split("}"):
+        if "{" not in chunk:
+            continue
+        selector, _, body = chunk.partition("{")
+        rules.append((selector.strip(), body.strip()))
+    return rules
+
+
+def _effective_fill(rect: ET.Element) -> str | None:
+    """The colour a divider rect actually renders: its inline ``style`` fill if
+    present, else its ``fill`` attribute. No stylesheet rule applies to divider
+    rects, so nothing outranks these."""
+    style = rect.get("style")
+    if style:
+        for decl in style.split(";"):
+            prop, _, value = decl.partition(":")
+            if prop.strip() == "fill":
+                return value.strip()
+    return rect.get("fill")
+
+
 def _flat_fill_carcass(orientation: Orientation, n_children: int) -> Carcass:
     """A single split of ``n_children`` equal ``Fill`` openings under the root."""
     root = Split(
@@ -159,6 +189,26 @@ def test_dividers_are_filled_by_their_resolved_material_colour() -> None:
     present = [fill for fill in fills if fill is not None]
     # One divider overrides to the thin panel; the other two inherit the default.
     assert sorted(present) == sorted([thin_colour, thick_colour, thick_colour])
+
+
+def test_no_stylesheet_rule_sets_fill_on_divider_rects() -> None:
+    # An SVG <style> rule outranks a fill= presentation attribute regardless of
+    # specificity, so a `fill` on any selector that matches <rect class="divider">
+    # would repaint every divider one colour (the round-2 defect this guards).
+    carcass = _nested_sample()
+    root = ET.fromstring(to_svg(carcass, solve(carcass, CATALOG), CATALOG))
+    divider_selectors = {".divider", "rect", "rect.divider", "*"}
+    for selector, body in _css_rules(_style_text(root)):
+        if selector in divider_selectors:
+            assert "fill" not in body, (selector, body)
+
+
+def test_two_materials_render_two_distinct_effective_divider_fills() -> None:
+    carcass = _nested_sample()
+    root = ET.fromstring(to_svg(carcass, solve(carcass, CATALOG), CATALOG))
+    effective = {_effective_fill(r) for r in _rects_by_class(root, "divider")}
+    assert None not in effective
+    assert len(effective) == 2
 
 
 def test_legend_lists_the_materials_used_in_deterministic_order() -> None:
