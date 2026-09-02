@@ -34,13 +34,13 @@ to zizmor's built-in default. `tools/check_action_pins.py` then covers
 the `# vX.Y.Z` comment: it fails offline on a SHA pin whose comment is
 missing or malformed or whose SHA is upper-case, and online it resolves
 each `# vX.Y.Z` tag against the GitHub API, follows an annotated tag to
-its target commit, and fails if that commit is not the pinned SHA. A mismatch, a missing tag, a rate-limit
-response, or an unreachable API all fail the run: there is no quiet pass
-when the check cannot confirm a pin. CI runs it with the job's
-`GITHUB_TOKEN` for rate-limit headroom. Offline local work that cannot
-reach the API runs `pixi run tests -- --offline`, which skips the online
-resolution and any other check that needs the network; the SHA-shape and
-comment checks still run.
+its target commit, and fails if that commit is not the pinned SHA. A
+mismatch, a missing tag, a rate-limit response, or an unreachable API all
+fail the run: there is no quiet pass when the check cannot confirm a pin.
+CI runs it with the job's `GITHUB_TOKEN` for rate-limit headroom. Offline
+local work that cannot reach the API runs `pixi run tests -- --offline`,
+which skips the online resolution and any other check that needs the
+network; the SHA-shape and comment checks still run.
 
 ## Start with no permissions, grant per job
 

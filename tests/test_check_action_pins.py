@@ -141,16 +141,23 @@ def test_malformed_version_comments_clean_for_the_repo_workflows() -> None:
     assert malformed_version_comments(WORKFLOW_DIR) == ()
 
 
+def _patch_workflow_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, content: str
+) -> None:
+    """Point ``check_action_pins._WORKFLOW_DIR`` at a one-file workflow tree."""
+    workflows = tmp_path / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "ci.yml").write_text(content, encoding="utf-8")
+    monkeypatch.setattr("tools.check_action_pins._WORKFLOW_DIR", workflows)
+
+
+_BAD_COMMENT_LINE = f"      - uses: actions/checkout@{SHA_A} # not a version\n"
+
+
 def test_main_fails_before_any_fetch_on_a_malformed_version_comment(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    workflows = tmp_path / ".github" / "workflows"
-    workflows.mkdir(parents=True)
-    (workflows / "ci.yml").write_text(
-        f"      - uses: actions/checkout@{SHA_A} # not a version\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr("tools.check_action_pins._WORKFLOW_DIR", workflows)
+    _patch_workflow_dir(tmp_path, monkeypatch, _BAD_COMMENT_LINE)
 
     # `_exploding_fetch` raises if called, so a pass here proves the check
     # fails before any network call.
@@ -166,13 +173,7 @@ def test_main_fails_a_malformed_comment_even_when_offline(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setenv("SHELVING_OFFLINE", "1")
-    workflows = tmp_path / ".github" / "workflows"
-    workflows.mkdir(parents=True)
-    (workflows / "ci.yml").write_text(
-        f"      - uses: actions/checkout@{SHA_A} # not a version\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr("tools.check_action_pins._WORKFLOW_DIR", workflows)
+    _patch_workflow_dir(tmp_path, monkeypatch, _BAD_COMMENT_LINE)
 
     # The comment check sits ahead of the SHELVING_OFFLINE guard, so a bad
     # comment is fatal rather than skipped.
