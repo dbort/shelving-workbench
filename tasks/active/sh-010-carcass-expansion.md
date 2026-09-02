@@ -2,7 +2,7 @@
 id: sh-010
 title: "Carcass expansion: PlankSpec list (M2, part 2)"
 current_agent: implementer
-current_phase: planning
+current_phase: implementation
 review_rejections: 0
 blocked_by: [sh-009]
 ---
@@ -20,7 +20,7 @@ carcass and woodworking vocabulary. Part 2 of 2 for milestone M2; builds on
 sh-009's catalog-driven solver.
 
 ## Status
-- [ ] Planning
+- [x] Planning
 - [ ] Implementation
 - [ ] Review
 - [ ] User sign-off

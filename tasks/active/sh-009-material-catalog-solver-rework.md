@@ -2,7 +2,7 @@
 id: sh-009
 title: "Material catalog + solver rework (M2, part 1)"
 current_agent: implementer
-current_phase: planning
+current_phase: implementation
 review_rejections: 0
 ---
 
@@ -19,7 +19,7 @@ with it. This is part 1 of 2 for milestone M2; `shelving_core.expand` and
 `PlankSpec` are sh-010.
 
 ## Status
-- [ ] Planning
+- [x] Planning
 - [ ] Implementation
 - [ ] Review
 - [ ] User sign-off
