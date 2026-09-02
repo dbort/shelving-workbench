@@ -1,8 +1,8 @@
 ---
 id: sh-008
 title: "Collapse the test tiers into one pixi-run harness, drop .venv"
-current_agent: reviewer
-current_phase: review
+current_agent: user
+current_phase: user_signoff
 review_rejections: 1
 ---
 
@@ -21,7 +21,7 @@ former tiers ran in about a second, so the split earned nothing.
 ## Status
 - [x] Planning
 - [x] Implementation
-- [ ] Review
+- [x] Review
 - [ ] User sign-off
 
 ## Must Have
