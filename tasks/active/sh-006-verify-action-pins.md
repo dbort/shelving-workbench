@@ -1,8 +1,8 @@
 ---
 id: sh-006
 title: "Verify GitHub Action pins online, with a --offline escape for pixi run tests"
-current_agent: reviewer
-current_phase: review
+current_agent: user
+current_phase: user_signoff
 review_rejections: 1
 ---
 
@@ -25,7 +25,7 @@ local mock of the tag API.
 ## Status
 - [x] Planning
 - [x] Implementation
-- [ ] Review
+- [x] Review
 - [ ] User sign-off
 
 ## Must Have
