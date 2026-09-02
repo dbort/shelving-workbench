@@ -42,7 +42,7 @@ for a sample layout so the distribution is eyeballable.
 
 ## M2 — Carcass expansion, no FreeCAD
 
-**Status:** Planned
+**Status:** Task sh-009
 
 `shelving_core.expand` and `shelving_core.materials`: catalog data
 model, expansion to a `PlankSpec` list, per-joint lap order, coordinate
