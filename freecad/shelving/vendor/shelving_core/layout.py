@@ -125,19 +125,16 @@ Bay = Leaf | Split
 
 @dataclass
 class Carcass:
-    """The shelving box: outer dimensions, a default material, and a root bay.
-
-    ``default_material`` is a catalog id; its thickness applies to the shell
-    panels and to any ``Divider`` that sets no ``material`` of its own. ``id``
-    is this unit's persistent identity, assigned once and preserved across
-    edits.
-    """
+    """The shelving box: outer dimensions, a default material, and a root bay."""
 
     width_mm: float
     height_mm: float
     depth_mm: float
+    # Catalog id; its thickness applies to the shell panels and to any
+    # ``Divider`` that sets no ``material`` of its own.
     default_material: MaterialId
     root: Bay
+    # This unit's persistent identity, assigned once and preserved across edits.
     id: str = field(default_factory=new_id)
 
     def __post_init__(self) -> None:

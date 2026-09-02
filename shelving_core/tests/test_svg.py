@@ -2,11 +2,7 @@
 
 ``shelving_core.svg.to_svg`` builds its output with f-strings, so these tests
 parse it back with :mod:`xml.etree.ElementTree` (parsing only; construction
-stays library-free in the renderer) and assert on the resulting element tree:
-the root element and its ``viewBox``, the rect and label counts for a known
-tree, the exact placed geometry for a hand-computed case that proves +z maps to
-smaller SVG ``y``, the material title / per-divider fill / legend, and
-byte-identical output across two calls.
+stays library-free in the renderer) and assert on the resulting element tree.
 """
 
 import xml.etree.ElementTree as ET
