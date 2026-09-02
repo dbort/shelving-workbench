@@ -22,7 +22,7 @@ workbench identifier.
 - A `ShelvingUnit` parametric object: a single self-contained carcass
   (one "box").
 - Butt-joint construction only. The top and bottom run the full width and
-  depth; the two sides, and every shelf and divider, are captured between
+  depth; the two sides and every shelf and divider are captured between
   them. The lap order of an individual joint (which member runs
   continuous, which is captured) is reserved in the schema as a per-joint
   override and is not yet honored; expansion always applies the carcass
@@ -148,9 +148,9 @@ top, the two sides, every divider, and (later) the back. A `PlankSpec` is
 frame, with `size` and `placement` each a `Vec3`. Grain direction is
 deferred to a later milestone.
 
-The default carcass rule (top and bottom continuous the full width and
-depth, the sides and every divider captured between them) sets each
-joint's lap order. A per-joint override that flips which member runs
+The default carcass rule sets each joint's lap order: top and bottom run
+continuous the full width and depth, and the sides and every divider are
+captured between them. A per-joint override that flips which member runs
 through is reserved in the schema; M2 always applies the default.
 
 Expansion has no FreeCAD dependency: it produces plain data. The FreeCAD

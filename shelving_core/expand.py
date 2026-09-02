@@ -1,12 +1,9 @@
 """Carcass expansion: a solved split-tree to a flat list of ``PlankSpec`` records.
 
-:func:`expand` runs the spacing solver, then emits one :class:`PlankSpec` per
-physical plank: the carcass shell (bottom, top, left side, right side) followed
-by one plank per ``Divider`` in tree pre-order. Shell planks follow the default
-carcass lap rule, where the top and bottom run continuous the full width and
-depth and the two sides are captured between them. Divider geometry is the
-solver's :class:`~shelving_core.solver.Rect` extruded through the full depth; it
-is never recomputed here.
+Shell planks follow the default carcass lap rule: the top and bottom run
+continuous the full width and depth, the two sides are captured between them.
+Divider geometry is the solver's :class:`~shelving_core.solver.Rect` extruded
+through the full depth, never recomputed here.
 
 All lengths are float millimetres in the carcass local frame: origin at the
 front-bottom-left corner, ``+X`` right (width), ``+Y`` back (depth), ``+Z`` up
@@ -33,7 +30,7 @@ class Vec3:
 
 
 class PlankRole(enum.StrEnum):
-    """What a plank is within the carcass; drives the generated ``Label`` later."""
+    """What a plank is within the carcass; the FreeCAD layer derives its ``Label``."""
 
     LEFT_SIDE = "left_side"
     RIGHT_SIDE = "right_side"
