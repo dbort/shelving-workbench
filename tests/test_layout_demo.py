@@ -31,7 +31,9 @@ def test_demo_runs_and_prints_the_solved_sample() -> None:
     assert result.returncode == 0, result.stderr
     lines = result.stdout.splitlines()
     assert lines, "demo produced no stdout"
-    assert lines[0].startswith("Carcass 900 x 1800 x 300 mm"), lines[0]
+    assert lines[0] == (
+        "Carcass 900 x 1800 x 300 mm, default material 18 mm birch ply"
+    ), lines[0]
 
     # The sample tree: a root HORIZONTAL split over a 3-child VERTICAL split and
     # a 2-child VERTICAL split -> 3 splits, 5 leaves, 4 dividers (1 + 2 + 1).
@@ -54,7 +56,9 @@ def test_demo_svg_flag_writes_a_parseable_svg(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     assert f"wrote {out}" in result.stdout
     # The text dump still prints; --svg only adds the file and its confirmation.
-    assert result.stdout.splitlines()[0].startswith("Carcass 900 x 1800 x 300 mm")
+    assert result.stdout.splitlines()[0] == (
+        "Carcass 900 x 1800 x 300 mm, default material 18 mm birch ply"
+    )
 
     assert out.exists()
     contents = out.read_text(encoding="utf-8")
