@@ -220,7 +220,7 @@ lands this. Record any NEW workaround per `CLAUDE.md`.
 
 ## Execution Plan
 
-- [ ] **Step 1** (`tools/check-action-pins.sh`): Write the online resolver +
+- [x] **Step 1** (`tools/check-action-pins.sh`): Write the online resolver +
   verifier per the Must Have, FATAL-NOT-SOFT, CLASSIFY BY OUTCOME, API DETAIL,
   and SHELVING_OFFLINE CONTRACT. Gather `uses:` pins from
   `.github/workflows/*.yml`/`*.yaml`; strip any `<path>` segment; per pin, one
@@ -232,38 +232,38 @@ lands this. Record any NEW workaround per `CLAUDE.md`.
   `run-tests.sh`'s existing `shellcheck tools/*.sh` glob, so keep it
   shellcheck-clean.
 
-- [ ] **Step 2** (`tests/test_check_action_pins.py`, `pyproject.toml`): Add the
+- [x] **Step 2** (`tests/test_check_action_pins.py`, `pyproject.toml`): Add the
   typed test with the fixture `http.server` mock per TEST MOCK and the Must
   Have's case list. Add the file to `[tool.mypy].files`.
 
-- [ ] **Step 3** (`tools/lint-workflows.sh`): Add `tools/check-action-pins.sh`
+- [x] **Step 3** (`tools/lint-workflows.sh`): Add `tools/check-action-pins.sh`
   as a check after the offline pin-format check, using the same failure
   aggregation. No new argument; the environment carries `SHELVING_OFFLINE`.
 
-- [ ] **Step 4** (`tools/run-tests.sh`): Replace the no-arg guard with handling
+- [x] **Step 4** (`tools/run-tests.sh`): Replace the no-arg guard with handling
   for one optional `--offline` arg: `--offline` → `export SHELVING_OFFLINE=1`;
   empty → run as now; anything else → one-line usage to stderr, exit 2. Add one
   header-comment line about `--offline` setting `SHELVING_OFFLINE` for
   network-dependent checks (intent only, no step list).
 
-- [ ] **Step 5** (`.github/workflows/ci.yml`): Add
+- [x] **Step 5** (`.github/workflows/ci.yml`): Add
   `GITHUB_TOKEN: ${{ github.token }}` to the `tests` job's `env` (or the `pixi
   run tests` step's `env`). No permission or trigger change. Confirm the job
   still runs `pixi run tests` with no `--offline`.
 
-- [ ] **Step 6** (`docs/github-actions-hardening.md`): Document the online
+- [x] **Step 6** (`docs/github-actions-hardening.md`): Document the online
   SHA/tag verification in the pin-related and enforcement sections: what it
   checks, that CI runs it with `GITHUB_TOKEN` and fails on a network failure,
   and the `pixi run tests -- --offline` escape. No `SHELVING_OFFLINE` mention.
 
-- [ ] **Step 7** (`docs/architecture.md`): In "Testing and CI", add the
+- [x] **Step 7** (`docs/architecture.md`): In "Testing and CI", add the
   `SHELVING_OFFLINE` contract as the pattern every network-dependent check
   follows, and name the action-pin check as today's sole instance.
 
-- [ ] **Step 8** (`README.md`): One sentence in `## Tests` that
+- [x] **Step 8** (`README.md`): One sentence in `## Tests` that
   `pixi run tests -- --offline` skips checks needing the network. No specifics.
 
-- [ ] **Step 9** (`.claude/docs/friction-log.md`): Remove the `2026-08-30`
+- [x] **Step 9** (`.claude/docs/friction-log.md`): Remove the `2026-08-30`
   "Reviewing SHA-pinned workflows had no tooling" entry.
 
 - [ ] **Step 10** (verification, no new files): `pixi run tests` green with
