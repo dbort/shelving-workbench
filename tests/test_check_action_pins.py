@@ -1,9 +1,9 @@
 """Behavioural coverage of ``tools/check-action-pins.sh``.
 
 The script resolves each SHA-pinned action's ``# vX.Y.Z`` tag against the
-GitHub API. Running it for real would make the suite depend on GitHub being
-reachable and on the live tag graph, so these tests point ``GITHUB_API_URL``
-at a local mock of the two endpoints it calls
+GitHub API. Running it against the live API would make the suite depend on
+GitHub being reachable and on the live tag graph, so these tests point
+``GITHUB_API_URL`` at a local mock of the two endpoints it calls
 (``/repos/<owner>/<repo>/git/ref/tags/<tag>`` and ``.../git/tags/<sha>``) and
 assert the script's outcome for each shape of response. The mock counts
 requests so the offline case can prove no call was made.

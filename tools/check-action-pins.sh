@@ -45,8 +45,8 @@ api_host="${BASE#http://}"
 api_host="${api_host#https://}"
 api_host="${api_host%%/*}"
 
-# Attach the token only to the real GitHub API, so a redirected or
-# misconfigured GITHUB_API_URL cannot harvest it.
+# Attach the token only to the real GitHub API, so it never reaches a
+# redirected or misconfigured GITHUB_API_URL.
 CURL_AUTH=()
 token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
 if [ -n "$token" ] && [ "$api_host" = "api.github.com" ]; then

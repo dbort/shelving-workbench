@@ -268,17 +268,17 @@ right children.
 
 ### Network-dependent checks: the `SHELVING_OFFLINE` contract
 
-Most checks are offline and deterministic. A check that genuinely needs
-the network reads the `SHELVING_OFFLINE` environment variable as its first
-action and follows this contract: value `1` enables offline mode and the
-check prints a named skip line and exits 0 before any network call; unset
-or empty runs the check for real; any other value is a usage error that
+Most checks are offline and deterministic. A check that needs the network
+reads the `SHELVING_OFFLINE` environment variable as its first action and
+follows this contract: value `1` enables offline mode and the check
+prints a named skip line and exits 0 before any network call; unset or
+empty runs the check; any other value is a usage error that
 exits non-zero, so `SHELVING_OFFLINE=0` cannot silently enable offline
 mode. `pixi run tests -- --offline` exports `SHELVING_OFFLINE=1` for
 offline local work. Without it, the check fails the run rather than
 passing quietly on any network problem: an unreachable host, a rate-limit
 response, or a persistent server error. The action-pin verifier
-(`tools/check-action-pins.sh`, run from the workflow lint) is the only
+`tools/check-action-pins.sh`, run from the workflow lint, is the only
 network-dependent check today. A future one, such as an integration test
 against a live service, follows the same contract.
 
