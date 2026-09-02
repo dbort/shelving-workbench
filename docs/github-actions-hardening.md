@@ -25,15 +25,22 @@ When adding or bumping an action, resolve the SHA from the release tag
 yourself (GitHub's "releases" page, or the API) rather than trusting a
 value pasted from documentation.
 
-The workflow lint verifies this correspondence online: for every `uses:`
-it resolves the `# vX.Y.Z` tag against the GitHub API, follows an
-annotated tag to its target commit, and fails if that commit is not the
-pinned SHA. A mismatch, a missing tag, a rate-limit response, or an
-unreachable API all fail the run: there is no quiet pass when the check
-cannot confirm a pin. CI runs it with the job's `GITHUB_TOKEN` for
-rate-limit headroom. Offline local work that cannot reach the API runs
-`pixi run tests -- --offline`, which skips this check and any other that
-needs the network.
+The workflow lint enforces this in two stages. `zizmor`'s `unpinned-uses`
+audit runs offline and fails any `uses:` that is not pinned to a full
+commit SHA; `zizmor.yml` at the repo root sets its blanket policy to
+`hash-pin`, and the lint passes `--config zizmor.yml` explicitly so a
+missing or unreadable policy file aborts the run instead of falling back
+to zizmor's built-in default. `tools/check_action_pins.py` then covers
+the `# vX.Y.Z` comment: it fails offline on a SHA pin whose comment is
+missing or malformed or whose SHA is upper-case, and online it resolves
+each `# vX.Y.Z` tag against the GitHub API, follows an annotated tag to
+its target commit, and fails if that commit is not the pinned SHA. A mismatch, a missing tag, a rate-limit
+response, or an unreachable API all fail the run: there is no quiet pass
+when the check cannot confirm a pin. CI runs it with the job's
+`GITHUB_TOKEN` for rate-limit headroom. Offline local work that cannot
+reach the API runs `pixi run tests -- --offline`, which skips the online
+resolution and any other check that needs the network; the SHA-shape and
+comment checks still run.
 
 ## Start with no permissions, grant per job
 
@@ -126,21 +133,23 @@ FreeCAD smoke test, so CI needs no dedicated workflow-lint job; to run
 only this lint, call `bash tools/lint-workflows.sh` from inside
 `pixi shell`.
 
-One invocation drives five tools: `actionlint`, `zizmor`, an inline
-`uses:` pin-format regex, `check-jsonschema` against the vendored
-Dependabot schema, and `tools/check_action_pins.py`. All five run every
-time and any failure fails the run. Three things about that are not
-visible from the code:
+One invocation drives four tools: `actionlint`, `zizmor`,
+`check-jsonschema` against the vendored Dependabot schema, and
+`tools/check_action_pins.py`. All four run every time and any failure
+fails the run. Three things about that are not visible from the code:
 
-- **`zizmor` suppressions.** A confirmed false positive is silenced with
-  an inline `# zizmor: ignore[<rule>]` comment carrying a one-line reason.
-  A genuine finding is fixed, never suppressed.
+- **`zizmor` suppressions and the pin policy.** A confirmed false positive
+  is silenced with an inline `# zizmor: ignore[<rule>]` comment carrying a
+  one-line reason; a genuine finding is fixed, never suppressed.
+  `zizmor.yml` sets the `unpinned-uses` blanket policy to `hash-pin`, so a
+  tag or branch `uses:` fails the audit.
 - **Offline versus online.** `actionlint`, `zizmor --offline`, the
-  pin-format regex, and the Dependabot schema check are offline and
-  deterministic, so the lint stays reproducible without network access.
-  Only `check_action_pins.py` uses the network: it confirms each pinned
-  SHA is the commit its `# vX.Y.Z` tag names, is fatal on any network
-  failure (mismatch, missing tag, rate limit, persistent 5xx, unreachable
-  API), and `pixi run tests -- --offline` is the only way to skip it.
+  Dependabot schema check, and `check_action_pins.py`'s `# vX.Y.Z`
+  comment check are offline and deterministic, so the lint stays
+  reproducible without network access. Only the SHA resolution in
+  `check_action_pins.py` uses the network: it confirms each pinned SHA is
+  the commit its `# vX.Y.Z` tag names, is fatal on any network failure
+  (mismatch, missing tag, rate limit, persistent 5xx, unreachable API),
+  and `pixi run tests -- --offline` is the only way to skip it.
 - **`shellcheck` is a `pixi.toml` dependency** because `actionlint` shells
   out to it to lint every `run:` script body.

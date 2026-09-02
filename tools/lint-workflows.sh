@@ -16,6 +16,7 @@ cd "$REPO_ROOT"
 
 WORKFLOW_DIR=".github/workflows"
 DEPENDABOT=".github/dependabot.yml"
+ZIZMOR_CONFIG="zizmor.yml"
 
 status=0
 
@@ -29,31 +30,15 @@ run_check() {
 	fi
 }
 
-# Offline pin-format check. Kept as a shell function so it runs with no
-# network and no third-party tool: every `uses:` must name a full 40-hex
-# commit SHA with a trailing `# vX.Y.Z` release comment. The action reference
-# before `@` may carry extra path segments (e.g. github/codeql-action/upload-sarif).
-# Both `.yml` and `.yaml` are checked: actionlint and zizmor take the whole
-# directory, so a `.yaml` workflow must not slip past the pin check.
-check_pins() {
-	local pin_regex='^uses: [A-Za-z0-9._/-]+@[0-9a-f]{40} # v[0-9]+\.[0-9]+\.[0-9]+$'
-	local rc=0 file raw trimmed
-	while IFS= read -r -d '' file; do
-		while IFS= read -r raw; do
-			# Normalise both `uses:` on its own line and `- uses:` list items.
-			trimmed="$(printf '%s' "$raw" | sed 's/^[[:space:]]*//; s/^-[[:space:]]*//; s/[[:space:]]*$//')"
-			if [[ ! "$trimmed" =~ $pin_regex ]]; then
-				echo "  ${file}: unpinned or mis-commented: ${trimmed}" >&2
-				rc=1
-			fi
-		done < <(grep -E '^[[:space:]]*-?[[:space:]]*uses:' "$file" || true)
-	done < <(find "$WORKFLOW_DIR" -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) -print0)
-	return "$rc"
-}
-
+# zizmor's unpinned-uses audit enforces the full 40-hex SHA pin. `--config` is
+# passed explicitly rather than relying on CWD discovery, so a missing or
+# unreadable zizmor.yml is a hard error instead of a silent fall-back to
+# zizmor's built-in default (which happens to match, hiding the breakage).
+# check_action_pins.py checks the trailing `# vX.Y.Z` comment beside each SHA,
+# offline before its network calls, so a missing or malformed comment fails
+# even under --offline.
 run_check "actionlint" actionlint
-run_check "zizmor (offline)" zizmor --offline "$WORKFLOW_DIR"
-run_check "uses: pin format" check_pins
+run_check "zizmor (offline)" zizmor --offline --config "$ZIZMOR_CONFIG" "$WORKFLOW_DIR"
 run_check "dependabot schema" check-jsonschema --builtin-schema vendor.dependabot "$DEPENDABOT"
 # Online check: SHELVING_OFFLINE threads through the environment, no new argument.
 run_check "action pin SHAs" python3 tools/check_action_pins.py

@@ -19,12 +19,14 @@ import pytest
 
 from tools.check_action_pins import (
     FetchResult,
+    MalformedPin,
     OfflineConfigError,
     Pin,
     ResolveError,
     auth_headers,
     classify_status,
     main,
+    malformed_version_comments,
     offline_mode,
     resolve_commit,
     workflow_pins,
@@ -100,6 +102,85 @@ def test_workflow_pins_ignores_unpinned_and_mis_commented_lines(tmp_path: Path) 
     )
 
     assert workflow_pins(tmp_path) == ()
+
+
+# --------------------------------------------------------------------------- #
+# malformed_version_comments
+# --------------------------------------------------------------------------- #
+
+
+def test_malformed_version_comments_flags_only_sha_pins_that_pin_re_rejects(
+    tmp_path: Path,
+) -> None:
+    workflows = tmp_path / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "ci.yml").write_text(
+        f"      - uses: actions/checkout@{SHA_A} # v4.2.2\n"  # fine
+        f"      - uses: actions/setup-python@{SHA_B}\n"  # no comment
+        f"      - uses: actions/cache@{SHA_C}  # pinned, no version\n"  # malformed
+        f"      - uses: actions/lint@{SHA_A.upper()} # v1.0.0\n"  # upper-case SHA
+        "      - uses: actions/upload-artifact@v4\n"  # tag pin: zizmor's job
+        "      - uses: ./.github/actions/local\n"
+        "      - run: echo uses: not/a@pin\n",
+        encoding="utf-8",
+    )
+
+    assert malformed_version_comments(workflows) == (
+        MalformedPin(".github/workflows/ci.yml", f"uses: actions/setup-python@{SHA_B}"),
+        MalformedPin(
+            ".github/workflows/ci.yml",
+            f"uses: actions/cache@{SHA_C}  # pinned, no version",
+        ),
+        MalformedPin(
+            ".github/workflows/ci.yml", f"uses: actions/lint@{SHA_A.upper()} # v1.0.0"
+        ),
+    )
+
+
+def test_malformed_version_comments_clean_for_the_repo_workflows() -> None:
+    assert malformed_version_comments(WORKFLOW_DIR) == ()
+
+
+def test_main_fails_before_any_fetch_on_a_malformed_version_comment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    workflows = tmp_path / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "ci.yml").write_text(
+        f"      - uses: actions/checkout@{SHA_A} # not a version\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("tools.check_action_pins._WORKFLOW_DIR", workflows)
+
+    # `_exploding_fetch` raises if called, so a pass here proves the check
+    # fails before any network call.
+    assert main([], fetch=_exploding_fetch, retry_sleep=0.0) == 1
+
+    captured = capsys.readouterr()
+    assert "verified" not in captured.out
+    assert "# vX.Y.Z" in captured.err
+    assert ".github/workflows/ci.yml" in captured.err
+
+
+def test_main_fails_a_malformed_comment_even_when_offline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("SHELVING_OFFLINE", "1")
+    workflows = tmp_path / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "ci.yml").write_text(
+        f"      - uses: actions/checkout@{SHA_A} # not a version\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("tools.check_action_pins._WORKFLOW_DIR", workflows)
+
+    # The comment check sits ahead of the SHELVING_OFFLINE guard, so a bad
+    # comment is fatal rather than skipped.
+    assert main([], fetch=_exploding_fetch, retry_sleep=0.0) == 1
+
+    captured = capsys.readouterr()
+    assert "skipped (SHELVING_OFFLINE)" not in captured.err
+    assert "# vX.Y.Z" in captured.err
 
 
 # --------------------------------------------------------------------------- #
