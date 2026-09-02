@@ -28,8 +28,9 @@ bash tools/vendor-core.sh --check
 pytest shelving_core tests
 bash tools/lint-workflows.sh
 
-# freecadcmd does not propagate a script's exit status, so the smoke script's
-# printed OK line is the pass signal, not its return code.
+# freecadcmd does not propagate a script's exit status (see
+# docs/freecadcmd-notes.md), so the smoke script's printed OK line is the pass
+# signal, not its return code.
 smoke_output="$(freecadcmd tools/freecad_smoke.py 2>&1)" || true
 printf '%s\n' "$smoke_output"
 if ! printf '%s\n' "$smoke_output" | grep -q "shelving workbench import OK"; then
