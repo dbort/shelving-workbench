@@ -177,7 +177,7 @@ Friction log: record any workaround per `CLAUDE.md` in
 
 ## Execution Plan
 
-- [ ] **Step 1** (`shelving_core/materials.py`, `shelving_core/materials.schema.json`): Implement `MaterialId`, `MATERIALS_SCHEMA_VERSION`, `MaterialEntry` (+ `__post_init__` guards), `Catalog` (`__getitem__`/`get`/`__contains__`/`__iter__`), the `MaterialEntryDoc`/`CatalogDoc` TypedDicts, and `to_dict`/`from_dict`/`to_json`/`from_json` per CATALOG DOC FORMAT. Author `materials.schema.json` (Draft 2020-12) to match, with `additionalProperties: false` and `thickness_mm` `exclusiveMinimum: 0`. Imports: standard library only; nothing from `shelving_core`.
+- [x] **Step 1** (`shelving_core/materials.py`, `shelving_core/materials.schema.json`): Implement `MaterialId`, `MATERIALS_SCHEMA_VERSION`, `MaterialEntry` (+ `__post_init__` guards), `Catalog` (`__getitem__`/`get`/`__contains__`/`__iter__`), the `MaterialEntryDoc`/`CatalogDoc` TypedDicts, and `to_dict`/`from_dict`/`to_json`/`from_json` per CATALOG DOC FORMAT. Author `materials.schema.json` (Draft 2020-12) to match, with `additionalProperties: false` and `thickness_mm` `exclusiveMinimum: 0`. Imports: standard library only; nothing from `shelving_core`.
 
 - [ ] **Step 2** (`shelving_core/layout.py`, `shelving_core/layout.schema.json`): Import `MaterialId` from `.materials`. `Carcass`: drop `default_thickness_mm`, add `default_material: MaterialId` and trailing `id: str = field(default_factory=new_id)`, update `__post_init__`, `to_dict`/`from_dict`, `CarcassBody`. `Divider`: drop `thickness_mm`, add `material: MaterialId | None = None` and `lap: Literal["captured","through"] | None = None`, update `__post_init__`, `to_dict`/`from_dict`, `DividerDoc`. Update `layout.schema.json` per Must Have. Keep `SCHEMA_VERSION = 1`.
 
