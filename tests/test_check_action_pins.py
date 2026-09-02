@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import urllib.error
 import urllib.parse
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 import pytest
@@ -45,7 +45,7 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
     pytest process; a token may sit in the ambient environment too. Every case
     that wants one sets it explicitly.
     """
-    for name in ("SHELVING_OFFLINE", "GH_TOKEN", "GITHUB_TOKEN"):
+    for name in ("SHELVING_OFFLINE", "GH_TOKEN", "GITHUB_TOKEN", "GITHUB_API_URL"):
         monkeypatch.delenv(name, raising=False)
 
 
@@ -57,7 +57,9 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_workflow_pins_parses_both_extensions_and_strips_path_segments(
     tmp_path: Path,
 ) -> None:
-    (tmp_path / "ci.yml").write_text(
+    workflows = tmp_path / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "ci.yml").write_text(
         "jobs:\n"
         "  build:\n"
         "    steps:\n"
@@ -67,18 +69,25 @@ def test_workflow_pins_parses_both_extensions_and_strips_path_segments(
         "      - name: not a uses line\n",
         encoding="utf-8",
     )
-    (tmp_path / "release.yaml").write_text(
+    (workflows / "release.yaml").write_text(
         f"      - uses: step-security/harden-runner@{SHA_C} # v2.10.4\n",
         encoding="utf-8",
     )
 
-    pins = workflow_pins(tmp_path)
+    pins = workflow_pins(workflows)
 
     assert isinstance(pins, tuple)
+    # `file` carries the workflow path, not the bare basename, so a failure
+    # line points at the file to edit.
     assert pins == (
-        Pin("actions/checkout", "v4.2.2", SHA_A, "ci.yml"),
-        Pin("github/codeql-action", "v3.28.1", SHA_B, "ci.yml"),
-        Pin("step-security/harden-runner", "v2.10.4", SHA_C, "release.yaml"),
+        Pin("actions/checkout", "v4.2.2", SHA_A, ".github/workflows/ci.yml"),
+        Pin("github/codeql-action", "v3.28.1", SHA_B, ".github/workflows/ci.yml"),
+        Pin(
+            "step-security/harden-runner",
+            "v2.10.4",
+            SHA_C,
+            ".github/workflows/release.yaml",
+        ),
     )
 
 
@@ -113,18 +122,26 @@ def test_workflow_pins_ignores_unpinned_and_mis_commented_lines(tmp_path: Path) 
 def test_classify_status_returns_a_reason_for_every_failure_class(
     status: int, needle: str
 ) -> None:
-    reason = classify_status(status, "owner/repo@v1.0.0")
+    reason = classify_status(status, "https://api.example", "owner/repo@v1.0.0")
     assert reason is not None
     assert needle in reason
     assert "owner/repo@v1.0.0" in reason
 
 
 def test_classify_status_200_is_the_verified_path() -> None:
-    assert classify_status(200, "owner/repo@v1.0.0") is None
+    assert classify_status(200, "https://api.example", "owner/repo@v1.0.0") is None
+
+
+def test_classify_status_connection_failure_names_the_api_base() -> None:
+    # The base is the one detail that matters when GITHUB_API_URL is overridden
+    # to an unreachable host.
+    reason = classify_status(0, "https://ghe.internal", "owner/repo@v1.0.0")
+    assert reason is not None
+    assert "https://ghe.internal" in reason
 
 
 def test_classify_status_rate_limit_names_the_token_fix() -> None:
-    reason = classify_status(403, "owner/repo@v1.0.0")
+    reason = classify_status(403, "https://api.example", "owner/repo@v1.0.0")
     assert reason is not None
     assert "GH_TOKEN" in reason
     assert "GITHUB_TOKEN" in reason
@@ -189,6 +206,17 @@ def test_resolve_commit_rejects_an_unexpected_payload_shape() -> None:
     with pytest.raises(ResolveError) as caught:
         resolve_commit(fetch, "https://api", "actions/checkout", "v4.2.2")
     assert "unexpected API response" in str(caught.value)
+
+
+def test_resolve_commit_turns_a_non_json_200_into_a_fatal_reason() -> None:
+    # A proxy or captive portal answering 200 with HTML: body is None, and the
+    # module classifies it rather than letting a parse error escape.
+    def fetch(url: str) -> FetchResult:
+        return FetchResult(200, None)
+
+    with pytest.raises(ResolveError) as caught:
+        resolve_commit(fetch, "https://api", "actions/checkout", "v4.2.2")
+    assert "unparseable response (HTTP 200)" in str(caught.value)
 
 
 # --------------------------------------------------------------------------- #
@@ -272,6 +300,9 @@ def test_auth_headers_falls_back_to_github_token() -> None:
         "http://127.0.0.1:8080",
         "https://ghe.example.com",
         "https://api.github.com.evil.com",
+        # urlsplit() puts the real host after the `@`; the userinfo prefix must
+        # not be mistaken for api.github.com.
+        "https://api.github.com@evil/",
     ],
 )
 def test_auth_headers_withholds_the_bearer_from_any_other_host(base: str) -> None:
@@ -325,3 +356,99 @@ def test_main_fails_and_names_every_offender_when_no_pin_matches(
     for pin in workflow_pins(WORKFLOW_DIR):
         assert pin.repo in captured.err, pin
         assert pin.sha in captured.err, pin
+        # The failure line carries the workflow path, not the bare basename.
+        assert pin.file in captured.err, pin
+
+
+def test_main_names_the_api_base_when_the_connection_fails(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("GITHUB_API_URL", "https://ghe.invalid")
+
+    def stub(url: str) -> FetchResult:
+        raise urllib.error.URLError("no route to host")
+
+    assert main([], fetch=stub, retry_sleep=0.0) != 0
+
+    captured = capsys.readouterr()
+    assert "https://ghe.invalid" in captured.err
+    assert "connection failed" in captured.err
+
+
+def test_main_flags_a_non_json_200_without_a_traceback(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def stub(url: str) -> FetchResult:
+        return FetchResult(200, None)
+
+    assert main([], fetch=stub, retry_sleep=0.0) != 0
+
+    captured = capsys.readouterr()
+    assert "verified" not in captured.out
+    assert "unparseable response (HTTP 200)" in captured.err
+
+
+# --------------------------------------------------------------------------- #
+# main  (the 5xx retry loop: bound pinned from both sides)
+# --------------------------------------------------------------------------- #
+
+
+Responder = Callable[[str, int], FetchResult]
+
+
+class _CountingFetch:
+    """A fetch stub that records how many HTTP calls ``main`` drives through it."""
+
+    def __init__(self, responder: Responder) -> None:
+        self._responder = responder
+        self.calls = 0
+
+    def __call__(self, url: str) -> FetchResult:
+        self.calls += 1
+        return self._responder(url, self.calls)
+
+
+def test_main_retries_a_persistent_5xx_exactly_twice_per_pin(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def always_500(url: str, _call: int) -> FetchResult:
+        return FetchResult(500, {})
+
+    fetch = _CountingFetch(always_500)
+    pin_count = len(workflow_pins(WORKFLOW_DIR))
+
+    assert main([], fetch=fetch, retry_sleep=0.0) != 0
+
+    # One initial attempt plus two retries, and no more, for every pin.
+    assert fetch.calls == 3 * pin_count
+
+    captured = capsys.readouterr()
+    assert "server error (HTTP 500)" in captured.err
+    assert "after retries" in captured.err
+
+
+def test_main_stops_retrying_once_a_5xx_call_succeeds(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    expected = {(pin.repo, pin.tag): pin.sha for pin in workflow_pins(WORKFLOW_DIR)}
+
+    def flaky_first_pin(url: str, call: int) -> FetchResult:
+        # The first pin's first two attempts 5xx, the third succeeds; every
+        # later call succeeds outright.
+        if call <= 2:
+            return FetchResult(500, {})
+        repo, tag = _ref_url_repo_and_tag(url)
+        return FetchResult(
+            200, {"object": {"type": "commit", "sha": expected[(repo, tag)]}}
+        )
+
+    fetch = _CountingFetch(flaky_first_pin)
+    pin_count = len(workflow_pins(WORKFLOW_DIR))
+
+    assert main([], fetch=fetch, retry_sleep=0.0) == 0
+
+    # Two retries on the first pin, then one clean call per remaining pin: the
+    # loop never fires again once a retry lands.
+    assert fetch.calls == pin_count + 2
+
+    assert f"verified {pin_count}/{pin_count} pins" in capsys.readouterr().out

@@ -1,21 +1,13 @@
 #!/usr/bin/env bash
 #
-# Lint the GitHub Actions workflows against this repo's hardening standard.
+# Lint the GitHub Actions workflows against this repo's hardening standard
+# (see docs/github-actions-hardening.md). One invocation runs every check and
+# exits non-zero if any of them fails.
 #
-# One invocation, five fatal checks (see docs/github-actions-hardening.md):
-#
-#   1. actionlint over .github/workflows/       - schema + `run:` shellcheck
-#   2. zizmor --offline over .github/workflows/ - Actions security audit
-#   3. an offline pin-format check              - every `uses:` is
-#                                                 owner/repo@<40-hex> # vX.Y.Z
-#   4. check-jsonschema vendor.dependabot       - .github/dependabot.yml schema
-#   5. check_action_pins.py                     - each pinned SHA is the commit
-#                                                 its `# vX.Y.Z` tag names
-#
-# Checks 1-4 run offline and take no GitHub token; check 5 calls the GitHub API
-# and is fatal on a network failure unless SHELVING_OFFLINE=1 (set by
-# `pixi run tests -- --offline`) makes it skip itself. All five run every time;
-# the script exits non-zero if any of them fails.
+# All but one check run offline and need no GitHub token. The exception
+# resolves each pinned SHA against the GitHub API and is fatal on a network
+# failure, unless SHELVING_OFFLINE=1 (set by `pixi run tests -- --offline`)
+# makes it skip itself before the first request.
 #
 set -euo pipefail
 
@@ -37,7 +29,7 @@ run_check() {
 	fi
 }
 
-# 3. Offline pin-format check. Kept as a shell function so it runs with no
+# Offline pin-format check. Kept as a shell function so it runs with no
 # network and no third-party tool: every `uses:` must name a full 40-hex
 # commit SHA with a trailing `# vX.Y.Z` release comment. The action reference
 # before `@` may carry extra path segments (e.g. github/codeql-action/upload-sarif).

@@ -51,7 +51,12 @@ _PIN_RE = re.compile(
 
 
 class Pin(NamedTuple):
-    """One SHA-pinned ``uses:`` entry from a workflow file."""
+    """One SHA-pinned ``uses:`` entry from a workflow file.
+
+    ``file`` carries the workflow's path relative to the repo
+    (``.github/workflows/ci.yml``), so a failure line points straight at the
+    file to edit rather than a bare basename.
+    """
 
     repo: str
     tag: str
@@ -63,11 +68,14 @@ class FetchResult(NamedTuple):
     """An HTTP response reduced to what pin resolution needs.
 
     ``status`` is ``0`` for a connection-level failure so ``classify_status``
-    can treat "never got an answer" as one more fatal case.
+    can treat "never got an answer" as one more fatal case. ``body`` is ``None``
+    when a response arrived but its payload was not JSON (a proxy or captive
+    portal answering 200 with HTML), which pin resolution reports as fatal
+    rather than crashing on the parse.
     """
 
     status: int
-    body: Mapping[str, object]
+    body: Mapping[str, object] | None
 
 
 Fetch = Callable[[str], FetchResult]
@@ -99,20 +107,23 @@ def workflow_pins(directory: Path) -> tuple[Pin, ...]:
                 continue
             ref, sha, version = match.group(1), match.group(2), match.group(3)
             repo = "/".join(ref.split("/")[:2])
-            pins.append(Pin(repo, f"v{version}", sha, path.name))
+            rel = f"{directory.parent.name}/{directory.name}/{path.name}"
+            pins.append(Pin(repo, f"v{version}", sha, rel))
     return tuple(pins)
 
 
-def classify_status(status: int, what: str) -> str | None:
+def classify_status(status: int, base: str, what: str) -> str | None:
     """Map an HTTP status to ``None`` (verified path) or a fatal reason string.
 
     Pure: the caller has already made the call and, for 5xx, already exhausted
-    its retries. ``status == 0`` means the request never completed.
+    its retries. ``status == 0`` means the request never completed; ``base`` is
+    named in that reason because it is the one failure that turns on a
+    misconfigured or unreachable ``GITHUB_API_URL`` override.
     """
     if status == 200:
         return None
     if status == 0:
-        return f"cannot reach the API for {what}: connection failed"
+        return f"cannot reach {base} for {what}: connection failed"
     if status in (403, 429):
         return (
             f"rate limited (HTTP {status}) for {what}; set GH_TOKEN or "
@@ -173,6 +184,13 @@ def _fetch_catching(fetch: Fetch, url: str) -> FetchResult:
         return FetchResult(0, {})
 
 
+def _require_json(result: FetchResult, what: str) -> Mapping[str, object]:
+    """The parsed body, or a fatal reason when a 200 carried a non-JSON payload."""
+    if result.body is None:
+        raise ResolveError(f"unparseable response (HTTP {result.status}) for {what}")
+    return result.body
+
+
 def resolve_commit(fetch: Fetch, base: str, repo: str, tag: str) -> str:
     """Commit SHA that ``tag`` names for ``repo``, following an annotated tag.
 
@@ -180,11 +198,11 @@ def resolve_commit(fetch: Fetch, base: str, repo: str, tag: str) -> str:
     a connection failure, or an unexpected payload shape.
     """
     ref_result = _fetch_catching(fetch, f"{base}/repos/{repo}/git/ref/tags/{tag}")
-    reason = classify_status(ref_result.status, f"{repo}@{tag}")
+    reason = classify_status(ref_result.status, base, f"{repo}@{tag}")
     if reason is not None:
         raise ResolveError(reason)
 
-    fields = _object_fields(ref_result.body)
+    fields = _object_fields(_require_json(ref_result, f"{repo}@{tag}"))
     if fields is None:
         raise ResolveError(f"unexpected API response resolving {repo} ref {tag}")
     obj_type, obj_sha = fields
@@ -195,10 +213,10 @@ def resolve_commit(fetch: Fetch, base: str, repo: str, tag: str) -> str:
         raise ResolveError(f"unexpected tag object type {obj_type!r} for {repo}@{tag}")
 
     tag_result = _fetch_catching(fetch, f"{base}/repos/{repo}/git/tags/{obj_sha}")
-    reason = classify_status(tag_result.status, f"{repo} tag object for {tag}")
+    reason = classify_status(tag_result.status, base, f"{repo} tag object for {tag}")
     if reason is not None:
         raise ResolveError(reason)
-    deref = _object_fields(tag_result.body)
+    deref = _object_fields(_require_json(tag_result, f"{repo} tag object for {tag}"))
     if deref is None:
         raise ResolveError(
             f"unexpected API response dereferencing {repo} tag object for {tag}"
@@ -221,16 +239,23 @@ def _http_fetch(url: str, headers: Mapping[str, str]) -> FetchResult:
     )
     try:
         with urllib.request.urlopen(request, timeout=20) as response:
-            # json.load's return is Any by construction (arbitrary external
-            # JSON); it is pinned to `object` here and narrowed by _as_mapping.
-            payload: object = json.load(response)
             status = int(response.status)
+            raw = response.read()
     except urllib.error.HTTPError as error:
+        status = int(error.code)
         try:
-            payload = json.loads(error.read() or b"{}")
+            # json.loads' return is Any by construction (arbitrary external
+            # JSON); it is pinned to `object` and narrowed by _as_mapping.
+            payload: object = json.loads(error.read() or b"{}")
         except ValueError:
             payload = {}
-        status = int(error.code)
+        return FetchResult(status, _as_mapping(payload))
+    try:
+        payload = json.loads(raw)
+    except ValueError:
+        # A proxy or captive portal can answer 200 with HTML; report that as a
+        # classified fatal rather than crashing on the parse.
+        return FetchResult(status, None)
     return FetchResult(status, _as_mapping(payload))
 
 
