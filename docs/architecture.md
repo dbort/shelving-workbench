@@ -77,7 +77,7 @@ form" the workbench produces.
 | Plank representation | `Part::FeaturePython` solid rebuilt from the tree; base geometry kept isolable so a later "promote to PartDesign Body" path is clean |
 | Container | `App::Part`, for `App::Link` and built-in Assembly compatibility and a single rigid-body `Placement` |
 | Assembly | v1 uses plain `Placement`. The container stays compatible with the FreeCAD 1.0 built-in Assembly workbench |
-| Material model | Document-level catalog object. Required field: actual thickness. All other fields optional. Planks reference stock by UUID; unit has a default, any node may override |
+| Material model | Document-level catalog object. Required fields: actual thickness and material type. All other fields optional. Planks reference stock by UUID; unit has a default, any node may override |
 | Parameter storage | Full split-tree serialised to a hidden `App::PropertyString` (JSON) on the container. Common knobs (overall W/H/D, default material) also promoted to first-class properties |
 | 2.5D editor | Modal task panel, `QGraphicsView` elevation, live 3D preview, OK/Cancel wrapping one document transaction |
 | Coordinates | Front elevation on the XZ plane (X right, Z up); depth runs +Y away from the viewer. Unit origin at the front-bottom-left corner. One depth for the whole unit in v1; per-bay depth override reserved in the schema |
@@ -103,16 +103,17 @@ and a root `Bay`. A `Bay` is either:
   two or more child `Bay`s, one `SplitRule` per child, and one fewer
   `Divider` than children (one per gap between consecutive children).
 
-`Carcass` carries a `default_thickness_mm`, used both for the carcass
-panels and as the thickness of any `Divider` that does not set its own,
-until M2 introduces the material catalog.
+`Carcass` carries a `default_material`, a catalog id whose thickness
+applies to the carcass shell panels and to any `Divider` that sets no
+`material` of its own.
 
 Lengths are plain `float` fields whose names carry an `_mm` suffix; there
 is no dedicated units type.
 
-Every node carries a UUID assigned at creation and preserved across all
-edits. Serialisation is a JSON object mirroring this structure, stored on
-the container. A small schema version field allows later migration.
+Every node, the `Carcass` included, carries a UUID assigned at creation
+and preserved across all edits. Serialisation is a JSON object mirroring
+this structure, stored on the container. A small schema version field
+allows later migration.
 
 ### The spacing solver
 
@@ -125,11 +126,12 @@ Given a parent span and a list of sibling openings, each with a
   to its weight. Driven.
 - **fill**: weight-1 shorthand. Driven.
 
-Divider thickness (from the divider's material) is subtracted from the
-parent span before leftover space is distributed. If the fixed openings
-plus divider thicknesses exceed the parent span, the solve fails with a
-structured error naming the offending bay; the FreeCAD layer turns this
-into a recompute error.
+`solve(carcass, catalog)` resolves `default_material` and each
+`Divider.material` against the catalog to a panel thickness. Divider
+thickness is subtracted from the parent span before leftover space is
+distributed. If the fixed openings plus divider thicknesses exceed the
+parent span, the solve fails with a structured error naming the offending
+bay; the FreeCAD layer turns this into a recompute error.
 
 Rules are never edited through an explicit control in v1. A freshly split
 bay's two children are both `fill`. Typing a dimension on an opening or
@@ -218,11 +220,13 @@ assembly-specific code ships in v1.
 ## Material catalog
 
 A document-level object (Python proxy over a plain data table, so the same
-structure is what `shelving_core` consumes). Each entry: `id` (UUID),
-`name`, `thickness` (required), and optional `nominal_label`,
-`sheet_size`, `grain_default`, `appearance`. The workbench ships a small
-default catalog seeded into a document on first unit creation. Editing an
-entry touches every `ShelvingUnit` that references it, triggering reflow.
+structure is what `shelving_core` consumes). Each entry carries `id`,
+`name`, `thickness_mm`, and `material_type` (all required), plus an
+optional `nominal_thickness` label. Sheet size, grain default, and
+appearance arrive with the milestones that consume them. The workbench
+ships a small default catalog seeded into a document on first unit
+creation. Editing an entry touches every `ShelvingUnit` that references
+it, triggering reflow.
 
 ## Repository layout
 
