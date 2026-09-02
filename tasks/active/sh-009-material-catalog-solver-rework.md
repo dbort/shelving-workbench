@@ -1,8 +1,8 @@
 ---
 id: sh-009
 title: "Material catalog + solver rework (M2, part 1)"
-current_agent: reviewer
-current_phase: review
+current_agent: user
+current_phase: user_signoff
 review_rejections: 0
 ---
 
@@ -21,7 +21,7 @@ with it. This is part 1 of 2 for milestone M2; `shelving_core.expand` and
 ## Status
 - [x] Planning
 - [x] Implementation
-- [ ] Review
+- [x] Review
 - [ ] User sign-off
 
 ## Must Have
