@@ -1,7 +1,8 @@
 """Spacing solver: a ``Carcass`` split-tree plus outer dimensions to 2D rects.
 
-``solve`` insets the carcass by its default thickness, then walks the tree
-placing one :class:`Rect` per ``Leaf``, ``Split``, and ``Divider`` id. Slack
+``solve`` insets the carcass by its default material's panel thickness, then
+walks the tree placing one :class:`Rect` per ``Leaf``, ``Split``, and
+``Divider`` id. Slack
 along a split's axis is distributed by :func:`distribute`, a pure function that
 knows nothing about rectangles or the tree. A layout that cannot be satisfied
 raises :class:`LayoutSolveError` with a machine-readable ``reason`` and the id of
@@ -27,6 +28,7 @@ from shelving_core.layout import (
     SplitRule,
     Weighted,
 )
+from shelving_core.materials import Catalog
 
 EPS_MM: float = 1e-6
 
@@ -140,9 +142,9 @@ def distribute(
     return sizes
 
 
-def _interior_rect(carcass: Carcass) -> Rect:
+def _interior_rect(carcass: Carcass, default_thickness_mm: float) -> Rect:
     """Carcass exterior inset by ``default_thickness_mm`` on all four sides."""
-    thickness_mm = carcass.default_thickness_mm
+    thickness_mm = default_thickness_mm
     width_mm = carcass.width_mm - 2 * thickness_mm
     height_mm = carcass.height_mm - 2 * thickness_mm
     if width_mm <= EPS_MM or height_mm <= EPS_MM:
@@ -163,16 +165,28 @@ def _interior_rect(carcass: Carcass) -> Rect:
     )
 
 
-def _effective_thicknesses(split: Split, default_thickness_mm: float) -> list[float]:
-    """Resolved thickness per divider: its own, or the carcass default if ``None``."""
+def _effective_thicknesses_mm(
+    split: Split, catalog: Catalog, default_thickness_mm: float
+) -> list[float]:
+    """Resolved thickness per divider: its material's, or the carcass default.
+
+    A ``Divider`` whose ``material`` is set but absent from ``catalog`` raises
+    ``KeyError`` from :meth:`Catalog.__getitem__`.
+    """
     return [
-        default_thickness_mm if divider.thickness_mm is None else divider.thickness_mm
+        default_thickness_mm
+        if divider.material is None
+        else catalog[divider.material].thickness_mm
         for divider in split.dividers
     ]
 
 
 def _place(
-    bay: Bay, rect: Rect, out: dict[str, Rect], default_thickness_mm: float
+    bay: Bay,
+    rect: Rect,
+    out: dict[str, Rect],
+    catalog: Catalog,
+    default_thickness_mm: float,
 ) -> None:
     """Record one :class:`Rect` per node id in the subtree rooted at ``bay``.
 
@@ -180,16 +194,18 @@ def _place(
     ``height_mm`` along Z; a ``VERTICAL`` split shares its ``width_mm`` along X.
     Children are laid from the low edge in list order, each filling the parent's
     cross axis; every divider fills the gap between two consecutive children.
-    ``default_thickness_mm`` resolves any ``Divider`` that does not set its own
-    thickness. A resolved opening ``<= EPS_MM`` raises
-    :class:`LayoutSolveError` against that child bay's id.
+    ``catalog`` and ``default_thickness_mm`` resolve each ``Divider``'s
+    thickness (its own material, or the carcass default). A resolved opening
+    ``<= EPS_MM`` raises :class:`LayoutSolveError` against that child bay's id.
     """
     match bay:
         case Leaf():
             out[bay.id] = rect
         case Split():
             out[bay.id] = rect
-            thicknesses_mm = _effective_thicknesses(bay, default_thickness_mm)
+            thicknesses_mm = _effective_thicknesses_mm(
+                bay, catalog, default_thickness_mm
+            )
             horizontal = bay.orientation is Orientation.HORIZONTAL
             axis_span_mm = rect.height_mm if horizontal else rect.width_mm
             sizes_mm = distribute(
@@ -219,7 +235,7 @@ def _place(
                         width_mm=size_mm,
                         height_mm=rect.height_mm,
                     )
-                _place(child, child_rect, out, default_thickness_mm)
+                _place(child, child_rect, out, catalog, default_thickness_mm)
                 cursor_mm += size_mm
                 if index < len(thicknesses_mm):
                     thickness_mm = thicknesses_mm[index]
@@ -241,9 +257,17 @@ def _place(
                     cursor_mm += thickness_mm
 
 
-def solve(carcass: Carcass) -> SolvedLayout:
-    """Place every ``Leaf``, ``Split``, and ``Divider`` id in one :class:`Rect`."""
-    interior_rect = _interior_rect(carcass)
+def solve(carcass: Carcass, catalog: Catalog) -> SolvedLayout:
+    """Place every ``Leaf``, ``Split``, and ``Divider`` id in one :class:`Rect`.
+
+    Panel thickness comes from ``catalog``: the carcass shell and any
+    ``Divider`` without its own ``material`` use
+    ``catalog[carcass.default_material].thickness_mm``. A ``default_material``
+    or ``Divider.material`` id absent from ``catalog`` raises ``KeyError`` from
+    :meth:`Catalog.__getitem__`, not :class:`LayoutSolveError`.
+    """
+    default_thickness_mm = catalog[carcass.default_material].thickness_mm
+    interior_rect = _interior_rect(carcass, default_thickness_mm)
     out: dict[str, Rect] = {}
-    _place(carcass.root, interior_rect, out, carcass.default_thickness_mm)
+    _place(carcass.root, interior_rect, out, catalog, default_thickness_mm)
     return SolvedLayout(rect_by_id=out)

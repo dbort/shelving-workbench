@@ -1,8 +1,8 @@
 ---
 id: sh-009
 title: "Material catalog + solver rework (M2, part 1)"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 0
 ---
 
@@ -20,7 +20,7 @@ with it. This is part 1 of 2 for milestone M2; `shelving_core.expand` and
 
 ## Status
 - [x] Planning
-- [ ] Implementation
+- [x] Implementation
 - [ ] Review
 - [ ] User sign-off
 
@@ -179,16 +179,16 @@ Friction log: record any workaround per `CLAUDE.md` in
 
 - [x] **Step 1** (`shelving_core/materials.py`, `shelving_core/materials.schema.json`): Implement `MaterialId`, `MATERIALS_SCHEMA_VERSION`, `MaterialEntry` (+ `__post_init__` guards), `Catalog` (`__getitem__`/`get`/`__contains__`/`__iter__`), the `MaterialEntryDoc`/`CatalogDoc` TypedDicts, and `to_dict`/`from_dict`/`to_json`/`from_json` per CATALOG DOC FORMAT. Author `materials.schema.json` (Draft 2020-12) to match, with `additionalProperties: false` and `thickness_mm` `exclusiveMinimum: 0`. Imports: standard library only; nothing from `shelving_core`.
 
-- [ ] **Step 2** (`shelving_core/layout.py`, `shelving_core/layout.schema.json`): Import `MaterialId` from `.materials`. `Carcass`: drop `default_thickness_mm`, add `default_material: MaterialId` and trailing `id: str = field(default_factory=new_id)`, update `__post_init__`, `to_dict`/`from_dict`, `CarcassBody`. `Divider`: drop `thickness_mm`, add `material: MaterialId | None = None` and `lap: Literal["captured","through"] | None = None`, update `__post_init__`, `to_dict`/`from_dict`, `DividerDoc`. Update `layout.schema.json` per Must Have. Keep `SCHEMA_VERSION = 1`.
+- [x] **Step 2** (`shelving_core/layout.py`, `shelving_core/layout.schema.json`): Import `MaterialId` from `.materials`. `Carcass`: drop `default_thickness_mm`, add `default_material: MaterialId` and trailing `id: str = field(default_factory=new_id)`, update `__post_init__`, `to_dict`/`from_dict`, `CarcassBody`. `Divider`: drop `thickness_mm`, add `material: MaterialId | None = None` and `lap: Literal["captured","through"] | None = None`, update `__post_init__`, `to_dict`/`from_dict`, `DividerDoc`. Update `layout.schema.json` per Must Have. Keep `SCHEMA_VERSION = 1`.
 
-- [ ] **Step 3** (`shelving_core/solver.py`): `solve(carcass, catalog)`. Resolve `default_thickness_mm` from the catalog; thread `catalog` + `default_thickness_mm` through `_interior_rect`, `_place`, and `_effective_thicknesses_mm` (renamed from `_effective_thicknesses` for the `_mm` convention; divider material -> thickness, else `default_thickness_mm`). Leave `distribute` and all other logic byte-identical. Import `Catalog` from `.materials`.
+- [x] **Step 3** (`shelving_core/solver.py`): `solve(carcass, catalog)`. Resolve `default_thickness_mm` from the catalog; thread `catalog` + `default_thickness_mm` through `_interior_rect`, `_place`, and `_effective_thicknesses_mm` (renamed from `_effective_thicknesses` for the `_mm` convention; divider material -> thickness, else `default_thickness_mm`). Leave `distribute` and all other logic byte-identical. Import `Catalog` from `.materials`.
 
-- [ ] **Step 4** (`shelving_core/svg.py`, `shelving_core/tests/test_layout.py`, `shelving_core/tests/test_solver.py`, `shelving_core/tests/test_schema.py`, `shelving_core/tests/test_svg.py`): Drop the `default thickness` clause from the `to_svg` title. Update the four test modules to `default_material` + `Catalog` + `solve(carcass, catalog)` + `Divider(material=/lap=)`, adjust JSON/schema expectations, update/drop the removed value-guard tests, and add the new `default_material` / `lap` guard tests and the extended round-trip assertions per Must Have "Tests — reworked".
+- [x] **Step 4** (`shelving_core/svg.py`, `shelving_core/tests/test_layout.py`, `shelving_core/tests/test_solver.py`, `shelving_core/tests/test_schema.py`, `shelving_core/tests/test_svg.py`): Drop the `default thickness` clause from the `to_svg` title. Update the four test modules to `default_material` + `Catalog` + `solve(carcass, catalog)` + `Divider(material=/lap=)`, adjust JSON/schema expectations, update/drop the removed value-guard tests, and add the new `default_material` / `lap` guard tests and the extended round-trip assertions per Must Have "Tests — reworked".
 
-- [ ] **Step 5** (`shelving_core/tests/test_materials.py`, `shelving_core/tests/test_materials_schema.py`): Write the two new suites per Must Have "Tests — new". `test_materials_schema.py` uses `jsonschema`.
+- [x] **Step 5** (`shelving_core/tests/test_materials.py`, `shelving_core/tests/test_materials_schema.py`): Write the two new suites per Must Have "Tests — new". `test_materials_schema.py` uses `jsonschema`.
 
-- [ ] **Step 6** (`tools/layout_demo.py`, `tests/test_layout_demo.py`): Add the in-code `Catalog` (two entries, one divider overriding to the 12 mm entry), switch the `solve` call to pass the catalog, replace the header's `default thickness <n> mm` text with `default material <name>`. Update the `tests/test_layout_demo.py` header assertion. Run `python tools/layout_demo.py`; confirm exit 0.
+- [x] **Step 6** (`tools/layout_demo.py`, `tests/test_layout_demo.py`): Add the in-code `Catalog` (two entries, one divider overriding to the 12 mm entry), switch the `solve` call to pass the catalog, replace the header's `default thickness <n> mm` text with `default material <name>`. Update the `tests/test_layout_demo.py` header assertion. Run `python tools/layout_demo.py`; confirm exit 0.
 
-- [ ] **Step 7** (`docs/architecture.md`): Apply the scoped edits in Must Have "Docs": the split-tree `default_material` sentence + Carcass-UUID note, the solver-takes-catalog note, the "## Material catalog" field list, the "Material model" decisions row. Nothing else.
+- [x] **Step 7** (`docs/architecture.md`): Apply the scoped edits in Must Have "Docs": the split-tree `default_material` sentence + Carcass-UUID note, the solver-takes-catalog note, the "## Material catalog" field list, the "Material model" decisions row. Nothing else.
 
-- [ ] **Step 8** (`freecad/shelving/vendor/shelving_core/`): Run `bash tools/vendor-core.sh`, commit the refreshed vendored copy (now including `materials.py`, `materials.schema.json`). Run `pixi run tests` and confirm the whole chain is green.
+- [x] **Step 8** (`freecad/shelving/vendor/shelving_core/`): Run `bash tools/vendor-core.sh`, commit the refreshed vendored copy (now including `materials.py`, `materials.schema.json`). Run `pixi run tests` and confirm the whole chain is green.
