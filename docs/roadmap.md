@@ -6,7 +6,8 @@ in FreeCAD. Milestones become `sh-XXX` tasks through the normal pipeline.
 
 ## Status legend
 
-Every milestone carries a **Status** line, one of:
+Every milestone carries a **Status** line. A milestone delivered by one
+task uses:
 
 - **Planned** — no task exists yet.
 - **Task sh-XXX** — a task file exists and is moving through the pipeline.
@@ -17,6 +18,35 @@ Every milestone carries a **Status** line, one of:
 Set **Task sh-XXX** in the same change that creates the task file. The
 flip to **Done sh-XXX** is made by `approve-task` when the branch merges
 to `main`, never by the task's own implementation or review steps.
+
+### Milestones split across several tasks
+
+A milestone too large for one task lists each delivering task in a
+checklist directly under its **Status** line, and the **Status** line
+becomes a rollup:
+
+- **Planned** — no task file exists yet.
+- **Tasks sh-XXX, sh-YYY, …** — at least one task file exists; the line
+  names every task in the split, in dependency order.
+- **Done sh-XXX, sh-YYY, …** — every task in the split has merged to
+  `main`.
+
+The checklist carries one line per task, `- [ ] sh-XXX — <what it
+delivers>`, with `(blocked on sh-YYY)` appended where a dependency
+applies:
+
+    **Status:** Tasks sh-009, sh-010
+
+    - [x] sh-009 — material catalog + solver rework
+    - [ ] sh-010 — carcass expansion (blocked on sh-009)
+
+`new-task` writes this block when it creates a task file for the
+milestone: it adds the checklist, converting a single-task milestone if
+needed, and keeps the **Status** id list in sync. `approve-task` ticks a
+task's box when its branch merges and flips the rollup to **Done …** as
+it ticks the last box. The human-gate rule is unchanged: no agent ticks a
+box or edits the **Status** line outside `approve-task`, or `new-task` at
+task creation.
 
 ## M0 — Scaffold
 
@@ -42,11 +72,17 @@ for a sample layout so the distribution is eyeballable.
 
 ## M2 — Carcass expansion, no FreeCAD
 
-**Status:** Task sh-009
+**Status:** Tasks sh-009, sh-010
+
+- [ ] sh-009 — material catalog (`shelving_core.materials`) and reworking the
+  spacing solver to resolve panel thickness from the catalog
+- [ ] sh-010 — carcass expansion (`shelving_core.expand`): the `PlankSpec`
+  list, the lap rule, the coordinate convention (blocked on sh-009)
 
 `shelving_core.expand` and `shelving_core.materials`: catalog data
 model, expansion to a `PlankSpec` list, per-joint lap order, coordinate
-convention, per-node material and depth overrides.
+convention, per-node material overrides (per-node depth override deferred
+past M2).
 
 *Verify:* pytest asserting plank sizes, placements, and total volume for
 sample units; the print script gains a plank table.
