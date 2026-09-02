@@ -2,16 +2,20 @@
 #
 # Lint the GitHub Actions workflows against this repo's hardening standard.
 #
-# One invocation, four fatal checks (see docs/github-actions-hardening.md):
+# One invocation, five fatal checks (see docs/github-actions-hardening.md):
 #
 #   1. actionlint over .github/workflows/       - schema + `run:` shellcheck
 #   2. zizmor --offline over .github/workflows/ - Actions security audit
 #   3. an offline pin-format check              - every `uses:` is
 #                                                 owner/repo@<40-hex> # vX.Y.Z
 #   4. check-jsonschema vendor.dependabot       - .github/dependabot.yml schema
+#   5. check-action-pins.sh                     - each pinned SHA is the commit
+#                                                 its `# vX.Y.Z` tag names
 #
-# All four run every time; the script exits non-zero if any of them fails.
-# zizmor runs offline for determinism and takes no GitHub token.
+# Checks 1-4 run offline and take no GitHub token; check 5 calls the GitHub API
+# and is fatal on a network failure unless SHELVING_OFFLINE=1 (set by
+# `pixi run tests -- --offline`) makes it skip itself. All five run every time;
+# the script exits non-zero if any of them fails.
 #
 set -euo pipefail
 
@@ -59,6 +63,8 @@ run_check "actionlint" actionlint
 run_check "zizmor (offline)" zizmor --offline "$WORKFLOW_DIR"
 run_check "uses: pin format" check_pins
 run_check "dependabot schema" check-jsonschema --builtin-schema vendor.dependabot "$DEPENDABOT"
+# Online check: SHELVING_OFFLINE threads through the environment, no new argument.
+run_check "action pin SHAs" bash tools/check-action-pins.sh
 
 if [ "$status" -ne 0 ]; then
 	echo "workflow lint: FAILED" >&2
