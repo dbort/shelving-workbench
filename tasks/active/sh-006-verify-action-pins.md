@@ -1,8 +1,8 @@
 ---
 id: sh-006
 title: "Verify GitHub Action pins online, with a --offline escape for pixi run tests"
-current_agent: user
-current_phase: user_signoff
+current_agent: implementer
+current_phase: implementation
 review_rejections: 1
 ---
 
@@ -25,7 +25,7 @@ local mock of the tag API.
 ## Status
 - [x] Planning
 - [x] Implementation
-- [x] Review
+- [ ] Review
 - [ ] User sign-off
 
 ## Must Have
@@ -217,6 +217,95 @@ No real network; the test is safe to run in every mode.
 
 FRICTION LOG: delete the `2026-08-30` workflow-tooling entry in the commit that
 lands this. Record any NEW workaround per `CLAUDE.md`.
+
+## Rework — post-sign-off (bash → Python)
+
+The user rejected the branch at sign-off. Two changes; the pipeline re-runs
+from `implementation`. The `## Must Have`, `## Frontier Advice`, and
+`## Execution Plan` above describe the shell implementation that was built and
+approved; where this section conflicts with them, this section wins. All prior
+behaviour (the two-outcome contract, FATAL-NOT-SOFT, the `SHELVING_OFFLINE`
+contract, the token-host guard, failure aggregation, `verified N/N` output,
+the `--offline` flag, the CI token, the docs) must be preserved exactly.
+
+**R1 — `tools/check-action-pins.sh` is too complex for bash; rewrite it as
+`tools/check_action_pins.py`.**
+- Python 3.12, standard library only: `urllib.request` for HTTP (no `requests`
+  dependency, no `curl`, no `python3 -c` sub-shells), `json`, `re`, `pathlib`,
+  `os`, `sys`. Typed to the repo standard: `mypy --strict` clean, no bare
+  `Any`/`dict`/`list`/`tuple`/`set` in signatures or public attributes, added
+  to `pyproject.toml` `[tool.mypy].files`.
+- `git rm tools/check-action-pins.sh`. `tools/run-tests.sh` and
+  `tools/lint-workflows.sh` call `python3 tools/check_action_pins.py` (or
+  `python tools/check_action_pins.py`) instead of `bash tools/check-action-pins.sh`.
+  It no longer matches the `shellcheck tools/*.sh` glob; `mypy` covers it now.
+- Structure it as importable functions so the tests can exercise pieces
+  directly, not only via subprocess:
+  - `workflow_pins(dir) -> tuple[Pin, ...]` — parse `uses:` lines from
+    `*.yml`/`*.yaml`, strip the `<path>` segment, return `(repo, tag, sha,
+    file)` records (`Pin` = `NamedTuple` or frozen dataclass).
+  - `classify_status(http_status, what) -> None | str` — 200 → ok; 403/429,
+    404, other 4xx, 5xx-after-retries, connection-failure → a reason string.
+    Pure, no I/O.
+  - `resolve_commit(fetch, base, repo, tag) -> str` / raises — takes an
+    injected `fetch(url) -> Response`-like callable so a unit test passes a
+    fake returning canned `(status, json)` with NO server. Handles the
+    annotated-tag second hop.
+  - `offline_mode() -> bool` / raises on an illegal `SHELVING_OFFLINE` value —
+    the `1` / unset-empty / else-is-error contract, checked before any network
+    call.
+  - `auth_headers(base, env) -> Mapping[str, str]` — returns the bearer header
+    only when the host is exactly `api.github.com`; empty otherwise. Pure,
+    unit-testable.
+  - a `main(argv) -> int` that wires them, retries 5xx up to 2× (retry sleep
+    injectable / an arg defaulting to ~1s, so a unit test sets 0 or patches
+    `time.sleep`), aggregates all failures, prints `check-action-pins:
+    verified N/N pins` on success.
+
+**R2 — reevaluate the testing plan.** Replace the subprocess-against-a-mock-HTTP-server
+approach with direct unit tests of the functions above (no `http.server`, no
+`threading`, no `poll_interval`, no per-test 0.5s teardown):
+- `workflow_pins`: sample lines including a `<path>` segment, `.yaml` vs
+  `.yml`, a non-matching line; assert the parsed records and count.
+- `classify_status`: each status class → the expected ok/reason.
+- `resolve_commit` with a fake `fetch`: lightweight tag → commit; annotated
+  tag → second hop → commit; 404 → the fatal reason; a fake that raises a
+  connection error → the fatal reason.
+- `offline_mode`: `SHELVING_OFFLINE` unset/empty/`1`/`0`/`"true"` → run / run /
+  skip / **raise** / **raise**; assert no `fetch` is called when it raises or
+  skips.
+- `auth_headers`: token + `api.github.com` → header present; token +
+  `127.0.0.1:8080` or any other host → **no** header; no token → no header.
+- One thin end-to-end test of `main()` against a stub `fetch` covering the
+  all-verified path (asserts `verified N/N` on stdout, exit 0) and an
+  all-mismatch path (asserts every pin's repo+sha on stderr, exit non-zero).
+- `tests/test_check_action_pins.py` is rewritten to this shape; keep it in
+  `[tool.mypy].files`. The `poll_interval` fixture fix from commit `112fe25`
+  becomes moot (no server) — that is fine.
+- The live-network check still happens for real when `pixi run tests` runs on
+  the dev VM / in CI (it prints `verified 7/7 pins`); the unit tests do not
+  touch the network and run in well under a second.
+
+**R3 — `docs/github-actions-hardening.md` "Enforcement: the workflow lint"
+section restates what each of the five checks does, mirroring
+`lint-workflows.sh` and each tool.** Cut the per-check "what it does"
+enumeration. State only: that `lint-workflows.sh` enforces the
+machine-verifiable rules from this document, that it runs as part of
+`pixi run tests` (and how to run it alone), and the non-obvious conventions
+that are NOT visible from the code — the `# zizmor: ignore[<rule>]` +
+one-line-reason policy, the offline-vs-online split rationale, and that
+`shellcheck` is a `pixi.toml` dependency because `actionlint` shells out to
+it. Name the five tools in a single sentence if useful; do not give each a
+paragraph. Apply the same judgement to any other doc prose that walks through
+a script's steps.
+
+**Verification (supersedes Step 10):** `pixi run tests` green on the dev VM
+with `check-action-pins: verified 7/7 pins`; `pixi run tests -- --offline`
+green with `check-action-pins: skipped (SHELVING_OFFLINE)`; `mypy --strict`
+(via `pixi run tests`) clean over `tools/check_action_pins.py` and the
+rewritten test; the pin test file runs in under a second;
+`shellcheck tools/*.sh` clean (now without `check-action-pins.sh`);
+`git grep -n 'check-action-pins\.sh'` returns nothing outside `tasks/`.
 
 ## Execution Plan
 
