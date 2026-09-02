@@ -10,14 +10,17 @@ The sample tree is defined in code. The output leads with the in-code material
 catalog (one row per entry), then an indented walk of the tree: one line per
 node with its short id, kind, solved rectangle ``(x, z, width, height)`` in
 millimetres, and, for a node under a split, the ``SplitRule`` that positioned
-it; divider lines also carry the resolved material name and thickness. With
-``--svg PATH``, the solved layout is also written to ``PATH`` as an SVG
+it; divider lines also carry the resolved material name and thickness. It then
+prints the expanded plank list, one row per physical plank (role, size,
+minimum-corner placement, material name), and a final total-plank-volume line.
+With ``--svg PATH``, the solved layout is also written to ``PATH`` as an SVG
 elevation and a confirmation line is printed.
 """
 
 import argparse
 import pathlib
 
+from shelving_core.expand import PlankSpec, expand, total_volume_mm3
 from shelving_core.layout import (
     Bay,
     Carcass,
@@ -136,6 +139,19 @@ def _print_bay(
                 )
 
 
+def _print_planks(specs: list[PlankSpec], catalog: Catalog) -> None:
+    print("Planks:")
+    for spec in specs:
+        size = f"{spec.size.x_mm:g} x {spec.size.y_mm:g} x {spec.size.z_mm:g} mm"
+        placement = (
+            f"({spec.placement.x_mm:g}, {spec.placement.y_mm:g}, "
+            f"{spec.placement.z_mm:g})"
+        )
+        name = catalog[spec.material].name
+        print(f"  {spec.role.value:<11} {size}  at {placement}  {name}")
+    print(f"Total plank volume: {total_volume_mm3(specs):.0f} mm^3")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -157,6 +173,7 @@ def main() -> None:
     )
     _print_catalog(catalog)
     _print_bay(carcass.root, layout, 0, None, catalog, carcass.default_material)
+    _print_planks(expand(carcass, catalog), catalog)
 
     svg_path: pathlib.Path | None = args.svg
     if svg_path is not None:
