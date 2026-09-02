@@ -61,6 +61,15 @@ wrong.
   then with a comment saying why. `mypy --strict` over the changed code
   must pass.
 
+- **Shell stays simple:** bash is only for a linear sequence of commands,
+  simple conditionals, and thin wrappers (the `tools/run-tests.sh` /
+  `tools/lint-workflows.sh` shape). Anything past that — loops that parse
+  text, HTTP calls, JSON, retry/backoff, arithmetic beyond trivial,
+  arrays or maps used as data structures — is written as typed Python
+  under the Typed Python rule above, with its logic in importable
+  functions so tests exercise them directly rather than only
+  subprocess-driving the script.
+
 <!-- Example shape for future entries:
 
 - **Config parity:** any task adding an env var a deploy-managed service
