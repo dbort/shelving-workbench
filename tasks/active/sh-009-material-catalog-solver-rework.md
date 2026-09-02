@@ -1,8 +1,8 @@
 ---
 id: sh-009
 title: "Material catalog + solver rework (M2, part 1)"
-current_agent: user
-current_phase: user_signoff
+current_agent: implementer
+current_phase: implementation
 review_rejections: 0
 ---
 
@@ -20,8 +20,8 @@ for milestone M2; `shelving_core.expand` and `PlankSpec` are sh-010.
 
 ## Status
 - [x] Planning
-- [x] Implementation
-- [x] Review
+- [ ] Implementation
+- [ ] Review
 - [ ] User sign-off
 
 ## Round 2 — sign-off refinements (user-directed, not a review rejection)
@@ -41,6 +41,16 @@ steps 9-14, on the same branch.
   material and thickness.
 - The SVG surfaces materials: a fuller title, per-material divider colour with
   a label, and a legend.
+
+## Round 3 — SVG per-material colour does not render (user-found at sign-off)
+Round 2 emitted each divider as `<rect class="divider" fill="#RRGGBB" …>`, but
+`_style_block` kept `.divider { fill: #888888; … }`. A rule in an SVG `<style>`
+element outranks a `fill=` presentation attribute regardless of specificity, so
+every divider renders grey; the legend swatches (class `swatch`, no `fill` in
+CSS) do show colour, which masked the bug. `test_svg.py` and the Round 2 review
+checked the `fill="#…"` substring in the output text, not what renders.
+`review_rejections` stays 0: found by the user at sign-off, handled like the
+Round 2 refinements. Fix is Execution Plan steps 15-16.
 
 ## Must Have
 
@@ -75,7 +85,8 @@ steps 9-14, on the same branch.
 ### `shelving_core/svg.py`
 - [ ] `to_svg` gains a `catalog: Catalog` parameter: `to_svg(carcass, layout, catalog, *, scale=..., margin_mm=..., font_size_mm=...)`. It reads only the carcass, the solved layout, and the catalog; it never calls `solve`. Import `Catalog` from `shelving_core.materials`.
 - [ ] Title carries the default material: `f"Carcass {w:g} x {h:g} x {d:g} mm, default material: {entry.name} ({entry.thickness_mm:g} mm)"` with `entry = catalog[carcass.default_material]`.
-- [ ] Each divider rect is filled by a per-material colour and carries a short label (material `name` + `thickness_mm`). Colour comes from a fixed ordered palette, assigned to each distinct `MaterialId` in use (the `default_material` plus every `Divider.material` override) in ascending `MaterialId`-string order, so a tree with the same materials always gets the same colours regardless of walk order. Keep the existing `carcass` / `leaf` / `divider` / `label` CSS classes; add per-material classes or inline `fill`.
+- [ ] Each divider rect is filled by a per-material colour and carries a short label (material `name` + `thickness_mm`). Colour comes from a fixed ordered palette, assigned to each distinct `MaterialId` in use (the `default_material` plus every `Divider.material` override) in ascending `MaterialId`-string order, so a tree with the same materials always gets the same colours regardless of walk order.
+- [ ] The per-material divider colour must actually render: no rule in the emitted `<style>` block sets `fill` on a selector that matches a divider rect (an SVG `<style>` rule outranks a `fill=` presentation attribute). Concretely, `.divider` in `_style_block` keeps `stroke: none` and drops `fill: #888888`; the per-divider `fill` comes from the presentation attribute (or an inline `style="fill:…"`, which also outranks the stylesheet). Every divider always carries an explicit fill, so there is no fallback colour to lose.
 - [ ] A legend block, one row per material actually used in the same deterministic order, shows a colour swatch, `name`, `thickness_mm`, and `material_type`. Position it so it does not overlap the elevation (extend the title band or add a reserved strip; grow `view_h` / margins as needed).
 - [ ] Output stays byte-deterministic for a given `(carcass, layout, catalog)`: fixed `.3f` coordinate formatting, pre-order walk, sorted-id colour assignment, no reliance on dict insertion order.
 
@@ -84,6 +95,7 @@ steps 9-14, on the same branch.
 - [ ] `test_solver.py`: introduce a small catalog helper (e.g. entries at the exact thicknesses the cases need); every `solve(...)` call passes a `Catalog`; `Divider` thickness cases become `Divider(material=<id at that thickness>)`. `distribute` direct-call tests are untouched (still literal numbers). The nested-`Rect` case and the carcass-inset case keep their `pytest.approx(abs=1e-6)` assertions with thicknesses now sourced from the catalog.
 - [ ] `test_schema.py`: sample `Carcass` docs carry `id`/`default_material` and dividers carry `material`/`lap` instead of `thickness_mm`; the invalid-doc corpus is updated (a doc still carrying `default_thickness_mm` or a divider `thickness_mm` must now fail because `additionalProperties: false`).
 - [ ] `test_svg.py`: `to_svg(...)` calls pass a `Catalog`; `Carcass` uses `default_material`. Assert the new title text (default material name + thickness), that each divider rect carries a per-material fill, that the legend lists exactly the materials used in the deterministic order, and that `to_svg` output is byte-identical across two calls with the same `(carcass, layout, catalog)`.
+- [ ] `test_svg.py` also asserts the per-material colour is not overridden by CSS: the emitted `<style>` block has no `fill` declaration on `.divider` (or any selector matching a divider rect), and a case with two materials produces two distinct rendered divider fills (resolve each divider rect's effective fill: its `fill`/`style` attribute, since no stylesheet rule sets divider fill). This is the assertion the Round 2 tests lacked.
 - [ ] `tests/test_layout_demo.py`: header assertion updated to `default material <name> (<thickness> mm)`; assert the catalog block prints (one row per entry) and that each divider line carries a `material=` tag. Solved-rect tree line counts unchanged. No plank-table assertion yet, that arrives with sh-010.
 
 ### Tests — new
@@ -254,3 +266,11 @@ Friction log: record any workaround per `CLAUDE.md` in
 - [x] **Step 13** (`shelving_core/tests/test_layout.py`, `shelving_core/tests/test_schema.py`): `Divider(lap=...)` uses `LapOrder.*`. Drop the constructor-level `lap` negative test; add a `from_dict` test that an unknown `lap` string raises `ValueError`. Extend the round-trip assertion to cover `lap` as `None` and as a `LapOrder` member. `test_schema.py` sample docs keep the lowercase-string `lap` wire form.
 
 - [x] **Step 14** (`shelving_core/tests/`, `docs/architecture.md`, task file): If `docs/architecture.md` names `Divider.lap` as a bare string literal anywhere, update it to name the `LapOrder` enum (otherwise no doc change). Run `pixi run tests` green; run `bash tools/vendor-core.sh` and confirm the drift check passes. Re-check `## Status` Implementation, set `current_phase: review` / `current_agent: reviewer`, commit on `sh-009`, hand to review. (`architecture.md` names lap only conceptually, in the sh-010-owned "### Carcass expansion" section, so no doc change.)
+
+### Round 3 — SVG colour render fix (same `sh-009` branch, on top of steps 1-14)
+
+- [ ] **Step 15** (`shelving_core/svg.py`): In `_style_block`, drop `fill: #888888` from the `.divider` rule (keep `stroke: none`); every divider rect already carries an explicit per-material `fill` presentation attribute, which now renders. Confirm no other emitted `<style>` selector sets `fill` on divider rects. Regenerate the demo SVG (`pixi run demo -- --svg /tmp/…/x.svg`) and eyeball that the two sample materials produce two divider colours. Re-run `bash tools/vendor-core.sh`.
+
+- [ ] **Step 16** (`shelving_core/tests/test_svg.py`): Add the render-not-just-source assertions per Must Have: the `<style>` block has no `fill` on `.divider`; a two-material case yields two distinct effective divider fills (read from each divider rect's `fill` / `style`, since no stylesheet rule applies). Keep the existing determinism / legend-order / title-text assertions. Re-run `bash tools/vendor-core.sh`.
+
+- [ ] **Step 17**: `pixi run tests` green; `bash tools/vendor-core.sh` drift check passes. Re-check `## Status` Implementation, set `current_phase: review` / `current_agent: reviewer`, commit on `sh-009`, hand to review.
