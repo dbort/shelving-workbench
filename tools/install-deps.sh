@@ -22,8 +22,8 @@ pixi_installed_now=0
 
 add_local_bin_to_rc() {
 	local rc="$1"
-	# The rc file must receive $HOME and $PATH literally, to be expanded by the
-	# future shell that sources it, not by this script.
+	# The rc file must receive $HOME and $PATH literally so the future shell that
+	# sources it expands them, not this script.
 	# shellcheck disable=SC2016
 	local line='export PATH="$HOME/.local/bin:$PATH"'
 	if [ ! -f "$rc" ] || ! grep -qxF "$line" "$rc"; then

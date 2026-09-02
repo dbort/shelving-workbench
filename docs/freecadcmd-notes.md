@@ -15,8 +15,7 @@ that line, because the return code carries no signal.
 
 `tools/run-tests.sh` does this: it captures the smoke script's output and
 greps for `shelving workbench import OK`, treating a missing marker as
-failure. See `tools/run-tests.sh` and the marker `tools/freecad_smoke.py`
-prints.
+failure. See the marker that `tools/freecad_smoke.py` prints.
 
 ## FreeCAD freezes the `freecad` namespace package's `__path__`
 
