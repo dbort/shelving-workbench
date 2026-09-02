@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dbort/shelving-workbench/schemas/materials-v1.json",
+  "title": "Shelving material catalog document",
+  "description": "Serialised form of shelving_core.materials.Catalog (schema version 1).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "materials"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "materials": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/materialEntry" }
+    }
+  },
+  "$defs": {
+    "materialEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "thickness_mm", "material_type"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "thickness_mm": { "type": "number", "exclusiveMinimum": 0 },
+        "material_type": { "type": "string", "minLength": 1 },
+        "nominal_thickness": { "type": ["string", "null"] }
+      }
+    }
+  }
+}

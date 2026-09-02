@@ -2,10 +2,7 @@
 
 ``shelving_core.svg.to_svg`` builds its output with f-strings, so these tests
 parse it back with :mod:`xml.etree.ElementTree` (parsing only; construction
-stays library-free in the renderer) and assert on the resulting element tree:
-the root element and its ``viewBox``, the rect and label counts for a known
-tree, the exact placed geometry for a hand-computed case that proves +z maps to
-smaller SVG ``y``, and byte-identical output across two calls.
+stays library-free in the renderer) and assert on the resulting element tree.
 """
 
 import xml.etree.ElementTree as ET
@@ -22,10 +19,24 @@ from shelving_core.layout import (
     Split,
     Weighted,
 )
+from shelving_core.materials import Catalog, MaterialEntry, MaterialId
 from shelving_core.solver import solve
-from shelving_core.svg import to_svg
+from shelving_core.svg import _DIVIDER_PALETTE, to_svg
 
 SVG_NS = "http://www.w3.org/2000/svg"
+
+SHELL_10 = MaterialId("shell10")
+SHELL_18 = MaterialId("shell18")
+CATALOG = Catalog(
+    entries={
+        SHELL_10: MaterialEntry(
+            id=SHELL_10, name="thin panel", thickness_mm=10.0, material_type="ply"
+        ),
+        SHELL_18: MaterialEntry(
+            id=SHELL_18, name="thick panel", thickness_mm=18.0, material_type="ply"
+        ),
+    }
+)
 
 
 def _tag(name: str) -> str:
@@ -34,6 +45,40 @@ def _tag(name: str) -> str:
 
 def _rects_by_class(root: ET.Element, css_class: str) -> list[ET.Element]:
     return [r for r in root.findall(_tag("rect")) if r.get("class") == css_class]
+
+
+def _texts_by_class(root: ET.Element, css_class: str) -> list[ET.Element]:
+    return [t for t in root.findall(_tag("text")) if t.get("class") == css_class]
+
+
+def _style_text(root: ET.Element) -> str:
+    style = root.find(_tag("style"))
+    assert style is not None and style.text is not None
+    return style.text
+
+
+def _css_rules(style_text: str) -> list[tuple[str, str]]:
+    """(selector, declaration-body) pairs from the flat ``<style>`` block."""
+    rules: list[tuple[str, str]] = []
+    for chunk in style_text.split("}"):
+        if "{" not in chunk:
+            continue
+        selector, _, body = chunk.partition("{")
+        rules.append((selector.strip(), body.strip()))
+    return rules
+
+
+def _effective_fill(rect: ET.Element) -> str | None:
+    """The colour a divider rect renders: its inline ``style`` fill if present,
+    else its ``fill`` attribute. No stylesheet rule applies to divider rects, so
+    nothing outranks these."""
+    style = rect.get("style")
+    if style:
+        for decl in style.split(";"):
+            prop, _, value = decl.partition(":")
+            if prop.strip() == "fill":
+                return value.strip()
+    return rect.get("fill")
 
 
 def _flat_fill_carcass(orientation: Orientation, n_children: int) -> Carcass:
@@ -49,7 +94,7 @@ def _flat_fill_carcass(orientation: Orientation, n_children: int) -> Carcass:
         width_mm=100.0,
         height_mm=100.0,
         depth_mm=50.0,
-        default_thickness_mm=10.0,
+        default_material=SHELL_10,
         root=root,
     )
 
@@ -58,13 +103,14 @@ def _nested_sample() -> Carcass:
     """Root HORIZONTAL split over a plain leaf and a 3-way VERTICAL split.
 
     Four leaves, three dividers (one at the root, two in the inner split), one
-    of each rule kind.
+    of each rule kind. The inner split's first divider overrides its material to
+    ``SHELL_10`` so two distinct materials are in use.
     """
     inner = Split(
         orientation=Orientation.VERTICAL,
         children=[Leaf(id="a"), Leaf(id="b"), Leaf(id="c")],
         rules=[Fill(), Weighted(2.0), Fill()],
-        dividers=[Divider(id="di0"), Divider(id="di1")],
+        dividers=[Divider(id="di0", material=SHELL_10), Divider(id="di1")],
         id="inner",
     )
     root = Split(
@@ -78,46 +124,115 @@ def _nested_sample() -> Carcass:
         width_mm=900.0,
         height_mm=1800.0,
         depth_mm=300.0,
-        default_thickness_mm=18.0,
+        default_material=SHELL_18,
         root=root,
     )
 
 
 def test_output_parses_and_root_is_svg_with_viewbox() -> None:
     carcass = _nested_sample()
-    root = ET.fromstring(to_svg(carcass, solve(carcass)))
+    root = ET.fromstring(to_svg(carcass, solve(carcass, CATALOG), CATALOG))
     assert root.tag == _tag("svg")
     view_box = root.get("viewBox")
     assert view_box is not None
-    # W = width + 2*margin; H = height + 2*margin + title band (2*font_size).
-    assert view_box == "0 0 940.000 1864.000"
+    # W = width + 2*margin. H = height + 2*margin + title band (2*font_size) +
+    # legend band, which is (n_materials + 1) rows of 1.2*font_size plus a
+    # bottom margin: 1800 + 40 + 24 + (3 * 14.4 + 20) = 1927.2.
+    assert view_box == "0 0 940.000 1927.200"
     assert root.get("width") == "940.000"
-    assert root.get("height") == "1864.000"
+    assert root.get("height") == "1927.200"
 
 
 def test_rect_and_label_counts_for_a_known_tree() -> None:
     carcass = _nested_sample()
-    root = ET.fromstring(to_svg(carcass, solve(carcass)))
+    root = ET.fromstring(to_svg(carcass, solve(carcass, CATALOG), CATALOG))
 
     n_leaves = 4
     n_dividers = 3
-    assert len(root.findall(_tag("rect"))) == n_leaves + n_dividers + 1
+    n_materials = 2
     assert len(_rects_by_class(root, "carcass")) == 1
     assert len(_rects_by_class(root, "divider")) == n_dividers
     assert len(_rects_by_class(root, "leaf")) == n_leaves
+    assert len(_rects_by_class(root, "swatch")) == n_materials
+    assert len(root.findall(_tag("rect"))) == 1 + n_dividers + n_leaves + n_materials
 
-    texts = root.findall(_tag("text"))
-    label_texts = [t for t in texts if t.get("class") == "label"]
-    title_texts = [t for t in texts if t.get("class") == "title"]
-    assert len(label_texts) == n_leaves
+    leaf_labels = _texts_by_class(root, "label")
+    divider_labels = _texts_by_class(root, "divider-label")
+    title_texts = _texts_by_class(root, "title")
+    legend_texts = _texts_by_class(root, "legend")
+    assert len(leaf_labels) == n_leaves
+    assert len(divider_labels) == n_dividers
     assert len(title_texts) == 1
-    assert title_texts[0].text is not None
-    assert title_texts[0].text.startswith("Carcass 900 x 1800 x 300 mm")
+    assert title_texts[0].text == (
+        "Carcass 900 x 1800 x 300 mm, default material: thick panel (18 mm)"
+    )
+    # One legend heading plus one row per material in use.
+    assert len(legend_texts) == 1 + n_materials
 
-    # Every label carries its three lines: dimensions, short id, rule.
-    for label in label_texts:
-        tspans = label.findall(_tag("tspan"))
-        assert len(tspans) == 3
+    # Every leaf label carries its three lines: dimensions, short id, rule.
+    for label in leaf_labels:
+        assert len(label.findall(_tag("tspan"))) == 3
+    # Every divider label is a single material line.
+    for label in divider_labels:
+        assert len(label.findall(_tag("tspan"))) == 1
+
+
+def test_dividers_are_filled_by_their_resolved_material_colour() -> None:
+    carcass = _nested_sample()
+    root = ET.fromstring(to_svg(carcass, solve(carcass, CATALOG), CATALOG))
+
+    # sorted(MaterialId) == ["shell10", "shell18"], so palette[0] -> shell10 and
+    # palette[1] -> shell18.
+    thin_colour, thick_colour = _DIVIDER_PALETTE[0], _DIVIDER_PALETTE[1]
+    fills = [r.get("fill") for r in _rects_by_class(root, "divider")]
+    assert all(fill is not None for fill in fills)
+    present = [fill for fill in fills if fill is not None]
+    # One divider overrides to the thin panel; the other two inherit the default.
+    assert sorted(present) == sorted([thin_colour, thick_colour, thick_colour])
+
+
+def test_no_stylesheet_rule_sets_fill_on_divider_rects() -> None:
+    # An SVG <style> rule outranks a fill= presentation attribute regardless of
+    # specificity, so a `fill` on any selector that matches <rect class="divider">
+    # would repaint every divider one colour: the regression this test guards against.
+    carcass = _nested_sample()
+    root = ET.fromstring(to_svg(carcass, solve(carcass, CATALOG), CATALOG))
+    divider_selectors = {".divider", "rect", "rect.divider", "*"}
+    for selector, body in _css_rules(_style_text(root)):
+        if selector in divider_selectors:
+            assert "fill" not in body, (selector, body)
+
+
+def test_two_materials_render_two_distinct_effective_divider_fills() -> None:
+    carcass = _nested_sample()
+    root = ET.fromstring(to_svg(carcass, solve(carcass, CATALOG), CATALOG))
+    effective = {_effective_fill(r) for r in _rects_by_class(root, "divider")}
+    assert None not in effective
+    assert len(effective) == 2
+
+
+def test_legend_lists_the_materials_used_in_deterministic_order() -> None:
+    carcass = _nested_sample()
+    root = ET.fromstring(to_svg(carcass, solve(carcass, CATALOG), CATALOG))
+
+    legend_texts = _texts_by_class(root, "legend")
+    assert legend_texts[0].text == "Materials"
+    rows = [t.text for t in legend_texts[1:]]
+    assert rows == [
+        "thin panel  10 mm  ply",
+        "thick panel  18 mm  ply",
+    ]
+
+    swatch_fills = [r.get("fill") for r in _rects_by_class(root, "swatch")]
+    assert swatch_fills == [_DIVIDER_PALETTE[0], _DIVIDER_PALETTE[1]]
+
+
+def test_legend_holds_only_materials_actually_in_use() -> None:
+    # A tree whose dividers never override: only the default material appears.
+    carcass = _flat_fill_carcass(Orientation.VERTICAL, 3)
+    root = ET.fromstring(to_svg(carcass, solve(carcass, CATALOG), CATALOG))
+    rows = [t.text for t in _texts_by_class(root, "legend")[1:]]
+    assert rows == ["thin panel  10 mm  ply"]
 
 
 def test_root_leaf_without_a_split_has_no_rule_line() -> None:
@@ -125,18 +240,18 @@ def test_root_leaf_without_a_split_has_no_rule_line() -> None:
         width_mm=100.0,
         height_mm=100.0,
         depth_mm=50.0,
-        default_thickness_mm=10.0,
+        default_material=SHELL_10,
         root=Leaf(id="only"),
     )
-    root = ET.fromstring(to_svg(carcass, solve(carcass)))
-    (label,) = [t for t in root.findall(_tag("text")) if t.get("class") == "label"]
+    root = ET.fromstring(to_svg(carcass, solve(carcass, CATALOG), CATALOG))
+    (label,) = _texts_by_class(root, "label")
     tspans = label.findall(_tag("tspan"))
     assert [t.text for t in tspans] == ["80 x 80 mm", "only"]
 
 
 def test_y_flip_places_higher_z_nearer_the_top() -> None:
     carcass = _flat_fill_carcass(Orientation.HORIZONTAL, 2)
-    root = ET.fromstring(to_svg(carcass, solve(carcass)))
+    root = ET.fromstring(to_svg(carcass, solve(carcass, CATALOG), CATALOG))
     low, high = _rects_by_class(root, "leaf")
 
     # Interior 80x80 at solver (10, 10); 80 mm split minus a 10 mm divider is
@@ -157,15 +272,15 @@ def test_y_flip_places_higher_z_nearer_the_top() -> None:
 
 def test_three_way_split_renders_three_leaves_and_two_dividers() -> None:
     carcass = _flat_fill_carcass(Orientation.VERTICAL, 3)
-    root = ET.fromstring(to_svg(carcass, solve(carcass)))
+    root = ET.fromstring(to_svg(carcass, solve(carcass, CATALOG), CATALOG))
     assert len(_rects_by_class(root, "leaf")) == 3
     assert len(_rects_by_class(root, "divider")) == 2
 
 
 def test_output_is_deterministic() -> None:
     carcass = _nested_sample()
-    layout = solve(carcass)
-    assert to_svg(carcass, layout) == to_svg(carcass, layout)
+    layout = solve(carcass, CATALOG)
+    assert to_svg(carcass, layout, CATALOG) == to_svg(carcass, layout, CATALOG)
 
 
 def test_markup_metacharacters_in_an_id_are_xml_escaped() -> None:
@@ -174,10 +289,10 @@ def test_markup_metacharacters_in_an_id_are_xml_escaped() -> None:
         width_mm=100.0,
         height_mm=100.0,
         depth_mm=50.0,
-        default_thickness_mm=10.0,
+        default_material=SHELL_10,
         root=Leaf(id=raw_id),
     )
-    svg = to_svg(carcass, solve(carcass))
+    svg = to_svg(carcass, solve(carcass, CATALOG), CATALOG)
 
     # Still well-formed with the metacharacters carried through the label text.
     root = ET.fromstring(svg)
@@ -189,16 +304,16 @@ def test_markup_metacharacters_in_an_id_are_xml_escaped() -> None:
     assert "&quot;" in svg
     assert raw_id not in svg
 
-    (label,) = [t for t in root.findall(_tag("text")) if t.get("class") == "label"]
+    (label,) = _texts_by_class(root, "label")
     short_id_tspan = label.findall(_tag("tspan"))[1]
     assert short_id_tspan.text == raw_id[:8]
 
 
 def test_scale_grows_size_attributes_but_leaves_viewbox_untouched() -> None:
     carcass = _nested_sample()
-    layout = solve(carcass)
-    base = ET.fromstring(to_svg(carcass, layout, scale=1.0))
-    scaled = ET.fromstring(to_svg(carcass, layout, scale=2.0))
+    layout = solve(carcass, CATALOG)
+    base = ET.fromstring(to_svg(carcass, layout, CATALOG, scale=1.0))
+    scaled = ET.fromstring(to_svg(carcass, layout, CATALOG, scale=2.0))
 
     assert scaled.get("viewBox") == base.get("viewBox")
 

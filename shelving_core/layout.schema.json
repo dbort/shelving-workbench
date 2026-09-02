@@ -15,17 +15,19 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "id",
         "width_mm",
         "height_mm",
         "depth_mm",
-        "default_thickness_mm",
+        "default_material",
         "root"
       ],
       "properties": {
+        "id": { "type": "string", "minLength": 1 },
         "width_mm": { "type": "number", "exclusiveMinimum": 0 },
         "height_mm": { "type": "number", "exclusiveMinimum": 0 },
         "depth_mm": { "type": "number", "exclusiveMinimum": 0 },
-        "default_thickness_mm": { "type": "number", "minimum": 0 },
+        "default_material": { "type": "string", "minLength": 1 },
         "root": { "$ref": "#/$defs/bay" }
       }
     },
@@ -107,13 +109,11 @@
     "divider": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "thickness_mm"],
+      "required": ["id"],
       "properties": {
         "id": { "type": "string" },
-        "thickness_mm": {
-          "type": ["number", "null"],
-          "minimum": 0
-        }
+        "material": { "type": ["string", "null"] },
+        "lap": { "enum": ["captured", "through", null] }
       }
     }
   }

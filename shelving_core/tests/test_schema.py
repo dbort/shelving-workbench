@@ -19,11 +19,16 @@ from shelving_core.layout import (
     Divider,
     Fill,
     Fixed,
+    LapOrder,
     Leaf,
     Orientation,
     Split,
     Weighted,
 )
+from shelving_core.materials import MaterialId
+
+PLY = MaterialId("ply18")
+MDF = MaterialId("mdf12")
 
 
 def _schema() -> Mapping[str, object]:
@@ -40,8 +45,8 @@ def _nested_carcass() -> Carcass:
         children=[Leaf(id="b"), Leaf(id="c"), Leaf(id="d")],
         rules=[Fill(), Weighted(2.0), Fixed(150.0)],
         dividers=[
-            Divider(thickness_mm=None, id="dv1"),
-            Divider(thickness_mm=12.0, id="dv2"),
+            Divider(material=None, id="dv1"),
+            Divider(material=MDF, lap=LapOrder.THROUGH, id="dv2"),
         ],
         id="inner",
     )
@@ -49,15 +54,16 @@ def _nested_carcass() -> Carcass:
         orientation=Orientation.HORIZONTAL,
         children=[Leaf(id="a"), inner],
         rules=[Fixed(400.0), Fill()],
-        dividers=[Divider(thickness_mm=None, id="dv0")],
+        dividers=[Divider(material=None, id="dv0")],
         id="root",
     )
     return Carcass(
         width_mm=900.0,
         height_mm=1800.0,
         depth_mm=300.0,
-        default_thickness_mm=18.0,
+        default_material=PLY,
         root=root,
+        id="unit-1",
     )
 
 
@@ -66,8 +72,9 @@ def _leaf_carcass() -> Carcass:
         width_mm=600.0,
         height_mm=600.0,
         depth_mm=300.0,
-        default_thickness_mm=18.0,
+        default_material=PLY,
         root=Leaf(id="only"),
+        id="unit-leaf",
     )
 
 
@@ -109,7 +116,7 @@ def _with_unknown_rule_type() -> dict[str, Any]:
 
 def _with_missing_required_key() -> dict[str, Any]:
     doc = _valid_doc()
-    del doc["carcass"]["default_thickness_mm"]
+    del doc["carcass"]["default_material"]
     return doc
 
 
@@ -125,6 +132,18 @@ def _with_negative_size_mm() -> dict[str, Any]:
     return doc
 
 
+def _with_legacy_default_thickness() -> dict[str, Any]:
+    doc = _valid_doc()
+    doc["carcass"]["default_thickness_mm"] = 18.0
+    return doc
+
+
+def _with_legacy_divider_thickness() -> dict[str, Any]:
+    doc = _valid_doc()
+    doc["carcass"]["root"]["dividers"][0]["thickness_mm"] = 18.0
+    return doc
+
+
 @pytest.mark.parametrize(
     "doc",
     [
@@ -134,6 +153,8 @@ def _with_negative_size_mm() -> dict[str, Any]:
         _with_missing_required_key(),
         _with_wrong_value_type(),
         _with_negative_size_mm(),
+        _with_legacy_default_thickness(),
+        _with_legacy_divider_thickness(),
     ],
 )
 def test_invalid_docs_fail_schema_validation(doc: dict[str, Any]) -> None:

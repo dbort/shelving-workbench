@@ -74,7 +74,7 @@ for a sample layout so the distribution is eyeballable.
 
 **Status:** Tasks sh-009, sh-010
 
-- [ ] sh-009 — material catalog (`shelving_core.materials`) and reworking the
+- [x] sh-009 — material catalog (`shelving_core.materials`) and reworking the
   spacing solver to resolve panel thickness from the catalog
 - [ ] sh-010 — carcass expansion (`shelving_core.expand`): the `PlankSpec`
   list, the lap rule, the coordinate convention (blocked on sh-009)

@@ -31,7 +31,15 @@ def test_demo_runs_and_prints_the_solved_sample() -> None:
     assert result.returncode == 0, result.stderr
     lines = result.stdout.splitlines()
     assert lines, "demo produced no stdout"
-    assert lines[0].startswith("Carcass 900 x 1800 x 300 mm"), lines[0]
+    assert lines[0] == (
+        "Carcass 900 x 1800 x 300 mm, default material 18 mm birch ply (18 mm)"
+    ), lines[0]
+
+    # The in-code catalog block: a header then one row per entry (ply18, mdf12).
+    assert lines[1] == "Catalog:", lines[1]
+    catalog_rows = lines[2:4]
+    assert catalog_rows[0].strip().startswith("ply18")
+    assert catalog_rows[1].strip().startswith("mdf12")
 
     # The sample tree: a root HORIZONTAL split over a 3-child VERTICAL split and
     # a 2-child VERTICAL split -> 3 splits, 5 leaves, 4 dividers (1 + 2 + 1).
@@ -41,6 +49,15 @@ def test_demo_runs_and_prints_the_solved_sample() -> None:
     assert kinds.count("split") == 3
     assert kinds.count("leaf") == 5
     assert kinds.count("divider") == 4
+
+    # Every divider line resolves and prints its material.
+    divider_lines = [
+        line for line in lines if len(line.split()) > 1 and line.split()[1] == "divider"
+    ]
+    assert len(divider_lines) == 4
+    assert all('material="' in line for line in divider_lines)
+    # The one override in the sample tree surfaces the 12 mm MDF entry.
+    assert any('material="12 mm MDF" 12mm' in line for line in divider_lines)
 
 
 def test_demo_svg_flag_writes_a_parseable_svg(tmp_path: Path) -> None:
@@ -54,7 +71,9 @@ def test_demo_svg_flag_writes_a_parseable_svg(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     assert f"wrote {out}" in result.stdout
     # The text dump still prints; --svg only adds the file and its confirmation.
-    assert result.stdout.splitlines()[0].startswith("Carcass 900 x 1800 x 300 mm")
+    assert result.stdout.splitlines()[0] == (
+        "Carcass 900 x 1800 x 300 mm, default material 18 mm birch ply (18 mm)"
+    )
 
     assert out.exists()
     contents = out.read_text(encoding="utf-8")
