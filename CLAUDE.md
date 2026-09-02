@@ -32,16 +32,17 @@ absolutes must never be style-swept.
 
 ## Project conventions
 
-<!-- TODO: Replace with the constraints every implementation and review agent
-enforces. Aim for the same shape as these examples (each a checkable
-rule, not a vibe):
-
-- **No swallowed errors:** every error handled or returned explicitly.
-- **Context/cancellation awareness:** every network or DB request
-  respects the caller-provided cancellation mechanism.
-- **Clean interface mocking:** external APIs consumed through interfaces
-  the tests can stub without live endpoints.
--->
+- **Units in the name:** every identifier bound to a numeric quantity
+  that has a physical unit carries that unit as a suffix — `_mm` for
+  millimetre lengths (`width_mm`, `thickness_mm`, `axis_span_mm`),
+  `_mm3` for cubic-millimetre volumes, and so on. This covers dataclass
+  fields, function parameters, locals, and any helper whose return value
+  is such a quantity (`_effective_thicknesses_mm`, never
+  `_effective_thicknesses`). An identifier whose value is a `str` label
+  rather than the number itself (`nominal_thickness`) takes no unit
+  suffix. There is no dedicated units type; the suffix is the whole
+  mechanism. (`docs/architecture.md` states the same rule for the
+  split-tree; this is the project-wide form.)
 
 ## Standing task-planning obligations
 

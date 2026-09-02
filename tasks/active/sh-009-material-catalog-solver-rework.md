@@ -48,7 +48,7 @@ with it. This is part 1 of 2 for milestone M2; `shelving_core.expand` and
 
 ### `shelving_core/solver.py` (rework)
 - [ ] `solve(carcass: Carcass, catalog: Catalog) -> SolvedLayout`. Imports `Catalog` from `shelving_core.materials`.
-- [ ] `solve` resolves `default_t = catalog[carcass.default_material].thickness_mm` once and threads it plus `catalog` into `_interior_rect(carcass, default_t)` and `_place(bay, rect, out, catalog, default_t)`. `_effective_thicknesses(split, catalog, default_t) -> list[float]` returns, per divider, `catalog[d.material].thickness_mm` when `d.material is not None` else `default_t`.
+- [ ] `solve` resolves `default_thickness_mm = catalog[carcass.default_material].thickness_mm` once (the local keeps the name the existing `_place` parameter already uses) and threads it plus `catalog` into `_interior_rect(carcass, default_thickness_mm)` and `_place(bay, rect, out, catalog, default_thickness_mm)`. Rename `_effective_thicknesses` to `_effective_thicknesses_mm` (repo rule: a name for a `float` / `list[float]` dimensioned value carries the `_mm` suffix); its new signature is `_effective_thicknesses_mm(split, catalog, default_thickness_mm) -> list[float]`, returning per divider `catalog[d.material].thickness_mm` when `d.material is not None` else `default_thickness_mm`.
 - [ ] `distribute(...)` is unchanged: same signature, still a pure function over `Sequence[SplitRule]` and `Sequence[float]`, no `Catalog` parameter.
 - [ ] `LayoutSolveError` and its reasons are unchanged. A `default_material` or `Divider.material` absent from the catalog surfaces as the `KeyError` from `Catalog.__getitem__` (documented in the `solve` docstring), not a `LayoutSolveError`.
 
@@ -105,17 +105,24 @@ STANDING OBLIGATIONS (`CLAUDE.md`):
   unchanged (its existing `rsync` of `shelving_core/` already picks up the new
   files). Nothing to opt out of.
 
+NAMING: follow `CLAUDE.md` § Project conventions (units in the name).
+Concretely here: rename `_effective_thicknesses` -> `_effective_thicknesses_mm`,
+and suffix every new length local / parameter with `_mm`. `nominal_thickness`
+keeps no suffix — it is a `str` label, not a millimetre value.
+
 NO `from __future__ import annotations` (consistent with sh-003). String forward
 refs only where `layout.py` already uses them (`-> "Carcass"`, and now `->
 "Catalog"` in `materials.py`).
 
 SOLVER REWORK IS MECHANICAL: keep `distribute` byte-for-byte (signature and
-body). Thread `catalog` + a resolved `default_t: float` through `solve` ->
-`_interior_rect` / `_place` / `_effective_thicknesses`. `_effective_thicknesses`
-resolves each `Divider`: `catalog[d.material].thickness_mm` if `d.material` is
-not `None`, else `default_t`. Everything else in `solver.py` is untouched. The
-`_interior_rect` inset (by `t` on all four sides, origin at `(t, t)`) is correct
-unchanged — only the thickness *source* moves to the catalog.
+body). Thread `catalog` + a resolved `default_thickness_mm: float` through
+`solve` -> `_interior_rect` / `_place` / `_effective_thicknesses_mm` (renamed
+from `_effective_thicknesses`). `_effective_thicknesses_mm` resolves each
+`Divider`: `catalog[d.material].thickness_mm` if `d.material` is not `None`,
+else `default_thickness_mm`. Everything else in `solver.py` is untouched. The
+`_interior_rect` inset (by `default_thickness_mm` on all four sides, origin at
+`(default_thickness_mm, default_thickness_mm)`) is correct unchanged: only the
+thickness source moves to the catalog.
 
 `Carcass.id`: add `id: str = field(default_factory=new_id)` (reuse
 `layout.new_id`). It is unused in this task; it is added here so sh-010's
@@ -174,7 +181,7 @@ Friction log: record any workaround per `CLAUDE.md` in
 
 - [ ] **Step 2** (`shelving_core/layout.py`, `shelving_core/layout.schema.json`): Import `MaterialId` from `.materials`. `Carcass`: drop `default_thickness_mm`, add `default_material: MaterialId` and trailing `id: str = field(default_factory=new_id)`, update `__post_init__`, `to_dict`/`from_dict`, `CarcassBody`. `Divider`: drop `thickness_mm`, add `material: MaterialId | None = None` and `lap: Literal["captured","through"] | None = None`, update `__post_init__`, `to_dict`/`from_dict`, `DividerDoc`. Update `layout.schema.json` per Must Have. Keep `SCHEMA_VERSION = 1`.
 
-- [ ] **Step 3** (`shelving_core/solver.py`): `solve(carcass, catalog)`. Resolve `default_t` from the catalog; thread `catalog` + `default_t` through `_interior_rect`, `_place`, `_effective_thicknesses` (divider material -> thickness, else `default_t`). Leave `distribute` and all other logic byte-identical. Import `Catalog` from `.materials`.
+- [ ] **Step 3** (`shelving_core/solver.py`): `solve(carcass, catalog)`. Resolve `default_thickness_mm` from the catalog; thread `catalog` + `default_thickness_mm` through `_interior_rect`, `_place`, and `_effective_thicknesses_mm` (renamed from `_effective_thicknesses` for the `_mm` convention; divider material -> thickness, else `default_thickness_mm`). Leave `distribute` and all other logic byte-identical. Import `Catalog` from `.materials`.
 
 - [ ] **Step 4** (`shelving_core/svg.py`, `shelving_core/tests/test_layout.py`, `shelving_core/tests/test_solver.py`, `shelving_core/tests/test_schema.py`, `shelving_core/tests/test_svg.py`): Drop the `default thickness` clause from the `to_svg` title. Update the four test modules to `default_material` + `Catalog` + `solve(carcass, catalog)` + `Divider(material=/lap=)`, adjust JSON/schema expectations, update/drop the removed value-guard tests, and add the new `default_material` / `lap` guard tests and the extended round-trip assertions per Must Have "Tests — reworked".
 

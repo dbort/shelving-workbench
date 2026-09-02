@@ -32,18 +32,18 @@ sh-009's catalog-driven solver.
 - [ ] `class PlankRole(enum.StrEnum)` with members `LEFT_SIDE = "left_side"`, `RIGHT_SIDE = "right_side"`, `TOP = "top"`, `BOTTOM = "bottom"`, `SHELF = "shelf"`, `DIVIDER = "divider"`.
 - [ ] `@dataclass(frozen=True) PlankSpec` with `node_id: str`, `role: PlankRole`, `size: Vec3`, `placement: Vec3`, `material: MaterialId`. No grain field.
 - [ ] `expand(carcass: Carcass, catalog: Catalog) -> list[PlankSpec]`: calls `solve(carcass, catalog)` internally, then emits, in this exact order: `BOTTOM`, `TOP`, `LEFT_SIDE`, `RIGHT_SIDE`, then one plank per `Divider` walking the tree in pre-order (each child visited, then the divider that follows it, recursing into `Split` children).
-- [ ] Shell-plank geometry (local frame: origin front-bottom-left, `+X` right, `+Y` back/depth, `+Z` up; `placement` is the plank's min corner; `W,H,D = carcass.width_mm, height_mm, depth_mm`; `t = catalog[carcass.default_material].thickness_mm`): BOTTOM `size Vec3(W, D, t)` at `Vec3(0, 0, 0)`; TOP `size Vec3(W, D, t)` at `Vec3(0, 0, H - t)`; LEFT_SIDE `size Vec3(t, D, H - 2*t)` at `Vec3(0, 0, t)`; RIGHT_SIDE `size Vec3(t, D, H - 2*t)` at `Vec3(W - t, 0, t)`. (Top and bottom run continuous full width x full depth; the two sides are captured between them.)
-- [ ] Divider geometry: for `Divider` `d` in `Split` `s`, `rect = layout[d.id]`; `role` is `PlankRole.SHELF` when `s.orientation is Orientation.HORIZONTAL` else `PlankRole.DIVIDER`; `size Vec3(rect.width_mm, D, rect.height_mm)`; `placement Vec3(rect.x_mm, 0.0, rect.z_mm)`; `material` is `d.material` when set else `carcass.default_material` (looked up via `catalog[...]` so an unknown id raises `KeyError`); `node_id` is `d.id`.
+- [ ] Shell-plank geometry (local frame: origin front-bottom-left, `+X` right, `+Y` back/depth, `+Z` up; `placement` is the plank's minimum corner). Let `width_mm`, `height_mm`, `depth_mm` be the carcass outer dimensions and `thickness_mm = catalog[carcass.default_material].thickness_mm`. BOTTOM `size Vec3(width_mm, depth_mm, thickness_mm)` at `Vec3(0, 0, 0)`; TOP `size Vec3(width_mm, depth_mm, thickness_mm)` at `Vec3(0, 0, height_mm - thickness_mm)`; LEFT_SIDE `size Vec3(thickness_mm, depth_mm, height_mm - 2*thickness_mm)` at `Vec3(0, 0, thickness_mm)`; RIGHT_SIDE `size Vec3(thickness_mm, depth_mm, height_mm - 2*thickness_mm)` at `Vec3(width_mm - thickness_mm, 0, thickness_mm)`. (Top and bottom run continuous full width x full depth; the two sides are captured between them.)
+- [ ] Divider geometry: for `Divider` `d` in `Split` `s`, `rect = layout[d.id]`; `role` is `PlankRole.SHELF` when `s.orientation is Orientation.HORIZONTAL` else `PlankRole.DIVIDER`; `size Vec3(rect.width_mm, carcass.depth_mm, rect.height_mm)`; `placement Vec3(rect.x_mm, 0.0, rect.z_mm)`; `material` is `d.material` when set else `carcass.default_material` (looked up via `catalog[...]` so an unknown id raises `KeyError`); `node_id` is `d.id`.
 - [ ] Shell-plank `node_id` is `f"{carcass.id}:{role.value}"` (e.g. `"<uuid>:left_side"`), stable across repeated `expand` calls on the same `Carcass`.
-- [ ] Public helper `total_volume(specs: Sequence[PlankSpec]) -> float` returning `sum(s.size.x_mm * s.size.y_mm * s.size.z_mm for s in specs)`. Used by the demo and the tests.
+- [ ] Public helper `total_volume_mm3(specs: Sequence[PlankSpec]) -> float` returning `sum(s.size.x_mm * s.size.y_mm * s.size.z_mm for s in specs)`. Used by the demo and the tests. (Name carries `_mm3` per the repo's units-in-the-name rule.)
 - [ ] `LayoutSolveError` from `solve` propagates through `expand` unchanged. `Divider.lap` is not read (still reserved).
 - [ ] No FreeCAD import; imports only from `shelving_core.layout`, `.materials`, `.solver`.
 
 ### Tests — new
-- [ ] `shelving_core/tests/test_expand.py`: (a) a bare single-`Leaf` carcass -> exactly 4 planks, each role/size/placement asserted with `pytest.approx(abs=1e-6)`, plus `total_volume`; (b) a one-`HORIZONTAL`-split carcass -> a 5th plank, `role == SHELF`, `size == (W-2t, D, t)`, placement from the solver; (c) a one-`VERTICAL`-split carcass -> `role == DIVIDER`, `size == (t, D, H-2t)`; (d) a `Divider(material=<12mm id>)` override in a catalog whose default is 18mm -> that plank's `material` is the override id and its thickness dimension is 12, and a sibling leaf opening is smaller than in the no-override case; (e) shell `node_id`s equal `f"{carcass.id}:<role>"` and are identical across two `expand` calls; (f) a nested sample (mirroring the demo tree) -> plank count `== 4 + divider count` and `total_volume` equals an independent recomputation; (g) `default_material` missing from the catalog raises `KeyError`; an over-constrained carcass raises `LayoutSolveError` through `expand`.
+- [ ] `shelving_core/tests/test_expand.py`: (a) a bare single-`Leaf` carcass -> exactly 4 planks, each role/size/placement asserted with `pytest.approx(abs=1e-6)`, plus `total_volume_mm3`; (b) a one-`HORIZONTAL`-split carcass -> a 5th plank, `role == SHELF`, `size == (width_mm - 2*thickness_mm, depth_mm, thickness_mm)`, placement from the solver; (c) a one-`VERTICAL`-split carcass -> `role == DIVIDER`, `size == (thickness_mm, depth_mm, height_mm - 2*thickness_mm)`; (d) a `Divider(material=<12mm id>)` override in a catalog whose default is 18mm -> that plank's `material` is the override id and its thickness dimension is 12, and a sibling leaf opening is smaller than in the no-override case; (e) shell `node_id`s equal `f"{carcass.id}:<role>"` and are identical across two `expand` calls; (f) a nested sample (mirroring the demo tree) -> plank count `== 4 + divider count` and `total_volume_mm3` equals an independent recomputation; (g) `default_material` missing from the catalog raises `KeyError`; an over-constrained carcass raises `LayoutSolveError` through `expand`.
 
 ### Demo
-- [ ] `tools/layout_demo.py`: after the existing solved-rect tree dump, call `expand(carcass, catalog)` and print a plank table — one row per plank with role, size as `x x y x z mm`, placement as `(x, y, z)`, and material name — then a final line `Total plank volume: <n> mm^3` (integer-formatted millimetres cubed, no litres). The sample already has one divider with a `material=` override (added in sh-009); the table shows it. `python tools/layout_demo.py` exits 0; `--svg PATH` still works.
+- [ ] `tools/layout_demo.py`: after the existing solved-rect tree dump, call `expand(carcass, catalog)` and print a plank table — one row per plank with role, size as `x x y x z mm`, placement as `(x, y, z)`, and material name — then a final line `Total plank volume: <n> mm^3` from `total_volume_mm3(specs)` (integer-formatted millimetres cubed, no litres). The sample already has one divider with a `material=` override (added in sh-009); the table shows it. `python tools/layout_demo.py` exits 0; `--svg PATH` still works.
 - [ ] `tests/test_layout_demo.py`: add assertions that the plank-table section has `4 + <divider count>` rows for the sample and that a `Total plank volume:` line is printed. The header and tree-line assertions are unchanged from sh-009.
 
 ### Docs
@@ -77,9 +77,13 @@ MODULE DEPENDENCY DIRECTION: `expand` imports from `shelving_core.layout`,
 STANDING OBLIGATIONS (`CLAUDE.md`):
 - **Typed Python** applies and is satisfied: frozen dataclasses (`Vec3`,
   `PlankSpec`), `StrEnum` (`PlankRole`), `Sequence` parameter on
-  `total_volume`, no new `Any`/`object` (nothing here parses external JSON).
+  `total_volume_mm3`, no new `Any`/`object` (nothing here parses external JSON).
   `mypy --strict` over `expand.py` and `test_expand.py` must pass.
 - **Shell stays simple**: no shell logic added; nothing to opt out of.
+
+NAMING: follow `CLAUDE.md` § Project conventions (units in the name). Here that
+means `Vec3` fields `x_mm` / `y_mm` / `z_mm`, every length local suffixed `_mm`,
+and the volume helper named `total_volume_mm3`.
 
 NO `from __future__ import annotations` (consistent with sh-003).
 `Vec3`/`PlankSpec`/`PlankRole` need no forward refs; `expand`'s tree recursion
@@ -88,25 +92,31 @@ dispatches on `isinstance`, not annotations.
 COORDINATE CONVENTION (local carcass frame, matches `docs/architecture.md`):
 origin at the front-bottom-left corner; `+X` right (width), `+Y` away from the
 viewer (depth), `+Z` up (height). A `PlankSpec.placement` is the plank's minimum
-corner in that frame — the point you would pass to `Part.makeBox` before
+corner in that frame, the point you would pass to `Part.makeBox` before
 translating. `size` is the plank's extent along each axis. All lengths are float
 millimetres; no rounding, no `Decimal`.
 
-CARCASS LAP RULE (exact; `t` = `catalog[carcass.default_material].thickness_mm`,
-`W/H/D` = carcass width/height/depth):
-- BOTTOM: size `(W, D, t)`, placement `(0, 0, 0)`.
-- TOP: size `(W, D, t)`, placement `(0, 0, H - t)`.
-- LEFT_SIDE: size `(t, D, H - 2*t)`, placement `(0, 0, t)`.
-- RIGHT_SIDE: size `(t, D, H - 2*t)`, placement `(W - t, 0, t)`.
+CARCASS LAP RULE (exact). `thickness_mm` =
+`catalog[carcass.default_material].thickness_mm`; `width_mm` / `height_mm` /
+`depth_mm` = the carcass outer dimensions.
+- BOTTOM: size `(width_mm, depth_mm, thickness_mm)`, placement `(0, 0, 0)`.
+- TOP: size `(width_mm, depth_mm, thickness_mm)`, placement
+  `(0, 0, height_mm - thickness_mm)`.
+- LEFT_SIDE: size `(thickness_mm, depth_mm, height_mm - 2*thickness_mm)`,
+  placement `(0, 0, thickness_mm)`.
+- RIGHT_SIDE: size `(thickness_mm, depth_mm, height_mm - 2*thickness_mm)`,
+  placement `(width_mm - thickness_mm, 0, thickness_mm)`.
 - Each divider is its solved `Rect` extruded through the full depth: size
-  `(rect.width_mm, D, rect.height_mm)`, placement `(rect.x_mm, 0, rect.z_mm)`.
+  `(rect.width_mm, depth_mm, rect.height_mm)`, placement
+  `(rect.x_mm, 0, rect.z_mm)`.
 Interior divider sizes/placements come straight from `solve`; do not recompute
-them in `expand`. The `_interior_rect` inset already accounts for `t` on all
-four sides, so a shelf's solved width is `W - 2*t` and a vertical divider's
-solved height is `H - 2*t` without any extra arithmetic here.
+them in `expand`. The `_interior_rect` inset already accounts for `thickness_mm`
+on all four sides, so a shelf's solved width is `width_mm - 2*thickness_mm` and a
+vertical divider's solved height is `height_mm - 2*thickness_mm` without any
+extra arithmetic here.
 
 SHELL-PLANK IDENTITY: shell-plank `node_id` is the literal string
-`f"{carcass.id}:{role.value}"`. Deterministic and stable across `expand` calls —
+`f"{carcass.id}:{role.value}"`. Deterministic and stable across `expand` calls,
 never `uuid4()` per call. Divider `node_id` is the `Divider.id` from the tree.
 
 ERROR BEHAVIOUR: a `MaterialId` not in the catalog -> `KeyError` from
@@ -132,7 +142,7 @@ Friction log: record any workaround per `CLAUDE.md` in
 
 ## Execution Plan
 
-- [ ] **Step 1** (`shelving_core/expand.py`): New module. `Vec3`, `PlankRole`, `PlankSpec`, `total_volume`, and `expand(carcass, catalog)` per CARCASS LAP RULE, SHELL-PLANK IDENTITY, and the divider geometry / ordering in Must Have. Calls `solve(carcass, catalog)` internally. Imports only from `shelving_core.layout`, `.materials`, `.solver`. No FreeCAD import.
+- [ ] **Step 1** (`shelving_core/expand.py`): New module. `Vec3`, `PlankRole`, `PlankSpec`, `total_volume_mm3`, and `expand(carcass, catalog)` per CARCASS LAP RULE, SHELL-PLANK IDENTITY, and the divider geometry / ordering in Must Have. Calls `solve(carcass, catalog)` internally. Imports only from `shelving_core.layout`, `.materials`, `.solver`. No FreeCAD import.
 
 - [ ] **Step 2** (`shelving_core/tests/test_expand.py`): Write the suite per Must Have "Tests — new" (cases a–g). Use `pytest.approx(abs=1e-6)` for every geometric assertion.
 
