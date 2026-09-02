@@ -1,8 +1,8 @@
 ---
 id: sh-010
 title: "Carcass expansion: PlankSpec list (M2, part 2)"
-current_agent: reviewer
-current_phase: review
+current_agent: user
+current_phase: user_signoff
 review_rejections: 0
 blocked_by: [sh-009]
 ---
@@ -22,7 +22,7 @@ sh-009's catalog-driven solver.
 ## Status
 - [x] Planning
 - [x] Implementation
-- [ ] Review
+- [x] Review
 - [ ] User sign-off
 
 ## Must Have
