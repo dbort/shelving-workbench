@@ -16,6 +16,7 @@ it.
 
 from __future__ import annotations
 
+import hashlib
 import http.server
 import json
 import os
@@ -33,7 +34,17 @@ SCRIPT = REPO_ROOT / "tools" / "check-action-pins.sh"
 WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
 
 ZERO_SHA = "0" * 40
-FAKE_TAG_OBJECT_SHA = "a" * 40
+
+
+def _tag_object_sha(repo: str, tag: str) -> str:
+    """Stand-in SHA for an annotated tag's tag object, unique per ``(repo, tag)``.
+
+    Keeping it distinct per pin means the dereference endpoint can map a tag
+    object back to exactly one commit, so two pins of the same ``owner/repo``
+    at different tags cannot answer with a shared SHA.
+    """
+    return hashlib.sha1(f"{repo}@{tag}".encode()).hexdigest()
+
 
 # Mirrors the script's own line filter: a `uses:` pin with a full commit SHA
 # and a `# vX.Y.Z` release comment.
@@ -69,20 +80,27 @@ def workflow_pins() -> tuple[Pin, ...]:
     return tuple(pins)
 
 
-def _expected_commits() -> Mapping[str, str]:
-    return {pin.repo: pin.sha for pin in workflow_pins()}
+def _expected_commits() -> Mapping[tuple[str, str], str]:
+    return {(pin.repo, pin.tag): pin.sha for pin in workflow_pins()}
 
 
 class _MockServer(http.server.HTTPServer):
     """HTTP server that answers the tag endpoints and counts requests."""
 
     def __init__(
-        self, address: tuple[str, int], mode: MockMode, commits: Mapping[str, str]
+        self,
+        address: tuple[str, int],
+        mode: MockMode,
+        commits: Mapping[tuple[str, str], str],
     ) -> None:
         super().__init__(address, _Handler)
         self.mode: MockMode = mode
-        self.commits: Mapping[str, str] = commits
+        self.commits: Mapping[tuple[str, str], str] = commits
         self.request_count: int = 0
+        # Every ``Authorization`` header value the mock has received, in order
+        # (``None`` when a request carried none). The token-host guard test
+        # asserts this stays all-``None`` for a non-github API base.
+        self.authorizations: list[str | None] = []
 
     @property
     def base_url(self) -> str:
@@ -105,6 +123,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         server = self.server
         assert isinstance(server, _MockServer)
         server.request_count += 1
+        server.authorizations.append(self.headers.get("Authorization"))
 
         parts = self.path.strip("/").split("/")
         # /repos/<owner>/<repo>/git/ref/tags/<tag>
@@ -114,21 +133,31 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             and parts[3:6] == ["git", "ref", "tags"]
         ):
             repo = f"{parts[1]}/{parts[2]}"
-            commit = server.commits.get(repo, ZERO_SHA)
-            self._reply_ref(server.mode, parts[6], commit)
+            tag = parts[6]
+            commit = server.commits.get((repo, tag), ZERO_SHA)
+            self._reply_ref(server.mode, repo, tag, commit)
             return
         # /repos/<owner>/<repo>/git/tags/<sha>
         if len(parts) == 6 and parts[0] == "repos" and parts[3:5] == ["git", "tags"]:
             repo = f"{parts[1]}/{parts[2]}"
-            commit = server.commits.get(repo, ZERO_SHA)
+            object_sha = parts[5]
+            commit = next(
+                (
+                    sha
+                    for (pin_repo, pin_tag), sha in server.commits.items()
+                    if pin_repo == repo
+                    and _tag_object_sha(pin_repo, pin_tag) == object_sha
+                ),
+                ZERO_SHA,
+            )
             self._reply(
                 200,
-                {"sha": parts[5], "object": {"sha": commit, "type": "commit"}},
+                {"sha": object_sha, "object": {"sha": commit, "type": "commit"}},
             )
             return
         self._reply(404, {"message": "unhandled path"})
 
-    def _reply_ref(self, mode: MockMode, tag: str, commit: str) -> None:
+    def _reply_ref(self, mode: MockMode, repo: str, tag: str, commit: str) -> None:
         if mode == "not_found":
             self._reply(404, {"message": "Not Found"})
             return
@@ -139,7 +168,10 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         if mode == "annotated":
             self._reply(
                 200,
-                {"ref": ref, "object": {"sha": FAKE_TAG_OBJECT_SHA, "type": "tag"}},
+                {
+                    "ref": ref,
+                    "object": {"sha": _tag_object_sha(repo, tag), "type": "tag"},
+                },
             )
             return
         sha = ZERO_SHA if mode == "mismatch" else commit
@@ -168,7 +200,23 @@ def start_mock() -> Iterator[StartMock]:
         server.server_close()
 
 
-def _run(*, api_url: str, offline: bool = False) -> subprocess.CompletedProcess[str]:
+def _run(
+    *,
+    api_url: str,
+    offline: bool = False,
+    shelving_offline: str | None = None,
+    gh_token: str | None = None,
+    github_token: str | None = None,
+) -> subprocess.CompletedProcess[str]:
+    """Drive the script as a subprocess with an explicit environment.
+
+    ``SHELVING_OFFLINE``, ``GH_TOKEN``, and ``GITHUB_TOKEN`` are stripped from
+    the inherited environment by default so ``pixi run tests -- --offline``
+    cannot leak ``SHELVING_OFFLINE=1`` in and no ambient token reaches the
+    mock. A case opts back in through ``shelving_offline`` (any raw value, for
+    the value-guard test) or ``gh_token`` / ``github_token`` (for the
+    token-host guard test).
+    """
     env: dict[str, str] = {
         key: value
         for key, value in os.environ.items()
@@ -178,6 +226,12 @@ def _run(*, api_url: str, offline: bool = False) -> subprocess.CompletedProcess[
     env["CHECK_ACTION_PINS_RETRY_SLEEP"] = "0"
     if offline:
         env["SHELVING_OFFLINE"] = "1"
+    if shelving_offline is not None:
+        env["SHELVING_OFFLINE"] = shelving_offline
+    if gh_token is not None:
+        env["GH_TOKEN"] = gh_token
+    if github_token is not None:
+        env["GITHUB_TOKEN"] = github_token
     return subprocess.run(
         ["bash", str(SCRIPT)],
         capture_output=True,
@@ -215,9 +269,11 @@ def test_mismatched_sha_is_fatal_and_names_the_offender(
     result = _run(api_url=server.base_url)
 
     assert result.returncode != 0
-    offender = workflow_pins()[0]
-    assert offender.repo in result.stderr
-    assert offender.sha in result.stderr
+    # Every pin fails in this mode; the run must report them all, not just the
+    # first, so each pin's repo and pinned SHA has to appear on stderr.
+    for pin in workflow_pins():
+        assert pin.repo in result.stderr, pin
+        assert pin.sha in result.stderr, pin
     assert ZERO_SHA in result.stderr
     assert "verified" not in result.stdout
 
@@ -258,3 +314,37 @@ def test_offline_skips_before_any_network_call(start_mock: StartMock) -> None:
     assert result.returncode == 0
     assert "check-action-pins: skipped (SHELVING_OFFLINE)" in result.stderr
     assert server.request_count == 0
+
+
+def test_shelving_offline_zero_is_a_usage_error(start_mock: StartMock) -> None:
+    """``SHELVING_OFFLINE=0`` must fail loudly, never silently enable offline mode."""
+    server = start_mock("lightweight")
+    result = _run(api_url=server.base_url, shelving_offline="0")
+
+    assert result.returncode != 0
+    assert "check-action-pins: SHELVING_OFFLINE must be unset or 1" in result.stderr
+    # The value guard is the script's first action, so it fires before any pin
+    # is resolved.
+    assert server.request_count == 0
+
+
+def test_gh_token_is_never_sent_to_a_non_github_host(start_mock: StartMock) -> None:
+    """A token set in the environment must not reach a redirected API base."""
+    server = start_mock("lightweight")
+    result = _run(api_url=server.base_url, gh_token="gh-secret-value")
+
+    assert result.returncode == 0, result.stderr
+    assert server.request_count == len(workflow_pins())
+    assert server.authorizations
+    assert all(value is None for value in server.authorizations), server.authorizations
+
+
+def test_github_token_is_never_sent_to_a_non_github_host(
+    start_mock: StartMock,
+) -> None:
+    server = start_mock("lightweight")
+    result = _run(api_url=server.base_url, github_token="github-secret-value")
+
+    assert result.returncode == 0, result.stderr
+    assert server.authorizations
+    assert all(value is None for value in server.authorizations), server.authorizations
