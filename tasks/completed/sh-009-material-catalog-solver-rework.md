@@ -2,7 +2,7 @@
 id: sh-009
 title: "Material catalog + solver rework (M2, part 1)"
 current_agent: user
-current_phase: user_signoff
+current_phase: done
 review_rejections: 0
 ---
 
@@ -22,7 +22,7 @@ for milestone M2; `shelving_core.expand` and `PlankSpec` are sh-010.
 - [x] Planning
 - [x] Implementation
 - [x] Review
-- [ ] User sign-off
+- [x] User sign-off
 
 ## Round 2 — sign-off refinements (user-directed, not a review rejection)
 The branch reached `user_signoff` and cleared review plus the doc-hygiene
