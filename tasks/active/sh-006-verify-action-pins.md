@@ -1,8 +1,8 @@
 ---
 id: sh-006
 title: "Verify GitHub Action pins online, with a --offline escape for pixi run tests"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 0
 ---
 
@@ -24,12 +24,12 @@ local mock of the tag API.
 
 ## Status
 - [x] Planning
-- [ ] Implementation
+- [x] Implementation
 - [ ] Review
 - [ ] User sign-off
 
 ## Must Have
-- [ ] `tools/check-action-pins.sh` (`#!/usr/bin/env bash`, `set -euo pipefail`,
+- [x] `tools/check-action-pins.sh` (`#!/usr/bin/env bash`, `set -euo pipefail`,
   executable): for every `uses: <owner>/<repo>[/<path>]@<40-hex> # v<maj>.<min>.<patch>`
   line across `.github/workflows/*.yml` and `*.yaml`, resolve
   `refs/tags/v<maj>.<min>.<patch>` for `<owner>/<repo>` against
@@ -38,13 +38,13 @@ local mock of the tag API.
   `<40-hex>`. Every line is checked; failures aggregate and are all reported,
   not just the first. The `<path>` segment (e.g. `github/codeql-action/upload-sarif`)
   is stripped before resolving; the tag lives on `<owner>/<repo>`.
-- [ ] Exactly two outcomes, no third: **verified** (tag resolved, commit equals
+- [x] Exactly two outcomes, no third: **verified** (tag resolved, commit equals
   the pin) or **fatal** (any of: commit differs; tag missing / HTTP 404 / any
   other 4xx; a connection failure such as `curl` exit 6/7; HTTP 403/429 rate
   limit; HTTP 5xx still failing after up to 2 short retries). There is no
   exit-0 path for a network failure. A rate-limit fatal message names
   `GH_TOKEN`/`GITHUB_TOKEN` as the fix.
-- [ ] `SHELVING_OFFLINE` contract, honoured by every network-dependent check:
+- [x] `SHELVING_OFFLINE` contract, honoured by every network-dependent check:
   the value `1` enables offline mode; unset or empty disables it; **any other
   value is a usage error** (the check prints
   `<name>: SHELVING_OFFLINE must be unset or 1` to stderr and exits non-zero, so
@@ -52,20 +52,20 @@ local mock of the tag API.
   `tools/check-action-pins.sh` prints `check-action-pins: skipped (SHELVING_OFFLINE)`
   to stderr and exits 0 **before making any network call**. This is the only
   skip path.
-- [ ] The script uses `GH_TOKEN` or `GITHUB_TOKEN` as a bearer token when set,
+- [x] The script uses `GH_TOKEN` or `GITHUB_TOKEN` as a bearer token when set,
   for rate-limit headroom; it also runs unauthenticated (reads only public tag
   data, no scope beyond the default). The `Authorization` header is sent **only
   when the resolved API host is `api.github.com`** (or the exact
   runner-provided `GITHUB_API_URL`), never to an arbitrary override, so a
   redirected or misconfigured base cannot harvest the token.
-- [ ] On success the script prints `check-action-pins: verified N/N pins` to
+- [x] On success the script prints `check-action-pins: verified N/N pins` to
   stdout, where N is the number of `uses:` lines found, so a reviewer and the
   test can confirm it actually ran.
-- [ ] Classification is by outcome, not by probing first: make the real API
+- [x] Classification is by outcome, not by probing first: make the real API
   call per pin and branch on the captured HTTP status
   (`curl ... -w '%{http_code}'`, never `curl --fail`). JSON is parsed with a
   `python3 -c` one-liner (`json.load(sys.stdin)`), not `jq`.
-- [ ] `tests/test_check_action_pins.py` (typed, `mypy --strict`-clean, added to
+- [x] `tests/test_check_action_pins.py` (typed, `mypy --strict`-clean, added to
   `pyproject.toml` `[tool.mypy].files`): drives `tools/check-action-pins.sh` as
   a subprocess against a local mock of the tag API (a fixture `http.server`
   bound to `127.0.0.1` on an ephemeral port, `GITHUB_API_URL` pointed at it).
@@ -77,48 +77,48 @@ local mock of the tag API.
   `SHELVING_OFFLINE=1` → the skip line, exit 0, and the mock records zero
   requests. The 5xx-retry-then-fatal path is covered here too if the mock can
   express it; otherwise it is a handoff-recorded manual check.
-- [ ] `tools/lint-workflows.sh` calls `tools/check-action-pins.sh` as an
+- [x] `tools/lint-workflows.sh` calls `tools/check-action-pins.sh` as an
   additional check after the offline `uses:` pin-format check, using the same
   run-all-then-exit-nonzero aggregation it already uses for its other checks.
   It passes no new argument: `SHELVING_OFFLINE` threads through the environment.
-- [ ] `tools/run-tests.sh` accepts one optional argument, `--offline`. Bare
+- [x] `tools/run-tests.sh` accepts one optional argument, `--offline`. Bare
   `tools/run-tests.sh` runs everything. `tools/run-tests.sh --offline` does
   `export SHELVING_OFFLINE=1` before running the checks. Any other argument (or
   more than one) prints a one-line usage to stderr and exits 2. It only ever
   writes the value `1`. Invoked as `pixi run tests` and
   `pixi run tests -- --offline`.
-- [ ] `tools/run-tests.sh`'s header comment gains one line stating that
+- [x] `tools/run-tests.sh`'s header comment gains one line stating that
   `--offline` sets `SHELVING_OFFLINE` so network-dependent checks skip
   themselves. No enumeration of steps (per `CLAUDE.md` § Writing style).
-- [ ] `.github/workflows/ci.yml`: the single `tests` job (or the `pixi run
+- [x] `.github/workflows/ci.yml`: the single `tests` job (or the `pixi run
   tests` step) gains `GITHUB_TOKEN: ${{ github.token }}` in its `env`, for
   rate-limit headroom against the shared-runner IP pool. CI runs `pixi run
   tests` with no `--offline`, so the pin check runs and a network failure fails
   the job. No new workflow permission (`contents: read` already covers reading
   other public repos' tags); triggers stay `push` + `pull_request` (never
   `pull_request_target`).
-- [ ] `docs/github-actions-hardening.md`: the "Pin every action to a commit
+- [x] `docs/github-actions-hardening.md`: the "Pin every action to a commit
   SHA" and enforcement sections state that the pin check now also verifies,
   online, that each SHA is the commit its `# vX.Y.Z` tag names; that this runs
   in CI with `GITHUB_TOKEN` and fails the run on a network failure; and that
   `pixi run tests -- --offline` skips it for offline local work. Does not
   mention `SHELVING_OFFLINE` (that is an internal tools contract, not a
   user-facing knob).
-- [ ] `docs/architecture.md` "Testing and CI": documents the `SHELVING_OFFLINE`
+- [x] `docs/architecture.md` "Testing and CI": documents the `SHELVING_OFFLINE`
   contract (value `1` enables, unset/empty disables, other values are an error;
   a network-dependent check reads it and skips itself when enabled;
   `pixi run tests -- --offline` sets it; without it a network failure in such a
   check fails the run) as the pattern every future network-dependent check
   follows.
-- [ ] `README.md` `## Tests`: one added sentence that `pixi run tests --
+- [x] `README.md` `## Tests`: one added sentence that `pixi run tests --
   --offline` skips checks that need the network. High-level; does not name
   which checks.
-- [ ] `pixi run tests` is green on the dev VM (which has network): its output
+- [x] `pixi run tests` is green on the dev VM (which has network): its output
   contains `check-action-pins: verified N/N pins`. `pixi run tests -- --offline`
   is green and its output contains `check-action-pins: skipped (SHELVING_OFFLINE)`.
   `shellcheck tools/*.sh` (already a `run-tests.sh` step) stays clean with the
   new script.
-- [ ] The `2026-08-30` "Reviewing SHA-pinned workflows had no tooling behind
+- [x] The `2026-08-30` "Reviewing SHA-pinned workflows had no tooling behind
   it" friction-log entry is removed from `.claude/docs/friction-log.md` in the
   commit that lands this task (it closes the last residual: the SHA/tag
   correspondence check).
@@ -266,7 +266,7 @@ lands this. Record any NEW workaround per `CLAUDE.md`.
 - [x] **Step 9** (`.claude/docs/friction-log.md`): Remove the `2026-08-30`
   "Reviewing SHA-pinned workflows had no tooling" entry.
 
-- [ ] **Step 10** (verification, no new files): `pixi run tests` green with
+- [x] **Step 10** (verification, no new files): `pixi run tests` green with
   `check-action-pins: verified N/N pins` and the new pytest case passing;
   `pixi run tests -- --offline` green with
   `check-action-pins: skipped (SHELVING_OFFLINE)` in the output;
