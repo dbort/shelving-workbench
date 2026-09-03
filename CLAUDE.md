@@ -114,7 +114,13 @@ two in sync):
   explains *why* otherwise-unusual logic exists, not as a comparison to
   superseded code.
 - Doc comments: identifier-first summary line that adds information
-  beyond the name.
+  beyond the name. A function or method docstring states the *contract* a
+  caller relies on: the return value and any ordering or shape guarantee,
+  what it raises, which inputs have no effect, invariants. It does not
+  narrate the body step by step ("calls X, then does Y, then returns Z").
+  The internal call sequence lives in the code; a maintainer note that
+  earns its place goes inline at the line it explains, not in the
+  docstring.
 - No em-dash asides; use a comma, colon, or separate sentence.
 - No filler adverbs (really, simply, actually, crucially...) and no
   marketing fluff (robust, seamless, comprehensive, leverage).
