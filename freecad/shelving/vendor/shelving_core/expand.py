@@ -64,7 +64,8 @@ def total_volume_mm3(specs: Sequence[PlankSpec]) -> float:
 def expand(carcass: Carcass, catalog: Catalog) -> list[PlankSpec]:
     """Every physical plank of ``carcass``, in list order: the shell as
     ``BOTTOM``, ``TOP``, ``LEFT_SIDE``, ``RIGHT_SIDE``, then one plank per
-    ``Divider`` in tree pre-order.
+    ``Divider`` from a depth-first walk of the split tree, each divider
+    emitted right after the planks of the child it follows.
 
     A material id absent from ``catalog`` raises ``KeyError``; an unsatisfiable
     layout raises :class:`~shelving_core.solver.LayoutSolveError`.
