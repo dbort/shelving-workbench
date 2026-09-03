@@ -89,7 +89,15 @@ sample units; the print script gains a plank table.
 
 ## M3 — `ShelvingUnit` in FreeCAD
 
-**Status:** Planned
+**Status:** Tasks sh-011, sh-012
+
+- [ ] sh-011 — FreeCAD object layer: the isolable plank box helper, the
+  `Plank` `Part::FeaturePython`, generated `Label`s, the in-code default
+  catalog, the `freecad-stubs` type-check dependency plus `mypy --strict`
+  over `freecad/shelving/`, and a headless functional-test harness
+- [ ] sh-012 — the `ShelvingUnit` `App::Part` container, the "create unit"
+  command and toolbar, `execute` calling core expansion and reconciling
+  child planks by UUID (blocked on sh-011)
 
 Workbench skeleton, the "create unit" command, the `App::Part` container
 with promoted scalars and the `Layout` JSON property, `execute` calling
