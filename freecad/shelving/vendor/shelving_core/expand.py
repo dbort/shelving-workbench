@@ -62,15 +62,13 @@ def total_volume_mm3(specs: Sequence[PlankSpec]) -> float:
 
 
 def expand(carcass: Carcass, catalog: Catalog) -> list[PlankSpec]:
-    """Every physical plank of ``carcass`` once the spacing solver has placed it.
+    """Every physical plank of ``carcass``, in list order: the shell as
+    ``BOTTOM``, ``TOP``, ``LEFT_SIDE``, ``RIGHT_SIDE``, then one plank per
+    ``Divider`` in tree pre-order.
 
-    Calls :func:`~shelving_core.solver.solve` internally, then emits the shell
-    in the order ``BOTTOM``, ``TOP``, ``LEFT_SIDE``, ``RIGHT_SIDE`` followed by
-    one plank per ``Divider`` in pre-order (each child, then the divider that
-    follows it, recursing into ``Split`` children). A material id absent from
-    ``catalog`` raises ``KeyError`` and an unsatisfiable layout raises
-    :class:`~shelving_core.solver.LayoutSolveError`; both propagate unchanged.
-    ``Divider.lap`` is not read.
+    A material id absent from ``catalog`` raises ``KeyError``; an unsatisfiable
+    layout raises :class:`~shelving_core.solver.LayoutSolveError`.
+    ``Divider.lap`` does not affect the result.
     """
     layout = solve(carcass, catalog)
     thickness_mm = catalog[carcass.default_material].thickness_mm

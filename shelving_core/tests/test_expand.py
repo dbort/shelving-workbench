@@ -183,7 +183,7 @@ def test_shell_node_ids_are_stable_and_role_scoped() -> None:
 
 
 def _nested_sample() -> Carcass:
-    """Mirrors ``tools/layout_demo.py``: 4 dividers over 3 splits, one override."""
+    """4 dividers over 3 splits, one override."""
     top = Split(
         orientation=Orientation.VERTICAL,
         children=[Leaf(), Leaf(), Leaf()],

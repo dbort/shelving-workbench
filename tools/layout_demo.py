@@ -1,4 +1,4 @@
-"""Build a sample nested Carcass, solve it, and print the solved layout.
+"""Build a sample nested Carcass, solve it, expand it, and print the result.
 
 Run through the pixi environment, which puts ``shelving_core`` on the import
 path:
@@ -6,15 +6,17 @@ path:
     pixi run demo
     pixi run demo -- --svg out.svg
 
-The sample tree is defined in code. The output leads with the in-code material
-catalog (one row per entry), then an indented walk of the tree: one line per
-node with its short id, kind, solved rectangle ``(x, z, width, height)`` in
-millimetres, and, for a node under a split, the ``SplitRule`` that positioned
-it; divider lines also carry the resolved material name and thickness. It then
-prints the expanded plank list, one row per physical plank (role, size,
-minimum-corner placement, material name), and a final total-plank-volume line.
-With ``--svg PATH``, the solved layout is also written to ``PATH`` as an SVG
-elevation and a confirmation line is printed.
+The sample tree and catalog are defined in code. Output, in order:
+
+- the material catalog: one row per entry;
+- an indented walk of the split tree: per node, its short id, kind, solved
+  rectangle ``(x, z, width, height)`` in millimetres, and the ``SplitRule``
+  that positioned it (nodes under a split only); divider lines also show the
+  resolved material name and thickness;
+- the expanded plank list: one row per physical plank (role, size,
+  minimum-corner placement, material name), then a total-plank-volume line.
+
+``--svg PATH`` also writes the solved layout to ``PATH`` as an SVG elevation.
 """
 
 import argparse
