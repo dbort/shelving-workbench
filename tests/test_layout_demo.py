@@ -59,6 +59,14 @@ def test_demo_runs_and_prints_the_solved_sample() -> None:
     # The one override in the sample tree surfaces the 12 mm MDF entry.
     assert any('material="12 mm MDF" 12mm' in line for line in divider_lines)
 
+    # The expanded plank table: a "Planks:" header, then one row per physical
+    # plank (4 shell planks plus one per divider), then the total-volume line.
+    planks_start = lines.index("Planks:")
+    total_line = next(line for line in lines if line.startswith("Total plank volume:"))
+    plank_rows = lines[planks_start + 1 : lines.index(total_line)]
+    assert len(plank_rows) == 4 + 4
+    assert total_line.endswith(" mm^3")
+
 
 def test_demo_svg_flag_writes_a_parseable_svg(tmp_path: Path) -> None:
     out = tmp_path / "layout.svg"

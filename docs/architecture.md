@@ -21,11 +21,12 @@ workbench identifier.
 
 - A `ShelvingUnit` parametric object: a single self-contained carcass
   (one "box").
-- Butt-joint construction only. Sides run full height and depth; top,
-  bottom, shelves, and dividers are captured between the sides. The lap
-  order of any individual joint (which member runs continuous, which is
-  captured) is an overridable per-joint attribute; the carcass rule is
-  only the default.
+- Butt-joint construction only. The top and bottom run the full width and
+  depth; the two sides and every shelf and divider are captured between
+  them. The lap order of an individual joint (which member runs
+  continuous, which is captured) is reserved in the schema as a per-joint
+  override and is not yet honored; expansion always applies the carcass
+  default.
 - A recursive split layout: any bay is either a leaf or is divided
   horizontally or vertically into two or more child bays.
 - A modal task-panel elevation editor with: split a bay H or V, drag a
@@ -140,15 +141,17 @@ size; its sibling keeps whatever rule it had and absorbs the slack.
 
 ### Carcass expansion
 
-`expand(carcass, catalog) -> list[PlankSpec]` walks the tree and emits one
-`PlankSpec` per physical plank: the two outer sides, top, bottom, every
-divider, and (later) the back. A `PlankSpec` is `(uuid, role, size as a
-3-tuple, placement, material_ref, grain)` in the carcass's local frame.
+`expand(carcass, catalog) -> list[PlankSpec]` calls the spacing solver,
+then walks the tree and emits one `PlankSpec` per physical plank: bottom,
+top, the two sides, every divider, and (later) the back. A `PlankSpec` is
+`(node_id, role, size, placement, material_ref)` in the carcass's local
+frame, with `size` and `placement` each a `Vec3`. Grain direction is
+deferred to a later milestone.
 
-The default carcass rule (sides continuous, everything else captured
-between them) sets each joint's default lap order. A per-joint override
-flips which member runs through. Expansion reads the effective lap order
-per joint to decide each plank's length and position.
+The default carcass rule sets each joint's lap order: top and bottom run
+continuous the full width and depth, and the sides and every divider are
+captured between them. A per-joint override that flips which member runs
+through is reserved in the schema; M2 always applies the default.
 
 Expansion has no FreeCAD dependency: it produces plain data. The FreeCAD
 layer turns each `PlankSpec` into a solid.

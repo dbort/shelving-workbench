@@ -52,3 +52,65 @@ It runs inside the pixi environment, which supplies every tool including
 FreeCAD. To run only the workflow lint, use `bash tools/lint-workflows.sh` from
 inside `pixi shell`. For offline work, `pixi run tests -- --offline` skips the
 checks that need network access.
+
+## Glossary
+
+The layout vocabulary and how each term maps onto the code in `shelving_core`.
+
+- **Carcass**: the shelving box. `Carcass` in `shelving_core.layout` holds the
+  outer `width_mm`, `height_mm`, and `depth_mm`, a `default_material`, a root
+  `Bay`, and a persistent `id`.
+- **Bay**: a rectangular region of the elevation. `Bay = Leaf | Split`: it is
+  either open or subdivided.
+- **Leaf**: an open compartment, a `Bay` with no further subdivision. `Leaf`
+  carries only its `id`.
+- **Split**: a `Bay` divided along one axis into two or more child bays.
+  `Split` holds an `Orientation` (`HORIZONTAL` or `VERTICAL`), the ordered
+  `children`, one `SplitRule` per child (`Fixed`, `Weighted`, or `Fill`), and
+  one `Divider` per gap between consecutive children.
+- **Divider**: the panel in the gap between two consecutive split children.
+  `Divider` in `shelving_core.layout` carries an optional `material` override
+  and a reserved `lap`. A divider in a `HORIZONTAL` split is a shelf
+  (`PlankRole.SHELF`); a divider in a `VERTICAL` split is a vertical divider
+  (`PlankRole.DIVIDER`).
+- **Plank**: one physical panel of the finished unit. `expand` emits one
+  `PlankSpec` per plank; the FreeCAD layer turns each into a solid.
+- **Joint**: where the edge of one plank meets another plank. v1 has no joint
+  data type; the carcass rule alone decides how planks meet.
+- **Butt joint**: the only construction in v1. One plank's square end meets the
+  face of another; there is no dado, rabbet, or groove.
+- **Lap order**: at a joint, which plank runs **continuous** (its length passes
+  straight through the joint) and which is **captured** (its length stops
+  against the neighbour's face). `LapOrder` in `shelving_core.layout` has the
+  members `THROUGH` and `CAPTURED`; `Divider.lap` is a reserved per-joint
+  override that no layout or expansion code reads in M2.
+- **Default carcass rule**: the top and bottom run continuous the full width
+  and depth; the two sides and every divider are captured. `expand` always
+  applies this rule.
+- **Catalog**: the material table. `Catalog` in `shelving_core.materials` maps
+  a `MaterialId` to a `MaterialEntry`.
+- **Material entry**: one stock record. `MaterialEntry` carries `id`, `name`,
+  `thickness_mm`, `material_type`, and an optional `nominal_thickness` label.
+  The solver resolves a `MaterialId` to `thickness_mm`.
+- **MaterialId**: a `NewType('MaterialId', str)`. `Carcass.default_material`
+  applies to the shell and to any `Divider` that sets no `material` of its own.
+- **PlankSpec**: the output record of `expand`, a frozen dataclass
+  `(node_id, role, size, placement, material)`. `node_id` is the owning
+  `Divider.id` for a divider plank and the literal `f"{carcass.id}:{role.value}"`
+  for a shell plank. `size` and `placement` are `Vec3`. There is no grain
+  field yet.
+- **PlankRole**: a `StrEnum` naming what a plank is: `LEFT_SIDE`, `RIGHT_SIDE`,
+  `TOP`, `BOTTOM`, `SHELF`, `DIVIDER`.
+- **Local coordinate frame**: origin at the carcass front-bottom-left corner,
+  `+X` right (width), `+Y` back (depth), `+Z` up (height). A
+  `PlankSpec.placement` is the plank's minimum corner in that frame; `size` is
+  its extent along each axis. All lengths are float millimetres.
+- **Vec3**: a frozen dataclass `(x_mm, y_mm, z_mm)` in `shelving_core.expand`,
+  used for both a plank's `size` and its `placement`.
+- **Spacing solver**: `solve(carcass, catalog)` in `shelving_core.solver`. It
+  insets the carcass by the default panel thickness, then places one `Rect`
+  per `Leaf`, `Split`, and `Divider` id, distributing slack along each split's
+  axis by its `SplitRule`s.
+- **expand**: `expand(carcass, catalog)` in `shelving_core.expand`. It calls
+  `solve`, then returns the `list[PlankSpec]` for the shell and every divider.
+  Like the solver, it has no FreeCAD dependency and produces plain data.
