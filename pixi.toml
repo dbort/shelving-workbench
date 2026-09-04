@@ -35,3 +35,6 @@ demo = "python tools/layout_demo.py"
 # is the project, not a third-party dependency.
 [pypi-dependencies]
 shelving-workbench = { path = ".", editable = true }
+# Type-check-only: PEP 561 type stubs for the FreeCAD / App / Part / FreeCADGui
+# modules.
+freecad-stubs = "*"

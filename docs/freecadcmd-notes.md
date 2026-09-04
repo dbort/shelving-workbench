@@ -1,9 +1,9 @@
 # Writing `freecadcmd` headless scripts
 
 `freecadcmd` runs a Python script inside a FreeCAD interpreter with no GUI.
-`pixi run tests` uses it for `tools/freecad_smoke.py`, and later milestones
-add more headless scripts for CI checks. Three of its behaviors differ from
-a plain `python script.py` run; each is handled in the code cited below.
+`pixi run tests` uses it for `tools/freecad_smoke.py` and
+`tools/freecad_object_smoke.py`. Several of its behaviors differ from a plain
+`python script.py` run; most are handled in the code cited below.
 
 ## The script's exit status is discarded
 
@@ -45,3 +45,27 @@ not enough to protect GUI-only code: the import passes and the
 See `freecad/shelving/init_gui.py`, which catches `ImportError` and, on the
 success path, drops `Gui` to `None` when `hasattr(Gui, "Workbench")` is
 false so the workbench base class and the `addWorkbench` call are skipped.
+
+## `App::Part` does not call a Python `Proxy.execute`
+
+FreeCAD 1.0.0 (`1.0.0R39109`) under `freecadcmd` gives a bare `App::Part` no
+scripted-object behavior. Both ways of attaching a proxy fail to produce an
+`execute` callback:
+
+- `doc.addObject("App::Part", name)` then `part.Proxy = recorder` raises
+  `AttributeError: 'App.Part' object has no attribute 'Proxy'`. The C++ type
+  carries no `App::*Python` extension, so it holds no proxy at all.
+- The three-argument `doc.addObject("App::Part", name, recorder)` form does not
+  raise, but the resulting object still exposes no `Proxy` attribute, and a
+  `touch()` + `recompute()` never calls the proxy's `execute`.
+
+The scripted `App::*Python` types behave the opposite way: a proxy passed the
+three-argument way to `App::FeaturePython`, `App::GeometryPython`, or
+`App::DocumentObjectGroupPython` receives `execute` on every `recompute()`.
+
+Consequence for sh-012: the `ShelvingUnit` container cannot be a bare
+`App::Part` that reconciles its children from its own `execute`. It must be a
+scripted type that receives `execute`, either an `App::DocumentObjectGroupPython`
+or an `App::FeaturePython` with a group extension. The other option is an
+`App::Part` paired with a child `App::FeaturePython` "driver" object that owns
+the reconciliation `execute`.

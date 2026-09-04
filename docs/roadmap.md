@@ -91,7 +91,7 @@ sample units; the print script gains a plank table.
 
 **Status:** Tasks sh-011, sh-012
 
-- [ ] sh-011 — FreeCAD object layer: the isolable plank box helper, the
+- [x] sh-011 — FreeCAD object layer: the isolable plank box helper, the
   `Plank` `Part::FeaturePython`, generated `Label`s, the in-code default
   catalog, the `freecad-stubs` type-check dependency plus `mypy --strict`
   over `freecad/shelving/`, and a headless functional-test harness
