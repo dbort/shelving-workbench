@@ -1,5 +1,10 @@
 # Shelving Workbench
 
+[![CI](https://github.com/dbort/shelving-workbench/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/dbort/shelving-workbench/actions/workflows/ci.yml)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/dbort/shelving-workbench/badge)](https://scorecard.dev/viewer/?uri=github.com/dbort/shelving-workbench)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![FreeCAD 1.0](https://img.shields.io/badge/FreeCAD-1.0-blue.svg)](https://www.freecad.org)
+
 A FreeCAD 1.0 workbench for parametric shelving. A unit is designed as a flat
 front elevation and expands into individually editable 3D plank solids; editing
 the elevation reflows the 3D. The layout math lives in a pure-Python core
