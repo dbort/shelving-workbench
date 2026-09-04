@@ -49,7 +49,7 @@ class PlankFeature(Protocol):
 class ShelvingUnitFeature(Protocol):
     """Scripted-object surface of the `ShelvingUnit` container.
 
-    Covers both halves of the sh-012 container: the `App::Part` that holds the
+    Covers both halves of the container: the `App::Part` that holds the
     single `Placement` and the plank children, and the `ShelvingUnitDriver`
     `App::FeaturePython` child that carries the promoted properties, `Layout`,
     and `execute`. Property names and types match the `addProperty` calls in

@@ -62,9 +62,9 @@ bottom. Switching back to `ply18` restores 18 mm.
    properties (right-click in the editor, **Show hidden**).
 2. Copy the current **Layout** value into a text editor. It has the shape
    `{"schema_version": 1, "carcass": {"id": "…", "width_mm": 900.0, "height_mm": 1800.0, "depth_mm": 300.0, "default_material": "ply18", "root": {"kind": "leaf", "id": "…"}}}`.
-3. Replace **only** the `"root": { … }` value — leave everything outside it (the
+3. Replace **only** the `"root": { … }` value, keeping everything outside it (the
    `schema_version`, and the `carcass` `id` / dimensions / `default_material`)
-   exactly as it is — with:
+   unchanged:
 
    ```json
    {"kind": "split", "id": "qa-split", "orientation": "horizontal", "children": [{"kind": "leaf", "id": "qa-bay-top"}, {"kind": "leaf", "id": "qa-bay-mid"}, {"kind": "leaf", "id": "qa-bay-bot"}], "rules": [{"type": "fill"}, {"type": "fill"}, {"type": "fill"}], "dividers": [{"id": "qa-shelf-1", "material": null, "lap": null}, {"id": "qa-shelf-2", "material": null, "lap": null}]}
@@ -93,8 +93,8 @@ Expected: the plank still reflows to the new size, and its label stays
 1. On the `ShelvingUnitDriver`, show hidden properties if they are not already
    visible (right-click in the editor, **Show hidden**).
 2. As in case 5, copy the current **Layout** out and replace **only** the
-   `"root": { … }` value — keep the `schema_version` and the `carcass` `id` /
-   dimensions / `default_material` unchanged — with a split whose two `fixed`
+   `"root": { … }` value, keeping the `schema_version` and the `carcass` `id` /
+   dimensions / `default_material` unchanged, with a split whose two `fixed`
    openings add up to far more than the space available:
 
    ```json

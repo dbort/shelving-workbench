@@ -271,7 +271,7 @@ ordered pass it covers ruff, a strict type check, and pytest over
 lint; and, in a FreeCAD 1.0 environment, a headless `freecadcmd` import
 smoke.
 
-As of M3 the `freecadcmd` step runs full smoke tests: create a unit,
+The `freecadcmd` step runs full smoke tests: create a unit,
 recompute, assert plank count and bounding boxes; edit a property,
 recompute, assert the reflow. Editing a catalog thickness and asserting
 that dependent planks change arrives with M4, when the catalog becomes a

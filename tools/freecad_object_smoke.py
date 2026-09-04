@@ -1,8 +1,9 @@
 """Headless functional check for the shelving object layer.
 
-Run via ``freecadcmd tools/freecad_object_smoke.py``. It builds the `Plank`
-scripted object and its helpers inside a real FreeCAD interpreter and asserts
-their geometry, labels, and catalog. ``freecadcmd`` discards a script's exit
+Run via ``freecadcmd tools/freecad_object_smoke.py``. It builds the `Plank` and
+`ShelvingUnit` scripted objects and their helpers inside a real FreeCAD
+interpreter and asserts their geometry, labels, catalog, and the unit's
+plank reconciliation. ``freecadcmd`` discards a script's exit
 status, so the final ``shelving object layer OK`` line is the only success
 signal; ``tools/run-tests.sh`` greps for it.
 
@@ -278,9 +279,10 @@ def _check_unit_end_to_end() -> None:
         good_count = len(planks)
 
         # Over-constraint: two Fixed openings that cannot fit the interior. The
-        # driver must raise, leave the six planks in place, and not rewrite
-        # Layout. FreeCAD logs the proxy RuntimeError traceback to stderr on the
-        # recompute below; that noise is the expected shape of the error path.
+        # driver must raise, leave the plank count and Layout at their last good
+        # values (good_count / good_layout, captured above). FreeCAD logs the
+        # proxy RuntimeError traceback to stderr on the recompute below; that
+        # noise is the expected shape of the error path.
         overfull = Carcass(
             width_mm=900.0,
             height_mm=1800.0,

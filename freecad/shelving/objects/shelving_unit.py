@@ -49,8 +49,7 @@ def make_shelving_unit(doc: FreeCAD.Document) -> FreeCAD.DocumentObject:
     `DefaultMaterial` properties and the hidden `Layout`, seeded with a
     single-`Leaf` 900 x 1800 x 300 mm carcass in `ply18`; the promoted scalars
     are set to match. The "Create Unit" command and the headless smoke both call
-    this, so it touches no GUI. A `recompute` afterwards is what builds the
-    planks.
+    this, so it touches no GUI. A `recompute` afterwards builds the planks.
     """
     part = cast("ShelvingUnitFeature", doc.addObject("App::Part", "ShelvingUnit"))
     driver = cast(

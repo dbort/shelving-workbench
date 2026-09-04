@@ -31,8 +31,8 @@ _RESOURCE_DIR = os.path.join(os.path.dirname(__file__), "resources")
 class ShelvingWorkbench(_WorkbenchBase):
     """FreeCAD workbench entry point for parametric shelving.
 
-    Carries only the menu metadata FreeCAD needs to list the workbench; it
-    registers no toolbar or command yet.
+    `Initialize` registers the Shelving toolbar and menu with the
+    `Shelving_CreateUnit` command.
     """
 
     MenuText = "Shelving"
@@ -46,7 +46,7 @@ class ShelvingWorkbench(_WorkbenchBase):
 
         command_ids = ["Shelving_CreateUnit"]
         self.appendToolbar("Shelving", command_ids)
-        # freecad-stubs leaves `appendMenu` fully unannotated.
+        # freecad-stubs leaves `appendMenu` unannotated.
         self.appendMenu("Shelving", command_ids)  # type: ignore[no-untyped-call]
 
     def Activated(self) -> None:
