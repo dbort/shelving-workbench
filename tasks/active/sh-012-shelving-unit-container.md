@@ -310,7 +310,7 @@ Friction log: record any workaround per `CLAUDE.md` in
   create/update/remove, create-time `Label` only), with `PlankFeature` /
   `ShelvingUnitFeature` casts on the `addObject` returns. Empty `dumps`/`loads`.
 
-- [ ] **Step 3** (`freecad/shelving/commands/__init__.py`,
+- [x] **Step 3** (`freecad/shelving/commands/__init__.py`,
   `freecad/shelving/commands/create_unit.py`): `CreateUnitCommand` with
   `GetResources` / `IsActive` / `Activated` per Must Have, and a headless-safe
   `Gui.addCommand`.
