@@ -12,6 +12,7 @@ The ``sys.path`` insert plus ``freecad.__path__`` refresh mirror
 path merged back in before it imports.
 """
 
+import json
 import os
 import sys
 from pkgutil import extend_path
@@ -30,14 +31,31 @@ from freecad.shelving.default_catalog import (  # noqa: E402
     DEFAULT_CATALOG_IDS,
     DEFAULT_MATERIAL_ID,
 )
-from freecad.shelving.objects.feature_types import PlankFeature  # noqa: E402
+from freecad.shelving.objects.feature_types import (  # noqa: E402
+    PlankFeature,
+    ShelvingUnitFeature,
+)
 from freecad.shelving.objects.geometry import plank_shape  # noqa: E402
 from freecad.shelving.objects.labels import generated_label  # noqa: E402
 from freecad.shelving.objects.plank import add_plank  # noqa: E402
+from freecad.shelving.objects.shelving_unit import (  # noqa: E402
+    make_shelving_unit,
+    unit_driver,
+)
 from freecad.shelving.vendor.shelving_core.expand import (  # noqa: E402
     PlankRole,
     Vec3,
 )
+from freecad.shelving.vendor.shelving_core.layout import (  # noqa: E402
+    Carcass,
+    Divider,
+    Fill,
+    Fixed,
+    Leaf,
+    Orientation,
+    Split,
+)
+from freecad.shelving.vendor.shelving_core.materials import MaterialId  # noqa: E402
 
 _CATALOG_ORDER = ["ply18", "ply12", "mdf19", "hardwood20"]
 
@@ -105,11 +123,162 @@ def _check_plank_recompute() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
+def _assert_vec(
+    got: FreeCAD.Vector,
+    expected: tuple[float, float, float],
+    tol_mm: float = 1e-6,
+) -> None:
+    observed = (got.x, got.y, got.z)
+    for got_mm, want_mm in zip(observed, expected, strict=True):
+        assert abs(got_mm - want_mm) <= tol_mm, (observed, expected)
+
+
+def _plank_children(part: object) -> list[PlankFeature]:
+    """The unit `App::Part`'s plank children: every group member carrying a
+    `NodeId`, which excludes the `ShelvingUnitDriver`."""
+    group = cast("ShelvingUnitFeature", part).Group
+    return [cast("PlankFeature", c) for c in group if hasattr(c, "NodeId")]
+
+
+def _union_bbox(
+    planks: list[PlankFeature],
+) -> tuple[float, float, float, float, float, float]:
+    boxes = [p.Shape.BoundBox for p in planks]
+    return (
+        min(b.XMin for b in boxes),
+        min(b.YMin for b in boxes),
+        min(b.ZMin for b in boxes),
+        max(b.XMax for b in boxes),
+        max(b.YMax for b in boxes),
+        max(b.ZMax for b in boxes),
+    )
+
+
+def _by_role(planks: list[PlankFeature]) -> dict[str, PlankFeature]:
+    return {p.Role: p for p in planks}
+
+
+def _in_error_state(driver: ShelvingUnitFeature) -> bool:
+    return "Touched" in driver.State or not driver.isValid()
+
+
+def _check_unit_end_to_end() -> None:
+    doc = FreeCAD.newDocument("shelving_unit_smoke")
+    try:
+        part = make_shelving_unit(doc)
+        driver = cast("ShelvingUnitFeature", unit_driver(part))
+        doc.recompute()
+
+        t_mm = DEFAULT_CATALOG["ply18"].thickness_mm
+
+        planks = _plank_children(part)
+        assert len(planks) == 4, len(planks)
+        assert {p.Role for p in planks} == {
+            "bottom",
+            "top",
+            "left_side",
+            "right_side",
+        }, {p.Role for p in planks}
+        _assert_box_tuple(_union_bbox(planks), (0.0, 0.0, 0.0), (900.0, 300.0, 1800.0))
+
+        shell = _by_role(planks)
+        _assert_vec(shell["bottom"].SizeMM, (900.0, 300.0, t_mm))
+        _assert_vec(shell["bottom"].CornerMM, (0.0, 0.0, 0.0))
+        _assert_vec(shell["top"].SizeMM, (900.0, 300.0, t_mm))
+        _assert_vec(shell["top"].CornerMM, (0.0, 0.0, 1800.0 - t_mm))
+        _assert_vec(shell["left_side"].SizeMM, (t_mm, 300.0, 1800.0 - 2.0 * t_mm))
+        _assert_vec(shell["left_side"].CornerMM, (0.0, 0.0, t_mm))
+        _assert_vec(shell["right_side"].SizeMM, (t_mm, 300.0, 1800.0 - 2.0 * t_mm))
+        _assert_vec(shell["right_side"].CornerMM, (900.0 - t_mm, 0.0, t_mm))
+
+        # Property reflow: widen the unit, recompute, and confirm the solved
+        # geometry and the rewritten Layout both follow.
+        driver.Width = 1000
+        doc.recompute()
+        planks = _plank_children(part)
+        union = _union_bbox(planks)
+        assert abs((union[3] - union[0]) - 1000.0) <= 1e-6, union
+        _assert_vec(_by_role(planks)["right_side"].CornerMM, (1000.0 - t_mm, 0.0, t_mm))
+        assert json.loads(driver.Layout)["carcass"]["width_mm"] == 1000.0, driver.Layout
+
+        # Structural relayout by hand-edited Layout: a HORIZONTAL split with two
+        # shelves. Reuse the unit's carcass id so the shell node ids stay
+        # matched and only the two shelves are added.
+        carcass_id = json.loads(driver.Layout)["carcass"]["id"]
+        driver.Width = 900
+        relayout = Carcass(
+            width_mm=900.0,
+            height_mm=1800.0,
+            depth_mm=300.0,
+            default_material=MaterialId("ply18"),
+            root=Split(
+                orientation=Orientation.HORIZONTAL,
+                children=[Leaf(), Leaf(), Leaf()],
+                rules=[Fixed(size_mm=400.0), Fixed(size_mm=400.0), Fill()],
+                dividers=[Divider(), Divider()],
+            ),
+            id=carcass_id,
+        )
+        driver.Layout = relayout.to_json()
+        doc.recompute()
+        planks = _plank_children(part)
+        assert len(planks) == 6, len(planks)
+        shelves = [p for p in planks if p.Role == "shelf"]
+        assert len(shelves) == 2, len(shelves)
+        for shelf in shelves:
+            _assert_vec(shelf.SizeMM, (900.0 - 2.0 * t_mm, 300.0, t_mm))
+
+        good_layout = driver.Layout
+        good_count = len(planks)
+
+        # Over-constraint: two Fixed openings that cannot fit the interior. The
+        # driver must raise, leave the six planks in place, and not rewrite
+        # Layout. FreeCAD logs the proxy RuntimeError traceback to stderr on the
+        # recompute below; that noise is the expected shape of the error path.
+        overfull = Carcass(
+            width_mm=900.0,
+            height_mm=1800.0,
+            depth_mm=300.0,
+            default_material=MaterialId("ply18"),
+            root=Split(
+                orientation=Orientation.HORIZONTAL,
+                children=[Leaf(), Leaf()],
+                rules=[Fixed(size_mm=5000.0), Fixed(size_mm=5000.0)],
+                dividers=[Divider()],
+            ),
+            id=carcass_id,
+        )
+        bad_layout = overfull.to_json()
+        driver.Layout = bad_layout
+        try:
+            doc.recompute()
+        except Exception:  # noqa: BLE001  a raised recompute also satisfies the check
+            pass
+        assert _in_error_state(driver), driver.State
+        assert len(_plank_children(part)) == good_count, len(_plank_children(part))
+        assert driver.Layout == bad_layout, "execute rewrote Layout on failure"
+        assert bad_layout != good_layout
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def _assert_box_tuple(
+    got: tuple[float, float, float, float, float, float],
+    min_corner_mm: tuple[float, float, float],
+    max_corner_mm: tuple[float, float, float],
+    tol_mm: float = 1e-6,
+) -> None:
+    expected = min_corner_mm + max_corner_mm
+    for got_mm, want_mm in zip(got, expected, strict=True):
+        assert abs(got_mm - want_mm) <= tol_mm, (got, expected)
+
+
 def main() -> None:
     _check_labels()
     _check_catalog()
     _check_plank_shape()
     _check_plank_recompute()
+    _check_unit_end_to_end()
     print("shelving object layer OK")
 
 

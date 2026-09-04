@@ -321,7 +321,7 @@ Friction log: record any workaround per `CLAUDE.md` in
   `mypy` and a headless `freecadcmd -c "import freecad.shelving.init_gui"` sanity
   check.
 
-- [ ] **Step 5** (`tools/freecad_object_smoke.py`): Add the end-to-end section —
+- [x] **Step 5** (`tools/freecad_object_smoke.py`): Add the end-to-end section —
   create, recompute, 4-plank + bbox assertions; lap-rule size checks; `Width`
   reflow + `Layout` rewrite; a `HORIZONTAL` two-`Fixed`-shelf relayout to 6
   planks; the over-constraint error-state check. Keep sh-011's checks and the

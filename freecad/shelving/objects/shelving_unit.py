@@ -20,14 +20,18 @@ from freecad.shelving.default_catalog import (
 from freecad.shelving.objects.feature_types import PlankFeature, ShelvingUnitFeature
 from freecad.shelving.objects.labels import generated_label
 from freecad.shelving.objects.plank import add_plank
-from freecad.shelving.vendor.shelving_core.expand import (
-    PlankRole,
-    PlankSpec,
-    expand,
-)
-from freecad.shelving.vendor.shelving_core.layout import Carcass, Leaf
-from freecad.shelving.vendor.shelving_core.materials import MaterialId
-from freecad.shelving.vendor.shelving_core.solver import LayoutSolveError
+
+# The vendored core's `expand.py` / `solver.py` bind their layout classes with
+# `from shelving_core.layout import ...` (byte-identical to upstream), so `expand`
+# type-checks its input against the top-level `shelving_core` package. A carcass
+# passed to it must be built from the same package, or `isinstance` misses every
+# `Split` and the dividers are silently dropped. Import the layout/solver/expand
+# surface from `shelving_core.*` to match; the byte-identical vendored copy under
+# `freecad.shelving.vendor` still backs `plank.py` and the label helper.
+from shelving_core.expand import PlankRole, PlankSpec, expand
+from shelving_core.layout import Carcass, Leaf
+from shelving_core.materials import MaterialId
+from shelving_core.solver import LayoutSolveError
 
 _GROUP = "Shelving"
 _DRIVER_NAME = "ShelvingUnitDriver"
@@ -163,6 +167,10 @@ class ShelvingUnit:
 
         spec_ids: set[str] = set()
         role_counts: dict[PlankRole, int] = {}
+        # Planks the driver created or updated this pass. A plank added mid
+        # recompute is not in the document's current work list, so each is
+        # recomputed explicitly once its spec is applied.
+        active: list[FreeCAD.DocumentObject] = []
         for spec in specs:
             role_counts[spec.role] = role_counts.get(spec.role, 0) + 1
             spec_ids.add(spec.node_id)
@@ -176,7 +184,9 @@ class ShelvingUnit:
                 plank.CornerMM = corner_mm
                 plank.Material = str(spec.material)
                 plank.Role = spec.role.value
-                cast("FreeCAD.DocumentObject", plank).touch()
+                existing_obj = cast("FreeCAD.DocumentObject", plank)
+                existing_obj.touch()
+                active.append(existing_obj)
                 continue
             created = add_plank(doc)
             new_plank = cast("PlankFeature", created)
@@ -189,10 +199,14 @@ class ShelvingUnit:
             # it, so a user rename sticks.
             created.Label = generated_label(spec.role, role_counts[spec.role])
             parent.addObject(created)
+            active.append(created)
 
         for node_id, stale in existing.items():
             if node_id not in spec_ids:
                 doc.removeObject(cast("FreeCAD.DocumentObject", stale).Name)
+
+        for plank_obj in active:
+            plank_obj.recompute()
 
     def dumps(self) -> None:
         """No proxy-side state: every persistent value is a property on the

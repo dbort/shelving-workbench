@@ -28,4 +28,21 @@ Sweeping the log is a human-triggered act, like task sign-off: the user asks for
 
 ## Entries
 
-_None open._
+- `2026-09-03` - **vendored `shelving_core` splits into two class identities**:
+  sh-012's `ShelvingUnit.execute` calls `expand(carcass, ...)`. The Frontier
+  Advice said to import `Carcass` / `Leaf` / `expand` from
+  `freecad.shelving.vendor.shelving_core.*`, but the vendored `expand.py` /
+  `solver.py` are byte-identical to upstream and import their layout classes with
+  `from shelving_core.layout import ...` (bare distribution name). In the CI
+  environment top-level `shelving_core` is importable, so `expand` type-checks
+  its input against `shelving_core.layout.Split` while a carcass built from
+  `freecad.shelving.vendor.shelving_core.layout` is a different `Split` class:
+  every `isinstance(bay, Split)` misses and all dividers/shelves are dropped with
+  no error. Worked around by importing the layout/solver/expand/materials surface
+  in `objects/shelving_unit.py` from top-level `shelving_core.*` so the classes
+  match what `expand` binds; `plank.py` and `labels.py` keep the vendored import
+  (they only touch standalone helpers like `Vec3` / `PlankRole`). Simpler if: the
+  vendored copy used relative imports (`from .layout import ...`), or
+  `tools/vendor-core.sh` rewrote the intra-package imports to the
+  `freecad.shelving.vendor.shelving_core` prefix, so there is one class identity
+  regardless of which path a consumer imports.
