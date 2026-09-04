@@ -282,7 +282,7 @@ FreeCAD API that behaved off-spec, a doc reverse-engineered).
   per Must Have, with the `ValueError` guards and the isolation-rationale
   docstring. Imports `FreeCAD`, `Part`, and `Vec3` from the vendored core.
 
-- [ ] **Step 3** (`freecad/shelving/objects/labels.py`, `freecad/shelving/catalog.py`):
+- [x] **Step 3** (`freecad/shelving/objects/labels.py`, `freecad/shelving/catalog.py`):
   `generated_label` with an exhaustive `match` over `PlankRole`. `DEFAULT_CATALOG`
   / `DEFAULT_MATERIAL_ID` / `DEFAULT_CATALOG_IDS` from the vendored `materials`
   module, with the M4-stopgap docstring. Neither module imports `FreeCAD`.
