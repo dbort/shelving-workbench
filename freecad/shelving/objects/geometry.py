@@ -5,9 +5,9 @@ will feed this seam into a PartDesign Body base feature, so no other module call
 `Part.makeBox` for a plank; swapping the construction stays a one-file change.
 """
 
+import FreeCAD
 import Part
 
-import FreeCAD
 from freecad.shelving.vendor.shelving_core.expand import Vec3
 
 

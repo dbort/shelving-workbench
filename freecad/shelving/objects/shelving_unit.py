@@ -12,6 +12,7 @@ the plank children into the `App::Part`.
 from typing import cast
 
 import FreeCAD
+
 from freecad.shelving.default_catalog import (
     DEFAULT_CATALOG,
     DEFAULT_CATALOG_IDS,

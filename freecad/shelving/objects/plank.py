@@ -14,6 +14,7 @@ this module headless stays safe.
 from typing import cast
 
 import FreeCAD
+
 from freecad.shelving.objects.feature_types import PlankFeature, ViewObjectHost
 from freecad.shelving.objects.geometry import plank_shape
 from freecad.shelving.vendor.shelving_core.expand import Vec3
