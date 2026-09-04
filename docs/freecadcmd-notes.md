@@ -3,7 +3,7 @@
 `freecadcmd` runs a Python script inside a FreeCAD interpreter with no GUI.
 `pixi run tests` uses it for `tools/freecad_smoke.py` and
 `tools/freecad_object_smoke.py`. Several of its behaviors differ from a plain
-`python script.py` run; each is handled in the code cited below.
+`python script.py` run; most are handled in the code cited below.
 
 ## The script's exit status is discarded
 
