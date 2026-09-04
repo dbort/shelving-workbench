@@ -60,11 +60,20 @@ bottom. Switching back to `ply18` restores 18 mm.
 
 1. On the `ShelvingUnitDriver`, set the property editor to show hidden
    properties (right-click in the editor, **Show hidden**).
-2. Edit **Layout**: replace the root `{"kind": "leaf", ...}` with a
-   `{"kind": "split", "orientation": "horizontal", ...}` node carrying three
-   `leaf` children, three `fill` rules, and two dividers. Keep the outer
-   `carcass` `id` unchanged.
-3. Recompute.
+2. Copy the current **Layout** value into a text editor. It has the shape
+   `{"schema_version": 1, "carcass": {"id": "…", "width_mm": 900.0, "height_mm": 1800.0, "depth_mm": 300.0, "default_material": "ply18", "root": {"kind": "leaf", "id": "…"}}}`.
+3. Replace **only** the `"root": { … }` value — leave everything outside it (the
+   `schema_version`, and the `carcass` `id` / dimensions / `default_material`)
+   exactly as it is — with:
+
+   ```json
+   {"kind": "split", "id": "qa-split", "orientation": "horizontal", "children": [{"kind": "leaf", "id": "qa-bay-top"}, {"kind": "leaf", "id": "qa-bay-mid"}, {"kind": "leaf", "id": "qa-bay-bot"}], "rules": [{"type": "fill"}, {"type": "fill"}, {"type": "fill"}], "dividers": [{"id": "qa-shelf-1", "material": null, "lap": null}, {"id": "qa-shelf-2", "material": null, "lap": null}]}
+   ```
+
+4. Paste the whole edited string back into **Layout** and recompute.
+
+The `qa-*` ids are arbitrary non-empty strings: any unique labels work, they do
+not need to be UUIDs.
 
 Expected: two new plank objects labelled `Shelf 1` and `Shelf 2` appear under
 the container, spanning the interior width at evenly spaced heights. The four
@@ -81,10 +90,19 @@ Expected: the plank still reflows to the new size, and its label stays
 
 ### 7. An over-constrained layout shows an error with no stale geometry
 
-1. On the `ShelvingUnitDriver`, edit **Layout** so a split's `fixed` opening
-   sizes add up to more than the space available (for example two `fixed` rules
-   of `5000` each in a unit 1800 mm tall).
-2. Recompute.
+1. On the `ShelvingUnitDriver`, show hidden properties if they are not already
+   visible (right-click in the editor, **Show hidden**).
+2. As in case 5, copy the current **Layout** out and replace **only** the
+   `"root": { … }` value — keep the `schema_version` and the `carcass` `id` /
+   dimensions / `default_material` unchanged — with a split whose two `fixed`
+   openings add up to far more than the space available:
+
+   ```json
+   {"kind": "split", "id": "qa-split", "orientation": "vertical", "children": [{"kind": "leaf", "id": "qa-bay-left"}, {"kind": "leaf", "id": "qa-bay-right"}], "rules": [{"type": "fixed", "size_mm": 5000.0}, {"type": "fixed", "size_mm": 5000.0}], "dividers": [{"id": "qa-div-1", "material": null, "lap": null}]}
+   ```
+
+3. Paste the whole edited string back into **Layout** and recompute. The `qa-*`
+   ids are arbitrary non-empty strings.
 
 Expected: the `ShelvingUnitDriver` shows a recompute-error marker in the tree,
 the report view names the solver overflow, and the 3D view still shows the last

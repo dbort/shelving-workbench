@@ -183,5 +183,6 @@ opening and change its size; confirm cripples and jacks follow.
 **Status:** Planned
 
 Parametric joinery with promote-to-Body, the cut-list Spreadsheet, the
-TechDraw elevation, multi-box units, and assembly joints, each as its own
-task.
+TechDraw elevation, multi-box units, assembly joints, and a macro or
+headless-script harness that drives the `docs/manual-qa.md` GUI cases, each
+as its own task.
