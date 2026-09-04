@@ -65,7 +65,7 @@ three-argument way to `App::FeaturePython`, `App::GeometryPython`, or
 
 Consequence for sh-012: the `ShelvingUnit` container cannot be a bare
 `App::Part` that reconciles its children from its own `execute`. It must be a
-scripted type that receives `execute` (an `App::DocumentObjectGroupPython`, or
-an `App::FeaturePython` with a group extension), or an `App::Part` paired with a
-child `App::FeaturePython` "driver" object that owns the reconciliation
-`execute`.
+scripted type that receives `execute`, either an `App::DocumentObjectGroupPython`
+or an `App::FeaturePython` with a group extension. The other option is an
+`App::Part` paired with a child `App::FeaturePython` "driver" object that owns
+the reconciliation `execute`.
