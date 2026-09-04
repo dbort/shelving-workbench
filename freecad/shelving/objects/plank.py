@@ -7,46 +7,14 @@ serializes to nothing (`dumps`/`loads` are no-ops). No GUI import and no
 supplies a default when it is present. Colour-by-material is M6.
 """
 
-from typing import Protocol, cast
-
-import Part
+from typing import cast
 
 import FreeCAD
+from freecad.shelving.objects.feature_types import PlankFeature
 from freecad.shelving.objects.geometry import plank_shape
 from freecad.shelving.vendor.shelving_core.expand import Vec3
 
 _GROUP = "Shelving"
-
-
-class _PlankFeature(Protocol):
-    """The `Part::FeaturePython` property surface a `Plank` proxy reads and writes.
-
-    FreeCAD attaches these with `addProperty` at runtime; the Protocol lets the
-    strict type check see them without a per-scripted-class stub. The names and
-    types match the `addProperty` calls in `Plank.__init__`.
-    """
-
-    Proxy: object
-    NodeId: str
-    Role: str
-    Material: str
-    SizeMM: FreeCAD.Vector
-    CornerMM: FreeCAD.Vector
-    Dimensions: str
-    Shape: Part.Shape
-
-    def addProperty(
-        self,
-        type: str,
-        name: str,
-        group: str = ...,
-        doc: str = ...,
-        attr: int = ...,
-        read_only: bool = ...,
-        hidden: bool = ...,
-    ) -> "_PlankFeature": ...
-
-    def setEditorMode(self, name: str, mode: list[str]) -> None: ...
 
 
 def _vec3(v: FreeCAD.Vector) -> Vec3:
@@ -62,7 +30,7 @@ def add_plank(doc: FreeCAD.Document, name: str = "Plank") -> FreeCAD.DocumentObj
     # The stub types `addObject` as returning the GUI proxy; headless it is an
     # `App::DocumentObject` carrying the scripted-object properties the Protocol
     # names.
-    obj = cast("_PlankFeature", doc.addObject("Part::FeaturePython", name))
+    obj = cast("PlankFeature", doc.addObject("Part::FeaturePython", name))
     Plank(obj)
     return cast("FreeCAD.DocumentObject", obj)
 
@@ -77,7 +45,7 @@ class Plank:
     later-milestone change the `plank_shape` seam isolates.
     """
 
-    def __init__(self, obj: _PlankFeature) -> None:
+    def __init__(self, obj: PlankFeature) -> None:
         obj.Proxy = self
         obj.addProperty(
             "App::PropertyString", "NodeId", _GROUP, "Reconciliation match key"
@@ -108,7 +76,7 @@ class Plank:
         obj.setEditorMode("SizeMM", ["Hidden"])
         obj.setEditorMode("CornerMM", ["Hidden"])
 
-    def execute(self, obj: _PlankFeature) -> None:
+    def execute(self, obj: PlankFeature) -> None:
         obj.Shape = plank_shape(_vec3(obj.SizeMM), _vec3(obj.CornerMM))
         size_mm = obj.SizeMM
         obj.Dimensions = f"{size_mm.x:g} x {size_mm.y:g} x {size_mm.z:g} mm"

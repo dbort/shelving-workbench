@@ -16,7 +16,7 @@ path merged back in before it imports.
 import os
 import sys
 from pkgutil import extend_path
-from typing import Protocol, cast
+from typing import cast
 
 import FreeCAD
 import freecad
@@ -31,9 +31,13 @@ from freecad.shelving.catalog import (  # noqa: E402
     DEFAULT_CATALOG_IDS,
     DEFAULT_MATERIAL_ID,
 )
+from freecad.shelving.objects.feature_types import (  # noqa: E402
+    PlankFeature,
+    ProxyHolder,
+)
 from freecad.shelving.objects.geometry import plank_shape  # noqa: E402
 from freecad.shelving.objects.labels import generated_label  # noqa: E402
-from freecad.shelving.objects.plank import _PlankFeature, add_plank  # noqa: E402
+from freecad.shelving.objects.plank import add_plank  # noqa: E402
 from freecad.shelving.vendor.shelving_core.expand import (  # noqa: E402
     PlankRole,
     Vec3,
@@ -57,14 +61,6 @@ _PYTHON_FEATURE_TYPES = (
     "App::GeometryPython",
     "App::DocumentObjectGroupPython",
 )
-
-
-class _ProxyHolder(Protocol):
-    """The scripted-object surface the probe drives: a ``Proxy`` slot and ``touch``."""
-
-    Proxy: object
-
-    def touch(self, propName: str = ...) -> None: ...
 
 
 class _Recorder:
@@ -130,7 +126,7 @@ def _check_plank_shape() -> None:
 def _check_plank_recompute() -> None:
     doc = FreeCAD.newDocument("shelving_smoke")
     try:
-        obj = cast("_PlankFeature", add_plank(doc))
+        obj = cast("PlankFeature", add_plank(doc))
         obj.SizeMM = FreeCAD.Vector(700.0, 300.0, 18.0)
         obj.CornerMM = FreeCAD.Vector(10.0, 0.0, 5.0)
         doc.recompute()
@@ -150,7 +146,7 @@ def _apart_rejects_proxy_attr() -> bool:
     doc = FreeCAD.newDocument("shelving_probe_attr")
     try:
         recorder = _Recorder()
-        part = cast("_ProxyHolder", doc.addObject("App::Part", "Probe"))
+        part = cast("ProxyHolder", doc.addObject("App::Part", "Probe"))
         try:
             part.Proxy = recorder
         except AttributeError:
@@ -175,7 +171,7 @@ def _apart_ignores_proxy_arg() -> bool:
         recorder = _Recorder()
         raw = doc.addObject("App::Part", "Probe", recorder)
         assert not hasattr(raw, "Proxy"), "three-arg App::Part kept a Proxy"
-        part = cast("_ProxyHolder", raw)
+        part = cast("ProxyHolder", raw)
         part.touch()
         doc.recompute()
         return recorder.executed
@@ -189,7 +185,7 @@ def _python_feature_executes(type_name: str) -> bool:
     doc = FreeCAD.newDocument("shelving_probe_ctl")
     try:
         recorder = _Recorder()
-        obj = cast("_ProxyHolder", doc.addObject(type_name, "Probe", recorder))
+        obj = cast("ProxyHolder", doc.addObject(type_name, "Probe", recorder))
         obj.touch()
         doc.recompute()
         return recorder.executed

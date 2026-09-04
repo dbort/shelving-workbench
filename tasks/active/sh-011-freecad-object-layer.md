@@ -26,6 +26,19 @@ milestone M3.
 - [x] Review
 - [ ] User sign-off
 
+## Sign-off addendum (user-directed, not a review rejection)
+The branch reached `user_signoff` and cleared review plus the doc-hygiene pass.
+During manual sign-off the user asked for two changes; `review_rejections` stays
+at 1.
+
+- The `freecad-stubs` comment in `pixi.toml` drops the before/after framing about
+  mypy having been off.
+- The scripted-object Protocols move into one shared module,
+  `freecad/shelving/objects/feature_types.py` (`PlankFeature`, `ProxyHolder`),
+  which `plank.py` and `tools/freecad_object_smoke.py` both import. This clears
+  the friction-log entry about `_PlankFeature` being reached by a cross-module
+  private import and `_ProxyHolder` being re-declared in the smoke.
+
 ## Must Have
 
 ### `freecad/shelving/objects/geometry.py` (new)
