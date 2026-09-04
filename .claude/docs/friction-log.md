@@ -28,4 +28,4 @@ Sweeping the log is a human-triggered act, like task sign-off: the user asks for
 
 ## Entries
 
-- `2026-08-31` - **Bash-tool shells have no coreutils on `PATH`**: the Bash tool runs non-login, non-interactive shells with a minimal PATH frozen per session and no `.bashrc`/`.profile` sourced; on this VM that PATH omits the dirs holding `df`, `ls`, `du`, `find`, `rm`, and `git`, so every diagnostic command fails by bare name. Worked around by hard-coding absolute paths (`/usr/bin/df`, `/bin/ls`, `/usr/bin/du`, `/usr/bin/find`, `/bin/rm`, `/usr/bin/git`) in each call. Simpler if: the VM setup put `/usr/bin` and `/bin` on the PATH the Bash tool inherits (e.g. extend `env.PATH` in `~/.claude/settings.json` beyond `${HOME}/.local/bin:${PATH}`, or set it in the VM's default environment), so scripts and ad-hoc commands can call standard tools by name.
+_None open._
