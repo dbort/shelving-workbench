@@ -296,11 +296,11 @@ Friction log: record any workaround per `CLAUDE.md` in
 
 ## Execution Plan
 
-- [ ] **Step 1** (`docs/freecadcmd-notes.md` — read only): Read the `App::Part` /
+- [x] **Step 1** (`docs/freecadcmd-notes.md` — read only): Read the `App::Part` /
   `Proxy.execute` section for the exact behavior the driver-child container
   works around.
 
-- [ ] **Step 2** (`freecad/shelving/objects/feature_types.py`,
+- [x] **Step 2** (`freecad/shelving/objects/feature_types.py`,
   `freecad/shelving/objects/shelving_unit.py`): Add the `ShelvingUnitFeature`
   Protocol to `feature_types.py` and update its module docstring. Then the
   `ShelvingUnit` proxy and `make_shelving_unit` factory (the `App::Part` plus a
