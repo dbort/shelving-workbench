@@ -49,29 +49,33 @@ false so the workbench base class and the `addWorkbench` call are skipped.
 ## `App::Part` does not call a Python `Proxy.execute`
 
 FreeCAD 1.0 under `freecadcmd` gives a bare `App::Part` no scripted-object
-behavior. `tools/freecad_object_smoke.py` probes this directly: it creates
-`doc.addObject("App::Part", "Probe")`, tries to attach a `Proxy` whose
-`execute` records the call, touches the object, and recomputes.
+behavior. `tools/freecad_object_smoke.py::_probe_apart_execute` demonstrates
+this on every `pixi run tests` run, using a `_Recorder` proxy whose `execute`
+sets a flag. Each observation below maps to an assertion in that probe:
 
-Observed on FreeCAD 1.0.0 (`1.0.0R39109`):
+- `_apart_rejects_proxy_attr`: `doc.addObject("App::Part", "Probe")` then
+  `part.Proxy = recorder` raises `AttributeError` (`'App.Part' object has no
+  attribute 'Proxy'`). The C++ type has no `App::*Python` extension, so it
+  holds no proxy; the probe treats this as `execute` never firing.
+- `_apart_ignores_proxy_arg`: the three-argument
+  `doc.addObject("App::Part", "Probe", recorder)` form does not raise, but the
+  probe asserts the resulting object has no `Proxy` attribute, and after
+  `touch()` + `recompute()` the recorder's `execute` has not fired.
+- `_python_feature_executes` (positive control): the same `_Recorder` proxy
+  passed the same three-argument way to `App::FeaturePython`,
+  `App::GeometryPython`, and `App::DocumentObjectGroupPython` does receive
+  `execute` on `recompute()`; the probe asserts all three fire. A FreeCAD that
+  stopped dispatching `execute` altogether would flip this control and fail
+  `pixi run tests`, so the `App::Part` result cannot pass vacuously.
 
-- `part.Proxy = recorder` raises `AttributeError: 'App.Part' object has no
-  attribute 'Proxy'`. The type has no `App::*Python` extension, so it will not
-  hold a proxy at all.
-- Passing the proxy through `doc.addObject("App::Part", name, objProxy)`
-  instead does not raise, but the resulting object still has no `Proxy`
-  attribute and its `execute` is never invoked on recompute.
-- For contrast, `App::FeaturePython`, `App::GeometryPython`, and
-  `App::DocumentObjectGroupPython` created the same way all call
-  `Proxy.execute` on every recompute.
-
-The smoke hard-codes `EXPECTED_APART_EXECUTE = False` and asserts the probe
-still matches, so a future FreeCAD bump that changes this fails `pixi run
-tests`.
+The probe prints `APART_PROXY_EXECUTE: no`, hard-codes
+`EXPECTED_APART_EXECUTE = False`, and asserts the observed value still matches,
+so a future FreeCAD bump that changes the `App::Part` behavior fails `pixi run
+tests`. Observed on FreeCAD 1.0.0 (`1.0.0R39109`).
 
 Consequence for sh-012: the `ShelvingUnit` container cannot be a bare
 `App::Part` that reconciles its children from its own `execute`. It must be a
 scripted type that receives `execute` (an `App::DocumentObjectGroupPython` /
-`App::FeaturePython` with a group extension), or an `App::Part` paired with a
-child `App::FeaturePython` "driver" object that owns the reconciliation
-`execute`.
+`App::FeaturePython` with a group extension, per the positive control above),
+or an `App::Part` paired with a child `App::FeaturePython` "driver" object that
+owns the reconciliation `execute`.

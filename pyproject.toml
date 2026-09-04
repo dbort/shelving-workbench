@@ -29,6 +29,7 @@ files = [
     "shelving_core",
     "freecad/shelving/",
     "tools/layout_demo.py",
+    "tools/freecad_object_smoke.py",
     "tools/check_lock_paths.py",
     "tools/check_action_pins.py",
     "tests/test_check_action_pins.py",

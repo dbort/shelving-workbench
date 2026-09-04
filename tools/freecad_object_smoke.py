@@ -4,10 +4,10 @@ Run via ``freecadcmd tools/freecad_object_smoke.py``. It exercises the
 import-light pieces (``generated_label``, ``DEFAULT_CATALOG``, ``plank_shape``),
 a real ``Part::FeaturePython`` ``Plank`` recompute in an in-memory document, and
 a probe of whether a recomputing ``App::Part`` invokes a Python
-``Proxy.execute`` (see the "App::Part and Proxy.execute" section of
-``docs/freecadcmd-notes.md``). ``freecadcmd`` discards a script's exit status,
-so the final ``shelving object layer OK`` line is the only success signal;
-``tools/run-tests.sh`` greps for it.
+``Proxy.execute`` (see the "``App::Part`` does not call a Python ``Proxy.execute``"
+section of ``docs/freecadcmd-notes.md``). ``freecadcmd`` discards a script's exit
+status, so the final ``shelving object layer OK`` line is the only success
+signal; ``tools/run-tests.sh`` greps for it.
 
 The ``sys.path`` insert plus ``freecad.__path__`` refresh mirror
 ``tools/freecad_smoke.py``: FreeCAD freezes the ``freecad`` namespace package's
@@ -18,6 +18,7 @@ path merged back in before it imports.
 import os
 import sys
 from pkgutil import extend_path
+from typing import Protocol, cast
 
 import FreeCAD
 import freecad
@@ -34,7 +35,7 @@ from freecad.shelving.catalog import (  # noqa: E402
 )
 from freecad.shelving.objects.geometry import plank_shape  # noqa: E402
 from freecad.shelving.objects.labels import generated_label  # noqa: E402
-from freecad.shelving.objects.plank import add_plank  # noqa: E402
+from freecad.shelving.objects.plank import _PlankFeature, add_plank  # noqa: E402
 from freecad.shelving.vendor.shelving_core.expand import (  # noqa: E402
     PlankRole,
     Vec3,
@@ -44,23 +45,46 @@ _CATALOG_ORDER = ["ply18", "ply12", "mdf19", "hardwood20"]
 
 # Whether FreeCAD 1.0 under freecadcmd calls a Python ``Proxy.execute`` when an
 # ``App::Part`` recomputes. Hard-coded from the observed probe result recorded
-# in the "App::Part and Proxy.execute" section of docs/freecadcmd-notes.md; a
-# FreeCAD bump that flips this fails `pixi run tests` loudly and forces sh-012's
-# container design to be revisited.
+# in the "``App::Part`` does not call a Python ``Proxy.execute``" section of
+# docs/freecadcmd-notes.md; a FreeCAD bump that flips this fails `pixi run tests`
+# loudly and forces sh-012's container design to be revisited.
 EXPECTED_APART_EXECUTE = False
+
+# App::* types that ship a Python scripted-object extension. Attaching a Proxy to
+# any of these and recomputing must call ``Proxy.execute``; they are the probe's
+# positive control, so a FreeCAD that silently stopped dispatching ``execute``
+# fails here instead of letting the ``App::Part`` result pass vacuously.
+_PYTHON_FEATURE_TYPES = (
+    "App::FeaturePython",
+    "App::GeometryPython",
+    "App::DocumentObjectGroupPython",
+)
+
+
+class _ProxyHolder(Protocol):
+    """The scripted-object surface the probe drives: a ``Proxy`` slot and ``touch``."""
+
+    Proxy: object
+
+    def touch(self, propName: str = ...) -> None: ...
 
 
 class _Recorder:
-    """Trivial scripted-object proxy: notes whether ``execute`` was called."""
+    """Scripted-object proxy that records whether ``execute`` fired on recompute."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.executed = False
 
-    def execute(self, obj):
+    def execute(self, obj: object) -> None:
         self.executed = True
 
 
-def _assert_box(bound_box, min_corner_mm, max_corner_mm, tol_mm=1e-6):
+def _assert_box(
+    bound_box: FreeCAD.BoundBox,
+    min_corner_mm: tuple[float, float, float],
+    max_corner_mm: tuple[float, float, float],
+    tol_mm: float = 1e-6,
+) -> None:
     observed = (
         bound_box.XMin,
         bound_box.YMin,
@@ -74,7 +98,7 @@ def _assert_box(bound_box, min_corner_mm, max_corner_mm, tol_mm=1e-6):
         assert abs(got_mm - want_mm) <= tol_mm, (observed, expected)
 
 
-def _check_labels():
+def _check_labels() -> None:
     assert generated_label(PlankRole.BOTTOM, 0) == "Bottom"
     assert generated_label(PlankRole.TOP, 0) == "Top"
     assert generated_label(PlankRole.LEFT_SIDE, 0) == "Left Side"
@@ -83,7 +107,7 @@ def _check_labels():
     assert generated_label(PlankRole.DIVIDER, 3) == "Divider 3"
 
 
-def _check_catalog():
+def _check_catalog() -> None:
     ids = [str(entry.id) for entry in DEFAULT_CATALOG]
     assert ids == _CATALOG_ORDER, ids
     assert DEFAULT_CATALOG_IDS == _CATALOG_ORDER, DEFAULT_CATALOG_IDS
@@ -93,7 +117,7 @@ def _check_catalog():
     assert DEFAULT_MATERIAL_ID == "ply18", DEFAULT_MATERIAL_ID
 
 
-def _check_plank_shape():
+def _check_plank_shape() -> None:
     shape = plank_shape(Vec3(700.0, 300.0, 18.0), Vec3(10.0, 0.0, 5.0))
     assert shape.ShapeType == "Solid", shape.ShapeType
     _assert_box(shape.BoundBox, (10.0, 0.0, 5.0), (710.0, 300.0, 23.0))
@@ -105,10 +129,10 @@ def _check_plank_shape():
         raise AssertionError("plank_shape accepted a zero extent")
 
 
-def _check_plank_recompute():
+def _check_plank_recompute() -> None:
     doc = FreeCAD.newDocument("shelving_smoke")
     try:
-        obj = add_plank(doc)
+        obj = cast("_PlankFeature", add_plank(doc))
         obj.SizeMM = FreeCAD.Vector(700.0, 300.0, 18.0)
         obj.CornerMM = FreeCAD.Vector(10.0, 0.0, 5.0)
         doc.recompute()
@@ -118,31 +142,82 @@ def _check_plank_recompute():
         FreeCAD.closeDocument(doc.Name)
 
 
-def _probe_apart_execute():
-    doc = FreeCAD.newDocument("shelving_probe")
+def _apart_rejects_proxy_attr() -> bool:
+    """Attach a proxy to a bare ``App::Part`` with ``part.Proxy = recorder``.
+
+    Returns whether ``_Recorder.execute`` fired on the following recompute.
+    FreeCAD 1.0 rejects the assignment with ``AttributeError`` (the C++ type
+    carries no ``App::*Python`` extension), so the recorder can never fire.
+    """
+    doc = FreeCAD.newDocument("shelving_probe_attr")
     try:
         recorder = _Recorder()
-        part = doc.addObject("App::Part", "Probe")
+        part = cast("_ProxyHolder", doc.addObject("App::Part", "Probe"))
         try:
             part.Proxy = recorder
         except AttributeError:
-            # A bare App::Part carries no scripted-object extension, so it
-            # rejects a Proxy assignment outright and can never call
-            # Proxy.execute.
-            observed = False
-        else:
-            part.touch()
-            doc.recompute()
-            observed = recorder.executed
+            return False
+        part.touch()
+        doc.recompute()
+        return recorder.executed
     finally:
         FreeCAD.closeDocument(doc.Name)
+
+
+def _apart_ignores_proxy_arg() -> bool:
+    """Attach a proxy to an ``App::Part`` through the three-argument
+    ``doc.addObject("App::Part", name, recorder)`` form.
+
+    Returns whether ``_Recorder.execute`` fired on the following recompute. The
+    call does not raise, but the resulting C++ ``App::Part`` keeps no ``Proxy``
+    attribute (asserted here) and never dispatches ``execute``.
+    """
+    doc = FreeCAD.newDocument("shelving_probe_arg")
+    try:
+        recorder = _Recorder()
+        raw = doc.addObject("App::Part", "Probe", recorder)
+        assert not hasattr(raw, "Proxy"), "three-arg App::Part kept a Proxy"
+        part = cast("_ProxyHolder", raw)
+        part.touch()
+        doc.recompute()
+        return recorder.executed
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def _python_feature_executes(type_name: str) -> bool:
+    """Return whether a fresh `type_name` object with a ``_Recorder`` proxy
+    receives ``execute`` on recompute. The positive control for the probe."""
+    doc = FreeCAD.newDocument("shelving_probe_ctl")
+    try:
+        recorder = _Recorder()
+        obj = cast("_ProxyHolder", doc.addObject(type_name, "Probe", recorder))
+        obj.touch()
+        doc.recompute()
+        return recorder.executed
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def _probe_apart_execute() -> None:
+    via_attr = _apart_rejects_proxy_attr()
+    via_arg = _apart_ignores_proxy_arg()
+    observed = via_attr or via_arg
     print(f"APART_PROXY_EXECUTE: {'yes' if observed else 'no'}")
-    # Locks sh-012's container choice; see the "App::Part and Proxy.execute"
-    # section of docs/freecadcmd-notes.md.
+
+    # Positive control: the same _Recorder proxy on a scripted App::*Python type
+    # must fire on recompute. Without this, a FreeCAD that stopped dispatching
+    # execute entirely would still read `observed = False` and pass, defeating
+    # the probe.
+    for type_name in _PYTHON_FEATURE_TYPES:
+        assert _python_feature_executes(type_name), type_name
+
+    # Locks sh-012's container choice; see the "``App::Part`` does not call a
+    # Python ``Proxy.execute``" section of docs/freecadcmd-notes.md.
     assert observed == EXPECTED_APART_EXECUTE, (observed, EXPECTED_APART_EXECUTE)
 
 
-def main():
+def main() -> None:
     _check_labels()
     _check_catalog()
     _check_plank_shape()
