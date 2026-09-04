@@ -15,8 +15,8 @@ milestone.
 
 ## Loading the workbench from this checkout
 
-The cases below need FreeCAD to load the workbench from your working copy, not
-from an Addon Manager release. FreeCAD discovers a workbench by scanning `Mod`
+The cases below need FreeCAD to load the workbench from your working copy rather
+than from an Addon Manager release. FreeCAD discovers a workbench by scanning `Mod`
 directories at startup, so symlink the repo into the user `Mod` directory.
 
 Find the FreeCAD user directory. Its default for FreeCAD 1.0 is
@@ -78,7 +78,7 @@ and the two sides captured between them. Each plank is selectable in the 3D
 view and the spacebar toggles its visibility.
 
 2. Paste this into the Python console (**View → Panels → Python console**). It
-   passes only when every plank solid is actually being drawn, which is the
+   passes only when every plank solid is being drawn, which is the
    check `pixi run tests` cannot make (`freecadcmd` exposes no `ViewObject`):
 
    ```python
