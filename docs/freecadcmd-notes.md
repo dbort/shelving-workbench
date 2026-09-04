@@ -45,3 +45,33 @@ not enough to protect GUI-only code: the import passes and the
 See `freecad/shelving/init_gui.py`, which catches `ImportError` and, on the
 success path, drops `Gui` to `None` when `hasattr(Gui, "Workbench")` is
 false so the workbench base class and the `addWorkbench` call are skipped.
+
+## `App::Part` does not call a Python `Proxy.execute`
+
+FreeCAD 1.0 under `freecadcmd` gives a bare `App::Part` no scripted-object
+behavior. `tools/freecad_object_smoke.py` probes this directly: it creates
+`doc.addObject("App::Part", "Probe")`, tries to attach a `Proxy` whose
+`execute` records the call, touches the object, and recomputes.
+
+Observed on FreeCAD 1.0.0 (`1.0.0R39109`):
+
+- `part.Proxy = recorder` raises `AttributeError: 'App.Part' object has no
+  attribute 'Proxy'`. The type has no `App::*Python` extension, so it will not
+  hold a proxy at all.
+- Passing the proxy through `doc.addObject("App::Part", name, objProxy)`
+  instead does not raise, but the resulting object still has no `Proxy`
+  attribute and its `execute` is never invoked on recompute.
+- For contrast, `App::FeaturePython`, `App::GeometryPython`, and
+  `App::DocumentObjectGroupPython` created the same way all call
+  `Proxy.execute` on every recompute.
+
+The smoke hard-codes `EXPECTED_APART_EXECUTE = False` and asserts the probe
+still matches, so a future FreeCAD bump that changes this fails `pixi run
+tests`.
+
+Consequence for sh-012: the `ShelvingUnit` container cannot be a bare
+`App::Part` that reconciles its children from its own `execute`. It must be a
+scripted type that receives `execute` (an `App::DocumentObjectGroupPython` /
+`App::FeaturePython` with a group extension), or an `App::Part` paired with a
+child `App::FeaturePython` "driver" object that owns the reconciliation
+`execute`.
