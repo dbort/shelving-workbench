@@ -8,26 +8,31 @@ not raise.
 """
 
 import os
+from typing import TYPE_CHECKING
 
-try:
-    import FreeCADGui as Gui
-except ImportError:
-    Gui = None
+if TYPE_CHECKING:
+    # The base is only referenced as a type here; the runtime branch below
+    # picks the real class or ``object``.
+    from FreeCADGui import Workbench as _WorkbenchBase
 else:
-    # freecadcmd exposes a FreeCADGui stub lacking the GUI classes.
-    if not hasattr(Gui, "Workbench"):
+    try:
+        import FreeCADGui as Gui
+    except ImportError:
         Gui = None
+    else:
+        # freecadcmd exposes a FreeCADGui stub lacking the GUI classes.
+        if not hasattr(Gui, "Workbench"):
+            Gui = None
+    _WorkbenchBase = Gui.Workbench if Gui is not None else object
 
 _RESOURCE_DIR = os.path.join(os.path.dirname(__file__), "resources")
-
-_WorkbenchBase = Gui.Workbench if Gui is not None else object
 
 
 class ShelvingWorkbench(_WorkbenchBase):
     """FreeCAD workbench entry point for parametric shelving.
 
-    M0 registers the workbench only; commands and the layout editor arrive in
-    later milestones.
+    M3 adds the plank object layer below the unit container; the "Create Unit"
+    command, toolbar, and layout editor arrive in later milestones.
     """
 
     MenuText = "Shelving"
@@ -47,5 +52,5 @@ class ShelvingWorkbench(_WorkbenchBase):
         return "Gui::PythonWorkbench"
 
 
-if Gui is not None:
+if not TYPE_CHECKING and Gui is not None:
     Gui.addWorkbench(ShelvingWorkbench())

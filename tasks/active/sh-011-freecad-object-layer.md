@@ -292,7 +292,7 @@ FreeCAD API that behaved off-spec, a doc reverse-engineered).
   the stated hidden/read-only flags, `execute` calling `plank_shape` and setting
   `Dimensions`, and the empty `dumps`/`loads`. No GUI import, no `ViewProvider`.
 
-- [ ] **Step 5** (`freecad/shelving/init_gui.py`): Add full type annotations so
+- [x] **Step 5** (`freecad/shelving/init_gui.py`): Add full type annotations so
   `mypy --strict` passes; behavior unchanged (headless `Gui = None` collapse,
   workbench class, no command wiring). Run `mypy`; it must now be green over all
   of `freecad/shelving/` except the vendored copy.
