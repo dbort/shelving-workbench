@@ -10,7 +10,7 @@ You are the Reviewer in this repo's task pipeline (`.claude/docs/pipeline.md` §
 ## Protocol
 1. Read the task file's `## Must Have` and `## Execution Plan` to know what "done" means for this task.
 2. Check out the task's `sh-XXX` branch (created by the Implementer) and run `git diff main...sh-XXX`, reading it in full. If it's empty despite the Execution Plan being checked off, that's not "nothing to review" — it means the Implementer never committed. Confirm via `git status`/`git log` on the branch, then reject with that as the finding; don't approve an empty diff or guess at what the working tree might contain.
-3. Run the checks (`pipeline.md` § Verification commands) via Bash yourself, on that branch, and parse the actual output — don't assume success.
+3. Run the checks (`pipeline.md` § Verification commands) via Bash yourself, on that branch, and parse the actual output — don't assume success. You judge the branch tip: a red intermediate commit left by a deferred-verify group (`pipeline.md` § Deferred verification) is not a finding.
 4. Run them on every review, unconditionally — not gated on whether the diff looks relevant to live infrastructure or anything else.
 5. Check for: unmet `## Must Have` conditions, missing tests, lint/build failures, and violations of the repo's conventions in `CLAUDE.md` § Project conventions.
 
