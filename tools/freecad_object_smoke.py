@@ -20,6 +20,7 @@ from pkgutil import extend_path
 from typing import cast
 
 import FreeCAD
+
 import freecad
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

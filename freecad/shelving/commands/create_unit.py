@@ -10,6 +10,7 @@ import os
 from typing import TYPE_CHECKING, TypedDict
 
 import FreeCAD
+
 from freecad.shelving.objects.shelving_unit import make_shelving_unit
 
 _RESOURCE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources")

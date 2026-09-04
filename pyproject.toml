@@ -23,6 +23,14 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
+[tool.ruff.lint.isort]
+# FreeCAD's runtime modules are C extensions with no source in this tree. On a
+# case-insensitive filesystem ruff resolves `import FreeCAD` to the `freecad/`
+# namespace-package directory and files it as first-party, so an import order
+# that passes on a developer's Mac fails I001 on the case-sensitive CI runner.
+# Pinning the classification makes the grouping identical on both.
+known-third-party = ["FreeCAD", "FreeCADGui", "Part"]
+
 [tool.mypy]
 strict = true
 files = [

@@ -14,9 +14,8 @@ declared in one place.
 from collections.abc import Sequence
 from typing import Protocol
 
-import Part
-
 import FreeCAD
+import Part
 
 
 class PlankFeature(Protocol):
