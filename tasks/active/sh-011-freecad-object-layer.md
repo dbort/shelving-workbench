@@ -297,7 +297,7 @@ FreeCAD API that behaved off-spec, a doc reverse-engineered).
   workbench class, no command wiring). Run `mypy`; it must now be green over all
   of `freecad/shelving/` except the vendored copy.
 
-- [ ] **Step 6** (`tools/freecad_object_smoke.py`): The functional harness per
+- [x] **Step 6** (`tools/freecad_object_smoke.py`): The functional harness per
   Must Have: the headless path shim, the `generated_label` / catalog /
   `plank_shape` / `Plank`-recompute assertions, the `App::Part` probe section
   with `EXPECTED_APART_EXECUTE`, and the `print("shelving object layer OK")`
