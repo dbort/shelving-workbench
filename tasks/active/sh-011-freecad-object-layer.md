@@ -1,9 +1,9 @@
 ---
 id: sh-011
 title: "FreeCAD object layer: Plank, box helper, test harness (M3, part 1)"
-current_agent: reviewer
-current_phase: review
-review_rejections: 0
+current_agent: implementer
+current_phase: implementation
+review_rejections: 1
 ---
 
 # sh-011: FreeCAD object layer: Plank, box helper, test harness (M3, part 1)
