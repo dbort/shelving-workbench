@@ -1,10 +1,10 @@
-"""Typed views of the scripted-object property surfaces this package drives.
+"""Typed view of the `Part::FeaturePython` property surface this package drives.
 
 FreeCAD attaches scripted-object fields with `addProperty` at runtime, and
 `freecad-stubs` types `Document.addObject` as a GUI proxy, so a strict type
-check has no static view of `NodeId`, `SizeMM`, `Proxy`, and the rest. These
-Protocols supply that view. The workbench code and the headless checks both
-import them, so each property surface is declared in one place.
+check has no static view of `NodeId`, `SizeMM`, `Proxy`, and the rest.
+`PlankFeature` supplies that view; `plank.py` and the headless checks both
+import it, so the surface is declared in one place.
 """
 
 from typing import Protocol
@@ -41,11 +41,3 @@ class PlankFeature(Protocol):
     ) -> "PlankFeature": ...
 
     def setEditorMode(self, name: str, mode: list[str]) -> None: ...
-
-
-class ProxyHolder(Protocol):
-    """Minimal scripted-object surface: a `Proxy` slot and `touch`."""
-
-    Proxy: object
-
-    def touch(self, propName: str = ...) -> None: ...

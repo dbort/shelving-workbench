@@ -28,16 +28,33 @@ milestone M3.
 
 ## Sign-off addendum (user-directed, not a review rejection)
 The branch reached `user_signoff` and cleared review plus the doc-hygiene pass.
-During manual sign-off the user asked for two changes; `review_rejections` stays
-at 1.
+During manual sign-off the user asked for the changes below; `review_rejections`
+stays at 1. Some depart from the approved Must Have wording, which is left as the
+record of what review saw.
 
+Round A:
 - The `freecad-stubs` comment in `pixi.toml` drops the before/after framing about
   mypy having been off.
-- The scripted-object Protocols move into one shared module,
-  `freecad/shelving/objects/feature_types.py` (`PlankFeature`, `ProxyHolder`),
-  which `plank.py` and `tools/freecad_object_smoke.py` both import. This clears
-  the friction-log entry about `_PlankFeature` being reached by a cross-module
-  private import and `_ProxyHolder` being re-declared in the smoke.
+- The scripted-object property Protocol moves into its own module,
+  `freecad/shelving/objects/feature_types.py` (`PlankFeature`), which `plank.py`
+  and `tools/freecad_object_smoke.py` both import. This clears the friction-log
+  entry about `_PlankFeature` being reached by a cross-module private import and
+  `_ProxyHolder` being re-declared in the smoke.
+
+Round B:
+- `freecad/shelving/catalog.py` is renamed to `default_catalog.py`.
+- `plank_shape`'s parameters lose the `_mm` suffix (`size`, `origin`): the `Vec3`
+  type already carries `_mm` on its fields. The `SizeMM` / `CornerMM` FreeCAD
+  property names keep the marker: they hold a bare `FreeCAD.Vector`, which is not
+  unit-tagged.
+- The `App::Part` / `Proxy.execute` probe is removed from
+  `tools/freecad_object_smoke.py` (the file keeps its label / catalog /
+  `plank_shape` / recompute functional checks). sh-012's container decision is
+  locked, and the finding is recorded in `docs/freecadcmd-notes.md`, which is
+  rewritten to stand on its own without the probe.
+- `README.md`'s `freecadcmd` test bullet is trimmed to the high-level summary.
+- A friction-log entry records that `[tool.mypy] files` still enumerates each
+  `tools/` / `tests/` script; collapsing to directories is deferred.
 
 ## Must Have
 
