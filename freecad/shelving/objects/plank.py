@@ -50,7 +50,7 @@ class _PlankFeature(Protocol):
 
 
 def _vec3(v: FreeCAD.Vector) -> Vec3:
-    """The core `Vec3` for a `FreeCAD.Vector`, the adapter the geometry seam wants."""
+    """The core `Vec3` for a `FreeCAD.Vector`, the form the geometry seam expects."""
     return Vec3(v.x, v.y, v.z)
 
 

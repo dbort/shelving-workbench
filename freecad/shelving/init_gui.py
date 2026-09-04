@@ -31,8 +31,8 @@ _RESOURCE_DIR = os.path.join(os.path.dirname(__file__), "resources")
 class ShelvingWorkbench(_WorkbenchBase):
     """FreeCAD workbench entry point for parametric shelving.
 
-    Registers itself with the GUI and supplies the workbench menu text, tooltip,
-    and icon. It wires no toolbar or command yet; `Initialize` is a no-op.
+    Carries only the menu metadata FreeCAD needs to list the workbench; it
+    registers no toolbar or command yet.
     """
 
     MenuText = "Shelving"

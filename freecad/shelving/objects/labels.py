@@ -14,9 +14,7 @@ def generated_label(role: PlankRole, ordinal_for_role: int) -> str:
 
     Shell roles (`BOTTOM`, `TOP`, `LEFT_SIDE`, `RIGHT_SIDE`) map to a fixed
     string and ignore `ordinal_for_role`; `SHELF` and `DIVIDER` append it
-    (`"Shelf 2"`, `"Divider 3"`). Every `PlankRole` member is handled
-    explicitly; the trailing `assert_never` (no `case _`) turns a newly added
-    member into a type error here rather than a silently wrong label.
+    (`"Shelf 2"`, `"Divider 3"`).
     """
     match role:
         case PlankRole.BOTTOM:
@@ -31,4 +29,6 @@ def generated_label(role: PlankRole, ordinal_for_role: int) -> str:
             return f"Shelf {ordinal_for_role}"
         case PlankRole.DIVIDER:
             return f"Divider {ordinal_for_role}"
+    # No `case _`: a newly added PlankRole member becomes a type error here
+    # rather than a silently wrong label.
     assert_never(role)

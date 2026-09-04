@@ -1,7 +1,7 @@
 """Plank solid construction, kept to a single seam.
 
 `plank_shape` is the only place a plank's geometry is built. A later milestone
-feeds this seam into a PartDesign Body base feature, so no other module calls
+will feed this seam into a PartDesign Body base feature, so no other module calls
 `Part.makeBox` for a plank; swapping the construction stays a one-file change.
 """
 

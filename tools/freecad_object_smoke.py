@@ -1,13 +1,11 @@
 """Headless functional check for the shelving object layer.
 
-Run via ``freecadcmd tools/freecad_object_smoke.py``. It exercises the
-import-light pieces (``generated_label``, ``DEFAULT_CATALOG``, ``plank_shape``),
-a real ``Part::FeaturePython`` ``Plank`` recompute in an in-memory document, and
-a probe of whether a recomputing ``App::Part`` invokes a Python
-``Proxy.execute`` (see the "``App::Part`` does not call a Python ``Proxy.execute``"
-section of ``docs/freecadcmd-notes.md``). ``freecadcmd`` discards a script's exit
-status, so the final ``shelving object layer OK`` line is the only success
-signal; ``tools/run-tests.sh`` greps for it.
+Run via ``freecadcmd tools/freecad_object_smoke.py``. One check probes whether a
+recomputing ``App::Part`` invokes a Python ``Proxy.execute`` (see the
+"``App::Part`` does not call a Python ``Proxy.execute``" section of
+``docs/freecadcmd-notes.md``). ``freecadcmd`` discards a script's exit status, so
+the final ``shelving object layer OK`` line is the only success signal;
+``tools/run-tests.sh`` greps for it.
 
 The ``sys.path`` insert plus ``freecad.__path__`` refresh mirror
 ``tools/freecad_smoke.py``: FreeCAD freezes the ``freecad`` namespace package's
@@ -47,7 +45,7 @@ _CATALOG_ORDER = ["ply18", "ply12", "mdf19", "hardwood20"]
 # ``App::Part`` recomputes. Hard-coded from the observed probe result recorded
 # in the "``App::Part`` does not call a Python ``Proxy.execute``" section of
 # docs/freecadcmd-notes.md; a FreeCAD bump that flips this fails `pixi run tests`
-# loudly and forces sh-012's container design to be revisited.
+# and forces sh-012's container design to be revisited.
 EXPECTED_APART_EXECUTE = False
 
 # App::* types that ship a Python scripted-object extension. Attaching a Proxy to

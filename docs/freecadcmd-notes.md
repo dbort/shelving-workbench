@@ -2,7 +2,7 @@
 
 `freecadcmd` runs a Python script inside a FreeCAD interpreter with no GUI.
 `pixi run tests` uses it for `tools/freecad_smoke.py`, and later milestones
-add more headless scripts for CI checks. Three of its behaviors differ from
+add more headless scripts for CI checks. Several of its behaviors differ from
 a plain `python script.py` run; each is handled in the code cited below.
 
 ## The script's exit status is discarded
@@ -75,7 +75,7 @@ tests`. Observed on FreeCAD 1.0.0 (`1.0.0R39109`).
 
 Consequence for sh-012: the `ShelvingUnit` container cannot be a bare
 `App::Part` that reconciles its children from its own `execute`. It must be a
-scripted type that receives `execute` (an `App::DocumentObjectGroupPython` /
-`App::FeaturePython` with a group extension, per the positive control above),
-or an `App::Part` paired with a child `App::FeaturePython` "driver" object that
-owns the reconciliation `execute`.
+scripted type that receives `execute`: an `App::DocumentObjectGroupPython` or
+`App::FeaturePython` with a group extension, per the positive control above. The
+other option is an `App::Part` paired with a child `App::FeaturePython` "driver"
+object that owns the reconciliation `execute`.
