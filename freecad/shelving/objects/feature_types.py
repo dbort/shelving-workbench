@@ -5,8 +5,10 @@ FreeCAD attaches scripted-object fields with `addProperty` at runtime, and
 check has no static view of `NodeId`, `SizeMM`, `Proxy`, and the rest.
 `PlankFeature` supplies that view for a plank solid; `ShelvingUnitFeature`
 supplies it for the `ShelvingUnit` container (its `App::Part` and the
-`ShelvingUnitDriver` child together). `plank.py`, `shelving_unit.py`, and the
-headless checks import them, so each surface is declared in one place.
+`ShelvingUnitDriver` child together); `ViewObjectHost` is the `ViewObject` a
+Python `ViewProvider` binds to in the GUI, `None` under `freecadcmd`. `plank.py`,
+`shelving_unit.py`, and the headless checks import them, so each surface is
+declared in one place.
 """
 
 from collections.abc import Sequence
@@ -31,6 +33,7 @@ class PlankFeature(Protocol):
     CornerMM: FreeCAD.Vector
     Dimensions: str
     Shape: Part.Shape
+    ViewObject: "ViewObjectHost | None"
 
     def addProperty(
         self,
@@ -44,6 +47,19 @@ class PlankFeature(Protocol):
     ) -> "PlankFeature": ...
 
     def setEditorMode(self, name: str, mode: list[str]) -> None: ...
+
+
+class ViewObjectHost(Protocol):
+    """The `ViewObject` FreeCAD hands a Python `ViewProvider` in `__init__` and
+    `attach`.
+
+    `DocumentObject.ViewObject` is `None` under `freecadcmd` (no GUI); in the
+    GUI it is a live provider whose `Proxy` binds the Python view provider and
+    whose `Object` back-links to the scripted `DocumentObject`.
+    """
+
+    Proxy: object
+    Object: FreeCAD.DocumentObject
 
 
 class ShelvingUnitFeature(Protocol):

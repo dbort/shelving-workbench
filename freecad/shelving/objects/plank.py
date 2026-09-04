@@ -2,15 +2,19 @@
 
 A `Plank` drives a `Part::FeaturePython` solid, one per `PlankSpec`. All
 persistent state lives on the FreeCAD object's properties, so the proxy
-serializes to nothing (`dumps`/`loads` are no-ops). No GUI import and no
-`ViewProvider`: a headless `Part::FeaturePython` needs none, and the GUI
-supplies a default when it is present. Colour-by-material is M6.
+serializes to nothing (`dumps`/`loads` are no-ops). Colour-by-material is M6.
+
+`PlankViewProvider` is bound only when a GUI is present (`add_plank` checks
+`obj.ViewObject`): this FreeCAD 1.0 build never shows a `Part::FeaturePython`
+that has no view-provider proxy, so a plank without one has a `Shape` but stays
+`isVisible() == False`. The class touches no `FreeCADGui` symbol, so importing
+this module headless stays safe.
 """
 
 from typing import cast
 
 import FreeCAD
-from freecad.shelving.objects.feature_types import PlankFeature
+from freecad.shelving.objects.feature_types import PlankFeature, ViewObjectHost
 from freecad.shelving.objects.geometry import plank_shape
 from freecad.shelving.vendor.shelving_core.expand import Vec3
 
@@ -34,6 +38,11 @@ def add_plank(doc: FreeCAD.Document, name: str = "Plank") -> FreeCAD.DocumentObj
     # Constructing Plank wires the proxy onto obj (obj.Proxy = self); obj owns
     # it from then on, so there is nothing to bind here.
     Plank(obj)
+    view_object = obj.ViewObject
+    # None under freecadcmd, so the headless path adds no view provider; in the
+    # GUI the binding is what makes the solid draw.
+    if view_object is not None:
+        PlankViewProvider(view_object)
     return cast("FreeCAD.DocumentObject", obj)
 
 
@@ -90,4 +99,42 @@ class Plank:
 
     def loads(self, state: object) -> None:
         """Counterpart to `dumps`; the proxy carries no restored state."""
+        return None
+
+
+class PlankViewProvider:
+    """Minimal view provider that lets a plank's `Part::FeaturePython` render.
+
+    It contributes no display mode of its own; the C++ `PartGui::ViewProviderPython`
+    base draws and selects the `Shape`. FreeCAD passes the view-provider object
+    in as `vobj`, so no `FreeCADGui` import is needed and this class is safe on
+    the headless import path. Colour-by-material is M6.
+    """
+
+    def __init__(self, vobj: ViewObjectHost) -> None:
+        vobj.Proxy = self
+
+    def attach(self, vobj: ViewObjectHost) -> None:
+        # Re-bound on document load; `Object` is the scripted DocumentObject.
+        self.Object = vobj.Object
+
+    def getDisplayModes(self, vobj: ViewObjectHost) -> list[str]:
+        return []
+
+    def getDefaultDisplayMode(self) -> str:
+        return "Flat Lines"
+
+    def updateData(self, obj: object, prop: str) -> None:
+        return None
+
+    def onChanged(self, vobj: object, prop: str) -> None:
+        return None
+
+    def getIcon(self) -> None:
+        return None
+
+    def dumps(self) -> None:
+        return None
+
+    def loads(self, state: object) -> None:
         return None

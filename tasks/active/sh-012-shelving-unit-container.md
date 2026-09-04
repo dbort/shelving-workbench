@@ -1,8 +1,8 @@
 ---
 id: sh-012
 title: "ShelvingUnit container + Create Unit command (M3, part 2)"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 1
 blocked_by: [sh-011]
 ---
@@ -103,6 +103,22 @@ actually displayed.
   gains a "Loading the workbench from this checkout" top-level section with the
   `Mod` symlink steps for Linux and macOS. The M3 prerequisite line points at
   it. Docs only.
+- Sign-off defect fix (planks did not render): `PlankViewProvider` added to
+  `objects/plank.py`, a minimal proxy (`attach` stores `vobj.Object`,
+  `getDisplayModes -> []`, `getDefaultDisplayMode -> "Flat Lines"`, no-op
+  `updateData` / `onChanged`, `getIcon` / `dumps` / `loads -> None`) that lets
+  the C++ `PartGui::ViewProviderPython` base draw the `Shape`. The class imports
+  no `FreeCADGui` symbol (FreeCAD injects `vobj`), so `plank.py` stays safe on
+  the headless import path. `add_plank` binds it only when `obj.ViewObject is not
+  None`; under `freecadcmd` that is `None`, so the headless path is byte-for-byte
+  unchanged and both smokes stay green. `objects/feature_types.py` gains a
+  `ViewObjectHost` Protocol and a `ViewObject` field on `PlankFeature` so the
+  guard type-checks. The `ShelvingUnitDriver` is left without a VP: the sign-off
+  report confirms it already shows correctly in the tree and it carries no
+  `Shape`, so there is nothing for a VP to fix. `pixi run tests` cannot assert
+  rendering (`freecadcmd` has no `ViewObject`); `docs/manual-qa.md` case 2 gains
+  a Python-console macro that asserts every `Part::FeaturePython` child reports
+  `ViewObject.isVisible()`, to be run once in the GUI for sign-off.
 
 ## Must Have
 

@@ -28,6 +28,18 @@ Sweeping the log is a human-triggered act, like task sign-off: the user asks for
 
 ## Entries
 
+- `2026-09-03` - **no headless signal for GUI rendering**: sh-012's sign-off
+  defect was that a `Part::FeaturePython` plank with a valid `Shape` never drew
+  in the FreeCAD 1.0.0 GUI, because it had no `ViewProvider` proxy. The fix
+  (`PlankViewProvider`) can only be exercised in a real GUI: under `freecadcmd`
+  `obj.ViewObject` is `None`, so `pixi run tests` cannot assert
+  `ViewObject.isVisible()` or that the view-provider binding took. Worked around
+  with a Python-console macro in `docs/manual-qa.md` case 2 that the user runs
+  once by hand. Simpler if: `freecadcmd` exposed a minimal `ViewObject` (even a
+  headless stub whose `isVisible()` / display-mode wiring could be asserted), or
+  there were an offscreen-GUI test mode, so view-provider regressions were caught
+  by the merge gate instead of at human sign-off.
+
 - `2026-09-03` - **vendored `shelving_core` splits into two class identities**:
   sh-012's `ShelvingUnit.execute` calls `expand(carcass, ...)`. The Frontier
   Advice said to import `Carcass` / `Leaf` / `expand` from

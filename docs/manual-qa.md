@@ -74,7 +74,24 @@ Expected: the tree gains one `ShelvingUnit` container. Expanding it shows a
 `ShelvingUnitDriver` plus four plank objects labelled `Bottom`, `Top`,
 `Left Side`, and `Right Side`. The 3D view shows a closed box 900 mm wide,
 1800 mm tall, and 300 mm deep, with the top and bottom running the full width
-and the two sides captured between them.
+and the two sides captured between them. Each plank is selectable in the 3D
+view and the spacebar toggles its visibility.
+
+2. Paste this into the Python console (**View → Panels → Python console**). It
+   passes only when every plank solid is actually being drawn, which is the
+   check `pixi run tests` cannot make (`freecadcmd` exposes no `ViewObject`):
+
+   ```python
+   doc = App.ActiveDocument
+   planks = [o for o in doc.Objects if o.TypeId == "Part::FeaturePython"]
+   assert planks, "no plank solids in the document"
+   hidden = [o.Name for o in planks if not o.ViewObject.isVisible()]
+   assert not hidden, "not rendering: {}".format(hidden)
+   print("OK: {} plank solids visible".format(len(planks)))
+   ```
+
+   Expected: it prints `OK: 4 plank solids visible` and raises no
+   `AssertionError`.
 
 ### 3. The scalar properties reflow the planks
 
