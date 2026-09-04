@@ -315,7 +315,7 @@ Friction log: record any workaround per `CLAUDE.md` in
   `GetResources` / `IsActive` / `Activated` per Must Have, and a headless-safe
   `Gui.addCommand`.
 
-- [ ] **Step 4** (`freecad/shelving/init_gui.py`): Wire `Shelving_CreateUnit`
+- [x] **Step 4** (`freecad/shelving/init_gui.py`): Wire `Shelving_CreateUnit`
   into a `"Shelving"` toolbar and menu in `Initialize`, with the command import
   deferred into `Initialize`. Keep the headless `Gui = None` path working. Run
   `mypy` and a headless `freecadcmd -c "import freecad.shelving.init_gui"` sanity

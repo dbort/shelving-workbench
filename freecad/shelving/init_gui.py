@@ -40,7 +40,14 @@ class ShelvingWorkbench(_WorkbenchBase):
     Icon = os.path.join(_RESOURCE_DIR, "shelving.svg")
 
     def Initialize(self) -> None:
-        pass
+        # Deferred so a headless `import freecad.shelving.init_gui` never reaches
+        # GUI-only code: the command module runs `Gui.addCommand` at import.
+        from freecad.shelving.commands import create_unit  # noqa: F401
+
+        command_ids = ["Shelving_CreateUnit"]
+        self.appendToolbar("Shelving", command_ids)
+        # freecad-stubs leaves `appendMenu` fully unannotated.
+        self.appendMenu("Shelving", command_ids)  # type: ignore[no-untyped-call]
 
     def Activated(self) -> None:
         pass
