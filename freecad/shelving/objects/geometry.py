@@ -11,23 +11,23 @@ import FreeCAD
 from freecad.shelving.vendor.shelving_core.expand import Vec3
 
 
-def plank_shape(size_mm: Vec3, origin_mm: Vec3) -> Part.Shape:
-    """An axis-aligned box solid of extent `size_mm` with its minimum corner at
-    `origin_mm`, both in the carcass local frame.
+def plank_shape(size: Vec3, origin: Vec3) -> Part.Shape:
+    """An axis-aligned box solid of extent `size` with its minimum corner at
+    `origin`, both in the carcass local frame.
 
-    Raises `ValueError` when any component of `size_mm` is not strictly
-    positive; the message names the offending axis and its value.
+    Raises `ValueError` when any component of `size` is not strictly positive;
+    the message names the offending axis and its value.
     """
     for axis, extent_mm in (
-        ("x", size_mm.x_mm),
-        ("y", size_mm.y_mm),
-        ("z", size_mm.z_mm),
+        ("x", size.x_mm),
+        ("y", size.y_mm),
+        ("z", size.z_mm),
     ):
         if extent_mm <= 0:
             raise ValueError(f"plank {axis} extent must be > 0, got {extent_mm}")
     return Part.makeBox(
-        size_mm.x_mm,
-        size_mm.y_mm,
-        size_mm.z_mm,
-        FreeCAD.Vector(origin_mm.x_mm, origin_mm.y_mm, origin_mm.z_mm),
+        size.x_mm,
+        size.y_mm,
+        size.z_mm,
+        FreeCAD.Vector(origin.x_mm, origin.y_mm, origin.z_mm),
     )

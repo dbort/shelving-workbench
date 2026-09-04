@@ -31,6 +31,8 @@ def add_plank(doc: FreeCAD.Document, name: str = "Plank") -> FreeCAD.DocumentObj
     # `App::DocumentObject` carrying the scripted-object properties the Protocol
     # names.
     obj = cast("PlankFeature", doc.addObject("Part::FeaturePython", name))
+    # Plank.__init__ registers itself as obj.Proxy and adds the properties; the
+    # FreeCAD object owns the proxy from then on, so there is nothing to bind.
     Plank(obj)
     return cast("FreeCAD.DocumentObject", obj)
 

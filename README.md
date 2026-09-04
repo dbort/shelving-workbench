@@ -46,9 +46,8 @@ checkout; both put `shelving_core` on the import path for scripts such as
   vendored-core drift check;
 - the workflow-hardening lint over `.github/workflows/` (see
   [`docs/github-actions-hardening.md`](docs/github-actions-hardening.md));
-- two headless `freecadcmd` checks: the workbench import smoke, and an
-  object-layer functional check that builds a `Plank` scripted object and
-  verifies its geometry, the generated labels, and the default catalog.
+- two headless `freecadcmd` checks: a workbench import smoke and an
+  object-layer functional check.
 
 It runs inside the pixi environment, which supplies every tool including
 FreeCAD. To run only the workflow lint, use `bash tools/lint-workflows.sh` from
