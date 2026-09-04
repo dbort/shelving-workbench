@@ -34,7 +34,9 @@ pixi run tests
 ```
 
 Who runs what:
-- The Implementer runs the checks after each Execution Plan step.
+- The Implementer runs the checks after each Execution Plan step; a group
+  of steps under a deferred checkpoint (§ Deferred verification) is
+  required green once, at the checkpoint, not after every step in it.
 - The Reviewer runs the checks, on every review, unconditionally.
 - `approve-task` runs the checks on the merged result before committing
   the merge.
@@ -44,6 +46,34 @@ If a task's work can only be verified by a live-infrastructure check that
 `pixi run tests` does not yet express, that check belongs as a durable
 automated test inside `pixi run tests` — not as a one-off shell command
 that evaporates after the session that ran it.
+
+### Deferred verification (checkpoints)
+
+By default every Execution Plan step is its own checkpoint: the Implementer
+runs the checks after it and they must pass before the next step starts.
+
+Some changes are atomic across files. An interface rename, or widening a
+type or lint gate to a directory, goes green only once every file it
+touches has been edited, so the Planner cannot split it into independently
+green steps without a false ordering. For these the Planner groups the
+steps and writes one checkpoint line after the last of them:
+
+    > **Checkpoint:** `pixi run tests` must be green here (Steps 3-6 are
+    > one atomic rename).
+
+The line is prose, not a `- [ ]` item, so it is never checked off. Inside
+the group the Implementer still runs the checks after each step to catch a
+break it did not expect (a syntax error, an unrelated regression), but a
+failure the group is known to carry until the checkpoint is not a stop;
+only a failure at the checkpoint, or at handoff to review, is. Per-step
+commits continue and the ones inside a group may be red: a task branch's
+history is not required to be bisectable, and the Reviewer judges the
+branch tip.
+
+A multi-step checkpoint is for a change that is genuinely atomic across
+files. It is not a way to defer verification on steps that could each
+stand alone; prefer step isolation and reach for a span only when a clean
+split is impossible.
 
 ## Phases
 
