@@ -55,6 +55,10 @@ for milestone M3; builds on sh-011.
   in `execute` gets the same `RuntimeError` translation as `expand`. N5 / N6 —
   comments added for the `driver.Width = 900` reset and the cross-identity
   vendored-import block.
+- Sign-off addition (user-directed, not a review finding): `docs/manual-qa.md`
+  gains a "Loading the workbench from this checkout" top-level section with the
+  `Mod` symlink steps for Linux and macOS. The M3 prerequisite line points at
+  it. Docs only.
 
 ## Must Have
 
