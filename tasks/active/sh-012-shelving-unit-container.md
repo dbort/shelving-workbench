@@ -28,31 +28,30 @@ for milestone M3; builds on sh-011.
 
 ## Must Have
 
-### Container pattern — read the probe finding first
-- [ ] Open `docs/freecadcmd-notes.md` and read the `App::Part` / `Proxy.execute`
-  section sh-011 wrote. It states whether FreeCAD 1.0 under `freecadcmd` runs a
-  Python `Proxy.execute` on a recomputing `App::Part`.
-- [ ] **If yes (Pattern A):** the `ShelvingUnit` proxy is attached directly to a
-  `doc.addObject("App::Part", ...)`; the promoted properties and `execute` live
-  on that `App::Part`. This matches `docs/architecture.md` as written; no doc
-  amendment.
-- [ ] **If no (Pattern B):** the unit is an `App::Part` (kept for `Placement` /
-  `App::Link` / Assembly compatibility) that contains one
-  `App::FeaturePython` driver child, named `ShelvingUnitDriver`, which carries
-  the promoted properties, `Layout`, and `execute`; the driver parents `Plank`
-  objects into the `App::Part`. Amend `docs/architecture.md` (see Docs below).
-- [ ] Every other Must-Have item below is written against "the unit object" —
-  the `App::Part` in Pattern A, the driver in Pattern B. The choice changes only
-  which object owns the properties and `execute`, not the algorithm.
+### Container pattern — `App::Part` plus a driver child
+sh-011's probe settled this. `docs/freecadcmd-notes.md` § "`App::Part` does not
+call a Python `Proxy.execute`" records that a bare `App::Part` under FreeCAD 1.0
+cannot hold a `Proxy` at all and never dispatches `execute` on recompute.
+
+- [ ] The unit is an `App::Part` (kept for `Placement` / `App::Link` / Assembly
+  compatibility) that contains one `App::FeaturePython` driver child, named
+  `ShelvingUnitDriver`. The driver carries the promoted properties, `Layout`,
+  and `execute`, and parents `Plank` objects into the `App::Part`.
+- [ ] "The unit object" in the Must Have items below means this driver: it owns
+  the properties and `execute`. "The container" or "the `App::Part`" means the
+  parent that holds the `Placement` and the plank children.
+- [ ] `docs/architecture.md`'s `### `ShelvingUnit` container` section still puts
+  the properties and `execute` on the `App::Part` itself; it is amended to the
+  driver-child split (see Docs below).
 
 ### `freecad/shelving/objects/shelving_unit.py` (new)
 - [ ] `class ShelvingUnit`: the `Proxy` for the unit object.
 - [ ] `make_shelving_unit(doc: FreeCAD.Document) -> FreeCAD.DocumentObject`:
   factory used by both the command and the functional smoke (so the smoke needs
-  no GUI). It creates the object(s) per the chosen pattern, attaches the proxy,
-  adds the properties, seeds the starter layout (below), sets the promoted
-  properties to match, and returns the unit object (the `App::Part` in both
-  patterns; in Pattern B the driver is reachable as its child).
+  no GUI). It creates the `App::Part` and its `ShelvingUnitDriver` child,
+  attaches the driver proxy, adds the properties, seeds the starter layout
+  (below), sets the promoted properties to match, and returns the `App::Part`
+  (the driver is reachable as its child).
 - [ ] Promoted properties, group `"Shelving"`:
   - `Width`, `Height`, `Depth` — `App::PropertyLength`. Read `.Value` for
     millimetres in `execute`.
@@ -81,9 +80,9 @@ for milestone M3; builds on sh-011.
      re-touches the object and loops the recompute).
   5. Reconcile children (below).
 - [ ] Child reconciliation:
-  - Index existing plank children by `NodeId` (children of the `App::Part` in
-    Pattern A; children the driver created, parented in the `App::Part`, in
-    Pattern B). "Plank child" = a child with a `NodeId` property.
+  - Index existing plank children by `NodeId`: planks the driver created,
+    parented in the `App::Part`. "Plank child" = a child with a `NodeId`
+    property, so the driver itself is never one.
   - Walk `specs` in list order. For a spec whose `node_id` matches an existing
     plank: set `SizeMM`, `CornerMM`, `Material`, `Role`; `touch()` it. For a new
     `node_id`: `add_plank(doc)`, set `NodeId`, the geometry properties,
@@ -102,7 +101,25 @@ for milestone M3; builds on sh-011.
   `freecad.shelving.vendor.shelving_core.layout` / `.materials`; `expand`,
   `PlankRole`, `Vec3` from `.expand`; `LayoutSolveError` from `.solver`.
   `DEFAULT_CATALOG` etc. from `freecad.shelving.default_catalog`; `add_plank` /
-  `generated_label` from `freecad.shelving.objects.*`.
+  `generated_label` from `freecad.shelving.objects.*`; `PlankFeature` and the
+  new `ShelvingUnitFeature` (below) from
+  `freecad.shelving.objects.feature_types`.
+
+### `freecad/shelving/objects/feature_types.py` (extend)
+- [ ] Add a `ShelvingUnitFeature` `Protocol` for the driver's scripted-object
+  surface, following the existing `PlankFeature` shape (names and types match
+  the `addProperty` calls in `ShelvingUnit.__init__`): `Proxy: object`, `Width`
+  / `Height` / `Depth` (the FreeCAD quantity type exposing `.Value: float`),
+  `DefaultMaterial: str`, `Layout: str`, `addProperty`, `touch`, the child-list
+  / `addObject` used to parent planks, and any state the smoke reads (`State` /
+  `isValid`).
+- [ ] `shelving_unit.py` casts `doc.addObject("App::FeaturePython", ...)` to
+  `ShelvingUnitFeature` and `add_plank(doc)` and any existing plank children to
+  `PlankFeature` before touching their scripted properties, the same way
+  `tools/freecad_object_smoke.py` already casts. `mypy --strict` over
+  `freecad/shelving/` stays green with no new blanket `type: ignore`.
+- [ ] Update the module docstring: it currently says `PlankFeature` alone
+  supplies the typed view.
 
 ### `freecad/shelving/commands/create_unit.py` (new)
 - [ ] `freecad/shelving/commands/__init__.py` plus `create_unit.py`.
@@ -126,7 +143,8 @@ for milestone M3; builds on sh-011.
 ### `tools/freecad_object_smoke.py` (extend) — end-to-end checks
 - [ ] Add a section, keeping sh-011's object-layer checks, that:
   - `make_shelving_unit(doc)`, `doc.recompute()`; assert exactly 4 plank
-    children; their `Role` set is `{bottom, top, left_side, right_side}`; the
+    children (children carrying a `NodeId`, so the `ShelvingUnitDriver` is
+    excluded); their `Role` set is `{bottom, top, left_side, right_side}`; the
     union of their `Shape.BoundBox` is `(0,0,0)`-`(900,300,1800)` within `1e-6`.
   - assert each shell plank's `SizeMM` / `CornerMM` against the carcass lap rule
     with `t = DEFAULT_CATALOG["ply18"].thickness_mm` (bottom `900 x 300 x t` at
@@ -172,11 +190,11 @@ for milestone M3; builds on sh-011.
   recompute error with no stale geometry.
 
 ### Docs
-- [ ] Pattern B only: amend `docs/architecture.md` `### `ShelvingUnit` container`
-  to describe the `App::Part` + `ShelvingUnitDriver` child split — the driver
-  owns the promoted properties, `Layout`, and `execute`; the `App::Part` keeps
-  the single `Placement` and the plank children. Note why (FreeCAD 1.0 does not
-  run `Proxy.execute` on a recomputing `App::Part`; cross-reference the
+- [ ] Amend `docs/architecture.md` `### `ShelvingUnit` container` to describe the
+  `App::Part` + `ShelvingUnitDriver` child split: the driver owns the promoted
+  properties, `Layout`, and `execute`; the `App::Part` keeps the single
+  `Placement` and the plank children. Note why (FreeCAD 1.0 does not run
+  `Proxy.execute` on a recomputing `App::Part`; cross-reference the
   `docs/freecadcmd-notes.md` section). No other restyling.
 - [ ] `docs/architecture.md` `## Testing and CI`: change "From M2 the
   `freecadcmd` step runs full smoke tests" to "As of M3 …" and trim the example
@@ -203,20 +221,22 @@ for milestone M3; builds on sh-011.
 
 DEPENDS ON sh-011 (`blocked_by: [sh-011]`): by the time this runs,
 `freecad/shelving/objects/geometry.py` (`plank_shape`), `objects/labels.py`
-(`generated_label`), `objects/plank.py` (`Plank`, `add_plank`), and
+(`generated_label`), `objects/plank.py` (`Plank`, `add_plank`),
+`objects/feature_types.py` (`PlankFeature`), and
 `freecad/shelving/default_catalog.py` (`DEFAULT_CATALOG`, `DEFAULT_MATERIAL_ID`,
 `DEFAULT_CATALOG_IDS`) all exist; `freecad/shelving/` is under `mypy --strict`
 via `freecad-stubs`; `tools/freecad_object_smoke.py` and its second
-`tools/run-tests.sh` block exist; and `docs/freecadcmd-notes.md` records the
-`App::Part` / `Proxy.execute` finding. This task adds the container, the command,
-the toolbar wiring, and the end-to-end assertions on top. Do not re-touch the
-sh-011 modules except to wire them together.
+`tools/run-tests.sh` block exist; and `docs/freecadcmd-notes.md` records that a
+bare `App::Part` takes no `Proxy` and never runs `execute`, so the container
+needs an `App::FeaturePython` driver child. This task adds the container, the
+command, the toolbar wiring, and the end-to-end assertions on top. Do not
+re-touch the sh-011 modules except to wire them together.
 
-CONTAINER PATTERN IS DECIDED BY DATA, NOT PREFERENCE: read the
-`docs/freecadcmd-notes.md` section and follow Pattern A or B as it dictates. Do
-not spend a rejection cycle re-litigating it. The `make_shelving_unit` factory
-is the seam that absorbs the difference; keep `execute` and reconciliation
-pattern-agnostic.
+CONTAINER PATTERN IS SETTLED: the `docs/freecadcmd-notes.md` finding rules out a
+bare `App::Part` proxy, so the container is the `App::Part` plus a
+`ShelvingUnitDriver` `App::FeaturePython` child. Do not re-litigate it or try to
+attach a `Proxy` to the `App::Part` directly. `make_shelving_unit` builds both
+objects; `execute` and the reconciliation run on the driver.
 
 HEADLESS CONVENTIONS (`docs/freecadcmd-notes.md`): the smoke keeps the
 `sys.path` + `extend_path` shim and the printed-marker success signal.
@@ -245,10 +265,12 @@ order when assigning `ordinal_for_role`.
 
 STANDING OBLIGATIONS (`CLAUDE.md`):
 - **Typed Python**: `freecad/shelving/` is under `mypy --strict` (set up in
-  sh-011). New modules are fully typed against `freecad-stubs`; a scoped
-  `# type: ignore[code]` or a commented `Any` is allowed only at a real stub
-  gap. `App::PropertyEnumeration` round-trips as `str`; `App::PropertyLength`
-  exposes `.Value` as `float` — annotate accordingly.
+  sh-011). Scripted-object property surfaces are declared as a `Protocol` in
+  `objects/feature_types.py` and `cast` onto each `doc.addObject(...)` return,
+  the way `PlankFeature` already is; add `ShelvingUnitFeature` there for the
+  driver rather than scattering `Any`. A scoped `# type: ignore[code]` is
+  allowed only at a real stub gap. `App::PropertyEnumeration` round-trips as
+  `str`; `App::PropertyLength` exposes `.Value` as `float`.
 - **Units in the name**: `SizeMM` / `CornerMM` stay as sh-011 defined them;
   length locals suffixed `_mm`. EXPLICIT OPT-OUT for the promoted properties:
   `Width`, `Height`, `Depth` keep those exact names with no `_mm` suffix,
@@ -275,15 +297,18 @@ Friction log: record any workaround per `CLAUDE.md` in
 ## Execution Plan
 
 - [ ] **Step 1** (`docs/freecadcmd-notes.md` — read only): Read the `App::Part` /
-  `Proxy.execute` section from sh-011 and fix Pattern A or B for the rest of the
-  task.
+  `Proxy.execute` section for the exact behavior the driver-child container
+  works around.
 
-- [ ] **Step 2** (`freecad/shelving/objects/shelving_unit.py`): `ShelvingUnit`
-  proxy and `make_shelving_unit` factory per the chosen pattern: the promoted
-  properties, the seeded single-`Leaf` starter layout, the five-step `execute`
-  (with the dirty guard and the pre-mutation `expand`), and the child
-  reconciliation (index by `NodeId`, create/update/remove, create-time `Label`
-  only). Empty `dumps`/`loads`.
+- [ ] **Step 2** (`freecad/shelving/objects/feature_types.py`,
+  `freecad/shelving/objects/shelving_unit.py`): Add the `ShelvingUnitFeature`
+  Protocol to `feature_types.py` and update its module docstring. Then the
+  `ShelvingUnit` proxy and `make_shelving_unit` factory (the `App::Part` plus a
+  `ShelvingUnitDriver` child): the promoted properties, the seeded
+  single-`Leaf` starter layout, the five-step `execute` (dirty guard,
+  pre-mutation `expand`), and the child reconciliation (index by `NodeId`,
+  create/update/remove, create-time `Label` only), with `PlankFeature` /
+  `ShelvingUnitFeature` casts on the `addObject` returns. Empty `dumps`/`loads`.
 
 - [ ] **Step 3** (`freecad/shelving/commands/__init__.py`,
   `freecad/shelving/commands/create_unit.py`): `CreateUnitCommand` with
@@ -305,9 +330,9 @@ Friction log: record any workaround per `CLAUDE.md` in
 - [ ] **Step 6** (`docs/manual-qa.md`): Create the manual QA catalog per Must
   Have, seeded with the `## M3 — `ShelvingUnit`` case group.
 
-- [ ] **Step 7** (`docs/architecture.md`): Pattern B only — amend the
-  `ShelvingUnit` container section for the driver-child split. Both patterns —
-  update the `## Testing and CI` "From M2" wording to "As of M3" and trim the
-  example list to M3's actual assertions. Run `pixi run tests` and confirm the
-  whole chain is green; run the `docs/manual-qa.md` `## M3` cases in the GUI and
-  record the outcome in this file for sign-off.
+- [ ] **Step 7** (`docs/architecture.md`): Amend the `### `ShelvingUnit`
+  container` section for the `App::Part` + `ShelvingUnitDriver` split. Update the
+  `## Testing and CI` "From M2" wording to "As of M3" and trim the example list
+  to M3's actual assertions. Run `pixi run tests` and confirm the whole chain is
+  green; run the `docs/manual-qa.md` `## M3` cases in the GUI and record the
+  outcome in this file for sign-off.
