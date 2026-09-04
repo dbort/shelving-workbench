@@ -277,7 +277,7 @@ FreeCAD API that behaved off-spec, a doc reverse-engineered).
   `mypy` (expect mypy to now fail only on the not-yet-typed `init_gui.py`, fixed
   in Step 5).
 
-- [ ] **Step 2** (`freecad/shelving/objects/__init__.py`,
+- [x] **Step 2** (`freecad/shelving/objects/__init__.py`,
   `freecad/shelving/objects/geometry.py`): New `objects` package. `plank_shape`
   per Must Have, with the `ValueError` guards and the isolation-rationale
   docstring. Imports `FreeCAD`, `Part`, and `Vec3` from the vendored core.
