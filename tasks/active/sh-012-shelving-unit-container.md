@@ -1,8 +1,8 @@
 ---
 id: sh-012
 title: "ShelvingUnit container + Create Unit command (M3, part 2)"
-current_agent: user
-current_phase: user_signoff
+current_agent: implementer
+current_phase: implementation
 review_rejections: 1
 blocked_by: [sh-011]
 ---
@@ -23,8 +23,52 @@ for milestone M3; builds on sh-011.
 ## Status
 - [x] Planning
 - [x] Implementation
-- [x] Review
+- [ ] Review
 - [ ] User sign-off
+
+## Sign-off defect — planks do not render in the FreeCAD GUI
+Found by the user in manual testing on macOS. `review_rejections` stays at 1;
+this is a sign-off demotion, not a review-loop round.
+
+**Symptom.** After **Create Unit**: the tree shows `ShelvingUnit` /
+`ShelvingUnitDriver` / four `Plank` objects, each `ViewObject.Visibility == True`
+with a real `Shape` (correct bounding boxes), but nothing draws in 3D,
+`ViewObject.isVisible()` is `False`, and spacebar does not toggle it.
+
+**Root cause (isolated at the console).** In this FreeCAD 1.0.0 build a
+`Part::FeaturePython` with a set `Shape` and no ViewProvider proxy does not
+render: bare or with the `Plank` proxy, `isVisible()` is stuck `False`, and
+`ViewObject.show()` / `touch()` + `recompute()` do not change it. A plain
+`Part::Feature` and a `Part::Box` in the same document render fine. Independent
+of whether the plank is created inside `execute` or at top level. sh-011's
+"a headless `Part::FeaturePython` needs no `ViewProvider`, and the GUI supplies
+a default" is false for this build; the merged `Plank` object has never
+actually displayed.
+
+**Fix directive.**
+- Give `Plank` a `ViewProvider` that renders its solid and is selectable /
+  visibility-toggleable. Scope is "it draws"; colour-by-material stays M6.
+  Try the minimal proxy first (`attach` storing `vobj.Object`,
+  `getDisplayModes -> []`, `getDefaultDisplayMode -> "Flat Lines"`, no-op
+  `updateData` / `onChanged`, `dumps` / `loads -> None`), which lets the C++
+  `PartGui::ViewProviderPython` base keep drawing the `Shape`. If that still
+  does not render in the GUI, force the C++ Part view provider at creation
+  (`Document.addObject(..., viewType=...)`).
+- Attach it only in a GUI: `add_plank` (or a GUI-only helper it calls) sets the
+  VP proxy when `obj.ViewObject is not None`. Under `freecadcmd`
+  `obj.ViewObject` is `None`, so this is a no-op there. Keep every `FreeCADGui`
+  import out of the headless path; `shelving_core/tests/test_no_freecad.py` and
+  the two `freecadcmd` smokes must stay green.
+- Check whether the `ShelvingUnitDriver` (`App::FeaturePython`, no shape) needs
+  a VP to avoid a broken tree entry; the `ShelvingUnit` `App::Part` already
+  renders (C++ VP), leave it.
+- `docs/manual-qa.md` case 2's "the 3D view shows a closed box …" is the
+  acceptance check. `freecadcmd` has no `ViewObject`, so `pixi run tests`
+  cannot assert rendering. Ship the fix plus a short console macro
+  (`doc = App.ActiveDocument; assert all(o.ViewObject.isVisible() for o in ...
+  if o.TypeId == "Part::FeaturePython")`) for the user to run once in the GUI,
+  and note in `manual-qa.md` how to run it.
+- No `shelving_core/` change. No colour / grain / catalog scope creep.
 
 ### Implementation notes
 - `objects/shelving_unit.py` imports the layout / solver / expand / materials
