@@ -35,3 +35,7 @@ demo = "python tools/layout_demo.py"
 # is the project, not a third-party dependency.
 [pypi-dependencies]
 shelving-workbench = { path = ".", editable = true }
+# Type-check-only: PEP 561 stubs for the FreeCAD / App / Part / FreeCADGui
+# modules. The conda-forge FreeCAD ships no stubs, which is why mypy over
+# `freecad/shelving/` was previously off. Ships no runtime code.
+freecad-stubs = "*"

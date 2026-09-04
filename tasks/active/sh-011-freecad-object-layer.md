@@ -268,7 +268,7 @@ FreeCAD API that behaved off-spec, a doc reverse-engineered).
 
 ## Execution Plan
 
-- [ ] **Step 1** (`pixi.toml`, `pixi.lock`, `pyproject.toml`): Add `freecad-stubs`
+- [x] **Step 1** (`pixi.toml`, `pixi.lock`, `pyproject.toml`): Add `freecad-stubs`
   to `[pypi-dependencies]`. `rm pixi.lock && pixi lock`; confirm the self-install
   entry is repo-relative and both platforms resolve. In `[tool.mypy]` drop the
   `freecad/` exclude, add `freecad/shelving/` to `files`, add the

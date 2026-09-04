@@ -27,9 +27,17 @@ select = ["E", "F", "I", "UP", "B"]
 strict = true
 files = [
     "shelving_core",
+    "freecad/shelving/",
     "tools/layout_demo.py",
     "tools/check_lock_paths.py",
     "tools/check_action_pins.py",
     "tests/test_check_action_pins.py",
 ]
-exclude = ["freecad/"]
+# The vendored core is byte-identical to `shelving_core/`, already in `files`;
+# analyzing it a second time under this module name collides ("duplicate module
+# named 'shelving_core'").
+exclude = ["^freecad/shelving/vendor/"]
+
+[[tool.mypy.overrides]]
+module = "freecad.shelving.vendor.*"
+follow_imports = "skip"
