@@ -2,7 +2,7 @@
 id: sh-011
 title: "FreeCAD object layer: Plank, box helper, test harness (M3, part 1)"
 current_agent: user
-current_phase: user_signoff
+current_phase: done
 review_rejections: 1
 ---
 
@@ -15,16 +15,15 @@ isolable helper that turns a plank's size and corner into a `Part` solid, a
 read-only size reporting, an in-code default material catalog, and a headless
 functional-test harness wired into `pixi run tests`. Adds `freecad-stubs` as a
 type-check-only dependency and brings `freecad/shelving/` (minus the vendored
-core) under `mypy --strict`. Also probes, and records in
-`docs/freecadcmd-notes.md`, whether FreeCAD 1.0 calls `Proxy.execute` on a
-recomputing `App::Part`, which decides sh-012's container shape. Part 1 of 2 for
-milestone M3.
+core) under `mypy --strict`. Records in `docs/freecadcmd-notes.md` that FreeCAD
+1.0 does not call `Proxy.execute` on a recomputing `App::Part`, which sets
+sh-012's container shape. Part 1 of 2 for milestone M3.
 
 ## Status
 - [x] Planning
 - [x] Implementation
 - [x] Review
-- [ ] User sign-off
+- [x] User sign-off
 
 ## Sign-off addendum (user-directed, not a review rejection)
 The branch reached `user_signoff` and cleared review plus the doc-hygiene pass.
