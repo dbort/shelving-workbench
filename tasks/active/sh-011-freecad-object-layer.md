@@ -304,7 +304,7 @@ FreeCAD API that behaved off-spec, a doc reverse-engineered).
   marker. Run it via `freecadcmd` directly and read the `APART_PROXY_EXECUTE`
   line.
 
-- [ ] **Step 7** (`tools/run-tests.sh`): Add the second capture-print-grep block
+- [x] **Step 7** (`tools/run-tests.sh`): Add the second capture-print-grep block
   for `tools/freecad_object_smoke.py` (marker `shelving object layer OK`),
   mirroring the existing smoke block.
 
