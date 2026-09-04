@@ -1,8 +1,8 @@
 ---
 id: sh-011
 title: "FreeCAD object layer: Plank, box helper, test harness (M3, part 1)"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 1
 ---
 
@@ -55,8 +55,8 @@ Round B:
 - The friction-log entry that read "`App::Part` rejects a `Proxy` assignment, so
   the sh-011 probe pseudocode crashes as written" was removed at the user's
   request. The behavioral fact it captured now lives in
-  `docs/freecadcmd-notes.md` (`## `App::Part` does not call a Python
-  `Proxy.execute``); the probe pseudocode it flagged is itself gone with the
+  `docs/freecadcmd-notes.md`, in the "App::Part does not call a Python
+  Proxy.execute" section; the probe pseudocode it flagged is itself gone with the
   probe.
 - `add_plank` in `freecad/shelving/objects/plank.py` gains a comment explaining
   why `Plank(obj)` is called for its constructor side effect and binds nothing:

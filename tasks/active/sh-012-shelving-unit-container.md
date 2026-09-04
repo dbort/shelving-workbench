@@ -124,7 +124,7 @@ for milestone M3; builds on sh-011.
   touch GUI-only code. The `Gui = None` collapse from sh-011 stays intact.
 
 ### `tools/freecad_object_smoke.py` (extend) — end-to-end checks
-- [ ] Add a section, keeping sh-011's checks and the `App::Part` probe, that:
+- [ ] Add a section, keeping sh-011's object-layer checks, that:
   - `make_shelving_unit(doc)`, `doc.recompute()`; assert exactly 4 plank
     children; their `Role` set is `{bottom, top, left_side, right_side}`; the
     union of their `Shape.BoundBox` is `(0,0,0)`-`(900,300,1800)` within `1e-6`.
@@ -269,8 +269,8 @@ CORE IS FROZEN INPUT: import everything layout/solver/expand/materials from
 
 Friction log: record any workaround per `CLAUDE.md` in
 `.claude/docs/friction-log.md` in this session, especially anything about
-`App::Part` recompute ordering or child parenting that the probe did not already
-cover.
+`App::Part` recompute ordering or child parenting that the
+`docs/freecadcmd-notes.md` finding did not already cover.
 
 ## Execution Plan
 
@@ -299,8 +299,8 @@ cover.
 - [ ] **Step 5** (`tools/freecad_object_smoke.py`): Add the end-to-end section —
   create, recompute, 4-plank + bbox assertions; lap-rule size checks; `Width`
   reflow + `Layout` rewrite; a `HORIZONTAL` two-`Fixed`-shelf relayout to 6
-  planks; the over-constraint error-state check. Keep sh-011's checks, the probe,
-  and the marker. Run via `freecadcmd`.
+  planks; the over-constraint error-state check. Keep sh-011's checks and the
+  marker. Run via `freecadcmd`.
 
 - [ ] **Step 6** (`docs/manual-qa.md`): Create the manual QA catalog per Must
   Have, seeded with the `## M3 — `ShelvingUnit`` case group.
