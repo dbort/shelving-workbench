@@ -89,13 +89,13 @@ sample units; the print script gains a plank table.
 
 ## M3 — `ShelvingUnit` in FreeCAD
 
-**Status:** Tasks sh-011, sh-012
+**Status:** Done sh-011, sh-012
 
 - [x] sh-011 — FreeCAD object layer: the isolable plank box helper, the
   `Plank` `Part::FeaturePython`, generated `Label`s, the in-code default
   catalog, the `freecad-stubs` type-check dependency plus `mypy --strict`
   over `freecad/shelving/`, and a headless functional-test harness
-- [ ] sh-012 — the `ShelvingUnit` `App::Part` container, the "create unit"
+- [x] sh-012 — the `ShelvingUnit` `App::Part` container, the "create unit"
   command and toolbar, `execute` calling core expansion and reconciling
   child planks by UUID (blocked on sh-011)
 
@@ -183,5 +183,6 @@ opening and change its size; confirm cripples and jacks follow.
 **Status:** Planned
 
 Parametric joinery with promote-to-Body, the cut-list Spreadsheet, the
-TechDraw elevation, multi-box units, and assembly joints, each as its own
-task.
+TechDraw elevation, multi-box units, assembly joints, and a macro or
+headless-script harness that drives the `docs/manual-qa.md` GUI cases, each
+as its own task.

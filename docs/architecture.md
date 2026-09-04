@@ -166,18 +166,28 @@ create unit, edit layout, manage catalog.
 
 ### `ShelvingUnit` container
 
-An `App::Part` with a Python proxy. Properties:
+An `App::Part` holding one `App::FeaturePython` child named
+`ShelvingUnitDriver`. FreeCAD 1.0 dispatches no `Proxy.execute` on a
+recomputing `App::Part` (see
+[`freecadcmd-notes.md`](freecadcmd-notes.md)), so the work is split:
 
-- promoted scalars: `Width`, `Height`, `Depth`, `DefaultMaterial`;
-- `Layout`: hidden `App::PropertyString` holding the split-tree JSON;
-- standard `Placement` (inherited from `App::Part`).
+- the `App::Part` keeps the single rigid-body `Placement` and parents the
+  plank children, for `App::Link` and Assembly compatibility;
+- the driver child carries the Python proxy, the promoted scalars
+  `Width`, `Height`, `Depth`, `DefaultMaterial`, the hidden
+  `Layout` `App::PropertyString` holding the split-tree JSON, and
+  `execute`.
 
-`execute` deserialises `Layout`, runs `shelving_core.expand` against the
-document's catalog, then reconciles children: for each `PlankSpec`, find
-the child `Part::FeaturePython` whose stored UUID matches and update its
-shape and metadata in place; create children for new UUIDs; delete
-children whose UUID is gone. A structured solver error is re-raised so
-FreeCAD marks the object as touched-with-error and shows no stale shape.
+The driver's `execute` deserialises `Layout`, overrides the four outer
+scalars from the promoted properties, runs `shelving_core.expand` against
+the default catalog, rewrites `Layout` from the reconciled carcass only
+when it changed, then reconciles the `App::Part`'s plank children: for
+each `PlankSpec`, find the child `Part::FeaturePython` whose stored
+`NodeId` matches and update its shape and metadata in place; create
+children for new ids; delete children whose id is gone. A structured
+solver error is re-raised as a `RuntimeError` before any child is
+touched, so FreeCAD marks the driver touched-with-error and shows no
+stale shape.
 
 ### Plank objects
 
@@ -261,11 +271,12 @@ ordered pass it covers ruff, a strict type check, and pytest over
 lint; and, in a FreeCAD 1.0 environment, a headless `freecadcmd` import
 smoke.
 
-From M2 the `freecadcmd` step runs full smoke tests: create a unit,
+The `freecadcmd` step runs full smoke tests: create a unit,
 recompute, assert plank count and bounding boxes; edit a property,
-recompute, assert the reflow; edit a catalog thickness, recompute, assert
-dependent planks changed. See [`freecadcmd-notes.md`](freecadcmd-notes.md)
-for the headless `freecadcmd` behaviors these scripts work around.
+recompute, assert the reflow. Editing a catalog thickness and asserting
+that dependent planks change arrives with M4, when the catalog becomes a
+document object. See [`freecadcmd-notes.md`](freecadcmd-notes.md) for the
+headless `freecadcmd` behaviors these scripts work around.
 
 The core carries the load. Every geometric rule (solver distribution,
 lap-order effects, over-constraint failure, serialisation round-trips) is

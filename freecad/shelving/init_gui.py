@@ -31,8 +31,8 @@ _RESOURCE_DIR = os.path.join(os.path.dirname(__file__), "resources")
 class ShelvingWorkbench(_WorkbenchBase):
     """FreeCAD workbench entry point for parametric shelving.
 
-    Carries only the menu metadata FreeCAD needs to list the workbench; it
-    registers no toolbar or command yet.
+    `Initialize` registers the Shelving toolbar and menu with the
+    `Shelving_CreateUnit` command.
     """
 
     MenuText = "Shelving"
@@ -40,7 +40,14 @@ class ShelvingWorkbench(_WorkbenchBase):
     Icon = os.path.join(_RESOURCE_DIR, "shelving.svg")
 
     def Initialize(self) -> None:
-        pass
+        # Deferred so a headless `import freecad.shelving.init_gui` never reaches
+        # GUI-only code: the command module runs `Gui.addCommand` at import.
+        from freecad.shelving.commands import create_unit  # noqa: F401
+
+        command_ids = ["Shelving_CreateUnit"]
+        self.appendToolbar("Shelving", command_ids)
+        # freecad-stubs leaves `appendMenu` unannotated.
+        self.appendMenu("Shelving", command_ids)  # type: ignore[no-untyped-call]
 
     def Activated(self) -> None:
         pass

@@ -69,3 +69,18 @@ scripted type that receives `execute`, either an `App::DocumentObjectGroupPython
 or an `App::FeaturePython` with a group extension. The other option is an
 `App::Part` paired with a child `App::FeaturePython` "driver" object that owns
 the reconciliation `execute`.
+
+## A proxy `execute` that raises marks the object `Invalid`
+
+FreeCAD 1.0.0 (`1.0.0R39109`) under `freecadcmd` does not propagate an exception
+raised inside a scripted object's `Proxy.execute` out of `doc.recompute()`. The
+recompute call returns normally; the failure shows up on the object's state
+instead. After a `RuntimeError` from `execute`, an `App::FeaturePython` driver
+reports `driver.State == ['Touched', 'Invalid']` and `driver.isValid() is False`,
+and stays that way across further recomputes until an `execute` succeeds. The
+traceback is written to stderr.
+
+Consequence for headless checks: assert the error path on `"Invalid" in
+obj.State` or `obj.isValid() is False`. Do not assert on `"Touched" in obj.State`
+alone: an object the recompute never visited also carries `"Touched"`, so that
+predicate passes even when `execute` never ran.
