@@ -2,7 +2,7 @@
 id: sh-012
 title: "ShelvingUnit container + Create Unit command (M3, part 2)"
 current_agent: user
-current_phase: user_signoff
+current_phase: done
 review_rejections: 1
 blocked_by: [sh-011]
 ---
@@ -24,7 +24,7 @@ for milestone M3; builds on sh-011.
 - [x] Planning
 - [x] Implementation
 - [x] Review
-- [ ] User sign-off
+- [x] User sign-off
 
 ## Sign-off defect — planks do not render in the FreeCAD GUI
 Found by the user in manual testing on macOS. `review_rejections` stays at 1;
