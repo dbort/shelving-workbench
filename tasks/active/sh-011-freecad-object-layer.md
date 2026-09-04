@@ -287,7 +287,7 @@ FreeCAD API that behaved off-spec, a doc reverse-engineered).
   / `DEFAULT_MATERIAL_ID` / `DEFAULT_CATALOG_IDS` from the vendored `materials`
   module, with the M4-stopgap docstring. Neither module imports `FreeCAD`.
 
-- [ ] **Step 4** (`freecad/shelving/objects/plank.py`): `Plank` proxy and
+- [x] **Step 4** (`freecad/shelving/objects/plank.py`): `Plank` proxy and
   `add_plank` factory per Must Have: the six `"Shelving"`-group properties with
   the stated hidden/read-only flags, `execute` calling `plank_shape` and setting
   `Dimensions`, and the empty `dumps`/`loads`. No GUI import, no `ViewProvider`.
