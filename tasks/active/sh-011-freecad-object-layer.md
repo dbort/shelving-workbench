@@ -1,8 +1,8 @@
 ---
 id: sh-011
 title: "FreeCAD object layer: Plank, box helper, test harness (M3, part 1)"
-current_agent: user
-current_phase: user_signoff
+current_agent: reviewer
+current_phase: review
 review_rejections: 1
 ---
 
@@ -23,7 +23,7 @@ milestone M3.
 ## Status
 - [x] Planning
 - [x] Implementation
-- [x] Review
+- [ ] Review
 - [ ] User sign-off
 
 ## Sign-off addendum (user-directed, not a review rejection)
