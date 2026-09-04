@@ -42,6 +42,12 @@ from freecad.shelving.objects.shelving_unit import (  # noqa: E402
     make_shelving_unit,
     unit_driver,
 )
+
+# The carcasses below are built from the vendored core, while `shelving_unit`
+# works in the top-level `shelving_core` package (see its module comment). Every
+# carcass crosses to the driver as JSON through `driver.Layout`, and that round
+# trip launders the class identity, so the mix is safe. Do not compare a core
+# object or enum member from this module against one the driver produced.
 from freecad.shelving.vendor.shelving_core.expand import (  # noqa: E402
     PlankRole,
     Vec3,
@@ -159,7 +165,14 @@ def _by_role(planks: list[PlankFeature]) -> dict[str, PlankFeature]:
 
 
 def _in_error_state(driver: ShelvingUnitFeature) -> bool:
-    return "Touched" in driver.State or not driver.isValid()
+    """Whether the driver's last recompute failed inside the proxy `execute`.
+
+    FreeCAD 1.0 headless swallows the raised `RuntimeError` and marks the object
+    `Invalid` instead of propagating it (`docs/freecadcmd-notes.md` § "A proxy
+    `execute` that raises marks the object `Invalid`"). "Touched" alone is not an
+    error signal: a recompute the driver was never visited on also carries it.
+    """
+    return "Invalid" in driver.State or not driver.isValid()
 
 
 def _check_unit_end_to_end() -> None:
@@ -203,7 +216,10 @@ def _check_unit_end_to_end() -> None:
 
         # Structural relayout by hand-edited Layout: a HORIZONTAL split with two
         # shelves. Reuse the unit's carcass id so the shell node ids stay
-        # matched and only the two shelves are added.
+        # matched and only the two shelves are added. Reset Width to 900 first:
+        # the previous block left the promoted property at 1000, and `execute`
+        # lets that win over the carcass JSON, which would contradict this
+        # 900-wide relayout and break the `900 - 2t` shelf-size assertion below.
         carcass_id = json.loads(driver.Layout)["carcass"]["id"]
         driver.Width = 900
         relayout = Carcass(
@@ -227,6 +243,36 @@ def _check_unit_end_to_end() -> None:
         assert len(shelves) == 2, len(shelves)
         for shelf in shelves:
             _assert_vec(shelf.SizeMM, (900.0 - 2.0 * t_mm, 300.0, t_mm))
+
+        # Reconciliation remove branch: collapse back to a single Leaf. Both
+        # shelf node ids leave the spec set, so `execute` must removeObject the
+        # two shelves and keep the four shell planks in place, not rebuild them.
+        shelf_node_ids = {s.NodeId for s in shelves}
+        shelf_names = {cast("FreeCAD.DocumentObject", s).Name for s in shelves}
+        shell_names_by_role = {
+            p.Role: cast("FreeCAD.DocumentObject", p).Name
+            for p in planks
+            if p.Role != "shelf"
+        }
+        driver.Layout = Carcass(
+            width_mm=900.0,
+            height_mm=1800.0,
+            depth_mm=300.0,
+            default_material=MaterialId("ply18"),
+            root=Leaf(),
+            id=carcass_id,
+        ).to_json()
+        doc.recompute()
+        planks = _plank_children(part)
+        assert len(planks) == 4, len(planks)
+        assert {p.NodeId for p in planks}.isdisjoint(shelf_node_ids), [
+            p.NodeId for p in planks
+        ]
+        for name in shelf_names:
+            assert doc.getObject(name) is None, name
+        assert {
+            p.Role: cast("FreeCAD.DocumentObject", p).Name for p in planks
+        } == shell_names_by_role, shell_names_by_role
 
         good_layout = driver.Layout
         good_count = len(planks)

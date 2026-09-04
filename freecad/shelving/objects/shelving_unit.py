@@ -93,9 +93,10 @@ class ShelvingUnit:
     from the promoted properties, expands it against `DEFAULT_CATALOG`, rewrites
     `Layout` only when the serialised form changed, and reconciles the plank
     children of the parent `App::Part` by `NodeId` (create, update in place,
-    remove). A solver, catalog, or validation failure raises `RuntimeError` and
-    leaves every child and `Layout` untouched, so the last good geometry stays
-    on screen and FreeCAD's own error state is the only signal.
+    remove). A malformed `Layout`, or a solver, catalog, or validation failure,
+    raises `RuntimeError` and leaves every child and `Layout` untouched, so the
+    last good geometry stays on screen and FreeCAD's own error state is the only
+    signal.
 
     All persistent state lives on the object's properties, so `dumps` / `loads`
     carry nothing.
@@ -124,7 +125,13 @@ class ShelvingUnit:
         obj.setEditorMode("Layout", ["Hidden"])
 
     def execute(self, obj: ShelvingUnitFeature) -> None:
-        carcass = Carcass.from_json(obj.Layout)
+        # A malformed hand-edited Layout gets the same RuntimeError translation
+        # as a solver failure, so the report view shows a solver-shaped message
+        # rather than a raw JSON / KeyError.
+        try:
+            carcass = Carcass.from_json(obj.Layout)
+        except (LayoutSolveError, KeyError, ValueError) as err:
+            raise RuntimeError(str(err)) from err
         # The promoted scalars win over the JSON's four outer numbers; id and
         # root come from the parsed tree unchanged.
         carcass = Carcass(

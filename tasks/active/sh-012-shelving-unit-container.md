@@ -1,8 +1,8 @@
 ---
 id: sh-012
 title: "ShelvingUnit container + Create Unit command (M3, part 2)"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 1
 blocked_by: [sh-011]
 ---
@@ -42,6 +42,19 @@ for milestone M3; builds on sh-011.
   next recompute.
 - Step 7's `docs/manual-qa.md` `## M3` GUI cases cannot run headless; they are
   pending human sign-off.
+- Review round 1 fixes (all in `tools/freecad_object_smoke.py` plus a docs note
+  and one `execute` wrap): F1 — `_in_error_state` now rests on `"Invalid" in
+  driver.State or not driver.isValid()`, the real signal a raised proxy
+  `execute` leaves under `freecadcmd` (`State == ['Touched', 'Invalid']`,
+  `isValid()` false, recompute does not re-raise); recorded in
+  `docs/freecadcmd-notes.md` § "A proxy `execute` that raises marks the object
+  `Invalid`". F2 — `_check_unit_end_to_end` now collapses the 6-plank relayout
+  back to a single `Leaf` before the over-constraint step and asserts the count
+  returns to 4, the two shelf `NodeId`s and their objects are gone from the
+  document, and the four shell planks kept their `Name`s. N4 — `Carcass.from_json`
+  in `execute` gets the same `RuntimeError` translation as `expand`. N5 / N6 —
+  comments added for the `driver.Width = 900` reset and the cross-identity
+  vendored-import block.
 
 ## Must Have
 
