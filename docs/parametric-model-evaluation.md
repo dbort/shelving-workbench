@@ -1,6 +1,6 @@
 # Parametric model evaluation
 
-An evaluation of two ways for the workbench to compute a shelving unit's
+An evaluation of three ways for the workbench to hold and compute a shelving unit's
 geometry, written before deciding whether to change the roadmap. Nothing
 here is a decision of record; [`architecture.md`](architecture.md) stays
 authoritative until a task updates it.
@@ -21,8 +21,9 @@ countertop is the unit's top plank length"), and override any intermediate
 value ("this opening is 300 mm, the rest share what is left") in the
 property editor, the way any other parametric FreeCAD object works.
 
-Two versions of the alternative are worth separating, because they differ
-by an order of magnitude in scope.
+Three versions are worth separating. The first two keep a workbench-owned
+model and differ in who does the arithmetic; the third drops the owned
+model and treats plain FreeCAD solids as the source of truth.
 
 ### Version A: bindable inputs, readable outputs
 
@@ -64,6 +65,33 @@ Each plank carries expressions for its own size and corner, and
 `execute` runs only on topology changes, to create and delete planks by
 UUID and to (re)generate expressions; every other recompute flows through
 the dependency graph without Python involvement beyond box construction.
+
+### Version C: recognise plain solids, edit, write back
+
+Source of truth is the set of plain solids themselves, in the manner of the
+Woodworking workbench (`dprojects/Woodworking`). The workbench keeps no
+model between edits. Three commands replace the driver:
+
+- **Recognise** takes a selection (or a container) of axis-aligned boxes,
+  classifies them into shell and interior planks, reads the lap order from
+  which member runs through at each joint, infers the bays from the voids,
+  and builds a split-tree. Anything outside a strict envelope is refused
+  with a diagnosis that names the offending object.
+- **Edit** is the 2.5D editor operating on the recognised tree.
+- **Apply** writes the tree back as plain boxes: existing planks updated by
+  identity, new ones created, removed ones deleted. With version B's
+  generator, it also emits expressions so the result stays self-consistent
+  when a parameter changes.
+
+What Woodworking proves about the substrate, from its `MagicPanels` API
+doc: panels are `Part::Box`, `PartDesign::Pad`, `Part::Cut`, `App::Link`,
+and clones; sizes come from `Length` / `Width` / `Height` or from vertices
+and the bounding box; orientation is a six-way axis classification from
+geometry (`getDirection` returns `XY`, `YX`, `XZ`, and so on); its move and
+resize tools write plain values, not expressions; and `magicGlue` is a
+`SubShapeBinder` helper for sketches, not a panel-to-panel parametric
+link. Woodworking never infers structure from an arrangement. Version C
+builds on the substrate it proves and adds the recognition it lacks.
 
 ## What version B gains
 
@@ -118,6 +146,141 @@ the dependency graph without Python involvement beyond box construction.
   types, and must treat an expression-bound opening as locked rather than
   overwrite the binding.
 
+## What version C gains
+
+- **Documents outlive the workbench.** A `Part::Box` is native; a
+  `Part::FeaturePython` whose proxy module is missing loads as a frozen
+  shape with a warning. Every other Part, Draft, and Woodworking tool
+  works on the output unchanged.
+- **Adoption of existing geometry.** The editor works on shelving the user
+  already modelled, or imported, as long as it fits the envelope.
+- **Lap order is read from geometry** rather than reserved in the schema.
+- **Direct plank edits round-trip.** This reverses the "3D edits" decision
+  of record: resizing a plank with Woodworking's `magicResizer` and then
+  opening the editor is a supported path, because recognise starts from
+  whatever is there.
+- **Recognition is pure geometry.** It lives in `shelving_core` as an
+  `infer` module taking `(size, corner)` boxes and returning a tree or a
+  structured refusal, with the round-trip property `infer(expand(t))`
+  reproduces `t` as the oracle test.
+- **`StudWall` recognises the same way**: plates and a row of studs are a
+  one-level tree.
+
+## What version C costs
+
+- **The tree is not unique.** Two continuous dividers crossing have no
+  tree at all; four segments meeting at a point are ambiguous between H
+  then V and V then H. Lap order resolves most cases (the continuous
+  member belongs to the outer split), and strictness handles the rest:
+  refuse, and name the plank that makes the arrangement unrecognisable.
+- **Rules are lost.** Geometry cannot distinguish a 300 mm `fixed`
+  opening from a `fill` that happened to solve to 300 mm. Three ways to
+  recover them, in increasing cost:
+  1. treat every opening as `fixed` on recognise, so nothing redistributes
+     until the user changes a rule in the editor;
+  2. store rule kind, node UUID, role, and material id as dynamic
+     properties on the plain box (`addProperty` works on any
+     `DocumentObject`, persists in the file, and needs no proxy to load);
+  3. read rules from the expressions the generator wrote: a literal length
+     is `fixed`, a share formula is `fill` or weighted. This is where
+     version B's generator becomes version C's persistence.
+  Option 2 is the sensible floor; option 3 falls out if B is adopted.
+- **Expressions fight plain-value tools.** If apply emits expressions, a
+  Woodworking resize writes a value that the next recompute overwrites.
+  Either apply writes plain values only and the editor is the sole reflow
+  mechanism, or bound planks are edited through the workbench's tools or
+  the parameter object and other tools are for unbound planks.
+- **Material is not inferable** beyond thickness, and thickness alone does
+  not identify a catalog entry. Recognise reads the stored property when
+  present and otherwise asks, or leaves the material unset.
+- **Refusal is the user experience.** Every unsupported arrangement (a
+  rotated plank, a gap at a joint, an overlap, a shelf that spans two bays,
+  a non-box) must produce a diagnosis that points at geometry. A silent
+  no-op or a generic error makes the tool feel broken.
+- **Consistency is not maintained between edits.** A user can leave the
+  boxes in any state; the model is only known to be consistent right
+  after apply. This is the Woodworking model and its users accept it, but
+  it is a different promise from the current design's "the 3D is always a
+  projection of the model".
+- **Identity across edits** must be stored (option 2 above) or
+  reconstructed by position on every recognise. Stored is cheap and
+  reliable; reconstruction is where labels and per-plank overrides would
+  get lost.
+
+## How the roadmap changes if version C is adopted
+
+- The `Plank` `Part::FeaturePython` proxy and the driver's per-recompute
+  `execute` are replaced by plain `Part::Box` objects carrying dynamic
+  properties (`NodeId`, `Role`, `Rule`, `Material`) and by the recognise /
+  edit / apply commands. The `App::Part` container and its `Placement`
+  stay.
+- `shelving_core` gains `infer.py` (boxes to tree, or a structured
+  refusal) and its round-trip test against `expand`.
+- M4 (catalog) is unchanged in shape; with B it also collapses as
+  described above.
+- M5 (editor) becomes the centre of the product: it is the only place the
+  tree exists, so it must be able to open from a recognised selection,
+  not only from a unit the workbench created.
+- M8 and M9 (`StudWall`, openings) gain recognise rules for studs and
+  headers; the on-centre spacing rule is recovered from stored properties
+  or expressions, never from geometry.
+- The "3D edits" and "Source of truth" decisions in `architecture.md`
+  change: direct edits round-trip through recognise, and the boxes are the
+  source of truth with the tree as a transient editing view.
+
+## Spike goals for version C
+
+A throwaway `freecadcmd` script, separate from the version B spike.
+
+1. **Round trip.** For each sample tree in the core tests, `expand` it to
+   boxes, feed the boxes to `infer`, and assert the tree comes back with
+   identical topology, sizes, and lap order (rules excluded). This is a
+   pure `shelving_core` test and should be written first.
+2. **Ambiguity envelope.** Feed `infer` a 2 x 2 grid with a continuous
+   vertical divider and segmented shelves (should resolve to V then H), the
+   mirror case (H then V), and four segments meeting at a point (should
+   refuse with a diagnosis naming the joint). Record the refusal messages
+   and judge whether they would tell a user what to fix.
+3. **Malformed input.** Feed a rotated plank, a 1 mm gap at a joint, an
+   overlap, a shelf spanning two bays, and a cylinder. Each must refuse and
+   name the object.
+4. **Dynamic properties on plain boxes.** Add `NodeId`, `Role`, `Rule`,
+   and `Material` string properties to a `Part::Box`, save, reload headless
+   without the workbench on `sys.path`, and assert the properties and the
+   shape survive with no warnings.
+5. **Apply by identity.** Recognise a unit, split a bay in the tree, apply,
+   and assert the untouched boxes are the same document objects (same
+   `Name`), the new plank is a new object, and a removed plank is deleted.
+6. **External edit then recognise.** Resize one shelf's `Length` by hand
+   (the Woodworking path), recognise, and assert the tree reflects the new
+   size and the lap order is unchanged. Then move the shelf 5 mm so it no
+   longer meets its neighbours and assert recognise refuses.
+7. **Expressions versus plain-value tools.** Apply with expressions (from
+   the B spike), then set a plank's `Length` to a literal, recompute, and
+   record which value wins. This decides the "expressions fight tools"
+   cost above.
+8. **Scale.** Recognise a forty-plank unit and time it. Recognition is
+   pairwise face matching at worst, so this is expected to be trivial, but
+   the number belongs in the record.
+
+## How B and C compose
+
+B answers "how does the model stay consistent when a parameter changes";
+C answers "what is the model, and who else may touch it". They are
+independent axes:
+
+| | Python solver writes values | Expressions written by generator |
+|---|---|---|
+| **Workbench-owned objects** | Design of record (M3 as built) | Version B |
+| **Plain solids, recognised** | Version C, plain (editor is the only reflow) | Version C + B (recognise reads rules from expressions) |
+
+The bottom-right cell is the most FreeCAD-native and the most work. The
+bottom-left cell is the smallest step that captures C's interop and
+adoption gains, and it leaves the door open to the bottom-right later
+because apply already owns the write-back. If C is adopted at all, start
+bottom-left with dynamic properties for identity and rules, and add the
+generator when the B spike has settled the override-ownership rule.
+
 ## What version A costs relative to B
 
 - Intermediates are visible but not overridable; "fix this opening" still
@@ -132,11 +295,14 @@ box with four knobs.
 
 ## Recommendation
 
-Prefer version B, gated on the spike below. The override-ownership rule is
-the single factor that decides whether B is pleasant or a trap, and it can
-be tested in a day without touching the roadmap.
+Prefer version B, gated on the spike below, for the consistency axis. On
+the ownership axis, version C's round-trip test (its spike goal 1) is a
+pure-Python day of work and decides whether recognition is tractable at
+all; run it alongside the B spike before choosing a cell in the table
+above. The override-ownership rule for B and the ambiguity envelope for C
+are the two facts that decide the roadmap.
 
-## Spike goals
+## Spike goals for version B
 
 A throwaway `freecadcmd` script (not a task; no pipeline) that answers the
 following. Each goal has a concrete pass condition so the outcome is a
@@ -186,7 +352,7 @@ list of facts, not an impression.
     is a data point for the property-panel-noise cost, and the time is a
     data point for the M5 live-preview concern.
 
-## How the roadmap changes if the spike passes
+## How the roadmap changes if the version B spike passes
 
 - **M4 (material catalog)** shrinks to the catalog object with thickness
   as a property; the reflow plumbing disappears.
