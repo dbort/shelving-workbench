@@ -263,6 +263,47 @@ A throwaway `freecadcmd` script, separate from the version B spike.
    pairwise face matching at worst, so this is expected to be trivial, but
    the number belongs in the record.
 
+## Separate workbench, or features inside Woodworking?
+
+If version C is adopted, the output is plain solids of the kind Woodworking
+already operates on, which raises the question of contributing the work
+upstream instead of shipping a workbench. The answer is a separate
+workbench whose output follows Woodworking's conventions.
+
+- **Governance.** Woodworking describes itself as "my environment for
+  woodworking" and is 99% single-author (504 of 509 commits at the time of
+  writing), with six external pull requests in its history, all small. Its
+  pull-request terms require changes to be "consistent with the current
+  vision for the add-on and not introduce drastic changes to interface or
+  user experience", and state that contributed code "will be improved or
+  removed by others". The repository has no CI, no type checking, and a
+  single sample directory under `Tests`. A modal split-tree editor is a
+  drastic interface change, and this repository's checks (pure core,
+  pytest, `mypy --strict`, headless `freecadcmd` smoke) would not survive
+  there.
+- **Different kind of tool.** Woodworking is a toolbox of stateless
+  operations on the current selection. Version C keeps a model, transient
+  or not: a tree with driving and driven rules, over-constraint semantics,
+  and identity and rule metadata stored on the boxes. The editor is the
+  product. The nearest overlap, `magicStart`, is a one-shot wizard that
+  emits a cabinet from dimensions; the delta that justifies this project is
+  the part that does not fit that vision. The core's second consumer,
+  `StudWall`, is outside woodworking entirely.
+- **Interop needs no merge.** If the emitted boxes follow Woodworking's
+  conventions (axis-aligned `Part::Box`, thickness along one axis,
+  `Length` / `Width` / `Height` carrying their usual meaning), then its cut
+  list (`getDimensions`), dowel, edge-banding, and export tools work on a
+  unit unchanged, and recognise works on panels made with its tools. Two
+  workbenches over one substrate is the normal FreeCAD arrangement.
+
+Consequences for version C: Woodworking's box conventions become an
+explicit design constraint, and the spike gains a goal:
+
+9. **Woodworking consumes the output.** With the Woodworking workbench
+   installed, run `getDimensions` on an applied unit and check the cut
+   list is correct; run `magicResizer` on one plank and confirm recognise
+   still accepts the unit (spike goal 6 covers the manual form of this).
+
 ## How B and C compose
 
 B answers "how does the model stay consistent when a parameter changes";
