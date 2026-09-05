@@ -28,6 +28,28 @@ Sweeping the log is a human-triggered act, like task sign-off: the user asks for
 
 ## Entries
 
+- `2026-09-04` - **`freecad-stubs` types names that do not exist at runtime**:
+  the plain-planks spike annotated a `Protocol` with `FreeCAD.Quantity` for a
+  `Part::Box`'s `Length`. `mypy --strict` accepted it, but FreeCAD 1.0.0 raised
+  `module 'FreeCAD' has no attribute 'Quantity'` when the class body evaluated
+  the annotation (the runtime name is `FreeCAD.Units.Quantity`). Worked around
+  with `from __future__ import annotations` so the annotations are never
+  evaluated. Simpler if: the stubs matched the runtime module layout, or the
+  repo's type check had a runtime-import smoke that caught a stub-only name
+  before it reached a script.
+
+- `2026-09-04` - **no documented way to get a box's global placement under an
+  `App::LinkGroup`**: the spike needed each plank's document-frame corner.
+  `getGlobalPlacement` composes only through geo-feature groups, and an
+  `App::LinkGroup` is not one, so it silently returns the local placement for a
+  Woodworking-style unit (`magicStart` puts its cabinets in a `LinkGroup`).
+  Found by testing both container types rather than from any doc; Woodworking
+  hits the same wall and hand-rolls `getContainersOffset`. Worked around by
+  walking the container chain and multiplying placements in
+  `spikes/plain_planks/export_boxes.py`. Simpler if: `getGlobalPlacement`
+  composed through link containers too, or the API doc stated which container
+  types it honours so the gap was findable without an experiment.
+
 - `2026-09-03` - **no headless signal for GUI rendering**: sh-012's sign-off
   defect was that a `Part::FeaturePython` plank with a valid `Shape` never drew
   in the FreeCAD 1.0.0 GUI, because it had no `ViewProvider` proxy. The fix
