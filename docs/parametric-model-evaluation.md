@@ -122,6 +122,8 @@ the spike confirms it is workable.
 |---|---|
 | Unit scope | One container the user chooses (`App::Part`, `App::LinkGroup`, or a plain group). Every box inside it is a plank of one unit; apply writes into the same container; the container gives the unit its `Placement` |
 | Plank types | `Part::Box` only, identity rotation, for the first envelope. `Pad` and rotated placements are later |
+| Elevation plane | Detected, not assumed: depth is the shallowest bounding-box axis, vertical is Z unless Z is the depth. Stored on the unit, overridable |
+| Facing | Which end of the depth axis is the front. Inferred only from a back or a front panel, otherwise unknown and stored as an explicit choice. Never guessed from depth alignment |
 | Outline | Rectilinear, one plane. Represented as the bounding rectangle's split-tree with leaves that may be marked *outside*: no planks, no opening. The shell follows the boundary between inside and outside |
 | Non-tree layouts | A pinwheel or any partition that is not a tree is refused, naming the planks that form the cycle |
 | Clearance at a joint | A gap up to a tolerance (default 3 mm) is a joint; the gap is stored per plank end and apply reproduces it. Larger gaps refuse |
@@ -361,6 +363,46 @@ Two further findings came out of the same run:
   rather than front-aligned. The unit has no back or front panel at all,
   so the "set aside the Y-thin panels" rule did no work here.
 
+#### Facing is not in the geometry
+
+Reporting that unit back to the user described its left side as the right
+one. The correction exposed a gap that no test would have caught, because
+the recogniser and the tests were both consistently wrong.
+
+The depth *axis* is detectable, but its *sign* is not: nothing in a set of
+boxes says which of the two faces a person stands at. The same elevation
+read from the other side is mirrored, so every left and right swaps. This
+changes no size, no topology, and no lap order, which is why it is easy to
+miss and why it survives every structural test. It changes only what a
+plank is called and which way the editor draws.
+
+The tempting heuristic does not survive contact with the real unit. Its
+shallow planks are flush with the **back** and set back three inches from
+the **front**, the reverse of the usual "shelves flush at the front"
+convention, so depth alignment is not evidence.
+
+What is evidence, when it exists:
+
+- a plank thin through the depth and lying **proud** of the other members
+  is a door or a face frame, so that end is the front;
+- one lying **within** the members is a back, so the front is the far end.
+
+The `magicStart` cabinet has both and infers cleanly. Open shelving has
+neither, which is the common case, and is simply undetermined.
+
+Consequences for the design:
+
+- **Facing is a stored property of the unit, not a derived value.** It
+  belongs on the container beside the plane, set once and remembered.
+- **Recognition must report it as unknown rather than guess.** The spike
+  now carries `front_at_min` on the plane as an explicit `None` when
+  undetermined, and `screen_right_sign` returns `None` with it, so any
+  code that needs a left or a right has to handle not knowing.
+- **The editor needs a "view from the other side" control**, and it is
+  the natural place to set the property the first time.
+- **Generated labels must not say left or right until facing is known.**
+  Today's `generated_label` would produce a confidently mirrored name.
+
 The unit also confirms two decisions already recorded: it is stepped at
 the bottom rather than the top, which the outside leaf handles without
 change, and it carries two stock thicknesses, which the closed-rectangle
@@ -379,9 +421,11 @@ about feasibility:
    through-shelf are refused at the conversion step even though recognise
    handles both. Adopting the approach means an explicit shell and the
    outside leaf in `shelving_core`, which is the bulk of the real work.
-3. **Where the plane and the depth axis live.** Recognition detects the
-   plane, but a `Carcass` has no field for it, and both the editor and
-   apply need it. It belongs in the model next to the outside leaf.
+3. **Where the plane and the facing live.** Recognition detects the plane
+   and sometimes the facing, but a `Carcass` has no field for either, and
+   the editor, apply, and every generated label need both. They belong in
+   the model next to the outside leaf, with facing stored rather than
+   inferred.
 
 ## Separate workbench, or features inside Woodworking?
 

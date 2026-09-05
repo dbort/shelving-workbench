@@ -49,17 +49,52 @@ _AXIS_NAMES = ("X", "Y", "Z")
 
 
 class Plane(NamedTuple):
-    """Which axis is which, as indices into a box's corner and size triples."""
+    """Which axis is which, as indices into a box's corner and size triples,
+    plus which end of the depth axis the unit is viewed from.
+
+    ``front_at_min`` is ``None`` when geometry does not determine it. It never
+    affects the recognised tree, only which end of a split is called left.
+    """
 
     depth: int
     horizontal: int
     vertical: int
+    front_at_min: bool | None = None
 
     def __str__(self) -> str:
+        facing = (
+            "front undetermined"
+            if self.front_at_min is None
+            else f"front at {'min' if self.front_at_min else 'max'} "
+            f"{_AXIS_NAMES[self.depth]}"
+        )
         return (
             f"{_AXIS_NAMES[self.horizontal]}{_AXIS_NAMES[self.vertical]} elevation, "
-            f"depth along {_AXIS_NAMES[self.depth]}"
+            f"depth along {_AXIS_NAMES[self.depth]}, {facing}"
         )
+
+    @property
+    def screen_right_sign(self) -> int | None:
+        """``+1`` when increasing the horizontal axis moves to the viewer's
+        right, ``-1`` when it moves left, ``None`` while the front is unknown.
+
+        Left and right in a label or an elevation view are meaningless without
+        this, and it cannot be recovered from the plane alone: the same YZ
+        elevation reads mirrored from either side.
+        """
+        if self.front_at_min is None:
+            return None
+        # The viewing direction points into the unit, away from the viewer.
+        forward = [0.0, 0.0, 0.0]
+        forward[self.depth] = 1.0 if self.front_at_min else -1.0
+        up = [0.0, 0.0, 0.0]
+        up[self.vertical] = 1.0
+        right = (
+            forward[1] * up[2] - forward[2] * up[1],
+            forward[2] * up[0] - forward[0] * up[2],
+            forward[0] * up[1] - forward[1] * up[0],
+        )
+        return 1 if right[self.horizontal] > 0 else -1
 
 
 class Member(enum.StrEnum):
@@ -233,10 +268,10 @@ def boxes_from_specs(specs: Sequence[PlankSpec]) -> list[Box]:
 
 def detect_plane(boxes: Sequence[Box]) -> Plane:
     """The elevation plane of ``boxes``: depth is the shallowest bounding-box
-    axis, vertical is Z unless Z is the depth.
+    axis, vertical is Z unless Z is the depth, front from :func:`infer_facing`.
 
-    A unit deeper than it is wide or tall would fool this; ``recognise`` takes
-    an explicit ``plane`` for that case.
+    A unit deeper than it is wide or tall would fool the depth choice;
+    ``recognise`` takes an explicit ``plane`` for that case.
     """
     spans = [
         max(b.corner_mm[axis] + b.size_mm[axis] for b in boxes)
@@ -246,7 +281,42 @@ def detect_plane(boxes: Sequence[Box]) -> Plane:
     depth = min(range(3), key=lambda axis: spans[axis])
     vertical = 2 if depth != 2 else 1
     horizontal = next(axis for axis in range(3) if axis not in (depth, vertical))
-    return Plane(depth=depth, horizontal=horizontal, vertical=vertical)
+    bare = Plane(depth=depth, horizontal=horizontal, vertical=vertical)
+    return bare._replace(front_at_min=infer_facing(boxes, bare))
+
+
+def infer_facing(boxes: Sequence[Box], plane: Plane) -> bool | None:
+    """Which end of the depth axis is the front, or ``None`` when the geometry
+    does not say.
+
+    The only evidence is a plank thin through the depth: one lying proud of the
+    other members is a door or a face, one lying within them is a back. A unit
+    with neither, which is the common case for open shelving, is undetermined
+    and the caller has to be told which way it faces. Depth alignment is not
+    evidence: a real unit was found whose shallow planks are flush with the
+    back and set back from the front, the reverse of the usual convention.
+    """
+    planks = [_classify(box, plane) for box in boxes]
+    members = [p for p in planks if p.member is not Member.PANEL]
+    panels = [p for p in planks if p.member is Member.PANEL]
+    if not members or not panels:
+        return None
+    lo = min(p.d0_mm for p in members)
+    hi = max(p.d1_mm for p in members)
+    middle = (lo + hi) / 2.0
+    votes: set[bool] = set()
+    for panel in panels:
+        if panel.d1_mm <= lo:
+            # Proud of the members at the low end: a door or a face frame, so
+            # the low end is the front.
+            votes.add(True)
+        elif panel.d0_mm >= hi:
+            votes.add(False)
+        else:
+            # Set within the members: a back, so the front is the far end.
+            back_at_max = (panel.d0_mm + panel.d1_mm) / 2.0 > middle
+            votes.add(back_at_max)
+    return votes.pop() if len(votes) == 1 else None
 
 
 def recognise(

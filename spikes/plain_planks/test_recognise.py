@@ -199,7 +199,10 @@ def test_woodworking_cabinet_recognises_with_clearance_and_panels() -> None:
 
     # The carcass depth is the floor's: 382 mm behind an 18 mm front panel.
     assert rec.d0_mm == 18.0
-    assert rec.plane == Plane(depth=1, horizontal=0, vertical=2)
+    # A proud front panel and a set-in back both say the low-Y face is the
+    # front, so +X runs to the viewer's right and left/right labels are safe.
+    assert rec.plane == Plane(depth=1, horizontal=0, vertical=2, front_at_min=True)
+    assert rec.plane.screen_right_sign == 1
     carcass = to_carcass(rec, MATERIAL_FOR_THICKNESS)
     assert (carcass.width_mm, carcass.height_mm, carcass.depth_mm) == (
         600.0,
@@ -368,8 +371,10 @@ def test_real_stair_step_unit_recognises() -> None:
     """
     rec = recognise(boxes_from_json(REAL_UNIT.read_text(encoding="utf-8")))
 
-    # Modelled on the YZ plane, not the XZ the spike first assumed.
-    assert rec.plane == Plane(depth=0, horizontal=1, vertical=2)
+    # Modelled on the YZ plane, not the XZ the spike first assumed. With no
+    # back and no front, geometry does not say which side it faces.
+    assert rec.plane == Plane(depth=0, horizontal=1, vertical=2, front_at_min=None)
+    assert rec.plane.screen_right_sign is None
     assert round(rec.bbox.width_mm, 1) == 1828.8
     assert round(rec.bbox.height_mm, 1) == 1498.6
     # Two stock thicknesses and two depths: 8.5 in planks set back from 11.5 in.
@@ -429,3 +434,39 @@ def test_snap_lines_do_not_chain() -> None:
     """A run of small steps must not merge into one wide cluster."""
     values = [0.0, 0.4, 0.8, 1.2, 1.6]
     assert len(_snap_lines(values, 0.5)) == 3
+
+
+def test_facing_flips_which_end_is_left() -> None:
+    """The same elevation reads mirrored from either side, so left and right
+    are a property of the viewer, never of the geometry."""
+    plane = Plane(depth=0, horizontal=1, vertical=2, front_at_min=True)
+    assert plane.screen_right_sign == -1
+    assert plane._replace(front_at_min=False).screen_right_sign == 1
+
+    # An XZ elevation viewed from low Y is FreeCAD's front view: +X to the right.
+    xz = Plane(depth=1, horizontal=0, vertical=2, front_at_min=True)
+    assert xz.screen_right_sign == 1
+    assert xz._replace(front_at_min=False).screen_right_sign == -1
+
+
+def test_depth_alignment_is_not_evidence_of_facing() -> None:
+    """The real unit's shallow planks are flush with the back and set back from
+    the front, so "shelves are flush at the front" would give the wrong answer.
+    """
+    boxes = boxes_from_json(REAL_UNIT.read_text(encoding="utf-8"))
+    rec = recognise(boxes)
+    shallow = [p for p in rec.planks if round(p.depth_mm, 1) == 215.9]
+    deep = [p for p in rec.planks if round(p.depth_mm, 1) == 292.1]
+    assert shallow and deep
+    # Flush at the high-depth end, set back at the low-depth end.
+    assert {round(p.d1_mm, 2) for p in shallow} == {round(p.d1_mm, 2) for p in deep}
+    assert min(p.d0_mm for p in shallow) > min(p.d0_mm for p in deep)
+    assert rec.plane.front_at_min is None
+
+
+def test_back_panel_alone_determines_facing() -> None:
+    """One panel set within the members is a back, which fixes the front."""
+    boxes = _closed_box([]) + [_box("Back", (18.0, 290.0, 18.0), (964.0, 10.0, 964.0))]
+    rec = recognise(boxes)
+    assert rec.plane.front_at_min is True
+    assert [p.name for p in rec.panels] == ["Back"]
