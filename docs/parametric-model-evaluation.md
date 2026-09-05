@@ -304,6 +304,44 @@ explicit design constraint, and the spike gains a goal:
    list is correct; run `magicResizer` on one plank and confirm recognise
    still accepts the unit (spike goal 6 covers the manual form of this).
 
+## If version C is adopted: reset in place, not a fresh repository
+
+Adopting version C invalidates the object layer and most of the design of
+record, and a repository that describes a superseded design as current
+steers implementers (human or agent) toward its shapes. The remedy is a
+deliberate reset in this repository, not a new one.
+
+What survives unchanged: the core (`layout`, `solver`, `expand`,
+`materials`, and their tests) is version C's apply path and the oracle
+for recognise; the check harness, pixi environment, CI, action-pin
+verifier, workflow lint, vendoring script, pipeline and skills,
+`package.xml`, workbench registration, and the `freecadcmd` notes are all
+still true. A fresh repository re-derives these and gains nothing, and
+"reference the old repository" copies the old shapes without the tests
+that constrain them.
+
+What misleads: `freecad/shelving/objects/` (the `Plank` proxy, the driver
+and its reconcile, the feature-type protocols), the object smoke test, and
+above all the prose in `architecture.md` and `roadmap.md`, which
+implementers read first and treat as the contract.
+
+The reset, done as one task after the core round-trip spike passes:
+
+1. Rewrite `architecture.md` as the version C design of record, as a new
+   document rather than an edit, with one line stating that anything in
+   history before the reset commit is superseded.
+2. Delete the dead object layer and its smoke test in the same change.
+   Nothing is kept "for reference" or marked deprecated; git history is
+   the reference.
+3. Re-milestone `roadmap.md`. Completed task files stay in
+   `tasks/completed/` untouched.
+4. Update the agent memory index in the same session.
+
+A fresh repository is the right call only if the tree itself goes away
+(so the core has no consumer) or the project's identity changes (a name
+covering framing as well as shelving). Version C keeps the tree as the
+editor's model, and a rename can happen in place, so neither applies.
+
 ## How B and C compose
 
 B answers "how does the model stay consistent when a parameter changes";
