@@ -642,9 +642,50 @@ counts that stay trivial.
 
 ### Panels that are not boxes
 
-Every region in the tree is a rectangle, because it is the product of
-guillotine cuts, and every plank fills its region's cross-section. So
-every plank is a rectangular box, and these have no representation:
+A real plan has a plank with a rectangle cut out along one edge, for
+access to a breaker panel, modelled as an `App::Part` holding a
+`PartDesign::Body` whose `Pad` extrudes a notched sketch. For layout it
+behaves exactly like a plank: it spans a region, it has a thickness, it
+sits at a position. The notch is fabrication detail, not layout.
+
+`spikes/plain_planks/inspect_object.py` answers the question that decides
+how such a part can be handled: subtract the solid from its own bounding
+box and ask whether what is left decomposes into boxes. A part that passes
+is a plank plus rectangular cutouts. One that fails has to be carried
+opaquely or refused. On a synthetic copy of the breaker-panel part it
+reports the enclosing box and the single cutout with its size and
+position.
+
+Four ways to handle a part like that:
+
+| option | recognition | apply | works on existing geometry |
+|---|---|---|---|
+| Refuse it | names the object | n/a | no |
+| Adopt it opaquely | bounding box, marked pinned | may move it, never resize it | yes |
+| Model cutouts natively | plank plus rectangular cutouts | emits a box minus boxes | only if cutouts are derived |
+| Modify downstream | reads through to our tagged box | rewrites the box, the user's cut re-applies | no, needs a rebuild |
+
+Adopting opaquely is the one that works on a model that already exists,
+and it is cheap because it reuses machinery already there: a pinned
+plank's length **drives** its region instead of being driven by it, which
+is the solver's existing distinction, and two pinned planks that disagree
+are an ordinary over-constraint. The cost is that the unit can no longer
+be resized in the direction that plank spans.
+
+Modifying downstream is the most parametric and is already the intent of
+the "3D edits" decision in `architecture.md`: the workbench owns a plain
+box and the user's cut consumes it and re-applies on every regeneration.
+It needs recognition to look through a `Part::Cut` to the tagged box
+inside, and it needs the user to build it that way.
+
+Deriving cutouts from arbitrary solids is the option not to reach for.
+The bounding-box subtraction above makes it look tractable, and it is for
+this part, but it is a general solid-decomposition problem as soon as a
+notch is not axis-aligned. Emitting cutouts for planks the workbench
+creates is a different and much smaller question.
+
+Whatever is chosen, every plank is still a rectangular box for layout
+purposes, and these have no representation at all:
 
 - an L-shaped or notched top cut from one sheet;
 - a mitred corner where two tops meet on a 45 degree cut;
@@ -657,11 +698,8 @@ already places fabrication outside the model. A mitred corner is
 arguably one: the panel is a rectangle and the mitre is a cut applied to
 it. An L-shaped top is not, because its outline is the design.
 
-Three ways to handle them, undecided: refuse a non-box panel loudly;
-adopt it as an opaque object that recognition preserves and apply does
-not control; or make rectangle-plus-cut the canonical way to express one.
-Whichever is chosen, the near-term requirement is only that such a panel
-is never silently dropped.
+The near-term requirement is only that such a panel is never silently
+dropped.
 
 ## How the roadmap changes if adopted
 
@@ -699,6 +737,13 @@ is never silently dropped.
   so a non-box panel disappears without complaint and the unit recognises
   as though it were never there. A missing panel changes nothing
   structurally, so nothing else catches it.
+- The container walk must **stop at a part, not descend into its
+  history**. A `PartDesign::Body` exposes its features through `Group`, so
+  the walk currently treats a body's sketch and pad as separate leaves and
+  skips both, never looking at the body's own solid. Containers to descend
+  into are `App::Part`, `App::LinkGroup`, and plain groups; a body or a
+  boolean is one part and its children are its construction, not its
+  contents.
 - M4 (catalog) keeps its shape; material identity is a stored property
   on each box.
 - M5 (editor) becomes the centre of the product: it is the only place the
