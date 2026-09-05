@@ -652,9 +652,37 @@ sits at a position. The notch is fabrication detail, not layout.
 how such a part can be handled: subtract the solid from its own bounding
 box and ask whether what is left decomposes into boxes. A part that passes
 is a plank plus rectangular cutouts. One that fails has to be carried
-opaquely or refused. On a synthetic copy of the breaker-panel part it
-reports the enclosing box and the single cutout with its size and
-position.
+opaquely or refused.
+
+Run on the real part, it passes cleanly. The solid is axis-aligned, and
+the difference from its bounding box is exactly one box:
+
+| | mm | inches |
+|---|---|---|
+| enclosing box | 292.1 x 18.2626 x 1480.3374 | 11.5 deep, 0.719 thick |
+| notch | 196.85 x 18.2626 x 355.6 | 7.75 x 14 |
+| material left behind the notch | 95.25 | 3.75 |
+| notch above the panel foot | 558.8 | 22 |
+
+Two things about the notch shape matter more than its size. It **spans
+the full thickness**, so it is a hole in the profile rather than a
+pocket. And it is **open at one edge** rather than enclosed, which is
+what lets the panel slide into place around whatever it clears instead of
+having to drop over it. So the shape is not an arbitrary cutout: it is a
+rectilinear profile extruded through a thickness, which is exactly what
+the `Pad` already is.
+
+That narrows the third option usefully. Deriving a general cutout list
+from a solid is hard, but deriving a **rectilinear profile** from a
+plank-shaped solid is a 2D problem on one face, and it is the same
+guillotine-flavoured question the recogniser already answers in the
+elevation.
+
+The part's enclosing box is identical to `panelZX008` in the stair-step
+fixture, down to its position, so that fixture's plain `Part::Box` is this
+same panel with its notch removed. The fixture therefore understates the
+real model, and recognition run on the real document today would drop this
+panel entirely.
 
 Four ways to handle a part like that:
 
@@ -678,11 +706,15 @@ box and the user's cut consumes it and re-applies on every regeneration.
 It needs recognition to look through a `Part::Cut` to the tagged box
 inside, and it needs the user to build it that way.
 
-Deriving cutouts from arbitrary solids is the option not to reach for.
-The bounding-box subtraction above makes it look tractable, and it is for
-this part, but it is a general solid-decomposition problem as soon as a
-notch is not axis-aligned. Emitting cutouts for planks the workbench
-creates is a different and much smaller question.
+Deriving cutouts from arbitrary solids is still the option not to reach
+for, but the real part suggests a narrower version that is worth
+considering: treat a plank as a **rectilinear profile extruded through a
+thickness**, and derive that profile from the solid's largest face. A
+plain plank is the degenerate case with a rectangular profile. This stays
+a 2D problem, keeps every plank a single extrusion, and covers an edge
+notch, an L-shaped top, and a stepped end with one mechanism. It does not
+cover a pocket that stops partway through, a mitre, or anything not
+axis-aligned.
 
 Whatever is chosen, every plank is still a rectangular box for layout
 purposes, and these have no representation at all:
