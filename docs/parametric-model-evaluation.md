@@ -126,6 +126,9 @@ the spike confirms it is workable.
 | Facing | Which end of the depth axis is the front. Stored on the unit and authoritative. Two hints give a first guess, a back or front panel and an inset front, and both fire rarely, so unknown is the normal outcome |
 | Outline | Rectilinear, one plane. The bounding rectangle's tree carries `Void` regions that hold no planks and are not bays; the outline is whatever they leave |
 | Shell | Not a rule and not a field. A split is an ordered run of planks and sub-regions, so the shell is just its outermost planks. `Carcass` does not survive |
+| Split axis | A split names an axis (X, Y, or Z), not an orientation within an assumed elevation plane. Near-term recognition and editing stay single-plane, but the model never needs changing to hold a second one |
+| Depth | A region's extent along the depth axis, not a field on the unit. A plank fills its region's cross-section with an inset per face, which is the same parameter as a joint clearance |
+| Panel shape | Rectangular boxes only. An L-shaped, mitred, notched, or scribed panel has no representation and is a future path, not a near-term goal |
 | Non-tree layouts | A pinwheel or any partition that is not a tree is refused, naming the planks that form the cycle |
 | Clearance at a joint | A gap up to a tolerance (default 3 mm) is a joint; the gap is stored per plank end and apply reproduces it. Larger gaps refuse |
 | Per-plank depth | Recognise records each plank's depth and Y offset as per-node overrides; apply reproduces them; unit depth is the default for new planks |
@@ -509,8 +512,12 @@ about feasibility:
 3. **Where the plane and the facing live.** Recognition detects the plane
    and sometimes the facing, but a `Carcass` has no field for either, and
    the editor, apply, and every generated label need both. They belong in
-   the model next to the outside leaf, with facing stored rather than
+   the model next to the `Void` region, with facing stored rather than
    inferred.
+4. **How much of the arrangement to model now.** Splits should name an
+   axis rather than an orientation within an assumed plane, so a second
+   elevation plane never forces a model change; recognition and the editor
+   stay single-plane. See Future paths.
 
 ## Separate workbench, or features inside Woodworking?
 
@@ -578,6 +585,84 @@ A fresh repository is the right call only if the tree itself goes away
 covering framing as well as shelving). Plain-planks keeps the tree as the
 editor's model, and a rename can happen in place, so neither applies.
 
+## Future paths, explicitly not near-term
+
+Recorded so the near-term model does not foreclose them. None of this is
+scheduled, and none of it should shape the first release beyond the one
+model decision noted above.
+
+### Assemblies on more than one plane
+
+Shelving set into the corner of a room, a T-shaped arrangement with a run
+projecting into the room, a U of three runs, or a library aisle of two
+runs facing each other. Each needs more than one elevation plane, which
+is the one assumption the single-plane model still makes.
+
+The encouraging part is that this is one more dimension rather than a new
+idea. **Seen from above, all of those arrangements are themselves
+guillotine subdivisions.** A corner is a rectangle with a void bitten out
+of it: cut the back strip full width, then cut what remains into the side
+run and the void. A T cuts the crossbar off and then cuts the rest into
+void, stem, void. An aisle is two strips with the walkway as the void
+between them. The arrangement of runs is the same operation as the
+arrangement of shelves, one level up, so the model generalises to a tree
+whose splits may run along any of the three axes.
+
+What it would buy beyond the arrangements themselves:
+
+- Plane detection stops being load-bearing. Recognition would look for
+  full-span cuts along any axis instead of guessing which axis is the
+  depth, and a wrong guess would mis-draw rather than mis-recognise.
+- Corner ownership becomes explicit. One run runs through and the other
+  butts into it, and which cut comes first is exactly that choice. The
+  tree would record a real construction decision instead of leaving it
+  implicit in coordinates.
+- Dimensional coupling comes free. The side run's length follows from the
+  back run's depth, because the cut that separates them sets both, and
+  their heights match because they are siblings. Keeping the runs as
+  separate units instead is what costs a constraint mechanism.
+
+What it would not solve:
+
+- **Cross-branch alignment**, the most substantial gap. Two runs are
+  separate subtrees, so their shelves line up only if their rules happen
+  to yield identical numbers. A library aisle wants them locked together.
+  That needs a mechanism the tree does not have, either a named rule
+  shared by several splits or a constraint layer above it.
+- **A pinwheel in plan**, four runs each stopping against the next, is not
+  guillotine and would be refused, exactly as it is in elevation.
+- **Anything not axis-aligned**, including a 45 degree corner cabinet.
+
+The cost is almost entirely in the editor, which is why the split above
+puts the model change in early and leaves the rest out. A single front
+elevation stops describing the object, so editing needs a plan view for
+the arrangement plus elevation editing per run. Recognition in three
+dimensions is the same voxel-grid flood fill with one more axis and cell
+counts that stay trivial.
+
+### Panels that are not boxes
+
+Every region in the tree is a rectangle, because it is the product of
+guillotine cuts, and every plank fills its region's cross-section. So
+every plank is a rectangular box, and these have no representation:
+
+- an L-shaped or notched top cut from one sheet;
+- a mitred corner where two tops meet on a 45 degree cut;
+- a shelf notched around a post;
+- a panel scribed to a wall, which is normal in a room that is not square;
+- a 45 degree corner cabinet.
+
+Some of these are fabrication rather than design, and the architecture
+already places fabrication outside the model. A mitred corner is
+arguably one: the panel is a rectangle and the mitre is a cut applied to
+it. An L-shaped top is not, because its outline is the design.
+
+Three ways to handle them, undecided: refuse a non-box panel loudly;
+adopt it as an opaque object that recognition preserves and apply does
+not control; or make rectangle-plus-cut the canonical way to express one.
+Whichever is chosen, the near-term requirement is only that such a panel
+is never silently dropped.
+
 ## How the roadmap changes if adopted
 
 - The `Plank` `Part::FeaturePython` proxy and the driver's per-recompute
@@ -586,9 +671,34 @@ editor's model, and a rename can happen in place, so neither applies.
   and its `Placement` stay; `App::LinkGroup` is accepted alongside
   `App::Part`.
 - `shelving_core` gains recognition (boxes to tree, or a structured
-  refusal) with its round-trip test against `expand`, the outside leaf in
-  the schema, per-plank depth and clearance overrides, and a shell rule in
-  `expand` that follows the inside/outside boundary.
+  refusal) with its round-trip test against `expand`, and the region tree
+  of `spikes/plain_planks/general_model.py` in place of `Carcass`: `Void`
+  regions for the outline, planks as ordinary items, and no shell rule.
+- **The model carries an axis per split from the start**, so a second
+  elevation plane needs no change to it later. Concretely: a split names
+  X, Y, or Z rather than an orientation within an assumed plane; depth is
+  a region's extent rather than a field on the unit; and a plank fills its
+  region's cross-section with a per-face inset, which is the same
+  parameter that expresses a joint clearance. This is not speculative
+  work. It deletes the unit-level depth field, folds the separate
+  clearance and depth-inset parameters into one, and stops backs and
+  fronts being set aside from the partition, all of which the single-plane
+  case needs anyway. See the future path below for what it buys later.
+- Recognition and the editor stay **single-plane** near-term. A
+  multi-plane container is refused, naming the planks that do not lie in
+  the chosen plane. Plane detection therefore stays load-bearing for
+  recognition and keeps its known fragility; the axis-per-split model
+  demotes it to a presentation hint only once recognition itself goes
+  multi-plane.
+- Recognition works in the **container's local frame**. The export macro
+  currently composes container placements into global coordinates, so a
+  unit rotated in a room would present as rotated boxes and be refused.
+- Objects the export skips, meaning anything that is not a `Part::Box`,
+  must be **reported rather than dropped**. Today the macro records them
+  under `skipped`, and both the recogniser and the report ignore that key,
+  so a non-box panel disappears without complaint and the unit recognises
+  as though it were never there. A missing panel changes nothing
+  structurally, so nothing else catches it.
 - M4 (catalog) keeps its shape; material identity is a stored property
   on each box.
 - M5 (editor) becomes the centre of the product: it is the only place the
