@@ -124,7 +124,8 @@ the spike confirms it is workable.
 | Plank types | `Part::Box` only, identity rotation, for the first envelope. `Pad` and rotated placements are later |
 | Elevation plane | Detected, not assumed: depth is the shallowest bounding-box axis, vertical is Z unless Z is the depth. Stored on the unit, overridable |
 | Facing | Which end of the depth axis is the front. Stored on the unit and authoritative. Two hints give a first guess, a back or front panel and an inset front, and both fire rarely, so unknown is the normal outcome |
-| Outline | Rectilinear, one plane. Represented as the bounding rectangle's split-tree with leaves that may be marked *outside*: no planks, no opening. The shell follows the boundary between inside and outside |
+| Outline | Rectilinear, one plane. The bounding rectangle's tree carries `Void` regions that hold no planks and are not bays; the outline is whatever they leave |
+| Shell | Not a rule and not a field. A split is an ordered run of planks and sub-regions, so the shell is just its outermost planks. `Carcass` does not survive |
 | Non-tree layouts | A pinwheel or any partition that is not a tree is refused, naming the planks that form the cycle |
 | Clearance at a joint | A gap up to a tolerance (default 3 mm) is a joint; the gap is stored per plank end and apply reproduces it. Larger gaps refuse |
 | Per-plank depth | Recognise records each plank's depth and Y offset as per-node overrides; apply reproduces them; unit depth is the default for new planks |
@@ -421,6 +422,78 @@ the bottom rather than the top, which the outside leaf handles without
 change, and it carries two stock thicknesses, which the closed-rectangle
 converter would reject but the general model must not.
 
+### The carcass is a specialisation, not a primitive
+
+Recognition produces a tree of regions and full-span cuts. `Carcass`
+produces four shell planks by rule: a top and a bottom running the full
+width, two sides captured between them. Those are not the same shape, and
+the difference is measurable. Of four fixtures, recognition handles all
+four and the conversion to `Carcass` refuses two:
+
+| unit | recognises | converts to `Carcass` |
+|---|---|---|
+| closed bookcase | yes | yes |
+| `magicStart` F0 cabinet | yes | yes |
+| synthetic stair-step | yes | no |
+| real stair-step unit | yes | no |
+
+Both refusals are the same message: not a closed rectangle. The shell rule
+is the constraint, not the recognition.
+
+`spikes/plain_planks/general_model.py` prototypes the tree without it. A
+split is an ordered list of *items* along its axis, each either a `Plank`
+or a `Sub` region carrying a size rule. There is no shell field and no
+shell rule: the shell is simply the outermost planks of the outermost
+splits.
+
+```
+Unit    = size, depth, default material, face, root Region
+Region  = Bay | Void | Divide
+Divide  = orientation + ordered [Item]
+Item    = Plank(material?, front inset, depth?) | Sub(Region, rule)
+```
+
+Ten tests establish what it buys:
+
+- **It reproduces the carcass exactly.** A `closed_box` helper builds the
+  carcass shape from ordinary items, and its expansion matches
+  `shelving_core.expand` plank for plank for one, two, and four openings,
+  and for a nested split with a divider in a second material. So nothing
+  is lost.
+- **A stepped outline is ordinary.** Three columns of falling height are
+  three sub-regions each ending in a `Void` that takes the leftover
+  height. The tops come out at 600, 900, and 1200 mm with no shell rule
+  involved, and a `Void` emits no plank and is not a bay.
+- **Two planks can sit face to face.** A framed wall's double top plate is
+  two adjacent `Plank` items. M8 needs this and the carcass model cannot
+  say it.
+- **A shelf can run through the sides.** Lap order is the order the splits
+  nest, so a through-shelf is a plank higher up the tree. The carcass
+  reserves this as a per-joint override that expansion never honours, and
+  can only ever produce two full-width planks.
+- **A per-plank inset keeps the rear flush**, which is the real unit's
+  shape and the convention it follows.
+- **The solver did not change.** `shelving_core.solver.distribute` is
+  reused unaltered: a plank contributes `Fixed(thickness)` and a region
+  contributes its own rule, so the arithmetic never needed to know which
+  was which. A unit too short for its own top and bottom now fails as an
+  ordinary overflow rather than a special case.
+
+What it costs:
+
+- **Building a plain bookcase is more verbose**, which the `closed_box`
+  constructor answers.
+- **Roles stop being a closed enum.** A stepped unit has three tops and
+  none of them is *the* top, so `PlankRole` cannot name them.
+  A role becomes a free-form string or a derived position, and generated
+  labels have to follow.
+- **More trees describe the same geometry**, so recognition has to pick a
+  canonical one and apply has to match by stored id rather than by shape.
+
+The conclusion is that `Carcass` should not survive the reset. Keeping it
+would mean carrying a second model for the shapes it can express, and
+every real unit seen so far that is not a plain box falls outside it.
+
 ### Verdict
 
 Every spike goal passes, real project geometry recognises correctly, and
@@ -429,11 +502,10 @@ about feasibility:
 
 1. **The name.** "Plain-planks" is a placeholder and should be settled
    before it reaches a module or type name.
-2. **The general model.** The spike converts recognised trees back to
-   today's implicit-shell `Carcass`, which is why a stepped outline and a
-   through-shelf are refused at the conversion step even though recognise
-   handles both. Adopting the approach means an explicit shell and the
-   outside leaf in `shelving_core`, which is the bulk of the real work.
+2. **The general model**, prototyped above and no longer in doubt:
+   `Carcass` goes, the shell becomes ordinary planks in the tree, and
+   `Void` regions carry the outline. Writing that into `shelving_core`,
+   with recognition producing it directly, is the bulk of the real work.
 3. **Where the plane and the facing live.** Recognition detects the plane
    and sometimes the facing, but a `Carcass` has no field for either, and
    the editor, apply, and every generated label need both. They belong in
