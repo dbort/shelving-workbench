@@ -315,9 +315,10 @@ def detect_plane(boxes: Sequence[Box]) -> Plane:
 def infer_facing(boxes: Sequence[Box], plane: Plane, tol_mm: float = 0.5) -> Facing:
     """Which end of the depth axis is the front, and what said so.
 
-    Two signals, strongest first. A plank thin through the depth settles it
-    outright: one lying proud of the other members is a door or a face, one
-    lying within them is a back. Failing that, the rear of a unit is almost
+    Two signals, strongest first. A plank thin through the depth settles it:
+    one lying within the members is a back, and one lying proud of them is a
+    door when it is stock-thickness and an overlay back when it is thin, which
+    point opposite ways. Failing that, the rear of a unit is almost
     always flush against the wall while the front may be inset for looks, so
     the end the members sit flush with is the back. A unit whose members are
     equally flush at both ends, which is any plain rectangular box, says
@@ -334,8 +335,14 @@ def infer_facing(boxes: Sequence[Box], plane: Plane, tol_mm: float = 0.5) -> Fac
     lo = min(p.d0_mm for p in members)
     hi = max(p.d1_mm for p in members)
 
+    # A panel much thinner than the stock around it is backing material, not a
+    # door. Without this a Woodworking cabinet's overlay back, which sits proud
+    # behind the carcass, reads as a front and mirrors the whole elevation.
+    thin_mm = _median(sorted(p.thickness_mm for p in members)) / 2.0
     votes = {
-        _panel_vote(panel, lo, hi) for panel in planks if panel.member is Member.PANEL
+        _panel_vote(panel, lo, hi, panel.thickness_mm < thin_mm)
+        for panel in planks
+        if panel.member is Member.PANEL
     }
     if len(votes) == 1:
         return Facing(votes.pop(), FacingEvidence.PANEL)
@@ -348,14 +355,28 @@ def infer_facing(boxes: Sequence[Box], plane: Plane, tol_mm: float = 0.5) -> Fac
     return Facing(inset_at_min_mm > inset_at_max_mm, FacingEvidence.FLUSH_BACK)
 
 
-def _panel_vote(panel: Plank, lo: float, hi: float) -> bool:
+def _panel_vote(panel: Plank, lo: float, hi: float, backing: bool) -> bool:
+    """Whether this panel says the front is at the low end of the depth axis.
+
+    A panel proud of the members is a door when it is stock-thickness and an
+    overlay back when it is thin, and those point opposite ways.
+    """
     if panel.d1_mm <= lo:
-        # Proud of the members at the low end: a door or a face frame.
-        return True
+        return not backing
     if panel.d0_mm >= hi:
-        return False
+        return backing
     # Set within the members: a back, so the front is the far end.
     return (panel.d0_mm + panel.d1_mm) / 2.0 > (lo + hi) / 2.0
+
+
+def _median(sorted_values: Sequence[float]) -> float:
+    n = len(sorted_values)
+    if n == 0:
+        return 0.0
+    mid = n // 2
+    if n % 2:
+        return sorted_values[mid]
+    return (sorted_values[mid - 1] + sorted_values[mid]) / 2.0
 
 
 def recognise(
