@@ -51,10 +51,13 @@ def _render(node: Node | None, indent: str = "") -> list[str]:
 
 
 def report(rec: Recognised) -> str:
+    depths = sorted(rec.depths_mm)
     lines = [
+        f"{rec.plane}",
         f"bounding rectangle {rec.bbox.width_mm:g} x {rec.bbox.height_mm:g} mm",
-        f"members span Y {rec.y0_mm:g} to {rec.y0_mm + rec.depth_mm:g} "
-        f"({rec.depth_mm:g} mm deep)",
+        f"members span depth {rec.d0_mm:g} to {rec.d0_mm + rec.depth_mm:g} "
+        f"({rec.depth_mm:g} mm)",
+        f"member depths {depths}" + (" -- per-plank depth" if len(depths) > 1 else ""),
         f"thicknesses {sorted(thicknesses(rec))}",
     ]
     if rec.panels:

@@ -218,12 +218,13 @@ A `freecadcmd` script, written after the core spike passes, covering:
 
 Outstanding; they need a human at FreeCAD 1.0 with Woodworking installed.
 
-10. Run `spikes/plain_planks/export_boxes.py` as a macro on a `magicStart`
-    cabinet and on a hand-modelled stair-step unit. The exported JSON is
-    the recogniser's real-world input, and the point is to find out
-    whether real geometry matches the shapes the spike assumes.
-11. Run Woodworking's `getDimensions` on a unit the spike's apply wrote,
-    and check the cut list is correct.
+10. Done. A stair-step unit from a live project was exported and now
+    recognises; see the results below. It found the plane assumption, the
+    snap tolerance, and the thickness corruption.
+11. Outstanding. Run Woodworking's `getDimensions` on a unit the spike's
+    apply wrote, and check the cut list is correct.
+12. Outstanding. Export a `magicStart` cabinet from the GUI, to check the
+    synthetic F0 fixture against a real one.
 
 ## Spike results
 
@@ -314,10 +315,62 @@ Run with `freecadcmd spikes/plain_planks/freecad_spike.py`, which prints
   FreeCAD's own recompute dominates, and it is still far below an
   interactive threshold.
 
+### Real geometry: a stair-step unit from a live project
+
+The user exported a stair-step component built in the FreeCAD GUI with
+Woodworking tools and fed it to the recogniser. It is kept as
+`spikes/plain_planks/real_stair_step.boxes.json` and asserted by
+`test_real_stair_step_unit_recognises`.
+
+**It recognises, and the tree matches the geometry.** A top running the
+full width, three uprights under it (a short left side, a middle divider,
+and a right side that runs down past everything as a leg), a shelf in the
+left step, two shelves plus a divider in the right step, and the open
+space below each step read as `Outside`. Nothing about the layout needed
+a new rule: it is guillotine, and lap order fell out of the tree order.
+
+Getting there took two fixes, both of which the synthetic tests had no way
+to provoke:
+
+- **The elevation plane cannot be assumed.** The unit is modelled on the
+  YZ plane with X as depth, because that is how it sits in the room. The
+  spike had X-across and Y-deep hardcoded, so it read the unit end-on and
+  refused with a bogus overlap. Recognition now detects the plane, taking
+  the depth axis to be the shallowest bounding-box extent, with an
+  explicit override. The `Plank` record is in elevation coordinates
+  (across, up, through) rather than XYZ, and a plank is classified as an
+  upright, a shelf, or a panel by which of those it is thin along. **Any
+  design that assumes a fixed plane is wrong**, and the same applies to
+  the editor and to apply.
+- **The snap tolerance was an order of magnitude too tight.** Edges that
+  the model means to be coincident differ by up to 0.09 mm, and four such
+  edges spread wider than the 0.05 mm tolerance the spike started with.
+  Worse, snapping greedily against the previous kept value let a run of
+  small steps chain. The tolerance is now 0.5 mm and clustering measures
+  from each cluster's own first member, so a chain cannot form.
+
+Two further findings came out of the same run:
+
+- **Snapping must not touch a plank's measured size.** Moving an edge to
+  a cluster midpoint changed each plank's thickness by up to half the
+  tolerance, which turned two real stock thicknesses into seven. Since
+  thickness is what identifies a plank's material, the grid now owns the
+  topology alone and every plank keeps its measured extents.
+- **Per-plank depth is the normal case, not an edge case.** This unit
+  mixes 215.9 mm and 292.1 mm planks (8.5 and 11.5 inch), back-aligned
+  rather than front-aligned. The unit has no back or front panel at all,
+  so the "set aside the Y-thin panels" rule did no work here.
+
+The unit also confirms two decisions already recorded: it is stepped at
+the bottom rather than the top, which the outside leaf handles without
+change, and it carries two stock thicknesses, which the closed-rectangle
+converter would reject but the general model must not.
+
 ### Verdict
 
-Every spike goal passes and nothing turned up that blocks the approach.
-The two open questions are not about feasibility:
+Every spike goal passes, real project geometry recognises correctly, and
+nothing turned up that blocks the approach. The open questions are not
+about feasibility:
 
 1. **The name.** "Plain-planks" is a placeholder and should be settled
    before it reaches a module or type name.
@@ -326,6 +379,9 @@ The two open questions are not about feasibility:
    through-shelf are refused at the conversion step even though recognise
    handles both. Adopting the approach means an explicit shell and the
    outside leaf in `shelving_core`, which is the bulk of the real work.
+3. **Where the plane and the depth axis live.** Recognition detects the
+   plane, but a `Carcass` has no field for it, and both the editor and
+   apply need it. It belongs in the model next to the outside leaf.
 
 ## Separate workbench, or features inside Woodworking?
 

@@ -4,6 +4,8 @@ Run with ``python -m pytest spikes`` from the repository root; ``pixi run
 tests`` does not include this directory.
 """
 
+from pathlib import Path
+
 import pytest
 
 from shelving_core.expand import PlankSpec, expand
@@ -24,9 +26,13 @@ from spikes.plain_planks.recognise import (
     CutSplit,
     Open,
     Outside,
+    Plane,
     RecogniseError,
+    _snap_lines,
+    boxes_from_json,
     boxes_from_specs,
     recognise,
+    thicknesses,
     to_carcass,
 )
 
@@ -192,7 +198,8 @@ def test_woodworking_cabinet_recognises_with_clearance_and_panels() -> None:
     assert all(isinstance(s, Open) for s in inner.strips)
 
     # The carcass depth is the floor's: 382 mm behind an 18 mm front panel.
-    assert rec.y0_mm == 18.0
+    assert rec.d0_mm == 18.0
+    assert rec.plane == Plane(depth=1, horizontal=0, vertical=2)
     carcass = to_carcass(rec, MATERIAL_FOR_THICKNESS)
     assert (carcass.width_mm, carcass.height_mm, carcass.depth_mm) == (
         600.0,
@@ -348,3 +355,77 @@ def test_round_trip_holds_at_scale(cols: int, rows: int) -> None:
     recovered = to_carcass(recognise(boxes_from_specs(specs)), MATERIAL_FOR_THICKNESS)
     assert _shape(recovered.root) == _shape(original.root)
     assert _plank_set(expand(recovered, CATALOG)) == _plank_set(specs)
+
+
+REAL_UNIT = Path(__file__).parent / "real_stair_step.boxes.json"
+
+
+def test_real_stair_step_unit_recognises() -> None:
+    """A stair-step unit modelled in the FreeCAD GUI with Woodworking tools.
+
+    Exported by ``export_boxes.py`` from a real project. It is the case that
+    found the plane assumption and the snap tolerance, so it stays a fixture.
+    """
+    rec = recognise(boxes_from_json(REAL_UNIT.read_text(encoding="utf-8")))
+
+    # Modelled on the YZ plane, not the XZ the spike first assumed.
+    assert rec.plane == Plane(depth=0, horizontal=1, vertical=2)
+    assert round(rec.bbox.width_mm, 1) == 1828.8
+    assert round(rec.bbox.height_mm, 1) == 1498.6
+    # Two stock thicknesses and two depths: 8.5 in planks set back from 11.5 in.
+    assert sorted(thicknesses(rec)) == [18.0086, 18.2626]
+    assert sorted(rec.depths_mm) == [215.9, 292.1]
+    assert not rec.panels, "the unit has no back or front"
+
+    # The top runs through, the right side is captured under it and runs down
+    # past everything else, and the two step bottoms are the outside regions.
+    root = rec.root
+    assert isinstance(root, CutSplit)
+    assert root.orientation is Orientation.HORIZONTAL
+    assert [c.plank.name for c in root.cuts] == ["panelYX"]
+    assert root.strips[1] is None
+
+    columns = root.strips[0]
+    assert isinstance(columns, CutSplit)
+    assert columns.orientation is Orientation.VERTICAL
+    assert [c.plank.name for c in columns.cuts] == [
+        "panelZX012",
+        "panelZX007",
+        "panelZX008",
+    ]
+    assert columns.strips[0] is None and columns.strips[-1] is None
+
+    left = columns.strips[1]
+    assert isinstance(left, CutSplit)
+    assert [c.plank.name for c in left.cuts] == ["Shelf015"]
+    assert isinstance(left.strips[0], Outside), "the left step is open below"
+    assert isinstance(left.strips[1], Open)
+
+    right = columns.strips[2]
+    assert isinstance(right, CutSplit)
+    assert [c.plank.name for c in right.cuts] == ["panelYX003", "Shelf013"]
+    assert isinstance(right.strips[0], Outside), "the right step is open below"
+    assert isinstance(right.strips[2], Open)
+
+    middle = right.strips[1]
+    assert isinstance(middle, CutSplit)
+    assert middle.orientation is Orientation.VERTICAL
+    assert [c.plank.name for c in middle.cuts] == ["panelZX011"]
+    for strip, shelf in zip(middle.strips, ["Shelf014", "Shelf016"], strict=True):
+        assert isinstance(strip, CutSplit)
+        assert [c.plank.name for c in strip.cuts] == [shelf]
+        assert all(isinstance(s, Open) for s in strip.strips)
+
+
+def test_real_unit_needs_the_looser_snap() -> None:
+    """The 0.05 mm tolerance the spike started with splits edges that a real
+    model means to be coincident."""
+    boxes = boxes_from_json(REAL_UNIT.read_text(encoding="utf-8"))
+    with pytest.raises(RecogniseError):
+        recognise(boxes, snap_mm=0.05)
+
+
+def test_snap_lines_do_not_chain() -> None:
+    """A run of small steps must not merge into one wide cluster."""
+    values = [0.0, 0.4, 0.8, 1.2, 1.6]
+    assert len(_snap_lines(values, 0.5)) == 3

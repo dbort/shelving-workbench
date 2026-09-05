@@ -4,9 +4,11 @@ Throwaway code that proves the recognition rule described in
 ``docs/parametric-model-evaluation.md`` against the core's ``expand`` as the
 oracle. Nothing in the workbench imports it.
 
-Coordinates follow the core: X right (width), Y back (depth), Z up (height),
-millimetres. A box is a plank when it is thin along X or Z; a box thin along
-Y (a back or front panel) projects over the whole elevation and is set aside.
+The elevation plane is detected, not assumed: real units are modelled on
+whichever plane suited the room, so the depth axis is taken to be the one with
+the smallest bounding-box extent and can be overridden. Within the plane the
+vertical axis is Z unless Z is the depth. A plank thin along the depth axis (a
+back or front panel) projects over the whole elevation and is set aside.
 
 Recognition runs on a cell grid whose lines are every plank edge. A flood fill
 from the grid's border through uncovered cells marks the outside. At each
@@ -21,6 +23,7 @@ import json
 from collections import deque
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from typing import NamedTuple
 
 from shelving_core.expand import PlankSpec
 from shelving_core.layout import (
@@ -36,14 +39,38 @@ from shelving_core.layout import (
 )
 from shelving_core.materials import MaterialId
 
-DEFAULT_SNAP_MM = 0.05
+# Real geometry disagrees at joints by tens of microns: a unit exported from
+# FreeCAD had four supposedly-coincident edges spread over 0.09 mm. The snap has
+# to absorb that and stay far below any real feature size.
+DEFAULT_SNAP_MM = 0.5
 DEFAULT_CLEARANCE_MM = 3.0
 
+_AXIS_NAMES = ("X", "Y", "Z")
 
-class ThinAxis(enum.StrEnum):
-    X = "x"
-    Y = "y"
-    Z = "z"
+
+class Plane(NamedTuple):
+    """Which axis is which, as indices into a box's corner and size triples."""
+
+    depth: int
+    horizontal: int
+    vertical: int
+
+    def __str__(self) -> str:
+        return (
+            f"{_AXIS_NAMES[self.horizontal]}{_AXIS_NAMES[self.vertical]} elevation, "
+            f"depth along {_AXIS_NAMES[self.depth]}"
+        )
+
+
+class Member(enum.StrEnum):
+    """What a plank is, by the axis it is thin along."""
+
+    # Thin across the elevation: a side or a divider.
+    UPRIGHT = "upright"
+    # Thin up the elevation: a shelf, a top, or a bottom.
+    SHELF = "shelf"
+    # Thin through the depth: a back or a front, outside the bay partition.
+    PANEL = "panel"
 
 
 @dataclass(frozen=True)
@@ -57,26 +84,30 @@ class Box:
 
 @dataclass(frozen=True)
 class Plank:
-    """A box with its edges snapped to the grid and its thin axis classified."""
+    """A box in elevation coordinates: ``h`` across, ``v`` up, ``d`` through."""
 
     name: str
-    x0_mm: float
-    x1_mm: float
-    y0_mm: float
-    y1_mm: float
-    z0_mm: float
-    z1_mm: float
-    thin: ThinAxis
+    h0_mm: float
+    h1_mm: float
+    v0_mm: float
+    v1_mm: float
+    d0_mm: float
+    d1_mm: float
+    member: Member
 
     @property
     def thickness_mm(self) -> float:
-        match self.thin:
-            case ThinAxis.X:
-                return self.x1_mm - self.x0_mm
-            case ThinAxis.Y:
-                return self.y1_mm - self.y0_mm
-            case ThinAxis.Z:
-                return self.z1_mm - self.z0_mm
+        match self.member:
+            case Member.UPRIGHT:
+                return self.h1_mm - self.h0_mm
+            case Member.SHELF:
+                return self.v1_mm - self.v0_mm
+            case Member.PANEL:
+                return self.d1_mm - self.d0_mm
+
+    @property
+    def depth_mm(self) -> float:
+        return self.d1_mm - self.d0_mm
 
 
 class RecogniseError(ValueError):
@@ -89,18 +120,20 @@ class RecogniseError(ValueError):
 
 @dataclass(frozen=True)
 class Rect:
-    x0_mm: float
-    x1_mm: float
-    z0_mm: float
-    z1_mm: float
+    """A region of the elevation: ``h`` across, ``v`` up."""
+
+    h0_mm: float
+    h1_mm: float
+    v0_mm: float
+    v1_mm: float
 
     @property
     def width_mm(self) -> float:
-        return self.x1_mm - self.x0_mm
+        return self.h1_mm - self.h0_mm
 
     @property
     def height_mm(self) -> float:
-        return self.z1_mm - self.z0_mm
+        return self.v1_mm - self.v0_mm
 
 
 @dataclass(frozen=True)
@@ -133,8 +166,8 @@ class CutSplit:
     ``strips`` has one entry per gap between consecutive cuts plus one before
     the first and one after the last; an entry is ``None`` when that gap has
     zero size, which is how a cut lying on the region's edge (a shell plank)
-    appears. ``orientation`` follows the core: ``HORIZONTAL`` cuts are Z-thin
-    planks stacked along Z.
+    appears. ``orientation`` follows the core: a ``HORIZONTAL`` split stacks
+    its children up the elevation and cuts with shelves.
     """
 
     orientation: Orientation
@@ -148,11 +181,20 @@ Node = Open | Outside | CutSplit
 
 @dataclass(frozen=True)
 class Recognised:
+    plane: Plane
     bbox: Rect
-    y0_mm: float
+    # Extent of the elevation members through the depth axis. Panels set aside
+    # as backs or fronts may lie outside it.
+    d0_mm: float
     depth_mm: float
     root: Node
     panels: tuple[Plank, ...]
+    planks: tuple[Plank, ...]
+
+    @property
+    def depths_mm(self) -> set[float]:
+        """Every distinct member depth; more than one means per-plank depth."""
+        return {round(p.depth_mm, 4) for p in self.planks}
 
 
 def boxes_from_json(text: str) -> list[Box]:
@@ -189,39 +231,67 @@ def boxes_from_specs(specs: Sequence[PlankSpec]) -> list[Box]:
     ]
 
 
+def detect_plane(boxes: Sequence[Box]) -> Plane:
+    """The elevation plane of ``boxes``: depth is the shallowest bounding-box
+    axis, vertical is Z unless Z is the depth.
+
+    A unit deeper than it is wide or tall would fool this; ``recognise`` takes
+    an explicit ``plane`` for that case.
+    """
+    spans = [
+        max(b.corner_mm[axis] + b.size_mm[axis] for b in boxes)
+        - min(b.corner_mm[axis] for b in boxes)
+        for axis in range(3)
+    ]
+    depth = min(range(3), key=lambda axis: spans[axis])
+    vertical = 2 if depth != 2 else 1
+    horizontal = next(axis for axis in range(3) if axis not in (depth, vertical))
+    return Plane(depth=depth, horizontal=horizontal, vertical=vertical)
+
+
 def recognise(
     boxes: Sequence[Box],
     snap_mm: float = DEFAULT_SNAP_MM,
     clearance_mm: float = DEFAULT_CLEARANCE_MM,
+    plane: Plane | None = None,
 ) -> Recognised:
     """The cut tree of ``boxes``, or ``RecogniseError`` naming the offenders.
 
-    Edges closer than ``snap_mm`` are one grid line. A plank end may stop up
-    to ``clearance_mm`` short of the region edge it spans to; the gap is
-    recorded on the ``Cut``.
+    ``plane`` defaults to :func:`detect_plane`. Edges within ``snap_mm`` of each
+    other are one grid line. A plank end may stop up to ``clearance_mm`` short
+    of the region edge it spans to; the gap is recorded on the ``Cut``.
     """
     if not boxes:
         raise RecogniseError("no boxes to recognise")
-    planks = [_classify(box) for box in boxes]
-    panels = tuple(p for p in planks if p.thin is ThinAxis.Y)
-    members = [p for p in planks if p.thin is not ThinAxis.Y]
+    if plane is None:
+        plane = detect_plane(boxes)
+    planks = [_classify(box, plane) for box in boxes]
+    panels = tuple(p for p in planks if p.member is Member.PANEL)
+    members = [p for p in planks if p.member is not Member.PANEL]
     if not members:
         raise RecogniseError(
-            "every box is thin along Y; nothing forms an elevation",
+            f"every box is thin through the depth axis ({plane}); nothing forms "
+            "an elevation",
             (p.name for p in planks),
         )
     grid = _Grid(members, snap_mm)
-    bbox = Rect(grid.xs[0], grid.xs[-1], grid.zs[0], grid.zs[-1])
-    y0_mm = min(p.y0_mm for p in members)
-    y1_mm = max(p.y1_mm for p in members)
-    root = _region(grid, 0, len(grid.xs) - 1, 0, len(grid.zs) - 1, clearance_mm)
+    bbox = Rect(grid.hs[0], grid.hs[-1], grid.vs[0], grid.vs[-1])
+    d0_mm = min(p.d0_mm for p in members)
+    d1_mm = max(p.d1_mm for p in members)
+    root = _region(grid, 0, len(grid.hs) - 1, 0, len(grid.vs) - 1, clearance_mm)
     if not _has_open(root):
         raise RecogniseError(
             "no enclosed bay: the outside reaches every void, so the shell has "
             "a gap wider than the clearance tolerance"
         )
     return Recognised(
-        bbox=bbox, y0_mm=y0_mm, depth_mm=y1_mm - y0_mm, root=root, panels=panels
+        plane=plane,
+        bbox=bbox,
+        d0_mm=d0_mm,
+        depth_mm=d1_mm - d0_mm,
+        root=root,
+        panels=panels,
+        planks=tuple(grid.planks),
     )
 
 
@@ -313,14 +383,18 @@ def _has_open(node: Node | None) -> bool:
     return False
 
 
-def thicknesses(rec: Recognised) -> set[float]:
-    """Every distinct plank thickness in the cut tree, for building a catalog."""
+def thicknesses(rec: Recognised, places: int = 4) -> set[float]:
+    """Every distinct plank thickness in the cut tree, for building a catalog.
+
+    Rounded to ``places`` decimals: a measured extent carries float noise well
+    below any thickness difference that means a different stock.
+    """
     found: set[float] = set()
 
     def walk(node: Node | None) -> None:
         if isinstance(node, CutSplit):
             for cut in node.cuts:
-                found.add(cut.plank.thickness_mm)
+                found.add(round(cut.plank.thickness_mm, places))
             for strip in node.strips:
                 walk(strip)
 
@@ -414,31 +488,44 @@ def _recover_rules(sizes_mm: Sequence[float], snap_mm: float) -> list[SplitRule]
     return rules
 
 
-def _classify(box: Box) -> Plank:
-    sx, sy, sz = box.size_mm
-    if min(sx, sy, sz) <= 0:
-        raise RecogniseError(f"{box.name}: every extent must be positive", (box.name,))
-    smallest = min(sx, sy, sz)
-    thin_axes = [
-        axis
-        for axis, extent in ((ThinAxis.X, sx), (ThinAxis.Y, sy), (ThinAxis.Z, sz))
-        if extent == smallest
-    ]
-    if len(thin_axes) != 1:
+def _classify(box: Box, plane: Plane) -> Plank:
+    if min(box.size_mm) <= 0:
         raise RecogniseError(
-            f"{box.name}: no single thin axis (extents {sx:g} x {sy:g} x {sz:g})",
+            f"{box.name}: every extent must be positive, got "
+            f"{box.size_mm[0]:g} x {box.size_mm[1]:g} x {box.size_mm[2]:g}",
             (box.name,),
         )
-    cx, cy, cz = box.corner_mm
+    smallest = min(box.size_mm)
+    thin_axes = [a for a in range(3) if box.size_mm[a] == smallest]
+    if len(thin_axes) != 1:
+        raise RecogniseError(
+            f"{box.name}: no single thin axis (extents "
+            f"{box.size_mm[0]:g} x {box.size_mm[1]:g} x {box.size_mm[2]:g})",
+            (box.name,),
+        )
+    thin = thin_axes[0]
+    if thin == plane.horizontal:
+        member = Member.UPRIGHT
+    elif thin == plane.vertical:
+        member = Member.SHELF
+    else:
+        member = Member.PANEL
+
+    def span(axis: int) -> tuple[float, float]:
+        return (box.corner_mm[axis], box.corner_mm[axis] + box.size_mm[axis])
+
+    h0_mm, h1_mm = span(plane.horizontal)
+    v0_mm, v1_mm = span(plane.vertical)
+    d0_mm, d1_mm = span(plane.depth)
     return Plank(
         name=box.name,
-        x0_mm=cx,
-        x1_mm=cx + sx,
-        y0_mm=cy,
-        y1_mm=cy + sy,
-        z0_mm=cz,
-        z1_mm=cz + sz,
-        thin=thin_axes[0],
+        h0_mm=h0_mm,
+        h1_mm=h1_mm,
+        v0_mm=v0_mm,
+        v1_mm=v1_mm,
+        d0_mm=d0_mm,
+        d1_mm=d1_mm,
+        member=member,
     )
 
 
@@ -447,26 +534,27 @@ _EMPTY = -1
 
 class _Grid:
     """Cell grid over the elevation. ``cover[j][i]`` is the plank index at
-    column ``i`` (X) and row ``j`` (Z), or ``_EMPTY``; ``outside[j][i]`` marks
-    uncovered cells reachable from the border."""
+    column ``i`` (across) and row ``j`` (up), or ``_EMPTY``; ``outside[j][i]``
+    marks uncovered cells reachable from the border."""
 
     def __init__(self, planks: Sequence[Plank], snap_mm: float) -> None:
-        self.xs = _snap_lines([v for p in planks for v in (p.x0_mm, p.x1_mm)], snap_mm)
-        self.zs = _snap_lines([v for p in planks for v in (p.z0_mm, p.z1_mm)], snap_mm)
+        self.hs = _snap_lines([v for p in planks for v in (p.h0_mm, p.h1_mm)], snap_mm)
+        self.vs = _snap_lines([v for p in planks for v in (p.v0_mm, p.v1_mm)], snap_mm)
         self.planks: list[Plank] = []
         self.cols: list[tuple[int, int]] = []
         self.rows: list[tuple[int, int]] = []
-        nx = len(self.xs) - 1
-        nz = len(self.zs) - 1
-        self.cover = [[_EMPTY] * nx for _ in range(nz)]
+        nh = len(self.hs) - 1
+        nv = len(self.vs) - 1
+        self.cover = [[_EMPTY] * nh for _ in range(nv)]
         for index, plank in enumerate(planks):
-            i0 = _index_of(self.xs, plank.x0_mm, snap_mm)
-            i1 = _index_of(self.xs, plank.x1_mm, snap_mm)
-            j0 = _index_of(self.zs, plank.z0_mm, snap_mm)
-            j1 = _index_of(self.zs, plank.z1_mm, snap_mm)
+            i0 = _index_of(self.hs, plank.h0_mm, snap_mm)
+            i1 = _index_of(self.hs, plank.h1_mm, snap_mm)
+            j0 = _index_of(self.vs, plank.v0_mm, snap_mm)
+            j1 = _index_of(self.vs, plank.v1_mm, snap_mm)
             if i0 == i1 or j0 == j1:
                 raise RecogniseError(
-                    f"{plank.name}: an extent is below the snap tolerance",
+                    f"{plank.name}: an extent collapses at the {snap_mm:g} mm snap "
+                    "tolerance",
                     (plank.name,),
                 )
             for j in range(j0, j1):
@@ -478,28 +566,21 @@ class _Grid:
                             (plank.name, planks[other].name),
                         )
                     self.cover[j][i] = index
-            self.planks.append(
-                Plank(
-                    name=plank.name,
-                    x0_mm=self.xs[i0],
-                    x1_mm=self.xs[i1],
-                    y0_mm=plank.y0_mm,
-                    y1_mm=plank.y1_mm,
-                    z0_mm=self.zs[j0],
-                    z1_mm=self.zs[j1],
-                    thin=plank.thin,
-                )
-            )
+            # Keep the plank's measured extents. Snapping moves an edge by up
+            # to half the tolerance, which would corrupt the thickness that
+            # identifies the plank's material; the grid owns the topology and
+            # `cols` / `rows` carry it.
+            self.planks.append(plank)
             self.cols.append((i0, i1))
             self.rows.append((j0, j1))
-        self.outside = self._flood_outside(nx, nz)
+        self.outside = self._flood_outside(nh, nv)
 
-    def _flood_outside(self, nx: int, nz: int) -> list[list[bool]]:
-        outside = [[False] * nx for _ in range(nz)]
+    def _flood_outside(self, nh: int, nv: int) -> list[list[bool]]:
+        outside = [[False] * nh for _ in range(nv)]
         queue: deque[tuple[int, int]] = deque()
-        for j in range(nz):
-            for i in range(nx):
-                on_border = i == 0 or j == 0 or i == nx - 1 or j == nz - 1
+        for j in range(nv):
+            for i in range(nh):
+                on_border = i == 0 or j == 0 or i == nh - 1 or j == nv - 1
                 if on_border and self.cover[j][i] == _EMPTY:
                     outside[j][i] = True
                     queue.append((i, j))
@@ -507,14 +588,14 @@ class _Grid:
             i, j = queue.popleft()
             for di, dj in ((1, 0), (-1, 0), (0, 1), (0, -1)):
                 ni, nj = i + di, j + dj
-                if 0 <= ni < nx and 0 <= nj < nz:
+                if 0 <= ni < nh and 0 <= nj < nv:
                     if not outside[nj][ni] and self.cover[nj][ni] == _EMPTY:
                         outside[nj][ni] = True
                         queue.append((ni, nj))
         return outside
 
     def rect(self, i0: int, i1: int, j0: int, j1: int) -> Rect:
-        return Rect(self.xs[i0], self.xs[i1], self.zs[j0], self.zs[j1])
+        return Rect(self.hs[i0], self.hs[i1], self.vs[j0], self.vs[j1])
 
 
 def _region(
@@ -550,13 +631,13 @@ def _region(
     h_cuts = [
         cut
         for index in inside
-        if grid.planks[index].thin is ThinAxis.Z
+        if grid.planks[index].member is Member.SHELF
         and (cut := _horizontal_cut(grid, index, i0, i1, clearance_mm)) is not None
     ]
     v_cuts = [
         cut
         for index in inside
-        if grid.planks[index].thin is ThinAxis.X
+        if grid.planks[index].member is Member.UPRIGHT
         and (cut := _vertical_cut(grid, index, j0, j1, clearance_mm)) is not None
     ]
     if h_cuts and v_cuts:
@@ -571,7 +652,7 @@ def _region(
             (grid.planks[index].name for index in inside),
         )
     if h_cuts:
-        h_cuts.sort(key=lambda c: c.plank.z0_mm)
+        h_cuts.sort(key=lambda c: c.plank.v0_mm)
         bounds = [j0]
         for cut in h_cuts:
             pj0, pj1 = grid.rows[grid.planks.index(cut.plank)]
@@ -583,7 +664,7 @@ def _region(
                 None if lo == hi else _region(grid, i0, i1, lo, hi, clearance_mm)
             )
         return CutSplit(Orientation.HORIZONTAL, rect, tuple(h_cuts), tuple(strips))
-    v_cuts.sort(key=lambda c: c.plank.x0_mm)
+    v_cuts.sort(key=lambda c: c.plank.h0_mm)
     bounds = [i0]
     for cut in v_cuts:
         pi0, pi1 = grid.cols[grid.planks.index(cut.plank)]
@@ -602,8 +683,8 @@ def _horizontal_cut(
 ) -> Cut | None:
     pi0, pi1 = grid.cols[index]
     pj0, pj1 = grid.rows[index]
-    lo = _gap(grid, range(pi0 - 1, i0 - 1, -1), range(pj0, pj1), grid.xs, True)
-    hi = _gap(grid, range(pi1, i1), range(pj0, pj1), grid.xs, True)
+    lo = _gap(grid, range(pi0 - 1, i0 - 1, -1), range(pj0, pj1), grid.hs, True)
+    hi = _gap(grid, range(pi1, i1), range(pj0, pj1), grid.hs, True)
     if lo is None or hi is None or lo > clearance_mm or hi > clearance_mm:
         return None
     return Cut(grid.planks[index], lo, hi)
@@ -614,8 +695,8 @@ def _vertical_cut(
 ) -> Cut | None:
     pi0, pi1 = grid.cols[index]
     pj0, pj1 = grid.rows[index]
-    lo = _gap(grid, range(pj0 - 1, j0 - 1, -1), range(pi0, pi1), grid.zs, False)
-    hi = _gap(grid, range(pj1, j1), range(pi0, pi1), grid.zs, False)
+    lo = _gap(grid, range(pj0 - 1, j0 - 1, -1), range(pi0, pi1), grid.vs, False)
+    hi = _gap(grid, range(pj1, j1), range(pi0, pi1), grid.vs, False)
     if lo is None or hi is None or lo > clearance_mm or hi > clearance_mm:
         return None
     return Cut(grid.planks[index], lo, hi)
@@ -646,20 +727,33 @@ def _gap(
 
 
 def _snap_lines(values: Iterable[float], snap_mm: float) -> list[float]:
-    """Sorted distinct grid lines, merging values closer than ``snap_mm``."""
+    """Sorted grid lines: each cluster of values within ``snap_mm`` of its own
+    first member collapses to one line at the cluster's midpoint.
+
+    Measuring from the cluster start rather than the previous value stops a run
+    of small steps from chaining into one wide cluster, and stops four edges
+    that should coincide from splitting because the outermost pair is a hair
+    over the tolerance.
+    """
     lines: list[float] = []
+    cluster: list[float] = []
     for value in sorted(values):
-        if lines and value - lines[-1] <= snap_mm:
-            continue
-        lines.append(value)
+        if cluster and value - cluster[0] > snap_mm:
+            lines.append((cluster[0] + cluster[-1]) / 2.0)
+            cluster = []
+        cluster.append(value)
+    if cluster:
+        lines.append((cluster[0] + cluster[-1]) / 2.0)
     return lines
 
 
 def _index_of(lines: Sequence[float], value: float, snap_mm: float) -> int:
-    for index, line in enumerate(lines):
-        if abs(line - value) <= snap_mm:
-            return index
-    raise AssertionError(f"{value} is not on the grid")
+    """Index of the grid line ``value`` snapped to; the nearest one, since a
+    cluster midpoint can sit up to half the tolerance from any member."""
+    best = min(range(len(lines)), key=lambda index: abs(lines[index] - value))
+    if abs(lines[best] - value) > snap_mm:
+        raise AssertionError(f"{value} is not on the grid")
+    return best
 
 
 def _req_str(obj: Mapping[str, object], key: str) -> str:
