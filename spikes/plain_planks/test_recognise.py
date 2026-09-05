@@ -24,6 +24,7 @@ from shelving_core.solver import solve
 from spikes.plain_planks.recognise import (
     Box,
     CutSplit,
+    FacingEvidence,
     Open,
     Outside,
     Plane,
@@ -31,6 +32,7 @@ from spikes.plain_planks.recognise import (
     _snap_lines,
     boxes_from_json,
     boxes_from_specs,
+    detect_axes,
     recognise,
     thicknesses,
     to_carcass,
@@ -371,10 +373,14 @@ def test_real_stair_step_unit_recognises() -> None:
     """
     rec = recognise(boxes_from_json(REAL_UNIT.read_text(encoding="utf-8")))
 
-    # Modelled on the YZ plane, not the XZ the spike first assumed. With no
-    # back and no front, geometry does not say which side it faces.
-    assert rec.plane == Plane(depth=0, horizontal=1, vertical=2, front_at_min=None)
-    assert rec.plane.screen_right_sign is None
+    # Modelled on the YZ plane, not the XZ the spike first assumed. It has no
+    # back and no front, so the only facing hint is the inset: the shallow
+    # planks are flush at high X, making that the rear.
+    assert rec.plane == Plane(depth=0, horizontal=1, vertical=2, front_at_min=True)
+    assert rec.facing_evidence is FacingEvidence.FLUSH_BACK
+    # Front at low X puts increasing Y to the viewer's left, so the upright at
+    # maximum Y is the left side.
+    assert rec.plane.screen_right_sign == -1
     assert round(rec.bbox.width_mm, 1) == 1828.8
     assert round(rec.bbox.height_mm, 1) == 1498.6
     # Two stock thicknesses and two depths: 8.5 in planks set back from 11.5 in.
@@ -449,19 +455,39 @@ def test_facing_flips_which_end_is_left() -> None:
     assert xz._replace(front_at_min=False).screen_right_sign == -1
 
 
-def test_depth_alignment_is_not_evidence_of_facing() -> None:
-    """The real unit's shallow planks are flush with the back and set back from
-    the front, so "shelves are flush at the front" would give the wrong answer.
-    """
+def test_inset_front_is_the_only_facing_hint_in_the_real_unit() -> None:
+    """The rear of a unit is flush and the front may be inset for looks, so the
+    flush end is the back. It is a weak hint: it says nothing at all unless the
+    plank depths differ, which most units' do not."""
     boxes = boxes_from_json(REAL_UNIT.read_text(encoding="utf-8"))
     rec = recognise(boxes)
     shallow = [p for p in rec.planks if round(p.depth_mm, 1) == 215.9]
     deep = [p for p in rec.planks if round(p.depth_mm, 1) == 292.1]
     assert shallow and deep
-    # Flush at the high-depth end, set back at the low-depth end.
+    # Flush at the high-depth end, inset by three inches at the low-depth end.
     assert {round(p.d1_mm, 2) for p in shallow} == {round(p.d1_mm, 2) for p in deep}
-    assert min(p.d0_mm for p in shallow) > min(p.d0_mm for p in deep)
-    assert rec.plane.front_at_min is None
+    assert round(min(p.d0_mm for p in shallow) - min(p.d0_mm for p in deep), 1) == 76.2
+    assert rec.plane.front_at_min is True
+
+
+def test_uniform_depth_leaves_facing_undetermined() -> None:
+    """The common case: every plank the same depth, no back and no front. The
+    two faces are identical, so nothing says which one a person stands at."""
+    for name in sorted(SAMPLE_TREES):
+        rec = recognise(boxes_from_specs(expand(SAMPLE_TREES[name], CATALOG)))
+        assert rec.plane.front_at_min is None, name
+        assert rec.facing_evidence is FacingEvidence.NONE, name
+        assert rec.plane.screen_right_sign is None, name
+
+
+def test_an_explicit_facing_is_never_second_guessed() -> None:
+    """A stored or user-set facing wins over any heuristic."""
+    boxes = boxes_from_json(REAL_UNIT.read_text(encoding="utf-8"))
+    axes = detect_axes(boxes)
+    for front_at_min in (True, False):
+        rec = recognise(boxes, plane=axes._replace(front_at_min=front_at_min))
+        assert rec.plane.front_at_min is front_at_min
+        assert rec.facing_evidence is FacingEvidence.GIVEN
 
 
 def test_back_panel_alone_determines_facing() -> None:

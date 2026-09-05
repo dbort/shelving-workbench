@@ -17,13 +17,14 @@ from pathlib import Path
 
 from spikes.plain_planks.recognise import (
     _AXIS_NAMES,
+    FacingEvidence,
     Node,
     Open,
     Outside,
     Recognised,
     RecogniseError,
     boxes_from_json,
-    detect_plane,
+    detect_axes,
     recognise,
     thicknesses,
 )
@@ -56,21 +57,34 @@ def _render(node: Node | None, indent: str = "") -> list[str]:
     return lines
 
 
+_FACING_WHY = {
+    FacingEvidence.GIVEN: "you said so",
+    FacingEvidence.PANEL: "a back or front panel says so",
+    FacingEvidence.FLUSH_BACK: "the members are flush at one end and inset at "
+    "the other, and the flush end is the rear -- a weak hint, and one that says "
+    "nothing at all when every plank is the same depth",
+}
+
+
 def _facing_line(rec: Recognised) -> str:
-    """Say plainly whether left and right in this report can be trusted."""
+    """Say plainly whether left and right in this report can be trusted, and on
+    what evidence."""
     sign = rec.plane.screen_right_sign
     if sign is None:
         return (
-            "  WARNING: the unit has no back and no front, so nothing says which "
-            "side it faces.\n"
-            "  The tree, sizes, and lap order below are correct either way, but "
-            "left and right\n"
-            "  are a coin flip: reading it from the other side mirrors the "
-            "elevation."
+            "  WARNING: nothing says which side this unit faces, so left and "
+            "right below are a\n"
+            "  coin flip -- read from the other side, the elevation mirrors. The "
+            "tree, sizes, and\n"
+            "  lap order are correct either way. Pass min or max to settle it."
         )
     across = _AXIS_NAMES[rec.plane.horizontal]
     towards = "right" if sign > 0 else "left"
-    return f"  increasing {across} runs to the viewer's {towards}"
+    line = f"  increasing {across} runs to the viewer's {towards}"
+    why = _FACING_WHY[rec.facing_evidence]
+    if rec.facing_evidence is FacingEvidence.GIVEN:
+        return f"{line} ({why})"
+    return f"{line}\n  (a guess: {why})"
 
 
 def report(rec: Recognised) -> str:
@@ -101,7 +115,9 @@ def main(argv: list[str]) -> int:
         return 2
     text = Path(argv[1]).read_text(encoding="utf-8")
     boxes = boxes_from_json(text)
-    plane = detect_plane(boxes)
+    # Axes only: leaving the facing unset lets recognise infer it and report
+    # what the inference rested on.
+    plane = detect_axes(boxes)
     if len(argv) == 3:
         if argv[2] not in ("min", "max"):
             print("the front argument must be 'min' or 'max'")

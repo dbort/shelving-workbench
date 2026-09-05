@@ -123,7 +123,7 @@ the spike confirms it is workable.
 | Unit scope | One container the user chooses (`App::Part`, `App::LinkGroup`, or a plain group). Every box inside it is a plank of one unit; apply writes into the same container; the container gives the unit its `Placement` |
 | Plank types | `Part::Box` only, identity rotation, for the first envelope. `Pad` and rotated placements are later |
 | Elevation plane | Detected, not assumed: depth is the shallowest bounding-box axis, vertical is Z unless Z is the depth. Stored on the unit, overridable |
-| Facing | Which end of the depth axis is the front. Inferred only from a back or a front panel, otherwise unknown and stored as an explicit choice. Never guessed from depth alignment |
+| Facing | Which end of the depth axis is the front. Stored on the unit and authoritative. Two hints give a first guess, a back or front panel and an inset front, and both fire rarely, so unknown is the normal outcome |
 | Outline | Rectilinear, one plane. Represented as the bounding rectangle's split-tree with leaves that may be marked *outside*: no planks, no opening. The shell follows the boundary between inside and outside |
 | Non-tree layouts | A pinwheel or any partition that is not a tree is refused, naming the planks that form the cycle |
 | Clearance at a joint | A gap up to a tolerance (default 3 mm) is a joint; the gap is stored per plank end and apply reproduces it. Larger gaps refuse |
@@ -376,30 +376,43 @@ changes no size, no topology, and no lap order, which is why it is easy to
 miss and why it survives every structural test. It changes only what a
 plank is called and which way the editor draws.
 
-The tempting heuristic does not survive contact with the real unit. Its
-shallow planks are flush with the **back** and set back three inches from
-the **front**, the reverse of the usual "shelves flush at the front"
-convention, so depth alignment is not evidence.
+Two hints exist, and **both fire rarely**:
 
-What is evidence, when it exists:
+- **A plank thin through the depth.** One lying proud of the other members
+  is a door or a face, so that end is the front; one lying within them is
+  a back, so the front is the far end. This needs the unit to have a back
+  or a front, which open shelving does not.
+- **An inset front.** The rear of a unit is almost always flush, since it
+  goes against a wall, while the front may be inset for looks. So the end
+  the members sit flush with is the back. This needs the plank depths to
+  *differ*: a unit whose planks are all one depth is symmetric through the
+  depth axis and says nothing.
 
-- a plank thin through the depth and lying **proud** of the other members
-  is a door or a face frame, so that end is the front;
-- one lying **within** the members is a back, so the front is the far end.
+Across the spike's ten fixtures, a panel settled two, the inset settled
+one, and seven were undetermined. Every synthetic unit is undetermined,
+because uniform depth is the ordinary case. **Unknown is the normal
+outcome, and the hints are a first guess, not a mechanism.**
 
-The `magicStart` cabinet has both and infers cleanly. Open shelving has
-neither, which is the common case, and is simply undetermined.
+The inset hint was nearly implemented backwards. The first reading of the
+real unit assumed shelves are flush at the front and shallower at the
+back; the convention is the reverse, and the unit's shallow planks are
+flush at the rear and inset three inches at the front. Read the wrong way
+round it would have produced a confident mirror image.
 
 Consequences for the design:
 
 - **Facing is a stored property of the unit, not a derived value.** It
-  belongs on the container beside the plane, set once and remembered.
-- **Recognition must report it as unknown rather than guess.** The spike
-  now carries `front_at_min` on the plane as an explicit `None` when
-  undetermined, and `screen_right_sign` returns `None` with it, so any
-  code that needs a left or a right has to handle not knowing.
-- **The editor needs a "view from the other side" control**, and it is
-  the natural place to set the property the first time.
+  belongs on the container beside the plane, set once and remembered. A
+  stored value is authoritative and is never second-guessed by a hint.
+- **Unknown is a first-class state.** The spike carries `front_at_min` as
+  an explicit `None`, and the derived left-right sign returns `None` with
+  it, so any code needing a left or a right must handle not knowing.
+- **A guess must be labelled as one.** Recognition records which evidence
+  settled the facing, and the report prints the reasoning when it guessed.
+- **The editor needs a "view from the other side" control**, and it is the
+  natural place to set the property the first time. Since unknown is the
+  normal outcome, the editor has to open on an arbitrary but stable
+  orientation and make flipping it one click.
 - **Generated labels must not say left or right until facing is known.**
   Today's `generated_label` would produce a confidently mirrored name.
 

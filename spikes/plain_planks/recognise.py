@@ -217,6 +217,9 @@ Node = Open | Outside | CutSplit
 @dataclass(frozen=True)
 class Recognised:
     plane: Plane
+    # What settled the facing, so a caller can weigh a convention against a
+    # panel it can point at.
+    facing_evidence: "FacingEvidence"
     bbox: Rect
     # Extent of the elevation members through the depth axis. Panels set aside
     # as backs or fronts may lie outside it.
@@ -266,9 +269,28 @@ def boxes_from_specs(specs: Sequence[PlankSpec]) -> list[Box]:
     ]
 
 
-def detect_plane(boxes: Sequence[Box]) -> Plane:
-    """The elevation plane of ``boxes``: depth is the shallowest bounding-box
-    axis, vertical is Z unless Z is the depth, front from :func:`infer_facing`.
+class FacingEvidence(enum.StrEnum):
+    """What settled which way a unit faces."""
+
+    # The caller said so, or a stored property did.
+    GIVEN = "given"
+    # A depth-thin plank: proud of the members is a front, within them a back.
+    PANEL = "panel"
+    # The rear of a unit is almost always flush and the front may be inset for
+    # looks, so the end the members sit flush with is the back.
+    FLUSH_BACK = "flush_back"
+    # Nothing distinguishes the two faces.
+    NONE = "none"
+
+
+class Facing(NamedTuple):
+    front_at_min: bool | None
+    evidence: FacingEvidence
+
+
+def detect_axes(boxes: Sequence[Box]) -> Plane:
+    """The elevation axes of ``boxes``: depth is the shallowest bounding-box
+    axis, vertical is Z unless Z is the depth. Facing is left undetermined.
 
     A unit deeper than it is wide or tall would fool the depth choice;
     ``recognise`` takes an explicit ``plane`` for that case.
@@ -281,42 +303,59 @@ def detect_plane(boxes: Sequence[Box]) -> Plane:
     depth = min(range(3), key=lambda axis: spans[axis])
     vertical = 2 if depth != 2 else 1
     horizontal = next(axis for axis in range(3) if axis not in (depth, vertical))
-    bare = Plane(depth=depth, horizontal=horizontal, vertical=vertical)
-    return bare._replace(front_at_min=infer_facing(boxes, bare))
+    return Plane(depth=depth, horizontal=horizontal, vertical=vertical)
 
 
-def infer_facing(boxes: Sequence[Box], plane: Plane) -> bool | None:
-    """Which end of the depth axis is the front, or ``None`` when the geometry
-    does not say.
+def detect_plane(boxes: Sequence[Box]) -> Plane:
+    """:func:`detect_axes` with the facing filled in from :func:`infer_facing`."""
+    axes = detect_axes(boxes)
+    return axes._replace(front_at_min=infer_facing(boxes, axes).front_at_min)
 
-    The only evidence is a plank thin through the depth: one lying proud of the
-    other members is a door or a face, one lying within them is a back. A unit
-    with neither, which is the common case for open shelving, is undetermined
-    and the caller has to be told which way it faces. Depth alignment is not
-    evidence: a real unit was found whose shallow planks are flush with the
-    back and set back from the front, the reverse of the usual convention.
+
+def infer_facing(boxes: Sequence[Box], plane: Plane, tol_mm: float = 0.5) -> Facing:
+    """Which end of the depth axis is the front, and what said so.
+
+    Two signals, strongest first. A plank thin through the depth settles it
+    outright: one lying proud of the other members is a door or a face, one
+    lying within them is a back. Failing that, the rear of a unit is almost
+    always flush against the wall while the front may be inset for looks, so
+    the end the members sit flush with is the back. A unit whose members are
+    equally flush at both ends, which is any plain rectangular box, says
+    nothing.
+
+    Depth alignment alone was nearly read backwards here: a real unit's shallow
+    planks are flush at the rear and inset three inches at the front, so the
+    inset end is the front, not the back.
     """
     planks = [_classify(box, plane) for box in boxes]
     members = [p for p in planks if p.member is not Member.PANEL]
-    panels = [p for p in planks if p.member is Member.PANEL]
-    if not members or not panels:
-        return None
+    if not members:
+        return Facing(None, FacingEvidence.NONE)
     lo = min(p.d0_mm for p in members)
     hi = max(p.d1_mm for p in members)
-    middle = (lo + hi) / 2.0
-    votes: set[bool] = set()
-    for panel in panels:
-        if panel.d1_mm <= lo:
-            # Proud of the members at the low end: a door or a face frame, so
-            # the low end is the front.
-            votes.add(True)
-        elif panel.d0_mm >= hi:
-            votes.add(False)
-        else:
-            # Set within the members: a back, so the front is the far end.
-            back_at_max = (panel.d0_mm + panel.d1_mm) / 2.0 > middle
-            votes.add(back_at_max)
-    return votes.pop() if len(votes) == 1 else None
+
+    votes = {
+        _panel_vote(panel, lo, hi) for panel in planks if panel.member is Member.PANEL
+    }
+    if len(votes) == 1:
+        return Facing(votes.pop(), FacingEvidence.PANEL)
+
+    inset_at_min_mm = sum(p.d0_mm - lo for p in members)
+    inset_at_max_mm = sum(hi - p.d1_mm for p in members)
+    if abs(inset_at_min_mm - inset_at_max_mm) <= tol_mm:
+        return Facing(None, FacingEvidence.NONE)
+    # The flush end is the back, so the front is the end with more inset.
+    return Facing(inset_at_min_mm > inset_at_max_mm, FacingEvidence.FLUSH_BACK)
+
+
+def _panel_vote(panel: Plank, lo: float, hi: float) -> bool:
+    if panel.d1_mm <= lo:
+        # Proud of the members at the low end: a door or a face frame.
+        return True
+    if panel.d0_mm >= hi:
+        return False
+    # Set within the members: a back, so the front is the far end.
+    return (panel.d0_mm + panel.d1_mm) / 2.0 > (lo + hi) / 2.0
 
 
 def recognise(
@@ -334,7 +373,12 @@ def recognise(
     if not boxes:
         raise RecogniseError("no boxes to recognise")
     if plane is None:
-        plane = detect_plane(boxes)
+        plane = detect_axes(boxes)
+    if plane.front_at_min is None:
+        facing = infer_facing(boxes, plane)
+        plane = plane._replace(front_at_min=facing.front_at_min)
+    else:
+        facing = Facing(plane.front_at_min, FacingEvidence.GIVEN)
     planks = [_classify(box, plane) for box in boxes]
     panels = tuple(p for p in planks if p.member is Member.PANEL)
     members = [p for p in planks if p.member is not Member.PANEL]
@@ -356,6 +400,7 @@ def recognise(
         )
     return Recognised(
         plane=plane,
+        facing_evidence=facing.evidence,
         bbox=bbox,
         d0_mm=d0_mm,
         depth_mm=d1_mm - d0_mm,
