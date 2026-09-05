@@ -216,16 +216,18 @@ A `freecadcmd` script, written after the core spike passes, covering:
 
 ### GUI checks
 
-With FreeCAD 1.0 and Woodworking installed:
+Outstanding; they need a human at FreeCAD 1.0 with Woodworking installed.
 
 10. Run `spikes/plain_planks/export_boxes.py` as a macro on a `magicStart`
-    cabinet and on the stair-step unit, modelled as plain boxes. The
-    exported JSON is the recogniser's real-world input.
-11. After apply exists: run Woodworking's `getDimensions` on an applied
-    unit and check the cut list; resize one plank with `magicResizer` and
-    confirm recognise still accepts the unit.
+    cabinet and on a hand-modelled stair-step unit. The exported JSON is
+    the recogniser's real-world input, and the point is to find out
+    whether real geometry matches the shapes the spike assumes.
+11. Run Woodworking's `getDimensions` on a unit the spike's apply wrote,
+    and check the cut list is correct.
 
-## Core spike results
+## Spike results
+
+### Core: recognise from boxes
 
 Run on 2026-09-04 against `spikes/plain_planks/recognise.py`; fifteen
 tests pass, `ruff` and `mypy --strict` are clean, and `pixi run tests`
@@ -283,6 +285,47 @@ cost grows roughly with plank count times grid cells.
 | 35 | 0.3 ms | 0.15 ms |
 | 63 | 0.7 ms | 0.26 ms |
 | 115 | 1.7 ms | 0.47 ms |
+
+### FreeCAD: plain boxes in a document
+
+Run with `freecadcmd spikes/plain_planks/freecad_spike.py`, which prints
+`plain-planks freecad spike OK` on success. All four goals pass.
+
+- **Dynamic properties survive a reload (goal 6).** Four
+  `App::PropertyString` properties added to a plain `Part::Box` come back
+  intact after a save, close, and reopen, with the shape valid. The saved
+  `Document.xml` contains no `Proxy`, `FeaturePython`, or `PythonObject`
+  entry, so the file needs nothing of ours installed to load. **This is
+  the linchpin of the approach and it holds.**
+- **The container walk feeds the recogniser (goal 7).** Both `App::Part`
+  and `App::LinkGroup` export cleanly, and moving the container leaves
+  the recognised tree unchanged while shifting the exported corners,
+  because the walk composes container placements and the tree is measured
+  against its own bounding rectangle. `getGlobalPlacement` is not usable
+  here: a `LinkGroup` is not a geo-feature group, so the chain is composed
+  by hand.
+- **Apply matches by identity (goal 8).** Adding a shelf to a recognised
+  tree updates the six existing boxes in place, creates exactly one, and
+  deletes none; removing it deletes exactly that one. Every shell plank
+  keeps its original document object. The result recognises again, so the
+  edit cycle closes.
+- **Cost is negligible (goal 9).** A 45-plank unit exports in 0.3 ms and
+  recognises in 0.6 ms; apply plus a full document recompute is 9 ms.
+  FreeCAD's own recompute dominates, and it is still far below an
+  interactive threshold.
+
+### Verdict
+
+Every spike goal passes and nothing turned up that blocks the approach.
+The two open questions are not about feasibility:
+
+1. **The name.** "Plain-planks" is a placeholder and should be settled
+   before it reaches a module or type name.
+2. **The general model.** The spike converts recognised trees back to
+   today's implicit-shell `Carcass`, which is why a stepped outline and a
+   through-shelf are refused at the conversion step even though recognise
+   handles both. Adopting the approach means an explicit shell and the
+   outside leaf in `shelving_core`, which is the bulk of the real work.
 
 ## Separate workbench, or features inside Woodworking?
 

@@ -10,6 +10,8 @@ A rotated box is refused, because the recogniser only handles axis-aligned
 planks; anything that is not a ``Part::Box`` is listed under ``skipped``.
 """
 
+from __future__ import annotations
+
 import json
 import os
 from collections.abc import Iterator
