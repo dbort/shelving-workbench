@@ -642,8 +642,8 @@ counts that stay trivial.
 
 ### Panels that are not boxes
 
-A real plan has a plank with a rectangle cut out along one edge, for
-access to a breaker panel, modelled as an `App::Part` holding a
+A revision of a real plan has a plank with a rectangle cut out along one
+edge, for access to a breaker panel, modelled as an `App::Part` holding a
 `PartDesign::Body` whose `Pad` extrudes a notched sketch. For layout it
 behaves exactly like a plank: it spans a region, it has a thickness, it
 sits at a position. The notch is fabrication detail, not layout.
@@ -678,11 +678,15 @@ plank-shaped solid is a 2D problem on one face, and it is the same
 guillotine-flavoured question the recogniser already answers in the
 elevation.
 
-The part's enclosing box is identical to `panelZX008` in the stair-step
-fixture, down to its position, so that fixture's plain `Part::Box` is this
-same panel with its notch removed. The fixture therefore understates the
-real model, and recognition run on the real document today would drop this
-panel entirely.
+The part comes from a superseded revision of the same plan, where it
+mirrored the longest leg of the stair-step unit, which is why its
+enclosing box matches `panelZX008` exactly. The stair-step model that is
+current is plain boxes throughout, so the fixture is faithful to it.
+
+That history is the useful part. One revision of one plan turned a plain
+panel into a notched extrusion, and the design is otherwise ordinary
+shelving. A plank-like part that is not a box is not an exotic case to
+guard against; it is what happens when a design meets a real room.
 
 Four ways to handle a part like that:
 
