@@ -425,6 +425,57 @@ the bottom rather than the top, which the outside leaf handles without
 change, and it carries two stock thicknesses, which the closed-rectangle
 converter would reject but the general model must not.
 
+### Real geometry: two units side by side, loosely grouped
+
+A second export, of two adjacent units from the same project whose side
+panels meet, kept as `spikes/plain_planks/real_two_units.boxes.json`. It
+was taken from a selection rather than a tidy container, which is what
+makes it useful.
+
+Four findings, in order of how much they change the plan.
+
+**Two abutting units are refused, and the reason is structural.** Each
+unit recognises on its own. Together they refuse with "no plank runs the
+full span of the region". The recogniser only cuts a region where a single
+plank spans it, and at the junction there is no such plank: the two units'
+top boards are separate pieces that together span the width and neither of
+which spans alone, and the seam between the units is two side panels face
+to face rather than one shared panel.
+
+The fix is a better rule, not a special case. A guillotine cut is any
+coordinate that no plank *crosses*, and cutting at a plank's two faces is
+just the special case where the resulting slab holds one plank. Under that
+rule the junction is a clean cut, nothing crosses it, and the top slab
+becomes a region holding two planks side by side, which the general model
+already expresses. It also removes an asymmetry in the current code, where
+a plank ends a region but cannot begin one. The cost is ambiguity: many
+coordinates are clean, so recognition would need a canonical choice of
+axis and cut set.
+
+**A dropped panel produces a wrong tree, not a refusal.** This export
+contains the notched breaker-panel part, and the walk dropped it, listing
+only its sketch and pad as skipped. The unit still recognised. Comparing
+the tree against the same unit with the panel adopted by its bounding box,
+three regions that are really enclosed bays were reported as `outside`,
+and the unit's left end was read as open. Nothing complained. This is the
+silent-drop failure predicted earlier, now demonstrated: the output is
+plausible, self-consistent, and wrong.
+
+It also settles the question it was meant to test. Adopting the panel
+opaquely by its bounding box makes the tree correct, so the cheapest
+option for a plank-like part does work on real geometry.
+
+**The seam cannot be classified by shape.** Two side panels face to face
+is geometrically identical to a framed wall's double top plate, which is
+one unit, not two. So whether an assembly is one unit or several is not
+recoverable from geometry, and the container the user recognises has to be
+the answer. Surfacing back-to-back parallel planks as a question is
+reasonable; deciding it automatically is not.
+
+**The walk double-counted.** Eleven planks were exported twice, byte for
+byte, because a selection can reach the same object by more than one path.
+Export has to deduplicate by document object.
+
 ### The carcass is a specialisation, not a primitive
 
 Recognition produces a tree of regions and full-span cuts. `Carcass`
@@ -758,6 +809,11 @@ dropped.
   clearance and depth-inset parameters into one, and stops backs and
   fronts being set aside from the partition, all of which the single-plane
   case needs anyway. See the future path below for what it buys later.
+- Recognition cuts a region at **any coordinate no plank crosses**, not
+  only where a single plank spans it. Two abutting units are the case that
+  forces this: their tops are separate boards that together span the
+  width, and their seam is two panels face to face. Cutting at a plank's
+  faces becomes the special case where the slab holds one plank.
 - Recognition and the editor stay **single-plane** near-term. A
   multi-plane container is refused, naming the planks that do not lie in
   the chosen plane. Plane detection therefore stays load-bearing for
@@ -773,6 +829,9 @@ dropped.
   so a non-box panel disappears without complaint and the unit recognises
   as though it were never there. A missing panel changes nothing
   structurally, so nothing else catches it.
+- Export must **deduplicate by document object**. A selection can reach
+  the same object by more than one path, and eleven planks in a real
+  export came through twice, byte for byte.
 - The container walk must **stop at a part, not descend into its
   history**. A `PartDesign::Body` exposes its features through `Group`, so
   the walk currently treats a body's sketch and pad as separate leaves and
