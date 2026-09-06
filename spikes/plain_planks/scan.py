@@ -1,6 +1,6 @@
-"""Plain-planks spike: recognise a cut tree from axis-aligned boxes.
+"""Plain-planks spike: scan a cut tree from axis-aligned boxes.
 
-Throwaway code that proves the recognition rule described in
+Throwaway code that proves the scanning rule described in
 ``docs/parametric-model-evaluation.md`` against the core's ``expand`` as the
 oracle. Nothing in the workbench imports it.
 
@@ -10,7 +10,7 @@ the smallest bounding-box extent and can be overridden. Within the plane the
 vertical axis is Z unless Z is the depth. A plank thin along the depth axis (a
 back or front panel) projects over the whole elevation and is set aside.
 
-Recognition runs on a cell grid whose lines are every plank edge. A flood fill
+Scanning runs on a cell grid whose lines are every plank edge. A flood fill
 from the grid's border through uncovered cells marks the outside. At each
 region the planks whose line across the region meets only themselves, outside
 cells, or a clearance gap are the full-span cuts; the strips between them are
@@ -53,7 +53,7 @@ class Plane(NamedTuple):
     plus which end of the depth axis the unit is viewed from.
 
     ``front_at_min`` is ``None`` when geometry does not determine it. It never
-    affects the recognised tree, only which end of a split is called left.
+    affects the scanned tree, only which end of a split is called left.
     """
 
     depth: int
@@ -145,7 +145,7 @@ class Plank:
         return self.d1_mm - self.d0_mm
 
 
-class RecogniseError(ValueError):
+class ScanError(ValueError):
     """A refusal: ``objects`` names the boxes the diagnosis points at."""
 
     def __init__(self, message: str, objects: Iterable[str] = ()) -> None:
@@ -215,7 +215,7 @@ Node = Open | Outside | CutSplit
 
 
 @dataclass(frozen=True)
-class Recognised:
+class Scan:
     plane: Plane
     # What settled the facing, so a caller can weigh a convention against a
     # panel it can point at.
@@ -293,7 +293,7 @@ def detect_axes(boxes: Sequence[Box]) -> Plane:
     axis, vertical is Z unless Z is the depth. Facing is left undetermined.
 
     A unit deeper than it is wide or tall would fool the depth choice;
-    ``recognise`` takes an explicit ``plane`` for that case.
+    ``scan`` takes an explicit ``plane`` for that case.
     """
     spans = [
         max(b.corner_mm[axis] + b.size_mm[axis] for b in boxes)
@@ -379,20 +379,20 @@ def _median(sorted_values: Sequence[float]) -> float:
     return (sorted_values[mid - 1] + sorted_values[mid]) / 2.0
 
 
-def recognise(
+def scan(
     boxes: Sequence[Box],
     snap_mm: float = DEFAULT_SNAP_MM,
     clearance_mm: float = DEFAULT_CLEARANCE_MM,
     plane: Plane | None = None,
-) -> Recognised:
-    """The cut tree of ``boxes``, or ``RecogniseError`` naming the offenders.
+) -> Scan:
+    """The cut tree of ``boxes``, or ``ScanError`` naming the offenders.
 
     ``plane`` defaults to :func:`detect_plane`. Edges within ``snap_mm`` of each
     other are one grid line. A plank end may stop up to ``clearance_mm`` short
     of the region edge it spans to; the gap is recorded on the ``Cut``.
     """
     if not boxes:
-        raise RecogniseError("no boxes to recognise")
+        raise ScanError("no boxes to scan")
     if plane is None:
         plane = detect_axes(boxes)
     if plane.front_at_min is None:
@@ -404,7 +404,7 @@ def recognise(
     panels = tuple(p for p in planks if p.member is Member.PANEL)
     members = [p for p in planks if p.member is not Member.PANEL]
     if not members:
-        raise RecogniseError(
+        raise ScanError(
             f"every box is thin through the depth axis ({plane}); nothing forms "
             "an elevation",
             (p.name for p in planks),
@@ -415,11 +415,11 @@ def recognise(
     d1_mm = max(p.d1_mm for p in members)
     root = _region(grid, 0, len(grid.hs) - 1, 0, len(grid.vs) - 1, clearance_mm)
     if not _has_open(root):
-        raise RecogniseError(
+        raise ScanError(
             "no enclosed bay: the outside reaches every void, so the shell has "
             "a gap wider than the clearance tolerance"
         )
-    return Recognised(
+    return Scan(
         plane=plane,
         facing_evidence=facing.evidence,
         bbox=bbox,
@@ -432,7 +432,7 @@ def recognise(
 
 
 def to_carcass(
-    rec: Recognised,
+    rec: Scan,
     material_for_thickness: Mapping[float, MaterialId],
     snap_mm: float = DEFAULT_SNAP_MM,
 ) -> Carcass:
@@ -441,7 +441,7 @@ def to_carcass(
     Requires the root to be cut by exactly a bottom and a top with nothing
     beyond them, and the strip between to be cut by exactly a left and a right
     side; anything else (an outside leaf, a stepped outline) raises
-    ``RecogniseError``. Sibling openings equal within ``snap_mm`` become
+    ``ScanError``. Sibling openings equal within ``snap_mm`` become
     ``Fill``; every other opening is ``Fixed`` at its size.
     """
     root = rec.root
@@ -452,7 +452,7 @@ def to_carcass(
         and root.strips[0] is None
         and root.strips[2] is None
     ):
-        raise RecogniseError(
+        raise ScanError(
             "unit is not a closed rectangle: expected a bottom and a top on the "
             "bounding rectangle's edges"
         )
@@ -464,19 +464,19 @@ def to_carcass(
         and middle.strips[0] is None
         and middle.strips[-1] is None
     ):
-        raise RecogniseError(
+        raise ScanError(
             "unit is not a closed rectangle: expected a left and a right side "
             "captured between the bottom and the top"
         )
     if len(root.cuts) != 2:
-        raise RecogniseError(
+        raise ScanError(
             "a shelf runs through the sides; today's Carcass has no lap override",
             (c.plank.name for c in root.cuts[1:-1]),
         )
     shell_cuts = (*root.cuts, middle.cuts[0], middle.cuts[-1])
     shell_thicknesses = {round(c.plank.thickness_mm, 3) for c in shell_cuts}
     if len(shell_thicknesses) != 1:
-        raise RecogniseError(
+        raise ScanError(
             f"shell planks have differing thicknesses {sorted(shell_thicknesses)}",
             (c.plank.name for c in shell_cuts),
         )
@@ -500,7 +500,7 @@ def to_carcass(
     else:
         inner = interior_strips[0]
         if inner is None:
-            raise RecogniseError("the sides leave no interior")
+            raise ScanError("the sides leave no interior")
         root_bay = _bay(inner, default_material, material_for_thickness, snap_mm)
     return Carcass(
         width_mm=rec.bbox.width_mm,
@@ -519,7 +519,7 @@ def _has_open(node: Node | None) -> bool:
     return False
 
 
-def thicknesses(rec: Recognised, places: int = 4) -> set[float]:
+def thicknesses(rec: Scan, places: int = 4) -> set[float]:
     """Every distinct plank thickness in the cut tree, for building a catalog.
 
     Rounded to ``places`` decimals: a measured extent carries float noise well
@@ -548,7 +548,7 @@ def _bay(
         case Open():
             return Leaf()
         case Outside():
-            raise RecogniseError(
+            raise ScanError(
                 "an outside region lies within a closed carcass; the spike converts "
                 "closed rectangles only"
             )
@@ -575,7 +575,7 @@ def _split(
     sizes_mm: list[float] = []
     for strip in strips:
         if strip is None:
-            raise RecogniseError(
+            raise ScanError(
                 "a divider sits on the edge of its bay",
                 (c.plank.name for c in cuts),
             )
@@ -608,7 +608,7 @@ def _material_for(
     for known_mm, material in material_for_thickness.items():
         if abs(known_mm - thickness_mm) <= snap_mm:
             return material
-    raise RecogniseError(f"no material has thickness {thickness_mm:g} mm")
+    raise ScanError(f"no material has thickness {thickness_mm:g} mm")
 
 
 def _recover_rules(sizes_mm: Sequence[float], snap_mm: float) -> list[SplitRule]:
@@ -626,7 +626,7 @@ def _recover_rules(sizes_mm: Sequence[float], snap_mm: float) -> list[SplitRule]
 
 def _classify(box: Box, plane: Plane) -> Plank:
     if min(box.size_mm) <= 0:
-        raise RecogniseError(
+        raise ScanError(
             f"{box.name}: every extent must be positive, got "
             f"{box.size_mm[0]:g} x {box.size_mm[1]:g} x {box.size_mm[2]:g}",
             (box.name,),
@@ -634,7 +634,7 @@ def _classify(box: Box, plane: Plane) -> Plank:
     smallest = min(box.size_mm)
     thin_axes = [a for a in range(3) if box.size_mm[a] == smallest]
     if len(thin_axes) != 1:
-        raise RecogniseError(
+        raise ScanError(
             f"{box.name}: no single thin axis (extents "
             f"{box.size_mm[0]:g} x {box.size_mm[1]:g} x {box.size_mm[2]:g})",
             (box.name,),
@@ -688,7 +688,7 @@ class _Grid:
             j0 = _index_of(self.vs, plank.v0_mm, snap_mm)
             j1 = _index_of(self.vs, plank.v1_mm, snap_mm)
             if i0 == i1 or j0 == j1:
-                raise RecogniseError(
+                raise ScanError(
                     f"{plank.name}: an extent collapses at the {snap_mm:g} mm snap "
                     "tolerance",
                     (plank.name,),
@@ -697,7 +697,7 @@ class _Grid:
                 for i in range(i0, i1):
                     other = self.cover[j][i]
                     if other != _EMPTY:
-                        raise RecogniseError(
+                        raise ScanError(
                             f"{plank.name} overlaps {planks[other].name}",
                             (plank.name, planks[other].name),
                         )
@@ -746,7 +746,7 @@ def _region(
             continue
         contained = pi0 >= i0 and pi1 <= i1 and pj0 >= j0 and pj1 <= j1
         if not contained:
-            raise RecogniseError(
+            raise ScanError(
                 f"{grid.planks[index].name} crosses the boundary of the bay it lies in",
                 (grid.planks[index].name,),
             )
@@ -759,7 +759,7 @@ def _region(
             return Outside(rect)
         if outside_count == 0:
             return Open(rect)
-        raise RecogniseError(
+        raise ScanError(
             f"the empty region {rect} is partly enclosed and partly open to the "
             "outside; the outline is not a tree"
         )
@@ -777,12 +777,12 @@ def _region(
         and (cut := _vertical_cut(grid, index, j0, j1, clearance_mm)) is not None
     ]
     if h_cuts and v_cuts:
-        raise RecogniseError(
+        raise ScanError(
             "both a horizontal and a vertical plank span the same region",
             (c.plank.name for c in (*h_cuts, *v_cuts)),
         )
     if not h_cuts and not v_cuts:
-        raise RecogniseError(
+        raise ScanError(
             f"no plank runs the full span of the region {rect}; the layout is "
             "not a tree",
             (grid.planks[index].name for index in inside),

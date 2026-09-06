@@ -1,4 +1,4 @@
-"""Spike tests: recognise round-trips ``expand``'s output and refuses non-trees.
+"""Spike tests: scan round-trips ``expand``'s output and refuses non-trees.
 
 Run with ``python -m pytest spikes`` from the repository root; ``pixi run
 tests`` does not include this directory.
@@ -21,19 +21,19 @@ from shelving_core.layout import (
 )
 from shelving_core.materials import Catalog, MaterialEntry, MaterialId
 from shelving_core.solver import solve
-from spikes.plain_planks.recognise import (
+from spikes.plain_planks.scan import (
     Box,
     CutSplit,
     FacingEvidence,
     Open,
     Outside,
     Plane,
-    RecogniseError,
+    ScanError,
     _snap_lines,
     boxes_from_json,
     boxes_from_specs,
     detect_axes,
-    recognise,
+    scan,
     thicknesses,
     to_carcass,
 )
@@ -132,7 +132,7 @@ SAMPLE_TREES = {
 def test_round_trip_reproduces_planks_and_topology(name: str) -> None:
     original = SAMPLE_TREES[name]
     specs = expand(original, CATALOG)
-    rec = recognise(boxes_from_specs(specs))
+    rec = scan(boxes_from_specs(specs))
     recovered = to_carcass(rec, MATERIAL_FOR_THICKNESS)
     assert _shape(recovered.root) == _shape(original.root)
     assert _plank_set(expand(recovered, CATALOG)) == _plank_set(specs)
@@ -140,16 +140,14 @@ def test_round_trip_reproduces_planks_and_topology(name: str) -> None:
 
 def test_rule_recovery_fill_for_equal_siblings_fixed_otherwise() -> None:
     equal = to_carcass(
-        recognise(
-            boxes_from_specs(expand(SAMPLE_TREES["three_fill_shelves"], CATALOG))
-        ),
+        scan(boxes_from_specs(expand(SAMPLE_TREES["three_fill_shelves"], CATALOG))),
         MATERIAL_FOR_THICKNESS,
     )
     assert isinstance(equal.root, Split)
     assert all(isinstance(rule, Fill) for rule in equal.root.rules)
 
     unequal = to_carcass(
-        recognise(boxes_from_specs(expand(SAMPLE_TREES["unequal_shelves"], CATALOG))),
+        scan(boxes_from_specs(expand(SAMPLE_TREES["unequal_shelves"], CATALOG))),
         MATERIAL_FOR_THICKNESS,
     )
     assert isinstance(unequal.root, Split)
@@ -183,8 +181,8 @@ def _woodworking_f0() -> list[Box]:
     ]
 
 
-def test_woodworking_cabinet_recognises_with_clearance_and_panels() -> None:
-    rec = recognise(_woodworking_f0())
+def test_woodworking_cabinet_scans_with_clearance_and_panels() -> None:
+    rec = scan(_woodworking_f0())
     assert sorted(p.name for p in rec.panels) == ["Back", "Front"]
     root = rec.root
     assert isinstance(root, CutSplit)
@@ -233,8 +231,8 @@ def _stair_step() -> list[Box]:
     ]
 
 
-def test_stair_step_recognises_with_outside_leaves() -> None:
-    rec = recognise(_stair_step())
+def test_stair_step_scans_with_outside_leaves() -> None:
+    rec = scan(_stair_step())
     root = rec.root
     assert isinstance(root, CutSplit)
     assert root.orientation is Orientation.HORIZONTAL
@@ -284,8 +282,8 @@ def test_pinwheel_is_refused_naming_the_cycle() -> None:
             _box("D", (382.0, 0.0, 318.0), (t, d, 664.0)),
         ]
     )
-    with pytest.raises(RecogniseError, match="not a tree") as info:
-        recognise(pinwheel)
+    with pytest.raises(ScanError, match="not a tree") as info:
+        scan(pinwheel)
     assert sorted(info.value.objects) == ["A", "B", "C", "D"]
 
 
@@ -296,25 +294,25 @@ def test_overlap_is_refused_naming_both() -> None:
             _box("ShelfB", (18.0, 0.0, 410.0), (964.0, 300.0, 18.0)),
         ]
     )
-    with pytest.raises(RecogniseError, match="overlaps") as info:
-        recognise(boxes)
+    with pytest.raises(ScanError, match="overlaps") as info:
+        scan(boxes)
     assert sorted(info.value.objects) == ["ShelfA", "ShelfB"]
 
 
 def test_gap_wider_than_clearance_is_refused() -> None:
     boxes = _closed_box([_box("Floating", (30.0, 0.0, 400.0), (940.0, 300.0, 18.0))])
-    with pytest.raises(RecogniseError, match="full span") as info:
-        recognise(boxes)
+    with pytest.raises(ScanError, match="full span") as info:
+        scan(boxes)
     assert info.value.objects == ("Floating",)
-    # The same shelf recognises when the clearance tolerance admits the gap.
-    rec = recognise(boxes, clearance_mm=12.0)
+    # The same shelf scans when the clearance tolerance admits the gap.
+    rec = scan(boxes, clearance_mm=12.0)
     assert isinstance(rec.root, CutSplit)
 
 
 def test_square_section_plank_is_refused() -> None:
     boxes = _closed_box([_box("Post", (18.0, 0.0, 18.0), (50.0, 300.0, 50.0))])
-    with pytest.raises(RecogniseError, match="thin axis") as info:
-        recognise(boxes)
+    with pytest.raises(ScanError, match="thin axis") as info:
+        scan(boxes)
     assert info.value.objects == ("Post",)
 
 
@@ -326,8 +324,8 @@ def test_leaky_shell_is_refused() -> None:
         _box("LeftSide", (0.0, 0.0, 18.0), (18.0, d, 964.0)),
         _box("RightSide", (982.0, 0.0, 18.0), (18.0, d, 964.0)),
     ]
-    with pytest.raises(RecogniseError, match="no enclosed bay"):
-        recognise(boxes)
+    with pytest.raises(ScanError, match="no enclosed bay"):
+        scan(boxes)
 
 
 def _grid_unit(cols: int, rows: int) -> Carcass:
@@ -357,7 +355,7 @@ def _grid_unit(cols: int, rows: int) -> Carcass:
 def test_round_trip_holds_at_scale(cols: int, rows: int) -> None:
     original = _grid_unit(cols, rows)
     specs = expand(original, CATALOG)
-    recovered = to_carcass(recognise(boxes_from_specs(specs)), MATERIAL_FOR_THICKNESS)
+    recovered = to_carcass(scan(boxes_from_specs(specs)), MATERIAL_FOR_THICKNESS)
     assert _shape(recovered.root) == _shape(original.root)
     assert _plank_set(expand(recovered, CATALOG)) == _plank_set(specs)
 
@@ -365,13 +363,13 @@ def test_round_trip_holds_at_scale(cols: int, rows: int) -> None:
 REAL_UNIT = Path(__file__).parent / "real_stair_step.boxes.json"
 
 
-def test_real_stair_step_unit_recognises() -> None:
+def test_real_stair_step_unit_scans() -> None:
     """A stair-step unit modelled in the FreeCAD GUI with Woodworking tools.
 
     Exported by ``export_boxes.py`` from a real project. It is the case that
     found the plane assumption and the snap tolerance, so it stays a fixture.
     """
-    rec = recognise(boxes_from_json(REAL_UNIT.read_text(encoding="utf-8")))
+    rec = scan(boxes_from_json(REAL_UNIT.read_text(encoding="utf-8")))
 
     # Modelled on the YZ plane, not the XZ the spike first assumed. It has no
     # back and no front, so the only facing hint is the inset: the shallow
@@ -432,8 +430,8 @@ def test_real_unit_needs_the_looser_snap() -> None:
     """The 0.05 mm tolerance the spike started with splits edges that a real
     model means to be coincident."""
     boxes = boxes_from_json(REAL_UNIT.read_text(encoding="utf-8"))
-    with pytest.raises(RecogniseError):
-        recognise(boxes, snap_mm=0.05)
+    with pytest.raises(ScanError):
+        scan(boxes, snap_mm=0.05)
 
 
 def test_snap_lines_do_not_chain() -> None:
@@ -460,7 +458,7 @@ def test_inset_front_is_the_only_facing_hint_in_the_real_unit() -> None:
     flush end is the back. It is a weak hint: it says nothing at all unless the
     plank depths differ, which most units' do not."""
     boxes = boxes_from_json(REAL_UNIT.read_text(encoding="utf-8"))
-    rec = recognise(boxes)
+    rec = scan(boxes)
     shallow = [p for p in rec.planks if round(p.depth_mm, 1) == 215.9]
     deep = [p for p in rec.planks if round(p.depth_mm, 1) == 292.1]
     assert shallow and deep
@@ -474,7 +472,7 @@ def test_uniform_depth_leaves_facing_undetermined() -> None:
     """The common case: every plank the same depth, no back and no front. The
     two faces are identical, so nothing says which one a person stands at."""
     for name in sorted(SAMPLE_TREES):
-        rec = recognise(boxes_from_specs(expand(SAMPLE_TREES[name], CATALOG)))
+        rec = scan(boxes_from_specs(expand(SAMPLE_TREES[name], CATALOG)))
         assert rec.plane.front_at_min is None, name
         assert rec.facing_evidence is FacingEvidence.NONE, name
         assert rec.plane.screen_right_sign is None, name
@@ -485,7 +483,7 @@ def test_an_explicit_facing_is_never_second_guessed() -> None:
     boxes = boxes_from_json(REAL_UNIT.read_text(encoding="utf-8"))
     axes = detect_axes(boxes)
     for front_at_min in (True, False):
-        rec = recognise(boxes, plane=axes._replace(front_at_min=front_at_min))
+        rec = scan(boxes, plane=axes._replace(front_at_min=front_at_min))
         assert rec.plane.front_at_min is front_at_min
         assert rec.facing_evidence is FacingEvidence.GIVEN
 
@@ -493,7 +491,7 @@ def test_an_explicit_facing_is_never_second_guessed() -> None:
 def test_back_panel_alone_determines_facing() -> None:
     """One panel set within the members is a back, which fixes the front."""
     boxes = _closed_box([]) + [_box("Back", (18.0, 290.0, 18.0), (964.0, 10.0, 964.0))]
-    rec = recognise(boxes)
+    rec = scan(boxes)
     assert rec.plane.front_at_min is True
     assert [p.name for p in rec.panels] == ["Back"]
 
@@ -501,7 +499,7 @@ def test_back_panel_alone_determines_facing() -> None:
 REAL_CABINET = Path(__file__).parent / "real_magicstart_f1.boxes.json"
 
 
-def test_real_magicstart_cabinet_recognises() -> None:
+def test_real_magicstart_cabinet_scans() -> None:
     """A cabinet generated by Woodworking's magicStart, read from the saved
     document rather than reconstructed from its source.
 
@@ -510,7 +508,7 @@ def test_real_magicstart_cabinet_recognises() -> None:
     come out of the same tool, which is why lap order is read from geometry
     rather than assumed.
     """
-    rec = recognise(boxes_from_json(REAL_CABINET.read_text(encoding="utf-8")))
+    rec = scan(boxes_from_json(REAL_CABINET.read_text(encoding="utf-8")))
     assert rec.plane.depth == 1 and rec.plane.horizontal == 0
     assert [p.name for p in rec.panels] == ["Back"]
 
@@ -538,7 +536,7 @@ def test_real_magicstart_cabinet_recognises() -> None:
 def test_a_thin_proud_panel_is_a_back_not_a_door() -> None:
     """The real cabinet's 3 mm back sits proud behind the carcass. Read as a
     door it would put the front at the wrong end and mirror every label."""
-    rec = recognise(boxes_from_json(REAL_CABINET.read_text(encoding="utf-8")))
+    rec = scan(boxes_from_json(REAL_CABINET.read_text(encoding="utf-8")))
     assert rec.facing_evidence is FacingEvidence.PANEL
     assert rec.plane.front_at_min is True
     # Front at low Y with X across is FreeCAD's own front view.
@@ -553,4 +551,4 @@ def test_a_thin_proud_panel_is_a_back_not_a_door() -> None:
         else b
         for b in boxes
     ]
-    assert recognise(doored).plane.front_at_min is False
+    assert scan(doored).plane.front_at_min is False

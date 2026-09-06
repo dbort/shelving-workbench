@@ -7,7 +7,7 @@ discards a script's exit status (``docs/freecadcmd-notes.md``), so the final
 It answers the four FreeCAD spike goals in
 ``docs/parametric-model-evaluation.md``: that dynamic properties survive a save
 and reload on a plain ``Part::Box`` with nothing of ours in the file, that a
-container walk produces the recogniser's input from both an ``App::Part`` and an
+container walk produces the scanner's input from both an ``App::Part`` and an
 ``App::LinkGroup``, that apply updates and removes boxes by identity, and what a
 forty-plank unit costs.
 """
@@ -44,9 +44,9 @@ from shelving_core.layout import (  # noqa: E402
 )
 from shelving_core.materials import Catalog, MaterialEntry, MaterialId  # noqa: E402
 from spikes.plain_planks.export_boxes import export_container  # noqa: E402
-from spikes.plain_planks.recognise import (  # noqa: E402
+from spikes.plain_planks.scan import (  # noqa: E402
     Box,
-    recognise,
+    scan,
     to_carcass,
 )
 
@@ -211,7 +211,7 @@ def _build_unit(
 
 
 def goal_7_export_from_containers() -> None:
-    """The container walk feeds the core recogniser from both container types,
+    """The container walk feeds the core scanner from both container types,
     including a container that has been moved."""
     carcass = Carcass(
         width_mm=900.0,
@@ -240,12 +240,12 @@ def goal_7_export_from_containers() -> None:
             )
             for record in export["boxes"]
         ]
-        recovered = to_carcass(recognise(boxes), MATERIAL_FOR_THICKNESS)
+        recovered = to_carcass(scan(boxes), MATERIAL_FOR_THICKNESS)
         assert isinstance(recovered.root, Split), container_type
         assert len(recovered.root.children) == 3, container_type
         assert recovered.width_mm == 900.0 and recovered.height_mm == 1200.0
 
-        # Moving the container must not change the recognised tree: the walk
+        # Moving the container must not change the scanned tree: the walk
         # composes container placements and the tree is measured relative to
         # its own bounding rectangle.
         _container(container).Placement = FreeCAD.Placement(
@@ -263,7 +263,7 @@ def goal_7_export_from_containers() -> None:
             )
             for record in moved["boxes"]
         ]
-        after = to_carcass(recognise(shifted), MATERIAL_FOR_THICKNESS)
+        after = to_carcass(scan(shifted), MATERIAL_FOR_THICKNESS)
         assert isinstance(after.root, Split)
         assert len(after.root.children) == 3, f"{container_type} after move"
         first = shifted[0].corner_mm
@@ -394,7 +394,7 @@ def goal_8_apply_by_identity() -> None:
     assert created == 0 and removed == 1, (created, removed)
     assert {child.Name for child in export_children(container)} == before
 
-    # The applied unit still recognises, so an edit cycle is closed.
+    # The applied unit still scans, so an edit cycle is closed.
     export = export_container(container)
     boxes = [
         Box(
@@ -404,17 +404,17 @@ def goal_8_apply_by_identity() -> None:
         )
         for record in export["boxes"]
     ]
-    again = to_carcass(recognise(boxes), MATERIAL_FOR_THICKNESS)
+    again = to_carcass(scan(boxes), MATERIAL_FOR_THICKNESS)
     assert isinstance(again.root, Split) and len(again.root.children) == 3
     FreeCAD.closeDocument(doc.Name)
     print(
         f"goal 8 OK: apply updated {updated}, created and removed one plank by id, "
-        "and the result still recognises"
+        "and the result still scans"
     )
 
 
 def goal_9_scale() -> None:
-    """A forty-plank unit's export, recognise, and apply cost."""
+    """A forty-plank unit's export, scan, and apply cost."""
     carcass = Carcass(
         width_mm=2000.0,
         height_mm=2000.0,
@@ -452,8 +452,8 @@ def goal_9_scale() -> None:
         for record in export["boxes"]
     ]
     start = time.perf_counter()
-    recovered = to_carcass(recognise(boxes), MATERIAL_FOR_THICKNESS)
-    recognise_s = time.perf_counter() - start
+    recovered = to_carcass(scan(boxes), MATERIAL_FOR_THICKNESS)
+    scan_s = time.perf_counter() - start
 
     wider = Carcass(
         width_mm=2400.0,
@@ -468,7 +468,7 @@ def goal_9_scale() -> None:
     apply_s = time.perf_counter() - start
     print(
         f"goal 9 OK: {len(boxes)} planks -- build {build_s * 1000:.0f} ms, "
-        f"export {export_s * 1000:.1f} ms, recognise {recognise_s * 1000:.1f} ms, "
+        f"export {export_s * 1000:.1f} ms, scan {scan_s * 1000:.1f} ms, "
         f"apply+recompute {apply_s * 1000:.0f} ms"
     )
     FreeCAD.closeDocument(doc.Name)

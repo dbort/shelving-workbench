@@ -1,9 +1,9 @@
-"""Print what the recogniser makes of a document exported by ``export_boxes.py``.
+"""Print what the scanner makes of a document exported by ``export_boxes.py``.
 
     pixi run -- python -m spikes.plain_planks.report Unit.boxes.json [min|max]
 
 Prints the cut tree, or the refusal and the objects it names. Use it to feed
-real GUI-modelled geometry to the recogniser without a FreeCAD round trip.
+real GUI-modelled geometry to the scanner without a FreeCAD round trip.
 
 The optional second argument says which end of the depth axis is the front,
 when the geometry does not (a unit with no back and no front). It changes no
@@ -15,17 +15,17 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from spikes.plain_planks.recognise import (
+from spikes.plain_planks.scan import (
     _AXIS_NAMES,
     FacingEvidence,
     Node,
     Open,
     Outside,
-    Recognised,
-    RecogniseError,
+    Scan,
+    ScanError,
     boxes_from_json,
     detect_axes,
-    recognise,
+    scan,
     thicknesses,
 )
 
@@ -66,7 +66,7 @@ _FACING_WHY = {
 }
 
 
-def _facing_line(rec: Recognised) -> str:
+def _facing_line(rec: Scan) -> str:
     """Say plainly whether left and right in this report can be trusted, and on
     what evidence."""
     sign = rec.plane.screen_right_sign
@@ -87,7 +87,7 @@ def _facing_line(rec: Recognised) -> str:
     return f"{line}\n  (a guess: {why})"
 
 
-def report(rec: Recognised) -> str:
+def report(rec: Scan) -> str:
     depths = sorted(rec.depths_mm)
     lines = [
         f"{rec.plane}",
@@ -115,7 +115,7 @@ def main(argv: list[str]) -> int:
         return 2
     text = Path(argv[1]).read_text(encoding="utf-8")
     boxes = boxes_from_json(text)
-    # Axes only: leaving the facing unset lets recognise infer it and report
+    # Axes only: leaving the facing unset lets scan infer it and report
     # what the inference rested on.
     plane = detect_axes(boxes)
     if len(argv) == 3:
@@ -124,8 +124,8 @@ def main(argv: list[str]) -> int:
             return 2
         plane = plane._replace(front_at_min=argv[2] == "min")
     try:
-        rec = recognise(boxes, plane=plane)
-    except RecogniseError as err:
+        rec = scan(boxes, plane=plane)
+    except ScanError as err:
         print(f"REFUSED: {err}")
         if err.objects:
             print("objects: " + ", ".join(err.objects))

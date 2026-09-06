@@ -1,4 +1,4 @@
-"""Export the ``Part::Box`` planks under a container as JSON for the recogniser.
+"""Export the ``Part::Box`` planks under a container as JSON for the scanner.
 
 Run as a macro in the FreeCAD GUI with one container selected (an
 ``App::Part``, ``App::LinkGroup``, or plain group), or with several boxes
@@ -6,7 +6,7 @@ selected. The JSON lands next to the document as ``<label>.boxes.json`` and the
 path is printed to the report view. Under ``freecadcmd`` the same function can
 be called on a container object directly.
 
-A rotated box is refused, because the recogniser only handles axis-aligned
+A rotated box is refused, because the scanner only handles axis-aligned
 planks; anything that is not a ``Part::Box`` is listed under ``skipped``.
 """
 
