@@ -17,14 +17,15 @@ from pathlib import Path
 
 from spikes.plain_planks.scan import (
     _AXIS_NAMES,
+    Cut,
     FacingEvidence,
     Node,
     Open,
     Outside,
     Scan,
     ScanError,
-    boxes_from_json,
     detect_axes,
+    export_from_json,
     scan,
     thicknesses,
 )
@@ -41,19 +42,17 @@ def _render(node: Node | None, indent: str = "") -> list[str]:
         f"{indent}{node.orientation.value} split of "
         f"{node.rect.width_mm:g} x {node.rect.height_mm:g} mm"
     ]
-    for index, strip in enumerate(node.strips):
-        lines.extend(_render(strip, indent + "    "))
-        if index < len(node.cuts):
-            cut = node.cuts[index]
-            gaps = ""
-            if cut.clearance_lo_mm or cut.clearance_hi_mm:
-                gaps = (
-                    f", clearance {cut.clearance_lo_mm:g} / {cut.clearance_hi_mm:g} mm"
-                )
-            lines.append(
-                f"{indent}    -- {cut.plank.name} "
-                f"({cut.plank.thickness_mm:g} mm thick{gaps})"
-            )
+    for item in node.items:
+        if not isinstance(item, Cut):
+            lines.extend(_render(item, indent + "    "))
+            continue
+        gaps = ""
+        if item.clearance_lo_mm or item.clearance_hi_mm:
+            gaps = f", clearance {item.clearance_lo_mm:g} / {item.clearance_hi_mm:g} mm"
+        lines.append(
+            f"{indent}    -- {item.plank.name} "
+            f"({item.plank.thickness_mm:g} mm thick{gaps})"
+        )
     return lines
 
 
@@ -114,7 +113,7 @@ def main(argv: list[str]) -> int:
         print(__doc__)
         return 2
     text = Path(argv[1]).read_text(encoding="utf-8")
-    boxes = boxes_from_json(text)
+    boxes, skipped = export_from_json(text)
     # Axes only: leaving the facing unset lets scan infer it and report
     # what the inference rested on.
     plane = detect_axes(boxes)
@@ -131,6 +130,15 @@ def main(argv: list[str]) -> int:
             print("objects: " + ", ".join(err.objects))
         return 1
     print(report(rec))
+    if skipped:
+        print(f"\n  WARNING: {len(skipped)} part(s) could not be read as planks.")
+        print("  The tree above is what remains, and a missing plank does not")
+        print("  refuse: enclosed bays read as open instead. Do not trust it")
+        print("  until these are resolved.")
+        for item in skipped:
+            name = item.label or item.name
+            print(f"    {name} [{item.type}]: {item.reason}")
+        return 1
     return 0
 
 

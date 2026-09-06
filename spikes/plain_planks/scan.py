@@ -195,23 +195,31 @@ class Cut:
 
 
 @dataclass(frozen=True)
-class CutSplit:
-    """A region divided by parallel full-span cuts.
+class Divide:
+    """A region cut into an ordered run of planks and sub-regions along an axis.
 
-    ``strips`` has one entry per gap between consecutive cuts plus one before
-    the first and one after the last; an entry is ``None`` when that gap has
-    zero size, which is how a cut lying on the region's edge (a shell plank)
-    appears. ``orientation`` follows the core: a ``HORIZONTAL`` split stacks
-    its children up the elevation and cuts with shelves.
+    ``items`` runs along the axis in order and holds ``Cut`` and ``Node``
+    entries in whatever sequence the geometry has. They need not alternate: two
+    adjacent ``Cut``s are two boards face to face, which is what the seam
+    between abutting units looks like, and what a framed wall's double top
+    plate looks like. ``Orientation.HORIZONTAL`` cuts with horizontal planks,
+    so the items stack up the elevation.
     """
 
     orientation: Orientation
     rect: Rect
-    cuts: tuple[Cut, ...]
-    strips: tuple["Node | None", ...]
+    items: tuple["Cut | Node", ...]
+
+    @property
+    def cuts(self) -> tuple[Cut, ...]:
+        return tuple(i for i in self.items if isinstance(i, Cut))
+
+    @property
+    def regions(self) -> tuple["Node", ...]:
+        return tuple(i for i in self.items if not isinstance(i, Cut))
 
 
-Node = Open | Outside | CutSplit
+Node = Open | Outside | Divide
 
 
 @dataclass(frozen=True)
@@ -235,26 +243,73 @@ class Scan:
         return {round(p.depth_mm, 4) for p in self.planks}
 
 
+@dataclass(frozen=True)
+class Skipped:
+    """A part the export could not read as a plank.
+
+    Carried through scanning rather than discarded. A dropped panel does not
+    make a unit fail, it makes it succeed with a hole: a real export lost a
+    notched side panel and three enclosed bays were then reported as open to
+    the outside, with nothing to signal it.
+    """
+
+    name: str
+    label: str
+    type: str
+    reason: str
+
+
 def boxes_from_json(text: str) -> list[Box]:
     """Parse the JSON written by ``export_boxes.py`` into ``Box`` records."""
+    return _parse(text)[0]
+
+
+def export_from_json(text: str) -> tuple[list[Box], list[Skipped]]:
+    """Both halves of an export: the planks, and the parts it could not read."""
+    return _parse(text)
+
+
+def _parse(text: str) -> tuple[list[Box], list[Skipped]]:
     parsed = json.loads(text)
     if not isinstance(parsed, dict):
         raise ValueError("top-level JSON value must be an object")
     raw_boxes = parsed.get("boxes")
     if not isinstance(raw_boxes, list):
         raise ValueError("'boxes' must be an array")
-    boxes: list[Box] = []
+    # A document Name identifies one object, so two entries sharing one are the
+    # same plank reached by two paths through the container tree. Identical
+    # entries collapse; conflicting ones are a real error.
+    by_name: dict[str, Box] = {}
     for entry in raw_boxes:
         if not isinstance(entry, dict):
             raise ValueError(f"box entry must be an object, got {entry!r}")
-        boxes.append(
-            Box(
+        box = Box(
+            name=_req_str(entry, "name"),
+            corner_mm=_req_vec(entry, "corner_mm"),
+            size_mm=_req_vec(entry, "size_mm"),
+        )
+        seen = by_name.get(box.name)
+        if seen is not None and seen != box:
+            raise ValueError(
+                f"two different boxes are both named {box.name!r}: "
+                f"{seen.corner_mm}+{seen.size_mm} and "
+                f"{box.corner_mm}+{box.size_mm}"
+            )
+        by_name[box.name] = box
+    boxes = list(by_name.values())
+    skipped: list[Skipped] = []
+    for entry in parsed.get("skipped") or []:
+        if not isinstance(entry, dict):
+            continue
+        skipped.append(
+            Skipped(
                 name=_req_str(entry, "name"),
-                corner_mm=_req_vec(entry, "corner_mm"),
-                size_mm=_req_vec(entry, "size_mm"),
+                label=str(entry.get("label", "")),
+                type=str(entry.get("type", "")),
+                reason=str(entry.get("reason", "")),
             )
         )
-    return boxes
+    return boxes, skipped
 
 
 def boxes_from_specs(specs: Sequence[PlankSpec]) -> list[Box]:
@@ -446,34 +501,29 @@ def to_carcass(
     """
     root = rec.root
     if not (
-        isinstance(root, CutSplit)
+        isinstance(root, Divide)
         and root.orientation is Orientation.HORIZONTAL
-        and len(root.cuts) == 2
-        and root.strips[0] is None
-        and root.strips[2] is None
+        and len(root.items) == 3
+        and isinstance(root.items[0], Cut)
+        and isinstance(root.items[2], Cut)
     ):
         raise ScanError(
             "unit is not a closed rectangle: expected a bottom and a top on the "
             "bounding rectangle's edges"
         )
-    middle = root.strips[1]
+    middle = root.items[1]
     if not (
-        isinstance(middle, CutSplit)
+        isinstance(middle, Divide)
         and middle.orientation is Orientation.VERTICAL
-        and len(middle.cuts) >= 2
-        and middle.strips[0] is None
-        and middle.strips[-1] is None
+        and isinstance(middle.items[0], Cut)
+        and isinstance(middle.items[-1], Cut)
+        and len(middle.items) >= 3
     ):
         raise ScanError(
             "unit is not a closed rectangle: expected a left and a right side "
             "captured between the bottom and the top"
         )
-    if len(root.cuts) != 2:
-        raise ScanError(
-            "a shelf runs through the sides; today's Carcass has no lap override",
-            (c.plank.name for c in root.cuts[1:-1]),
-        )
-    shell_cuts = (*root.cuts, middle.cuts[0], middle.cuts[-1])
+    shell_cuts = (root.items[0], root.items[2], middle.items[0], middle.items[-1])
     shell_thicknesses = {round(c.plank.thickness_mm, 3) for c in shell_cuts}
     if len(shell_thicknesses) != 1:
         raise ScanError(
@@ -483,23 +533,21 @@ def to_carcass(
     default_material = _material_for(
         material_for_thickness, next(iter(shell_thicknesses)), snap_mm
     )
-    # A full-height divider is a full-span cut at the same level as the sides,
-    # so the interior cuts between the two sides are the root split's dividers.
-    interior_cuts = middle.cuts[1:-1]
-    interior_strips = middle.strips[1:-1]
+    # A full-height divider is a cut at the same level as the sides, so
+    # everything between the two sides is the root split's content.
+    interior = middle.items[1:-1]
     root_bay: Bay
-    if interior_cuts:
+    if any(isinstance(item, Cut) for item in interior):
         root_bay = _split(
             Orientation.VERTICAL,
-            interior_cuts,
-            interior_strips,
+            interior,
             default_material,
             material_for_thickness,
             snap_mm,
         )
     else:
-        inner = interior_strips[0]
-        if inner is None:
+        inner = interior[0]
+        if isinstance(inner, Cut):
             raise ScanError("the sides leave no interior")
         root_bay = _bay(inner, default_material, material_for_thickness, snap_mm)
     return Carcass(
@@ -514,8 +562,8 @@ def to_carcass(
 def _has_open(node: Node | None) -> bool:
     if isinstance(node, Open):
         return True
-    if isinstance(node, CutSplit):
-        return any(_has_open(strip) for strip in node.strips)
+    if isinstance(node, Divide):
+        return any(_has_open(r) for r in node.regions)
     return False
 
 
@@ -528,11 +576,11 @@ def thicknesses(rec: Scan, places: int = 4) -> set[float]:
     found: set[float] = set()
 
     def walk(node: Node | None) -> None:
-        if isinstance(node, CutSplit):
+        if isinstance(node, Divide):
             for cut in node.cuts:
                 found.add(round(cut.plank.thickness_mm, places))
-            for strip in node.strips:
-                walk(strip)
+            for region in node.regions:
+                walk(region)
 
     walk(rec.root)
     return found
@@ -552,11 +600,10 @@ def _bay(
                 "an outside region lies within a closed carcass; the spike converts "
                 "closed rectangles only"
             )
-        case CutSplit():
+        case Divide():
             return _split(
                 node.orientation,
-                node.cuts,
-                node.strips,
+                node.items,
                 default_material,
                 material_for_thickness,
                 snap_mm,
@@ -565,33 +612,50 @@ def _bay(
 
 def _split(
     orientation: Orientation,
-    cuts: Sequence[Cut],
-    strips: Sequence[Node | None],
+    items: Sequence["Cut | Node"],
     default_material: MaterialId,
     material_for_thickness: Mapping[float, MaterialId],
     snap_mm: float,
 ) -> Split:
+    """The core ``Split`` for one run of items.
+
+    A ``Carcass`` alternates strictly, one divider between each pair of
+    children, so a run that starts or ends with a plank, or holds two planks in
+    a row, has no carcass form and is refused. The general model has no such
+    restriction.
+    """
+    if isinstance(items[0], Cut) or isinstance(items[-1], Cut):
+        raise ScanError(
+            "a divider sits on the edge of its bay",
+            (i.plank.name for i in items if isinstance(i, Cut)),
+        )
     children: list[Bay] = []
     sizes_mm: list[float] = []
-    for strip in strips:
-        if strip is None:
-            raise ScanError(
-                "a divider sits on the edge of its bay",
-                (c.plank.name for c in cuts),
-            )
-        children.append(_bay(strip, default_material, material_for_thickness, snap_mm))
-        rect = strip.rect
-        sizes_mm.append(
-            rect.height_mm if orientation is Orientation.HORIZONTAL else rect.width_mm
-        )
     dividers: list[Divider] = []
-    for cut in cuts:
-        material = _material_for(
-            material_for_thickness, cut.plank.thickness_mm, snap_mm
-        )
-        dividers.append(
-            Divider(material=None if material == default_material else material)
-        )
+    expecting_region = True
+    for item in items:
+        if isinstance(item, Cut) == expecting_region:
+            raise ScanError(
+                "two planks meet face to face, which a Carcass cannot express",
+                (i.plank.name for i in items if isinstance(i, Cut)),
+            )
+        if isinstance(item, Cut):
+            material = _material_for(
+                material_for_thickness, item.plank.thickness_mm, snap_mm
+            )
+            dividers.append(
+                Divider(material=None if material == default_material else material)
+            )
+        else:
+            children.append(
+                _bay(item, default_material, material_for_thickness, snap_mm)
+            )
+            sizes_mm.append(
+                item.rect.height_mm
+                if orientation is Orientation.HORIZONTAL
+                else item.rect.width_mm
+            )
+        expecting_region = not expecting_region
     return Split(
         orientation=orientation,
         children=children,
@@ -737,105 +801,153 @@ class _Grid:
 def _region(
     grid: _Grid, i0: int, i1: int, j0: int, j1: int, clearance_mm: float
 ) -> Node:
-    inside: list[int] = []
+    """The node for one region, cutting at every coordinate no plank crosses.
+
+    A guillotine cut is a line the geometry does not straddle, so the test is
+    whether any plank crosses it, not whether some one plank happens to span
+    the region. Cutting at a plank's own two faces is then the special case
+    where the resulting slab holds that plank alone. Requiring a single
+    spanning plank instead refuses two abutting units, whose shared top is two
+    boards that together span the width and neither of which spans alone.
+    """
+    inside = _contained(grid, i0, i1, j0, j1)
+    rect = grid.rect(i0, i1, j0, j1)
+    if not inside:
+        return _empty(grid, rect, i0, i1, j0, j1)
+
+    up = _clean_lines(grid, inside, j0, j1, False, clearance_mm)
+    across = _clean_lines(grid, inside, i0, i1, True, clearance_mm)
+    # The finer partition wins, and a tie goes to stacking up the elevation,
+    # which is how furniture is described. Either choice is a valid tree; this
+    # only has to be deterministic.
+    if up and len(up) >= len(across):
+        bounds = [j0, *up, j1]
+        items = [
+            _slab(grid, i0, i1, lo, hi, clearance_mm, across=False)
+            for lo, hi in zip(bounds[:-1], bounds[1:], strict=True)
+        ]
+        return Divide(Orientation.HORIZONTAL, rect, tuple(items))
+    if across:
+        bounds = [i0, *across, i1]
+        items = [
+            _slab(grid, lo, hi, j0, j1, clearance_mm, across=True)
+            for lo, hi in zip(bounds[:-1], bounds[1:], strict=True)
+        ]
+        return Divide(Orientation.VERTICAL, rect, tuple(items))
+    raise ScanError(
+        f"no line crosses the region {rect} without cutting through a plank; "
+        "the layout is not a tree",
+        (grid.planks[index].name for index in inside),
+    )
+
+
+def _contained(grid: _Grid, i0: int, i1: int, j0: int, j1: int) -> list[int]:
+    """Indices of the planks lying inside the region; a straddler is refused."""
+    found: list[int] = []
     for index, ((pi0, pi1), (pj0, pj1)) in enumerate(
         zip(grid.cols, grid.rows, strict=True)
     ):
-        overlaps = pi0 < i1 and pi1 > i0 and pj0 < j1 and pj1 > j0
-        if not overlaps:
+        if not (pi0 < i1 and pi1 > i0 and pj0 < j1 and pj1 > j0):
             continue
-        contained = pi0 >= i0 and pi1 <= i1 and pj0 >= j0 and pj1 <= j1
-        if not contained:
+        if not (pi0 >= i0 and pi1 <= i1 and pj0 >= j0 and pj1 <= j1):
             raise ScanError(
                 f"{grid.planks[index].name} crosses the boundary of the bay it lies in",
                 (grid.planks[index].name,),
             )
-        inside.append(index)
-    rect = grid.rect(i0, i1, j0, j1)
-    if not inside:
-        cells = [(i, j) for j in range(j0, j1) for i in range(i0, i1)]
-        outside_count = sum(1 for i, j in cells if grid.outside[j][i])
-        if outside_count == len(cells):
-            return Outside(rect)
-        if outside_count == 0:
-            return Open(rect)
-        raise ScanError(
-            f"the empty region {rect} is partly enclosed and partly open to the "
-            "outside; the outline is not a tree"
-        )
+        found.append(index)
+    return found
 
-    h_cuts = [
-        cut
+
+def _empty(grid: _Grid, rect: Rect, i0: int, i1: int, j0: int, j1: int) -> Node:
+    cells = [(i, j) for j in range(j0, j1) for i in range(i0, i1)]
+    outside_count = sum(1 for i, j in cells if grid.outside[j][i])
+    if outside_count == len(cells):
+        return Outside(rect)
+    if outside_count == 0:
+        return Open(rect)
+    raise ScanError(
+        f"the empty region {rect} is partly enclosed and partly open to the "
+        "outside; the outline is not a tree"
+    )
+
+
+def _clean_lines(
+    grid: _Grid,
+    inside: Sequence[int],
+    lo: int,
+    hi: int,
+    across: bool,
+    clearance_mm: float,
+) -> list[int]:
+    """Interior grid lines that a plank in this region ends on and none crosses.
+
+    Three filters. A line no plank ends on separates nothing, and the grid is
+    global, so without that test a neighbouring unit's shelf heights would
+    slice this region's empty space into a dozen meaningless slabs. A line no
+    plank straddles is the guillotine condition itself. And lines closer
+    together than the clearance are one joint, not a compartment, so only one
+    of them survives: the face of a plank the cut actually separates, which is
+    a plank thin along the cut axis. Without that last rule a shelf held a
+    millimetre off each side turns its two joint gaps into two one millimetre
+    bays.
+    """
+    spans = [grid.cols[i] if across else grid.rows[i] for i in inside]
+    faces = {edge for span in spans for edge in span}
+    thin = Member.UPRIGHT if across else Member.SHELF
+    preferred = {
+        edge
         for index in inside
-        if grid.planks[index].member is Member.SHELF
-        and (cut := _horizontal_cut(grid, index, i0, i1, clearance_mm)) is not None
-    ]
-    v_cuts = [
-        cut
-        for index in inside
-        if grid.planks[index].member is Member.UPRIGHT
-        and (cut := _vertical_cut(grid, index, j0, j1, clearance_mm)) is not None
-    ]
-    if h_cuts and v_cuts:
-        raise ScanError(
-            "both a horizontal and a vertical plank span the same region",
-            (c.plank.name for c in (*h_cuts, *v_cuts)),
-        )
-    if not h_cuts and not v_cuts:
-        raise ScanError(
-            f"no plank runs the full span of the region {rect}; the layout is "
-            "not a tree",
-            (grid.planks[index].name for index in inside),
-        )
-    if h_cuts:
-        h_cuts.sort(key=lambda c: c.plank.v0_mm)
-        bounds = [j0]
-        for cut in h_cuts:
-            pj0, pj1 = grid.rows[grid.planks.index(cut.plank)]
-            bounds.extend((pj0, pj1))
-        bounds.append(j1)
-        strips: list[Node | None] = []
-        for lo, hi in zip(bounds[0::2], bounds[1::2], strict=True):
-            strips.append(
-                None if lo == hi else _region(grid, i0, i1, lo, hi, clearance_mm)
-            )
-        return CutSplit(Orientation.HORIZONTAL, rect, tuple(h_cuts), tuple(strips))
-    v_cuts.sort(key=lambda c: c.plank.h0_mm)
-    bounds = [i0]
-    for cut in v_cuts:
-        pi0, pi1 = grid.cols[grid.planks.index(cut.plank)]
-        bounds.extend((pi0, pi1))
-    bounds.append(i1)
-    v_strips: list[Node | None] = []
-    for lo, hi in zip(bounds[0::2], bounds[1::2], strict=True):
-        v_strips.append(
-            None if lo == hi else _region(grid, lo, hi, j0, j1, clearance_mm)
-        )
-    return CutSplit(Orientation.VERTICAL, rect, tuple(v_cuts), tuple(v_strips))
+        if grid.planks[index].member is thin
+        for edge in (grid.cols[index] if across else grid.rows[index])
+    }
+    coords = grid.hs if across else grid.vs
+    kept: list[int] = []
+    for line in range(lo + 1, hi):
+        if line not in faces or any(a < line < b for a, b in spans):
+            continue
+        if kept and coords[line] - coords[kept[-1]] <= clearance_mm:
+            if line in preferred and kept[-1] not in preferred:
+                kept[-1] = line
+            continue
+        if coords[line] - coords[lo] <= clearance_mm:
+            continue
+        if coords[hi] - coords[line] <= clearance_mm:
+            continue
+        kept.append(line)
+    return kept
 
 
-def _horizontal_cut(
-    grid: _Grid, index: int, i0: int, i1: int, clearance_mm: float
-) -> Cut | None:
+def _slab(
+    grid: _Grid, i0: int, i1: int, j0: int, j1: int, clearance_mm: float, across: bool
+) -> "Cut | Node":
+    """One slab between consecutive clean lines: a plank, a void, or a subtree.
+
+    A slab holding one plank that reaches across it is a plank item, with
+    whatever is left beside it recorded as a joint clearance. A lone plank that
+    does not reach across divides again along the other axis, which is how a
+    shelf that fills its own column but not the height of the region that
+    column came from is handled.
+    """
+    inside = _contained(grid, i0, i1, j0, j1)
+    if len(inside) != 1:
+        return _region(grid, i0, i1, j0, j1, clearance_mm)
+    index = inside[0]
+    plank = grid.planks[index]
     pi0, pi1 = grid.cols[index]
     pj0, pj1 = grid.rows[index]
-    lo = _gap(grid, range(pi0 - 1, i0 - 1, -1), range(pj0, pj1), grid.hs, True)
-    hi = _gap(grid, range(pi1, i1), range(pj0, pj1), grid.hs, True)
-    if lo is None or hi is None or lo > clearance_mm or hi > clearance_mm:
-        return None
-    return Cut(grid.planks[index], lo, hi)
-
-
-def _vertical_cut(
-    grid: _Grid, index: int, j0: int, j1: int, clearance_mm: float
-) -> Cut | None:
-    pi0, pi1 = grid.cols[index]
-    pj0, pj1 = grid.rows[index]
-    lo = _gap(grid, range(pj0 - 1, j0 - 1, -1), range(pi0, pi1), grid.vs, False)
-    hi = _gap(grid, range(pj1, j1), range(pi0, pi1), grid.vs, False)
-    if lo is None or hi is None or lo > clearance_mm or hi > clearance_mm:
-        return None
-    return Cut(grid.planks[index], lo, hi)
+    if across:
+        low = _gap(grid, range(pj0 - 1, j0 - 1, -1), range(pi0, pi1), grid.vs, False)
+        high = _gap(grid, range(pj1, j1), range(pi0, pi1), grid.vs, False)
+    else:
+        low = _gap(grid, range(pi0 - 1, i0 - 1, -1), range(pj0, pj1), grid.hs, True)
+        high = _gap(grid, range(pi1, i1), range(pj0, pj1), grid.hs, True)
+    if low is None or high is None or low > clearance_mm or high > clearance_mm:
+        # It sits alone in the slab but does not reach across it, so the slab
+        # divides again along the other axis and the plank spans whatever is
+        # left. Refusing here would reject a shelf that fills its own column
+        # but not the full height of the region the column was cut from.
+        return _region(grid, i0, i1, j0, j1, clearance_mm)
+    return Cut(plank, low, high)
 
 
 def _gap(

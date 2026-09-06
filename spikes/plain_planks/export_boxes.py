@@ -31,8 +31,26 @@ class BoxRecord(TypedDict):
 
 class SkippedRecord(TypedDict):
     name: str
+    label: str
     type: str
     reason: str
+
+
+def _skip_reason(obj: FreeCAD.DocumentObject) -> str:
+    """Why a part could not be read as a plank, in terms the user can act on."""
+    shape = getattr(obj, "Shape", None)
+    if shape is None or shape.isNull():
+        return "carries no solid"
+    if obj.isDerivedFrom("PartDesign::Body") or obj.isDerivedFrom(
+        "PartDesign::Feature"
+    ):
+        return "a PartDesign solid, not a Part::Box"
+    if len(shape.Solids) > 1:
+        return (
+            f"one object holding {len(shape.Solids)} solids, such as an array; "
+            "its source object is exported separately, so its copies are missing"
+        )
+    return f"a {obj.TypeId}, not a Part::Box"
 
 
 class Export(TypedDict):
@@ -53,9 +71,17 @@ class BoxObject(Protocol):
     Height: FreeCAD.Quantity
 
 
+# Types whose children are other parts, so the walk descends into them. A
+# PartDesign Body also exposes a Group, but it holds that body's own feature
+# history, not separate parts: descending into one yields its sketch and its
+# pad as if they were planks and never looks at the body's solid.
+_CONTAINERS = ("App::Part", "App::LinkGroup", "App::DocumentObjectGroup")
+
+
 def _children(obj: FreeCAD.DocumentObject) -> list[FreeCAD.DocumentObject]:
-    # LinkGroup children live in ElementList; Part, Body, and plain groups use
-    # Group. An object with neither is a leaf.
+    if not any(obj.isDerivedFrom(kind) for kind in _CONTAINERS):
+        return []
+    # LinkGroup children live in ElementList, Part and plain groups use Group.
     for attr in ("ElementList", "Group"):
         members = getattr(obj, attr, None)
         if isinstance(members, list):
@@ -64,31 +90,43 @@ def _children(obj: FreeCAD.DocumentObject) -> list[FreeCAD.DocumentObject]:
 
 
 def _walk(
-    obj: FreeCAD.DocumentObject, placement: FreeCAD.Placement
+    obj: FreeCAD.DocumentObject,
+    placement: FreeCAD.Placement,
+    seen: set[str],
 ) -> Iterator[tuple[FreeCAD.DocumentObject, FreeCAD.Placement]]:
-    """Every descendant leaf with the accumulated placement of its containers.
+    """Every descendant part with the accumulated placement of its containers.
 
     ``getGlobalPlacement`` only composes through geo-feature groups, and a
-    ``LinkGroup`` is not one, so the container chain is composed here.
+    ``LinkGroup`` is not one, so the container chain is composed here. ``seen``
+    carries the object names already yielded: a selection can reach the same
+    object by more than one path, and without this a real export produced
+    eleven planks twice over.
     """
     children = _children(obj)
     if not children:
-        yield obj, placement
+        if obj.Name not in seen:
+            seen.add(obj.Name)
+            yield obj, placement
         return
     own = getattr(obj, "Placement", None)
     if isinstance(own, FreeCAD.Placement):
         placement = placement.multiply(own)
     for child in children:
-        yield from _walk(child, placement)
+        yield from _walk(child, placement, seen)
 
 
 def export_container(obj: FreeCAD.DocumentObject) -> Export:
     boxes: list[BoxRecord] = []
     skipped: list[SkippedRecord] = []
-    for leaf, container_placement in _walk(obj, FreeCAD.Placement()):
+    for leaf, container_placement in _walk(obj, FreeCAD.Placement(), set()):
         if not leaf.isDerivedFrom("Part::Box"):
             skipped.append(
-                {"name": leaf.Name, "type": leaf.TypeId, "reason": "not a Part::Box"}
+                {
+                    "name": leaf.Name,
+                    "label": leaf.Label,
+                    "type": leaf.TypeId,
+                    "reason": _skip_reason(leaf),
+                }
             )
             continue
         box = cast("BoxObject", leaf)

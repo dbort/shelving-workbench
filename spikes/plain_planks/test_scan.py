@@ -4,6 +4,7 @@ Run with ``python -m pytest spikes`` from the repository root; ``pixi run
 tests`` does not include this directory.
 """
 
+import json
 from pathlib import Path
 
 import pytest
@@ -23,7 +24,8 @@ from shelving_core.materials import Catalog, MaterialEntry, MaterialId
 from shelving_core.solver import solve
 from spikes.plain_planks.scan import (
     Box,
-    CutSplit,
+    Cut,
+    Divide,
     FacingEvidence,
     Open,
     Outside,
@@ -33,6 +35,7 @@ from spikes.plain_planks.scan import (
     boxes_from_json,
     boxes_from_specs,
     detect_axes,
+    export_from_json,
     scan,
     thicknesses,
     to_carcass,
@@ -73,6 +76,27 @@ def _shape(bay: Bay) -> object:
     if isinstance(bay, Leaf):
         return "leaf"
     return (bay.orientation.value, tuple(_shape(child) for child in bay.children))
+
+
+def _names(node: Divide) -> list[str]:
+    """Plank names in item order, for asserting a split's shape."""
+    return [i.plank.name for i in node.items if isinstance(i, Cut)]
+
+
+def _kinds(node: Divide) -> str:
+    """One character per item in order: P for a plank, o for an open bay,
+    x for an outside region, D for a nested split."""
+    out = ""
+    for item in node.items:
+        if isinstance(item, Cut):
+            out += "P"
+        elif isinstance(item, Open):
+            out += "o"
+        elif isinstance(item, Outside):
+            out += "x"
+        else:
+            out += "D"
+    return out
 
 
 def _box(
@@ -185,17 +209,18 @@ def test_woodworking_cabinet_scans_with_clearance_and_panels() -> None:
     rec = scan(_woodworking_f0())
     assert sorted(p.name for p in rec.panels) == ["Back", "Front"]
     root = rec.root
-    assert isinstance(root, CutSplit)
-    assert [c.plank.name for c in root.cuts] == ["Floor", "Top"]
-    middle = root.strips[1]
-    assert isinstance(middle, CutSplit)
-    assert [c.plank.name for c in middle.cuts] == ["Left", "Right"]
-    inner = middle.strips[1]
-    assert isinstance(inner, CutSplit)
+    assert isinstance(root, Divide)
+    assert (_kinds(root), _names(root)) == ("PDP", ["Floor", "Top"])
+    middle = root.items[1]
+    assert isinstance(middle, Divide)
+    assert (_kinds(middle), _names(middle)) == ("PDP", ["Left", "Right"])
+    inner = middle.items[1]
+    assert isinstance(inner, Divide)
+    assert (_kinds(inner), _names(inner)) == ("oPo", ["Shelf"])
+    # The shelf is held a millimetre off each side. That is a joint gap, not a
+    # pair of one millimetre bays, so it stays a clearance on the plank.
     (shelf,) = inner.cuts
-    assert shelf.plank.name == "Shelf"
     assert (shelf.clearance_lo_mm, shelf.clearance_hi_mm) == (1.0, 1.0)
-    assert all(isinstance(s, Open) for s in inner.strips)
 
     # The carcass depth is the floor's: 382 mm behind an 18 mm front panel.
     assert rec.d0_mm == 18.0
@@ -234,28 +259,20 @@ def _stair_step() -> list[Box]:
 def test_stair_step_scans_with_outside_leaves() -> None:
     rec = scan(_stair_step())
     root = rec.root
-    assert isinstance(root, CutSplit)
-    assert root.orientation is Orientation.HORIZONTAL
-    assert [c.plank.name for c in root.cuts] == ["Floor"]
-    assert root.strips[0] is None
-    columns = root.strips[1]
-    assert isinstance(columns, CutSplit)
+    assert isinstance(root, Divide)
+    # A floor running through, then everything above it.
+    assert (_kinds(root), _names(root)) == ("PD", ["Floor"])
+    columns = root.items[1]
+    assert isinstance(columns, Divide)
     assert columns.orientation is Orientation.VERTICAL
-    assert [c.plank.name for c in columns.cuts] == ["Left", "Riser1", "Riser2", "Right"]
-    assert columns.strips[0] is None and columns.strips[4] is None
-    expected_above = [None, Outside, Outside]
-    tops = ["Top1", "Top2", "Top3"]
-    for strip, top_name, above in zip(
-        columns.strips[1:4], tops, expected_above, strict=True
-    ):
-        assert isinstance(strip, CutSplit)
-        assert strip.orientation is Orientation.HORIZONTAL
-        assert [c.plank.name for c in strip.cuts] == [top_name]
-        assert isinstance(strip.strips[0], Open)
-        if above is None:
-            assert strip.strips[1] is None
-        else:
-            assert isinstance(strip.strips[1], above)
+    assert _kinds(columns) == "PDPDPDP"
+    assert _names(columns) == ["Left", "Riser1", "Riser2", "Right"]
+    # Each column is a bay under its own top. The two shorter columns have
+    # empty space above them, which is outside the unit rather than a bay.
+    expected = [("oP", "Top1"), ("oPx", "Top2"), ("oPx", "Top3")]
+    for item, (shape, top) in zip(columns.items[1::2], expected, strict=True):
+        assert isinstance(item, Divide)
+        assert (_kinds(item), _names(item)) == (shape, [top])
 
 
 def _closed_box(
@@ -299,14 +316,35 @@ def test_overlap_is_refused_naming_both() -> None:
     assert sorted(info.value.objects) == ["ShelfA", "ShelfB"]
 
 
-def test_gap_wider_than_clearance_is_refused() -> None:
+def test_a_plank_that_reaches_nothing_still_partitions() -> None:
+    """A shelf floating clear of both sides is a valid guillotine partition, so
+    scanning accepts it and the gaps beside it come back as bays.
+
+    The plank-span rule used to refuse this. Cutting at every line no plank
+    crosses cannot: [gap, shelf, gap] is a legal split. Whether a plank
+    actually reaches its neighbours is a question about the thing being
+    buildable, not about the layout being a tree, and nothing here asks it.
+    """
     boxes = _closed_box([_box("Floating", (30.0, 0.0, 400.0), (940.0, 300.0, 18.0))])
-    with pytest.raises(ScanError, match="full span") as info:
-        scan(boxes)
-    assert info.value.objects == ("Floating",)
-    # The same shelf scans when the clearance tolerance admits the gap.
-    rec = scan(boxes, clearance_mm=12.0)
-    assert isinstance(rec.root, CutSplit)
+    root = scan(boxes).root
+    assert isinstance(root, Divide)
+    middle = root.items[1]
+    assert isinstance(middle, Divide)
+    # The 12 mm and 42 mm gaps beside the shelf read as bays, which is what a
+    # user would see and question.
+    assert _kinds(middle) == "PoDoP"
+    gaps = [i for i in middle.items if isinstance(i, Open)]
+    assert [round(g.rect.width_mm, 1) for g in gaps] == [12.0, 12.0]
+
+    # Held off each side by less than the clearance, it is one plank again.
+    close = _closed_box([_box("Shelf", (20.0, 0.0, 400.0), (960.0, 300.0, 18.0))])
+    close_root = scan(close).root
+    assert isinstance(close_root, Divide)
+    sides = close_root.items[1]
+    assert isinstance(sides, Divide)
+    inner = sides.items[1]
+    assert isinstance(inner, Divide)
+    assert (_kinds(inner), _names(inner)) == ("oPo", ["Shelf"])
 
 
 def test_square_section_plank_is_refused() -> None:
@@ -386,44 +424,33 @@ def test_real_stair_step_unit_scans() -> None:
     assert sorted(rec.depths_mm) == [215.9, 292.1]
     assert not rec.panels, "the unit has no back or front"
 
-    # The top runs through, the right side is captured under it and runs down
-    # past everything else, and the two step bottoms are the outside regions.
+    # The top runs through above everything. Under it, three uprights: a short
+    # side, a middle divider, and one that runs down past the rest as a leg.
     root = rec.root
-    assert isinstance(root, CutSplit)
-    assert root.orientation is Orientation.HORIZONTAL
-    assert [c.plank.name for c in root.cuts] == ["panelYX"]
-    assert root.strips[1] is None
+    assert isinstance(root, Divide)
+    assert (_kinds(root), _names(root)) == ("DP", ["panelYX"])
 
-    columns = root.strips[0]
-    assert isinstance(columns, CutSplit)
+    columns = root.items[0]
+    assert isinstance(columns, Divide)
     assert columns.orientation is Orientation.VERTICAL
-    assert [c.plank.name for c in columns.cuts] == [
-        "panelZX012",
-        "panelZX007",
-        "panelZX008",
-    ]
-    assert columns.strips[0] is None and columns.strips[-1] is None
+    assert _kinds(columns) == "PDPDP"
+    assert _names(columns) == ["panelZX012", "panelZX007", "panelZX008"]
 
-    left = columns.strips[1]
-    assert isinstance(left, CutSplit)
-    assert [c.plank.name for c in left.cuts] == ["Shelf015"]
-    assert isinstance(left.strips[0], Outside), "the left step is open below"
-    assert isinstance(left.strips[1], Open)
+    # Left step: open below, because the unit is stepped at the bottom.
+    left = columns.items[1]
+    assert isinstance(left, Divide)
+    assert (_kinds(left), _names(left)) == ("xPo", ["Shelf015"])
 
-    right = columns.strips[2]
-    assert isinstance(right, CutSplit)
-    assert [c.plank.name for c in right.cuts] == ["panelYX003", "Shelf013"]
-    assert isinstance(right.strips[0], Outside), "the right step is open below"
-    assert isinstance(right.strips[2], Open)
+    right = columns.items[3]
+    assert isinstance(right, Divide)
+    assert (_kinds(right), _names(right)) == ("xPDPo", ["panelYX003", "Shelf013"])
 
-    middle = right.strips[1]
-    assert isinstance(middle, CutSplit)
-    assert middle.orientation is Orientation.VERTICAL
-    assert [c.plank.name for c in middle.cuts] == ["panelZX011"]
-    for strip, shelf in zip(middle.strips, ["Shelf014", "Shelf016"], strict=True):
-        assert isinstance(strip, CutSplit)
-        assert [c.plank.name for c in strip.cuts] == [shelf]
-        assert all(isinstance(s, Open) for s in strip.strips)
+    middle = right.items[2]
+    assert isinstance(middle, Divide)
+    assert (_kinds(middle), _names(middle)) == ("DPD", ["panelZX011"])
+    for item, shelf in zip(middle.items[0::2], ["Shelf014", "Shelf016"], strict=True):
+        assert isinstance(item, Divide)
+        assert (_kinds(item), _names(item)) == ("oPo", [shelf])
 
 
 def test_real_unit_needs_the_looser_snap() -> None:
@@ -513,24 +540,23 @@ def test_real_magicstart_cabinet_scans() -> None:
     assert [p.name for p in rec.panels] == ["Back"]
 
     root = rec.root
-    assert isinstance(root, CutSplit)
+    assert isinstance(root, Divide)
     assert root.orientation is Orientation.VERTICAL
-    assert [c.plank.name for c in root.cuts] == ["Left", "Right"]
-    assert root.strips[0] is None and root.strips[2] is None
+    # The sides run the full height, the floor and top are captured between
+    # them: the opposite lap order to the synthetic F0 fixture above.
+    assert (_kinds(root), _names(root)) == ("PDP", ["Left", "Right"])
 
-    inner = root.strips[1]
-    assert isinstance(inner, CutSplit)
+    inner = root.items[1]
+    assert isinstance(inner, Divide)
     assert inner.orientation is Orientation.HORIZONTAL
-    assert [c.plank.name for c in inner.cuts] == ["Floor", "Shelf", "Top"]
     # The 100 mm plinth gap below the floor is open to the outside, so it is
     # not a bay.
-    assert isinstance(inner.strips[0], Outside)
-    assert round(inner.strips[0].rect.height_mm, 1) == 100.0
-    assert all(isinstance(s, Open) for s in inner.strips[1:3])
-    assert inner.strips[3] is None
+    assert (_kinds(inner), _names(inner)) == ("xPoPoP", ["Floor", "Shelf", "Top"])
+    plinth = inner.items[0]
+    assert isinstance(plinth, Outside)
+    assert round(plinth.rect.height_mm, 1) == 100.0
     # The shelf carries magicStart's 1 mm clearance at each side.
-    shelf = inner.cuts[1]
-    assert (shelf.clearance_lo_mm, shelf.clearance_hi_mm) == (1.0, 1.0)
+    assert (inner.cuts[1].clearance_lo_mm, inner.cuts[1].clearance_hi_mm) == (1.0, 1.0)
 
 
 def test_a_thin_proud_panel_is_a_back_not_a_door() -> None:
@@ -552,3 +578,65 @@ def test_a_thin_proud_panel_is_a_back_not_a_door() -> None:
         for b in boxes
     ]
     assert scan(doored).plane.front_at_min is False
+
+
+REAL_TWO_UNITS = Path(__file__).parent / "real_two_units.boxes.json"
+
+
+def test_two_abutting_units_scan_together() -> None:
+    """Two units from one project whose side panels meet, exported from a loose
+    selection rather than a tidy container.
+
+    This is the case the plank-span rule could not do. Neither unit's top board
+    spans the pair, and the seam between them is two side panels face to face,
+    so no single plank cuts the whole. Cutting at every line no plank crosses
+    handles it, and the seam shows up as two plank items in a row.
+    """
+    boxes, skipped = export_from_json(REAL_TWO_UNITS.read_text(encoding="utf-8"))
+    root = scan(boxes).root
+    assert isinstance(root, Divide)
+    # A bottom board, the two units, and the slab holding both their tops.
+    assert (_kinds(root), _names(root)) == ("PDD", ["panelFaceYX"])
+
+    tops = root.items[2]
+    assert isinstance(tops, Divide)
+    assert (_kinds(tops), _names(tops)) == ("PP", ["panelYX", "panelYX004"])
+    left_top, right_top = tops.items
+    assert isinstance(left_top, Cut) and isinstance(right_top, Cut)
+    # Together they span the width; neither spans it alone.
+    assert left_top.plank.h1_mm == right_top.plank.h0_mm
+
+    body = root.items[1]
+    assert isinstance(body, Divide)
+    assert body.orientation is Orientation.VERTICAL
+    assert _kinds(body) == "xDPPDP"
+    assert _names(body) == ["panelZX008", "panelZX001", "panelZX"]
+    # The seam: one unit's side and the next unit's side, touching.
+    left_side, right_side = body.items[2], body.items[3]
+    assert isinstance(left_side, Cut) and isinstance(right_side, Cut)
+    assert left_side.plank.h1_mm == right_side.plank.h0_mm
+
+    # The export predates the walk fix, so it still carries the notched panel
+    # as skipped and eleven planks twice over. Both are handled on the way in.
+    assert [s.name for s in skipped] == ["Sketch006", "Pad003"]
+    assert len({b.name for b in boxes}) == len(boxes)
+
+
+def test_duplicate_entries_collapse_but_conflicts_do_not() -> None:
+    """A selection can reach one object by two paths, so the same Name may be
+    exported twice. Identical entries are one plank; differing ones are an
+    error rather than an overlap deeper in."""
+    text = REAL_TWO_UNITS.read_text(encoding="utf-8")
+    assert len(json.loads(text)["boxes"]) == 39
+    assert len(boxes_from_json(text)) == 28
+
+    clashing = json.dumps(
+        {
+            "boxes": [
+                {"name": "Shelf", "corner_mm": [0, 0, 0], "size_mm": [1, 1, 1]},
+                {"name": "Shelf", "corner_mm": [9, 9, 9], "size_mm": [1, 1, 1]},
+            ]
+        }
+    )
+    with pytest.raises(ValueError, match="both named 'Shelf'"):
+        boxes_from_json(clashing)
