@@ -1,10 +1,12 @@
-# Plain-planks evaluation
+# Scan, edit, apply: an evaluation
 
 An evaluation of the plain-planks approach, written before deciding whether
 to replace the design of record with it. Nothing here is a decision of
 record; [`architecture.md`](architecture.md) stays authoritative until a
-task rewrites it. "Plain-planks" is a working name for the approach and is
-to be revisited before it names any Python module or type.
+task rewrites it. The approach has no name and needs none: the operations
+are **scan**, **edit**, and **apply**, and the modules are named for what
+they do. A label for the philosophy would only ever appear in prose, and
+would go stale as the approach moved.
 
 Two earlier alternatives, promoting the solver's driving values to
 properties and generating every number as a FreeCAD expression, were
@@ -20,12 +22,12 @@ between edits, in the manner of the Woodworking workbench
 (`dprojects/Woodworking`). Three commands replace the current driver
 object:
 
-- **Recognise** takes a container the user chooses, classifies the
+- **Scan** takes a container the user chooses, classifies the
   axis-aligned boxes inside it into planks, reads the lap order at each
   joint from which member runs through, infers the bays from the enclosed
   voids, and builds a split-tree. Anything outside a strict envelope is
   refused with a diagnosis that names the offending object.
-- **Edit** is the 2.5D editor operating on the recognised tree.
+- **Edit** is the 2.5D editor operating on the scanned tree.
 - **Apply** writes the tree back as plain boxes into the same container:
   existing planks updated by identity, new ones created, removed ones
   deleted.
@@ -38,7 +40,7 @@ from geometry and its output is geometry.
 ## What Woodworking establishes
 
 Read from a local clone of the repository. These are facts about the
-substrate the approach builds on, and constraints on the recognise
+substrate the approach builds on, and constraints on the scan
 envelope.
 
 - Panels are `Part::Box`, `PartDesign::Pad`, `Part::Cut`, `App::Link`,
@@ -54,7 +56,7 @@ envelope.
   `PartDesign::Body`, and `Part::Cut`.
 - A generated shelf is inset 1 mm from each side (`gShelfOffsetSides`)
   and is shallower than the sides: it sits behind the front panel and in
-  front of the back panel. Recognise must tolerate a small clearance at a
+  front of the back panel. Scan must tolerate a small clearance at a
   joint and planks of differing depth, or it refuses every Woodworking
   cabinet.
 - Back and front panels are thin along Y. They project onto the whole
@@ -78,13 +80,13 @@ envelope.
 - **Lap order is read from geometry** rather than reserved in the schema.
 - **Direct plank edits round-trip.** This reverses the "3D edits" decision
   of record: resizing a plank with Woodworking's `magicResizer` and then
-  opening the editor is a supported path, because recognise starts from
+  opening the editor is a supported path, because scan starts from
   whatever is there.
-- **Recognition is pure geometry.** It lives in `shelving_core` taking
+- **Scanning is pure geometry.** It lives in `shelving_core` taking
   `(size, corner)` boxes and returning a tree or a structured refusal,
-  with the round-trip property that recognising `expand`'s output
+  with the round-trip property that scanning `expand`'s output
   reproduces the tree as the oracle test.
-- **`StudWall` recognises the same way**: plates and a row of studs are a
+- **`StudWall` scans the same way**: plates and a row of studs are a
   one-level tree.
 
 ## Costs
@@ -98,7 +100,7 @@ envelope.
   Recovery is by stored metadata when present and by heuristic otherwise
   (see Decisions).
 - **Material is not inferable** beyond thickness, and thickness alone does
-  not identify a catalog entry. Recognise reads the stored property when
+  not identify a catalog entry. Scan reads the stored property when
   present and otherwise leaves the material unset.
 - **Refusal is the user experience.** Every unsupported arrangement (a
   rotated plank, a gap wider than the clearance tolerance, an overlap, a
@@ -110,7 +112,7 @@ envelope.
   after apply. Woodworking users accept this, but it is a different
   promise from "the 3D is always a projection of the model".
 - **Identity across edits** is stored on the boxes as dynamic properties.
-  Reconstructing it by position on every recognise would lose labels and
+  Reconstructing it by position on every scan would lose labels and
   per-plank overrides.
 
 ## Decisions
@@ -126,15 +128,21 @@ the spike confirms it is workable.
 | Facing | Which end of the depth axis is the front. Stored on the unit and authoritative. Two hints give a first guess, a back or front panel and an inset front, and both fire rarely, so unknown is the normal outcome |
 | Outline | Rectilinear, one plane. The bounding rectangle's tree carries `Void` regions that hold no planks and are not bays; the outline is whatever they leave |
 | Shell | Not a rule and not a field. A split is an ordered run of planks and sub-regions, so the shell is just its outermost planks. `Carcass` does not survive |
-| Split axis | A split names an axis (X, Y, or Z), not an orientation within an assumed elevation plane. Near-term recognition and editing stay single-plane, but the model never needs changing to hold a second one |
+| Split axis | A split names an axis (X, Y, or Z), not an orientation within an assumed elevation plane. Near-term scanning and editing stay single-plane, but the model never needs changing to hold a second one |
 | Depth | A region's extent along the depth axis, not a field on the unit. A plank fills its region's cross-section with an inset per face, which is the same parameter as a joint clearance |
 | Panel shape | Rectangular boxes only. An L-shaped, mitred, notched, or scribed panel has no representation and is a future path, not a near-term goal |
 | Non-tree layouts | A pinwheel or any partition that is not a tree is refused, naming the planks that form the cycle |
 | Clearance at a joint | A gap up to a tolerance (default 3 mm) is a joint; the gap is stored per plank end and apply reproduces it. Larger gaps refuse |
-| Per-plank depth | Recognise records each plank's depth and Y offset as per-node overrides; apply reproduces them; unit depth is the default for new planks |
+| Per-plank depth | Scan records each plank's depth and Y offset as per-node overrides; apply reproduces them; unit depth is the default for new planks |
 | Back and front panels | Y-thin planks are set aside from the bay partition and reported; back-panel semantics arrive with M7 |
 | Rule recovery | Stored rule metadata on a box is authoritative. Without it, sibling openings equal within tolerance become `fill` and the rest become `fixed` |
-| Identity and metadata | Dynamic properties on the plain box: node id, role, rule, material, clearances. They persist without the workbench installed |
+| Plank identity | The FreeCAD `Name`. Never stored by us, so it cannot be copied and a duplicate is a distinct entity by construction |
+| Provenance | Two stored fields, the `Name` and the document `Uid` at the time the plank was tagged. They classify what a mismatch means: a changed `Name` is a copy, a changed `Uid` is a relocation |
+| Stored metadata | Only what geometry cannot carry: **material** and the **rule** of the region beside the plank. Role and clearance are derived, so a copy carries fewer wrong fields |
+| Region rules | A record on the container, keyed by plank `Name`. Not a source of truth for geometry; a missing or stale entry falls back to the equal-siblings heuristic |
+| Reflow | Inert by default: scan, edit, apply are commands. An optional per-unit driver for automatic reflow comes later, and a live unit is not hand-editable |
+| Repeat rules | Deferred to `StudWall` (M8), where a computed member count is the point. Its children are positional, so it introduces a second identity scheme |
+| Draft arrays | Skipped loudly for now. Expanding one into its element placements is easy but adds a type to the envelope |
 | Apply | Plain values. Expressions among planks are a later option, not part of the approach |
 
 ### The outline model
@@ -154,7 +162,7 @@ order: the plank that runs the full span of a region is the one cut
 first and runs through; planks in the strips it creates are captured
 against it. That makes lap order unambiguous and free.
 
-Recognise therefore works on a cell grid: every plank edge coordinate is
+Scan therefore works on a cell grid: every plank edge coordinate is
 a grid line, a flood fill from the bounding rectangle's edge through
 uncovered cells marks the outside, and the recursion at each region looks
 for planks whose line across the region meets only the plank itself,
@@ -181,27 +189,27 @@ but `pixi run tests` does not run its tests or type-check it; run those
 with `pixi run -- python -m pytest spikes` and `pixi run -- mypy --strict
 spikes`.
 
-### Core spike: recognise from boxes, no FreeCAD
+### Core spike: scan from boxes, no FreeCAD
 
-`recognise.py` takes a list of axis-aligned boxes and returns a cut tree
-or a `RecogniseError` naming the objects. `test_recognise.py` covers:
+`scan.py` takes a list of axis-aligned boxes and returns a cut tree
+or a `ScanError` naming the objects. `test_scan.py` covers:
 
 1. **Round trip.** For sample trees (a single leaf, three `fill` shelves,
    a vertical split with a nested horizontal one, mixed thicknesses),
-   `expand` to boxes, recognise, convert back to a `Carcass`, `expand`
+   `expand` to boxes, scan, convert back to a `Carcass`, `expand`
    again, and assert the plank set matches to 1e-6 mm.
 2. **Woodworking cabinet.** The `magicStart` F0 shape (floor, sides, top,
    back, front, one shelf inset 1 mm each side and shallower than the
-   sides) recognises as one bay split by one shelf, with the back and
+   sides) scans as one bay split by one shelf, with the back and
    front set aside and the clearances recorded.
 3. **Stair-step.** Three columns of decreasing height with a continuous
-   floor and left side, step tops, and risers recognise into a tree with
+   floor and left side, step tops, and risers scan into a tree with
    outside leaves, and the lap order matches the geometry.
 4. **Refusals.** A pinwheel, an overlap, a gap wider than the clearance, a
    square-section plank, and a shell with a leak each refuse and name the
    objects.
 5. **Rule recovery.** Equal siblings become `fill`; a differing sibling
-   stays `fixed`; resizing the recognised carcass redistributes only the
+   stays `fixed`; resizing the scanned carcass redistributes only the
    `fill` openings.
 
 ### FreeCAD spike: plain boxes in a document
@@ -214,46 +222,46 @@ A `freecadcmd` script, written after the core spike passes, covering:
    shape survive with no warnings.
 7. **Export from a container.** Walk an `App::Part` and an
    `App::LinkGroup`, read each box's global placement, refuse a rotated
-   box, and produce the input the core recogniser takes.
-8. **Apply by identity.** Recognise a unit, split a bay in the tree,
+   box, and produce the input the core scanner takes.
+8. **Apply by identity.** Scan a unit, split a bay in the tree,
    apply, and assert the untouched boxes are the same document objects,
    the new plank is new, and a removed plank is deleted.
-9. **Scale.** Recognise a forty-plank unit and time it.
+9. **Scale.** Scan a forty-plank unit and time it.
 
 ### GUI checks
 
 Outstanding; they need a human at FreeCAD 1.0 with Woodworking installed.
 
 10. Done. A stair-step unit from a live project was exported and now
-    recognises; see the results below. It found the plane assumption, the
+    scans; see the results below. It found the plane assumption, the
     snap tolerance, and the thickness corruption.
 11. Outstanding. Run Woodworking's `getDimensions` on a unit the spike's
     apply wrote, and check the cut list is correct.
-12. Done. A saved `magicStart` document was read directly. It recognises,
+12. Done. A saved `magicStart` document was read directly. It scans,
     and it found that the tool ships two opposite lap orders and that the
     facing rule mishandled a proud overlay back.
 
 ## Spike results
 
-### Core: recognise from boxes
+### Core: scan from boxes
 
-Run on 2026-09-04 against `spikes/plain_planks/recognise.py`; fifteen
+Run on 2026-09-04 against `spikes/plain_planks/scan.py`; fifteen
 tests pass, `ruff` and `mypy --strict` are clean, and `pixi run tests`
-stays green. **Recognition is tractable.** The recogniser is about 500
+stays green. **Scanning is tractable.** The scanner is about 500
 lines and every planned case works.
 
 What the spike settled:
 
 1. **Round trip holds.** For a single leaf, four `fill` shelves, a nested
    vertical-then-horizontal tree with mixed materials, and unequal fixed
-   shelves, recognising `expand`'s boxes and expanding the recovered
+   shelves, scanning `expand`'s boxes and expanding the recovered
    carcass reproduces every plank to 1e-6 mm and the same tree shape. It
    also holds at 3 x 4, 6 x 10, and 8 x 14 grids.
-2. **The Woodworking cabinet recognises.** The `magicStart` F0 shape
+2. **The Woodworking cabinet scans.** The `magicStart` F0 shape
    yields floor and top as the outer cuts, the two sides inside them, and
    the shelf with its 1 mm clearance recorded at each end. Back and front
    are set aside as Y-thin panels.
-3. **The stair-step recognises.** Three columns of decreasing height give
+3. **The stair-step scans.** Three columns of decreasing height give
    a floor cut, then four uprights, then a per-column top with an
    `Outside` region above the two short columns. Lap order falls out of
    the tree order with no extra rule.
@@ -275,19 +283,19 @@ Three findings that change the plan:
   is an artefact of `Carcass` keeping its shell implicit; the general
   model with an explicit shell and outside leaves does not have it.
 - **A shelf that runs through the sides has no home in today's
-  `Carcass`.** Recognise handles it (it is simply an outer cut with three
+  `Carcass`.** Scan handles it (it is simply an outer cut with three
   or more members), but `expand` always makes the top and bottom
   continuous, so the converter refuses it. This is the per-joint lap
   override the schema reserves, and the general model needs it.
 - **Unit depth comes from the elevation members, not the bounding box.**
   A Woodworking cabinet's 400 mm depth is an 18 mm front panel plus a
-  382 mm carcass. Recognise reports the members' depth and the front
+  382 mm carcass. Scan reports the members' depth and the front
   offset separately, and both are needed to write the unit back.
 
-Performance is a non-issue: recognising 115 planks takes 1.7 ms, and the
+Performance is a non-issue: scanning 115 planks takes 1.7 ms, and the
 cost grows roughly with plank count times grid cells.
 
-| Planks | Recognise | Convert |
+| Planks | Scan | Convert |
 |---|---|---|
 | 15 | 0.2 ms | 0.08 ms |
 | 35 | 0.3 ms | 0.15 ms |
@@ -305,31 +313,31 @@ Run with `freecadcmd spikes/plain_planks/freecad_spike.py`, which prints
   `Document.xml` contains no `Proxy`, `FeaturePython`, or `PythonObject`
   entry, so the file needs nothing of ours installed to load. **This is
   the linchpin of the approach and it holds.**
-- **The container walk feeds the recogniser (goal 7).** Both `App::Part`
+- **The container walk feeds the scanner (goal 7).** Both `App::Part`
   and `App::LinkGroup` export cleanly, and moving the container leaves
-  the recognised tree unchanged while shifting the exported corners,
+  the scanned tree unchanged while shifting the exported corners,
   because the walk composes container placements and the tree is measured
   against its own bounding rectangle. `getGlobalPlacement` is not usable
   here: a `LinkGroup` is not a geo-feature group, so the chain is composed
   by hand.
-- **Apply matches by identity (goal 8).** Adding a shelf to a recognised
+- **Apply matches by identity (goal 8).** Adding a shelf to a scanned
   tree updates the six existing boxes in place, creates exactly one, and
   deletes none; removing it deletes exactly that one. Every shell plank
-  keeps its original document object. The result recognises again, so the
+  keeps its original document object. The result scans again, so the
   edit cycle closes.
 - **Cost is negligible (goal 9).** A 45-plank unit exports in 0.3 ms and
-  recognises in 0.6 ms; apply plus a full document recompute is 9 ms.
+  scans in 0.6 ms; apply plus a full document recompute is 9 ms.
   FreeCAD's own recompute dominates, and it is still far below an
   interactive threshold.
 
 ### Real geometry: a stair-step unit from a live project
 
 The user exported a stair-step component built in the FreeCAD GUI with
-Woodworking tools and fed it to the recogniser. It is kept as
+Woodworking tools and fed it to the scanner. It is kept as
 `spikes/plain_planks/real_stair_step.boxes.json` and asserted by
-`test_real_stair_step_unit_recognises`.
+`test_real_stair_step_unit_scans`.
 
-**It recognises, and the tree matches the geometry.** A top running the
+**It scans, and the tree matches the geometry.** A top running the
 full width, three uprights under it (a short left side, a middle divider,
 and a right side that runs down past everything as a leg), a shelf in the
 left step, two shelves plus a divider in the right step, and the open
@@ -342,7 +350,7 @@ to provoke:
 - **The elevation plane cannot be assumed.** The unit is modelled on the
   YZ plane with X as depth, because that is how it sits in the room. The
   spike had X-across and Y-deep hardcoded, so it read the unit end-on and
-  refused with a bogus overlap. Recognition now detects the plane, taking
+  refused with a bogus overlap. Scanning now detects the plane, taking
   the depth axis to be the shallowest bounding-box extent, with an
   explicit override. The `Plank` record is in elevation coordinates
   (across, up, through) rather than XYZ, and a plank is classified as an
@@ -372,7 +380,7 @@ Two further findings came out of the same run:
 
 Reporting that unit back to the user described its left side as the right
 one. The correction exposed a gap that no test would have caught, because
-the recogniser and the tests were both consistently wrong.
+the scanner and the tests were both consistently wrong.
 
 The depth *axis* is detectable, but its *sign* is not: nothing in a set of
 boxes says which of the two faces a person stands at. The same elevation
@@ -412,7 +420,7 @@ Consequences for the design:
 - **Unknown is a first-class state.** The spike carries `front_at_min` as
   an explicit `None`, and the derived left-right sign returns `None` with
   it, so any code needing a left or a right must handle not knowing.
-- **A guess must be labelled as one.** Recognition records which evidence
+- **A guess must be labelled as one.** Scanning records which evidence
   settled the facing, and the report prints the reasoning when it guessed.
 - **The editor needs a "view from the other side" control**, and it is the
   natural place to set the property the first time. Since unknown is the
@@ -436,8 +444,8 @@ makes it useful.
 Four findings, in order of how much they change the plan.
 
 **Two abutting units are refused, and the reason is structural.** Each
-unit recognises on its own. Together they refuse with "no plank runs the
-full span of the region". The recogniser only cuts a region where a single
+unit scans on its own. Together they refuse with "no plank runs the
+full span of the region". The scanner only cuts a region where a single
 plank spans it, and at the junction there is no such plank: the two units'
 top boards are separate pieces that together span the width and neither of
 which spans alone, and the seam between the units is two side panels face
@@ -450,12 +458,12 @@ rule the junction is a clean cut, nothing crosses it, and the top slab
 becomes a region holding two planks side by side, which the general model
 already expresses. It also removes an asymmetry in the current code, where
 a plank ends a region but cannot begin one. The cost is ambiguity: many
-coordinates are clean, so recognition would need a canonical choice of
+coordinates are clean, so scanning would need a canonical choice of
 axis and cut set.
 
 **A dropped panel produces a wrong tree, not a refusal.** This export
 contains the notched breaker-panel part, and the walk dropped it, listing
-only its sketch and pad as skipped. The unit still recognised. Comparing
+only its sketch and pad as skipped. The unit still scanned. Comparing
 the tree against the same unit with the panel adopted by its bounding box,
 three regions that are really enclosed bays were reported as `outside`,
 and the unit's left end was read as open. Nothing complained. This is the
@@ -469,7 +477,7 @@ option for a plank-like part does work on real geometry.
 **The seam cannot be classified by shape.** Two side panels face to face
 is geometrically identical to a framed wall's double top plate, which is
 one unit, not two. So whether an assembly is one unit or several is not
-recoverable from geometry, and the container the user recognises has to be
+recoverable from geometry, and the container the user scans has to be
 the answer. Surfacing back-to-back parallel planks as a question is
 reasonable; deciding it automatically is not.
 
@@ -482,10 +490,10 @@ Export has to deduplicate by document object.
 A cabinet generated by `magicStart` and saved, read straight from the
 document rather than reconstructed from Woodworking's source, kept as
 `spikes/plain_planks/real_magicstart_f1.boxes.json`. Six `Part::Box`
-objects in an `App::LinkGroup`, exported and recognised with no
+objects in an `App::LinkGroup`, exported and scanned with no
 intervention.
 
-**It recognises correctly**, including a 100 mm plinth gap below the floor
+**It scans correctly**, including a 100 mm plinth gap below the floor
 that reads as `Outside` rather than a bay, and the 1 mm shelf clearance at
 each side.
 
@@ -512,13 +520,13 @@ seeds it, and a guess is labelled as one.
 
 ### The carcass is a specialisation, not a primitive
 
-Recognition produces a tree of regions and full-span cuts. `Carcass`
+Scanning produces a tree of regions and full-span cuts. `Carcass`
 produces four shell planks by rule: a top and a bottom running the full
 width, two sides captured between them. Those are not the same shape, and
-the difference is measurable. Of four fixtures, recognition handles all
+the difference is measurable. Of four fixtures, scanning handles all
 four and the conversion to `Carcass` refuses two:
 
-| unit | recognises | converts to `Carcass` |
+| unit | scans | converts to `Carcass` |
 |---|---|---|
 | closed bookcase | yes | yes |
 | `magicStart` F0 cabinet | yes | yes |
@@ -526,7 +534,7 @@ four and the conversion to `Carcass` refuses two:
 | real stair-step unit | yes | no |
 
 Both refusals are the same message: not a closed rectangle. The shell rule
-is the constraint, not the recognition.
+is the constraint, not the scanning.
 
 `spikes/plain_planks/general_model.py` prototypes the tree without it. A
 split is an ordered list of *items* along its axis, each either a `Plank`
@@ -575,16 +583,61 @@ What it costs:
   none of them is *the* top, so `PlankRole` cannot name them.
   A role becomes a free-form string or a derived position, and generated
   labels have to follow.
-- **More trees describe the same geometry**, so recognition has to pick a
+- **More trees describe the same geometry**, so scanning has to pick a
   canonical one and apply has to match by stored id rather than by shape.
 
 The conclusion is that `Carcass` should not survive the reset. Keeping it
 would mean carrying a second model for the shapes it can express, and
 every real unit seen so far that is not a plain box falls outside it.
 
+### The bugs real geometry found, and the rule that replaced one
+
+Four defects surfaced only against real documents, and the last one was
+not a defect so much as a rule that was too narrow.
+
+- **The walk descended into a `PartDesign::Body`.** A body exposes its
+  feature history through `Group`, so its sketch and its pad were treated
+  as planks and its solid was never looked at. It now descends only into
+  `App::Part`, `App::LinkGroup`, and plain groups. A body or a boolean is
+  one part, and its children are its construction, not its contents.
+- **The walk double-counted.** A selection can reach one object by more
+  than one path, which put eleven planks into a real export twice over. It
+  now tracks what it has yielded, and the parser collapses identical
+  duplicates while refusing two different boxes claiming one `Name`.
+- **Skips were silent.** They now carry a reason and reach the report,
+  which says the tree cannot be trusted and exits non-zero.
+- **The plank-span rule refused two abutting units.** Replaced by the
+  general guillotine rule: a cut is any line no plank *crosses*, rather
+  than a line some one plank spans. Cutting at a plank's own faces is then
+  the case where the slab holds one plank.
+
+The new rule needed two conditions to stay useful. A cut line must be a
+face of a plank **in that region**, or a neighbouring unit's shelf heights
+slice this one's empty space into a dozen meaningless slabs. And lines
+closer together than the clearance are one joint rather than a
+compartment, with the face of a plank the cut separates winning, or a
+shelf held a millimetre off each side turns its two joint gaps into two
+one millimetre bays.
+
+`CutSplit` became `Divide` with a single ordered item list, matching the
+general model, so a shell plank at a region edge is simply the first item
+rather than a `None` strip.
+
+All three real fixtures now scan. The two abutting units come out with
+**both** seams visible: the units' two top boards side by side, and their
+two side panels face to face, neither pair having a member that spans
+alone.
+
+One behaviour changed rather than improved. A plank floating clear of both
+neighbours is no longer refused, because `[gap, plank, gap]` is a legal
+partition and the general rule cannot say otherwise. Whether a plank
+actually reaches its neighbours is a question about the thing being
+buildable, not about the layout being a tree. Nothing asks it yet, and
+something should.
+
 ### Verdict
 
-Every spike goal passes, real project geometry recognises correctly, and
+Every spike goal passes, real project geometry scans correctly, and
 nothing turned up that blocks the approach. The open questions are not
 about feasibility:
 
@@ -593,15 +646,15 @@ about feasibility:
 2. **The general model**, prototyped above and no longer in doubt:
    `Carcass` goes, the shell becomes ordinary planks in the tree, and
    `Void` regions carry the outline. Writing that into `shelving_core`,
-   with recognition producing it directly, is the bulk of the real work.
-3. **Where the plane and the facing live.** Recognition detects the plane
+   with scanning producing it directly, is the bulk of the real work.
+3. **Where the plane and the facing live.** Scanning detects the plane
    and sometimes the facing, but a `Carcass` has no field for either, and
    the editor, apply, and every generated label need both. They belong in
    the model next to the `Void` region, with facing stored rather than
    inferred.
 4. **How much of the arrangement to model now.** Splits should name an
    axis rather than an orientation within an assumed plane, so a second
-   elevation plane never forces a model change; recognition and the editor
+   elevation plane never forces a model change; scanning and the editor
    stay single-plane. See Future paths.
 
 ## Separate workbench, or features inside Woodworking?
@@ -630,7 +683,7 @@ is a separate workbench whose output follows Woodworking's conventions.
   second consumer, `StudWall`, is outside woodworking entirely.
 - **Interop needs no merge.** Emitted boxes follow Woodworking's
   conventions, so its cut list, dowel, edge-banding, and export tools work
-  on a unit unchanged, and recognise works on panels made with its tools.
+  on a unit unchanged, and scan works on panels made with its tools.
 
 ## If adopted: reset in place, not a fresh repository
 
@@ -641,7 +694,7 @@ deliberate reset in this repository, not a new one.
 
 What survives unchanged: the core (`layout`, `solver`, `expand`,
 `materials`, and their tests) is the apply path and the oracle for
-recognise; the check harness, pixi environment, CI, action-pin verifier,
+scan; the check harness, pixi environment, CI, action-pin verifier,
 workflow lint, vendoring script, pipeline and skills, `package.xml`,
 workbench registration, and the `freecadcmd` notes are all still true. A
 fresh repository re-derives these and gains nothing, and "reference the
@@ -670,6 +723,89 @@ A fresh repository is the right call only if the tree itself goes away
 covering framing as well as shelving). Plain-planks keeps the tree as the
 editor's model, and a rename can happen in place, so neither applies.
 
+## Copies, identity, and parameters
+
+Two questions raised after the spike, both of which turn on the same
+thing: every stored field is a field a copy can get wrong.
+
+### A copied plank
+
+Copying a plank to make another shelf is a normal gesture, and FreeCAD
+copies every property with it. A stored node id would therefore be
+duplicated, and nothing would say which box was the original. The worst
+case, a copy moved into a different unit, would leave that unit holding a
+plank claiming to belong to another.
+
+Measured against FreeCAD 1.0:
+
+| | result |
+|---|---|
+| `doc.Uid` | exists, a UUID |
+| copy within a document | `Name` changes |
+| copy into a fresh document | `Name` preserved, `Uid` differs |
+| copy where the name collides | `Name` changes |
+| Save As | `Uid` unchanged, so two files share one |
+
+So identity should not be stored at all. The `Name` is unique per
+document, persisted, stable across saves and across moves between
+containers, and a copy always gets a fresh one, which makes duplicate
+identity impossible rather than merely detectable. Two provenance fields,
+the `Name` and document `Uid` at tagging time, then classify a mismatch: a
+changed `Name` is a copy, and a preserved `Name` in a different document is
+a relocation. The Save As caveat is benign, since both files are
+self-consistent and merging them forces a rename that the first check
+catches.
+
+Three signatures then mean the same thing, and the resolution is what the
+user wanted anyway: **drop the stale record and adopt the box by
+geometry**, so a copied shelf becomes a new shelf. They are a plank whose
+recorded slot is taken, one whose recorded parent is not in this
+container, and one whose geometry does not match the slot it claims.
+
+Cutting the stored fields to material and rule matters for the same
+reason. Role and clearance are derivable, so storing them only creates
+fields a copy can carry wrongly.
+
+### Parameters
+
+The shared driving value proposed for cross-unit alignment **is** a
+parameter, and a `VarSet` is its natural home. If a rule can name a value
+instead of holding a literal, one mechanism covers three things:
+
+- **cross-unit alignment**, where several regions name one level or pitch;
+- **external driving**, since a `VarSet` property carries an expression, so
+  `shelf_pitch = Room.Height / 5` needs no code from us;
+- **exposure outward**, since other objects read the `VarSet`, or read the
+  plank boxes, whose `Length`, `Width` and `Height` are ordinary
+  properties.
+
+That answers the question this whole evaluation opened with, and far more
+cheaply than the expression generator that was evaluated and dropped,
+because only the handful of named driving values are expressions. Every
+derived dimension stays in the solver where it is testable. The generator's
+fatal cost was owning roughly a hundred and fifty user-editable
+expressions per unit; this owns perhaps five.
+
+The tension is when reflow happens. Scan, edit and apply are commands,
+while parameters imply the model follows on its own. Inert by default with
+an opt-in per-unit driver resolves it, at the price of making live and
+hand-editable mutually exclusive, which should be an explicit choice.
+
+### What follows for the near term
+
+Three seams, all small, and all of which pay for themselves on a single
+unit before any of the above is built.
+
+- **One function resolves a rule to a size.** A rule that is sometimes a
+  reference is both the alignment mechanism and the parameter mechanism,
+  so this is the single place either lands. Do not reserve an unimplemented
+  reference variant in the schema; the reserved lap-order field is already
+  a cautionary example here.
+- **One function applies a tree to a container.** Coupling means writing
+  more than one container in a transaction.
+- **A stable unit id on the container**, so a relationship can name units
+  durably.
+
 ## Future paths, explicitly not near-term
 
 Recorded so the near-term model does not foreclose them. None of this is
@@ -695,9 +831,9 @@ whose splits may run along any of the three axes.
 
 What it would buy beyond the arrangements themselves:
 
-- Plane detection stops being load-bearing. Recognition would look for
+- Plane detection stops being load-bearing. Scanning would look for
   full-span cuts along any axis instead of guessing which axis is the
-  depth, and a wrong guess would mis-draw rather than mis-recognise.
+  depth, and a wrong guess would mis-draw rather than mis-scan.
 - Corner ownership becomes explicit. One run runs through and the other
   butts into it, and which cut comes first is exactly that choice. The
   tree would record a real construction decision instead of leaving it
@@ -721,7 +857,7 @@ What it would not solve:
 The cost is almost entirely in the editor, which is why the split above
 puts the model change in early and leaves the rest out. A single front
 elevation stops describing the object, so editing needs a plan view for
-the arrangement plus elevation editing per run. Recognition in three
+the arrangement plus elevation editing per run. Scanning in three
 dimensions is the same voxel-grid flood fill with one more axis and cell
 counts that stay trivial.
 
@@ -760,7 +896,7 @@ the `Pad` already is.
 That narrows the third option usefully. Deriving a general cutout list
 from a solid is hard, but deriving a **rectilinear profile** from a
 plank-shaped solid is a 2D problem on one face, and it is the same
-guillotine-flavoured question the recogniser already answers in the
+guillotine-flavoured question the scanner already answers in the
 elevation.
 
 The part comes from a superseded revision of the same plan, where it
@@ -775,7 +911,7 @@ guard against; it is what happens when a design meets a real room.
 
 Four ways to handle a part like that:
 
-| option | recognition | apply | works on existing geometry |
+| option | scanning | apply | works on existing geometry |
 |---|---|---|---|
 | Refuse it | names the object | n/a | no |
 | Adopt it opaquely | bounding box, marked pinned | may move it, never resize it | yes |
@@ -792,7 +928,7 @@ be resized in the direction that plank spans.
 Modifying downstream is the most parametric and is already the intent of
 the "3D edits" decision in `architecture.md`: the workbench owns a plain
 box and the user's cut consumes it and re-applies on every regeneration.
-It needs recognition to look through a `Part::Cut` to the tagged box
+It needs scanning to look through a `Part::Cut` to the tagged box
 inside, and it needs the user to build it that way.
 
 Deriving cutouts from arbitrary solids is still the option not to reach
@@ -826,10 +962,10 @@ dropped.
 
 - The `Plank` `Part::FeaturePython` proxy and the driver's per-recompute
   `execute` are replaced by plain `Part::Box` objects carrying dynamic
-  properties and by the recognise / edit / apply commands. The container
+  properties and by the scan / edit / apply commands. The container
   and its `Placement` stay; `App::LinkGroup` is accepted alongside
   `App::Part`.
-- `shelving_core` gains recognition (boxes to tree, or a structured
+- `shelving_core` gains scanning (boxes to tree, or a structured
   refusal) with its round-trip test against `expand`, and the region tree
   of `spikes/plain_planks/general_model.py` in place of `Carcass`: `Void`
   regions for the outline, planks as ordinary items, and no shell rule.
@@ -843,24 +979,24 @@ dropped.
   clearance and depth-inset parameters into one, and stops backs and
   fronts being set aside from the partition, all of which the single-plane
   case needs anyway. See the future path below for what it buys later.
-- Recognition cuts a region at **any coordinate no plank crosses**, not
+- Scanning cuts a region at **any coordinate no plank crosses**, not
   only where a single plank spans it. Two abutting units are the case that
   forces this: their tops are separate boards that together span the
   width, and their seam is two panels face to face. Cutting at a plank's
   faces becomes the special case where the slab holds one plank.
-- Recognition and the editor stay **single-plane** near-term. A
+- Scanning and the editor stay **single-plane** near-term. A
   multi-plane container is refused, naming the planks that do not lie in
   the chosen plane. Plane detection therefore stays load-bearing for
-  recognition and keeps its known fragility; the axis-per-split model
-  demotes it to a presentation hint only once recognition itself goes
+  scanning and keeps its known fragility; the axis-per-split model
+  demotes it to a presentation hint only once scanning itself goes
   multi-plane.
-- Recognition works in the **container's local frame**. The export macro
+- Scanning works in the **container's local frame**. The export macro
   currently composes container placements into global coordinates, so a
   unit rotated in a room would present as rotated boxes and be refused.
 - Objects the export skips, meaning anything that is not a `Part::Box`,
-  must be **reported rather than dropped**. Today the macro records them
-  under `skipped`, and both the recogniser and the report ignore that key,
-  so a non-box panel disappears without complaint and the unit recognises
+  are **reported rather than dropped**. Today the macro records them
+  under `skipped`, and both the scanner and the report ignore that key,
+  so a non-box panel disappears without complaint and the unit scans
   as though it were never there. A missing panel changes nothing
   structurally, so nothing else catches it.
 - Export must **deduplicate by document object**. A selection can reach
@@ -876,11 +1012,11 @@ dropped.
 - M4 (catalog) keeps its shape; material identity is a stored property
   on each box.
 - M5 (editor) becomes the centre of the product: it is the only place the
-  tree exists, so it opens from a recognised container, not only from a
+  tree exists, so it opens from a scanned container, not only from a
   unit the workbench created.
-- M8 and M9 (`StudWall`, openings) gain recognise rules for studs and
+- M8 and M9 (`StudWall`, openings) gain scan rules for studs and
   headers; the on-centre spacing rule is recovered from stored properties,
   never from geometry.
 - The "3D edits" and "Source of truth" decisions in `architecture.md`
-  change: direct edits round-trip through recognise, and the boxes are the
+  change: direct edits round-trip through scan, and the boxes are the
   source of truth with the tree as a transient editing view.
