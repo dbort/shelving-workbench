@@ -1,12 +1,15 @@
 # Scan, edit, apply: an evaluation
 
-An evaluation of the plain-planks approach, written before deciding whether
-to replace the design of record with it. Nothing here is a decision of
-record; [`architecture.md`](architecture.md) stays authoritative until a
-task rewrites it. The approach has no name and needs none: the operations
-are **scan**, **edit**, and **apply**, and the modules are named for what
-they do. A label for the philosophy would only ever appear in prose, and
-would go stale as the approach moved.
+An evaluation of the plain-planks approach. It carries the evidence and the
+reasoning behind [`scope-and-design.md`](scope-and-design.md), which is the
+design of record; nothing here is a decision of record on its own. The
+approach was adopted, so the sections below that weigh whether to adopt it
+and what would follow are the record of that decision rather than an open
+question; `roadmap.md` carries what is left to do. The
+approach has no name and needs none: the operations are **scan**, **edit**,
+and **apply**, and the modules are named for what they do. A label for the
+philosophy would only appear in prose, and would go stale as the approach
+moved.
 
 Two earlier alternatives, promoting the solver's driving values to
 properties and generating every number as a FreeCAD expression, were
@@ -117,8 +120,8 @@ envelope.
 
 ## Decisions
 
-Made in the planning interview on 2026-09-04. Each is provisional until
-the spike confirms it is workable.
+Made in the planning interview on 2026-09-04. The spike results below
+confirm or amend each of them.
 
 | Question | Decision |
 |---|---|
@@ -127,7 +130,7 @@ the spike confirms it is workable.
 | Elevation plane | Detected, not assumed: depth is the shallowest bounding-box axis, vertical is Z unless Z is the depth. Stored on the unit, overridable |
 | Facing | Which end of the depth axis is the front. Stored on the unit and authoritative. Two hints give a first guess, a back or front panel and an inset front, and both fire rarely, so unknown is the normal outcome |
 | Outline | Rectilinear, one plane. The bounding rectangle's tree carries `Void` regions that hold no planks and are not bays; the outline is whatever they leave |
-| Shell | Not a rule and not a field. A split is an ordered run of planks and sub-regions, so the shell is just its outermost planks. `Carcass` does not survive |
+| Shell | Not a rule and not a field. A split is an ordered run of planks and sub-regions, so the shell is its outermost planks. `Carcass` does not survive |
 | Split axis | A split names an axis (X, Y, or Z), not an orientation within an assumed elevation plane. Near-term scanning and editing stay single-plane, but the model never needs changing to hold a second one |
 | Depth | A region's extent along the depth axis, not a field on the unit. A plank fills its region's cross-section with an inset per face, which is the same parameter as a joint clearance |
 | Measurement basis | A fixed size is a clear opening by default, or inclusive of the adjacent plank, which is a shelf spacing. Stored with the rule, since the two place the panels identically and geometry cannot tell them apart. Resolved to a clear size before distribution, in the same pass that resolves a named value |
@@ -135,14 +138,14 @@ the spike confirms it is workable.
 | Non-tree layouts | A pinwheel or any partition that is not a tree is refused, naming the planks that form the cycle |
 | Clearance at a joint | A gap up to a tolerance (default 3 mm) is a joint; the gap is stored per plank end and apply reproduces it. Larger gaps refuse |
 | Per-plank depth | Scan records each plank's depth and Y offset as per-node overrides; apply reproduces them; unit depth is the default for new planks |
-| Back and front panels | Y-thin planks are set aside from the bay partition and reported; back-panel semantics arrive with M7 |
+| Back and front panels | Y-thin planks are set aside from the bay partition and reported; back-panel semantics arrive with M11 |
 | Rule recovery | Stored rule metadata on a box is authoritative. Without it, sibling openings equal within tolerance become `fill` and the rest become `fixed` |
 | Plank identity | The FreeCAD `Name`. Never stored by us, so it cannot be copied and a duplicate is a distinct entity by construction |
 | Provenance | Two stored fields, the `Name` and the document `Uid` at the time the plank was tagged. They classify what a mismatch means: a changed `Name` is a copy, a changed `Uid` is a relocation |
 | Stored metadata | Only what geometry cannot carry: **material** and the **rule** of the region beside the plank. Role and clearance are derived, so a copy carries fewer wrong fields |
 | Region rules | A record on the container, keyed by plank `Name`. Not a source of truth for geometry; a missing or stale entry falls back to the equal-siblings heuristic |
 | Reflow | Inert by default: scan, edit, apply are commands. An optional per-unit driver for automatic reflow comes later, and a live unit is not hand-editable |
-| Repeat rules | Deferred to `StudWall` (M8), where a computed member count is the point. Its children are positional, so it introduces a second identity scheme |
+| Repeat rules | Deferred to `StudWall` (M12), where a computed member count is the point. Its children are positional, so it introduces a second identity scheme |
 | Draft arrays | Skipped loudly for now. Expanding one into its element placements is easy but adds a type to the envelope |
 | Apply | Plain values. Expressions among planks are a later option, not part of the approach |
 
@@ -283,11 +286,11 @@ Three findings that change the plan:
   two cuts as the shell and the rest as the root split's dividers. This
   is an artefact of `Carcass` keeping its shell implicit; the general
   model with an explicit shell and outside leaves does not have it.
-- **A shelf that runs through the sides has no home in today's
-  `Carcass`.** Scan handles it (it is simply an outer cut with three
-  or more members), but `expand` always makes the top and bottom
-  continuous, so the converter refuses it. This is the per-joint lap
-  override the schema reserves, and the general model needs it.
+- **A shelf that runs through the sides has no home in today's `Carcass`.**
+  Scan handles it (it is an outer cut with three or more members), but
+  `expand` always makes the top and bottom continuous, so the converter
+  refuses it. This is the per-joint lap override the schema reserves, and
+  the general model needs it.
 - **Unit depth comes from the elevation members, not the bounding box.**
   A Woodworking cabinet's 400 mm depth is an 18 mm front panel plus a
   382 mm carcass. Scan reports the members' depth and the front
@@ -454,8 +457,8 @@ to face rather than one shared panel.
 
 The fix is a better rule, not a special case. A guillotine cut is any
 coordinate that no plank *crosses*, and cutting at a plank's two faces is
-just the special case where the resulting slab holds one plank. Under that
-rule the junction is a clean cut, nothing crosses it, and the top slab
+the special case where the resulting slab holds one plank. Under that rule
+the junction is a clean cut, nothing crosses it, and the top slab
 becomes a region holding two planks side by side, which the general model
 already expresses. It also removes an asymmetry in the current code, where
 a plank ends a region but cannot begin one. The cost is ambiguity: many
@@ -464,10 +467,10 @@ axis and cut set.
 
 **A dropped panel produces a wrong tree, not a refusal.** This export
 contains the notched breaker-panel part, and the walk dropped it, listing
-only its sketch and pad as skipped. The unit still scanned. Comparing
-the tree against the same unit with the panel adopted by its bounding box,
-three regions that are really enclosed bays were reported as `outside`,
-and the unit's left end was read as open. Nothing complained. This is the
+only its sketch and pad as skipped. The unit still scanned. Comparing the
+tree against the same unit with the panel adopted by its bounding box,
+three regions that are enclosed bays were reported as `outside`, and the
+unit's left end was read as open. Nothing complained. This is the
 silent-drop failure predicted earlier, now demonstrated: the output is
 plausible, self-consistent, and wrong.
 
@@ -503,8 +506,8 @@ each side.
 and top between them; `createF0`, which the earlier synthetic fixture
 copies, runs the floor and top full width and captures the sides. Both
 come out of the same tool. There is no house lap order to assume, which is
-exactly why reading it from geometry, and letting the tree's nesting carry
-it, is the right call.
+why reading it from geometry, and letting the tree's nesting carry it, is
+the right call.
 
 **Facing was inferred backwards, and the fix matters.** The cabinet's 3 mm
 back sits *proud* behind the carcass rather than set within it, and the
@@ -540,8 +543,7 @@ is the constraint, not the scanning.
 `spikes/plain_planks/general_model.py` prototypes the tree without it. A
 split is an ordered list of *items* along its axis, each either a `Plank`
 or a `Sub` region carrying a size rule. There is no shell field and no
-shell rule: the shell is simply the outermost planks of the outermost
-splits.
+shell rule: the shell is the outermost planks of the outermost splits.
 
 ```
 Unit    = size, depth, default material, face, root Region
@@ -562,12 +564,12 @@ Ten tests establish what it buys:
   height. The tops come out at 600, 900, and 1200 mm with no shell rule
   involved, and a `Void` emits no plank and is not a bay.
 - **Two planks can sit face to face.** A framed wall's double top plate is
-  two adjacent `Plank` items. M8 needs this and the carcass model cannot
+  two adjacent `Plank` items. M12 needs this and the carcass model cannot
   say it.
 - **A shelf can run through the sides.** Lap order is the order the splits
   nest, so a through-shelf is a plank higher up the tree. The carcass
   reserves this as a per-joint override that expansion never honours, and
-  can only ever produce two full-width planks.
+  can only produce two full-width planks.
 - **A per-plank inset keeps the rear flush**, which is the real unit's
   shape and the convention it follows.
 - **The solver did not change.** `shelving_core.solver.distribute` is
@@ -621,8 +623,8 @@ shelf held a millimetre off each side turns its two joint gaps into two
 one millimetre bays.
 
 `CutSplit` became `Divide` with a single ordered item list, matching the
-general model, so a shell plank at a region edge is simply the first item
-rather than a `None` strip.
+general model, so a shell plank at a region edge is the first item rather
+than a `None` strip.
 
 All three real fixtures now scan. The two abutting units come out with
 **both** seams visible: the units' two top boards side by side, and their
@@ -632,9 +634,8 @@ alone.
 One behaviour changed rather than improved. A plank floating clear of both
 neighbours is no longer refused, because `[gap, plank, gap]` is a legal
 partition and the general rule cannot say otherwise. Whether a plank
-actually reaches its neighbours is a question about the thing being
-buildable, not about the layout being a tree. Nothing asks it yet, and
-something should.
+reaches its neighbours is a question about the thing being buildable, not
+about the layout being a tree. Nothing asks it yet, and something should.
 
 ### Verdict
 
@@ -680,8 +681,8 @@ is a separate workbench whose output follows Woodworking's conventions.
   semantics, and identity and rule metadata stored on the boxes. The
   editor is the product. The nearest overlap, `magicStart`, is a one-shot
   wizard that emits a cabinet from dimensions; the delta that justifies
-  this project is the part that does not fit that vision. The core's
-  second consumer, `StudWall`, is outside woodworking entirely.
+  this project is the part that does not fit that vision. The core's second
+  consumer, `StudWall`, is outside woodworking.
 - **Interop needs no merge.** Emitted boxes follow Woodworking's
   conventions, so its cut list, dowel, edge-banding, and export tools work
   on a unit unchanged, and scan works on panels made with its tools.
@@ -691,7 +692,7 @@ is a separate workbench whose output follows Woodworking's conventions.
 Adopting plain-planks invalidates the object layer and most of the design
 of record, and a repository that describes a superseded design as current
 steers implementers (human or agent) toward its shapes. The remedy is a
-deliberate reset in this repository, not a new one.
+reset in this repository, not a new one.
 
 What survives unchanged: the core (`layout`, `solver`, `expand`,
 `materials`, and their tests) is the apply path and the oracle for
@@ -807,7 +808,7 @@ unit before any of the above is built.
 - **A stable unit id on the container**, so a relationship can name units
   durably.
 
-## Future paths, explicitly not near-term
+## Future paths, not near-term
 
 Recorded so the near-term model does not foreclose them. None of this is
 scheduled, and none of it should shape the first release beyond the one
@@ -836,9 +837,9 @@ What it would buy beyond the arrangements themselves:
   full-span cuts along any axis instead of guessing which axis is the
   depth, and a wrong guess would mis-draw rather than mis-scan.
 - Corner ownership becomes explicit. One run runs through and the other
-  butts into it, and which cut comes first is exactly that choice. The
-  tree would record a real construction decision instead of leaving it
-  implicit in coordinates.
+  butts into it, and which cut comes first is that choice. The tree would
+  record a real construction decision instead of leaving it implicit in
+  coordinates.
 - Dimensional coupling comes free. The side run's length follows from the
   back run's depth, because the cut that separates them sets both, and
   their heights match because they are siblings. Keeping the runs as
@@ -852,7 +853,7 @@ What it would not solve:
   That needs a mechanism the tree does not have, either a named rule
   shared by several splits or a constraint layer above it.
 - **A pinwheel in plan**, four runs each stopping against the next, is not
-  guillotine and would be refused, exactly as it is in elevation.
+  guillotine and would be refused, as it is in elevation.
 - **Anything not axis-aligned**, including a 45 degree corner cabinet.
 
 The cost is almost entirely in the editor, which is why the split above
@@ -867,8 +868,8 @@ counts that stay trivial.
 A revision of a real plan has a plank with a rectangle cut out along one
 edge, for access to a breaker panel, modelled as an `App::Part` holding a
 `PartDesign::Body` whose `Pad` extrudes a notched sketch. For layout it
-behaves exactly like a plank: it spans a region, it has a thickness, it
-sits at a position. The notch is fabrication detail, not layout.
+behaves like a plank: it spans a region, it has a thickness, it sits at a
+position. The notch is fabrication detail, not layout.
 
 `spikes/plain_planks/inspect_object.py` answers the question that decides
 how such a part can be handled: subtract the solid from its own bounding
@@ -886,13 +887,12 @@ the difference from its bounding box is exactly one box:
 | material left behind the notch | 95.25 | 3.75 |
 | notch above the panel foot | 558.8 | 22 |
 
-Two things about the notch shape matter more than its size. It **spans
-the full thickness**, so it is a hole in the profile rather than a
-pocket. And it is **open at one edge** rather than enclosed, which is
-what lets the panel slide into place around whatever it clears instead of
-having to drop over it. So the shape is not an arbitrary cutout: it is a
-rectilinear profile extruded through a thickness, which is exactly what
-the `Pad` already is.
+Two things about the notch shape matter more than its size. It **spans the
+full thickness**, so it is a hole in the profile rather than a pocket. And
+it is **open at one edge** rather than enclosed, which is what lets the
+panel slide into place around whatever it clears instead of having to drop
+over it. So the shape is a rectilinear profile extruded through a
+thickness, which is what the `Pad` already is.
 
 That narrows the third option usefully. Deriving a general cutout list
 from a solid is hard, but deriving a **rectilinear profile** from a
@@ -907,8 +907,8 @@ current is plain boxes throughout, so the fixture is faithful to it.
 
 That history is the useful part. One revision of one plan turned a plain
 panel into a notched extrusion, and the design is otherwise ordinary
-shelving. A plank-like part that is not a box is not an exotic case to
-guard against; it is what happens when a design meets a real room.
+shelving. A plank-like part that is not a box is what happens when a design
+meets a real room, not an exotic case to guard against.
 
 Four ways to handle a part like that:
 
@@ -1010,12 +1010,12 @@ dropped.
   into are `App::Part`, `App::LinkGroup`, and plain groups; a body or a
   boolean is one part and its children are its construction, not its
   contents.
-- M4 (catalog) keeps its shape; material identity is a stored property
+- M8 (catalog) keeps its shape; material identity is a stored property
   on each box.
-- M5 (editor) becomes the centre of the product: it is the only place the
+- M9 (editor) becomes the centre of the product: it is the only place the
   tree exists, so it opens from a scanned container, not only from a
   unit the workbench created.
-- M8 and M9 (`StudWall`, openings) gain scan rules for studs and
+- M12 and M13 (`StudWall`, openings) gain scan rules for studs and
   headers; the on-centre spacing rule is recovered from stored properties,
   never from geometry.
 - The "3D edits" and "Source of truth" decisions in `architecture.md`

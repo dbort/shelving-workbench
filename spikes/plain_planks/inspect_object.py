@@ -5,7 +5,7 @@ or a single part. It prints a tree of what is inside and, for every object that
 carries a solid, whether that solid is a rectangular box, a box with rectangular
 bites taken out of it, or something else.
 
-That last question is the one that decides how a plank-like part can be handled:
+That last question decides how a plank-like part can be handled:
 a solid whose difference from its own bounding box decomposes into boxes can be
 modelled as a plank plus cutouts, and one that cannot has to be carried opaquely.
 

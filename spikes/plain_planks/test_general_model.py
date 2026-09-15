@@ -137,7 +137,7 @@ def _stepped_unit() -> Unit:
     carcass shell rule cannot state.
 
     Each column is a stack of a bay, its own top, and the void above it, so the
-    step is nothing but a ``Void`` taking the leftover height.
+    step is a ``Void`` taking the leftover height.
     """
 
     def column(void_mm: float) -> Sub:
@@ -226,8 +226,8 @@ def test_two_planks_face_to_face() -> None:
 
 
 def test_a_shelf_can_run_through_the_sides() -> None:
-    """Lap order is the order the splits nest, so a through-shelf is just a
-    plank higher up the tree. The carcass model reserves this as an unhonoured
+    """Lap order is the order the splits nest, so a through-shelf is a plank
+    higher up the tree. The carcass model reserves this as an unhonoured
     per-joint override."""
     unit = Unit(
         width_mm=900.0,
@@ -258,7 +258,7 @@ def test_a_shelf_can_run_through_the_sides() -> None:
     specs = expand(unit, CATALOG)
     through = [s for s in specs if s.size.x_mm == unit.width_mm]
     # Bottom, the mid shelf, and top all run the full width; the four sides do
-    # not. A carcass can only ever produce two full-width planks.
+    # not. A carcass can only produce two full-width planks.
     assert len(through) == 3
     assert len([s for s in specs if s.size.x_mm < unit.width_mm]) == 4
 

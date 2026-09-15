@@ -378,10 +378,6 @@ def infer_facing(boxes: Sequence[Box], plane: Plane, tol_mm: float = 0.5) -> Fac
     the end the members sit flush with is the back. A unit whose members are
     equally flush at both ends, which is any plain rectangular box, says
     nothing.
-
-    Depth alignment alone was nearly read backwards here: a real unit's shallow
-    planks are flush at the rear and inset three inches at the front, so the
-    inset end is the front, not the back.
     """
     planks = [_classify(box, plane) for box in boxes]
     members = [p for p in planks if p.member is not Member.PANEL]
@@ -491,7 +487,7 @@ def to_carcass(
     material_for_thickness: Mapping[float, MaterialId],
     snap_mm: float = DEFAULT_SNAP_MM,
 ) -> Carcass:
-    """Today's implicit-shell ``Carcass`` for a closed rectangular unit.
+    """The implicit-shell ``Carcass`` for a closed rectangular unit.
 
     Requires the root to be cut by exactly a bottom and a top with nothing
     beyond them, and the strip between to be cut by exactly a left and a right
@@ -804,8 +800,8 @@ def _region(
     """The node for one region, cutting at every coordinate no plank crosses.
 
     A guillotine cut is a line the geometry does not straddle, so the test is
-    whether any plank crosses it, not whether some one plank happens to span
-    the region. Cutting at a plank's own two faces is then the special case
+    whether any plank crosses it, not whether some one plank spans the
+    region. Cutting at a plank's own two faces is then the special case
     where the resulting slab holds that plank alone. Requiring a single
     spanning plank instead refuses two abutting units, whose shared top is two
     boards that together span the width and neither of which spans alone.
@@ -886,8 +882,8 @@ def _clean_lines(
     slice this region's empty space into a dozen meaningless slabs. A line no
     plank straddles is the guillotine condition itself. And lines closer
     together than the clearance are one joint, not a compartment, so only one
-    of them survives: the face of a plank the cut actually separates, which is
-    a plank thin along the cut axis. Without that last rule a shelf held a
+    of them survives: the face of a plank the cut separates, which is a
+    plank thin along the cut axis. Without that last rule a shelf held a
     millimetre off each side turns its two joint gaps into two one millimetre
     bays.
     """
@@ -923,10 +919,7 @@ def _slab(
     """One slab between consecutive clean lines: a plank, a void, or a subtree.
 
     A slab holding one plank that reaches across it is a plank item, with
-    whatever is left beside it recorded as a joint clearance. A lone plank that
-    does not reach across divides again along the other axis, which is how a
-    shelf that fills its own column but not the height of the region that
-    column came from is handled.
+    whatever is left beside it recorded as a joint clearance.
     """
     inside = _contained(grid, i0, i1, j0, j1)
     if len(inside) != 1:

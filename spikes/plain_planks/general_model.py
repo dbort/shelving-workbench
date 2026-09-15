@@ -4,12 +4,12 @@ A `Carcass` names four shell planks that `expand` emits by rule: a top and a
 bottom running the full width, two sides captured between them. That rule is
 what refuses a stepped outline, and it is a special case of something the tree
 already expresses. Here a split is an ordered list of *items* along its axis,
-each either a `Plank` or a `Sub` region, and the shell is nothing but the
-outermost planks of the outermost splits.
+each either a `Plank` or a `Sub` region, and the shell is the outermost
+planks of the outermost splits.
 
 What that buys, all of it out of reach of the shell rule:
 
-- a stepped or otherwise rectilinear outline, because a `Void` item is just
+- a stepped or otherwise rectilinear outline, because a `Void` item is
   another region with a size;
 - two planks face to face, which a framed wall's double top plate needs;
 - a plank that runs through where the shell rule says it is captured, because
@@ -18,7 +18,7 @@ What that buys, all of it out of reach of the shell rule:
 
 `solve` and `expand` here reuse `shelving_core.solver.distribute` unchanged: a
 plank contributes `Fixed(thickness)` and a region contributes its own rule, so
-the arithmetic never needed to know which was which.
+the arithmetic does not need to know which is which.
 """
 
 from __future__ import annotations
@@ -48,15 +48,14 @@ class Face(enum.StrEnum):
 
 @dataclass
 class Plank:
-    """One physical panel, sized along its split's axis by its thickness.
-
-    ``front_inset_mm`` sets the panel back from the unit's front face; the rear
-    stays flush, which is how a unit sits against a wall. ``depth_mm``
-    overrides the unit depth outright when a panel is neither.
-    """
+    """One physical panel, sized along its split's axis by its thickness."""
 
     material: MaterialId | None = None
+    # Sets the panel back from the unit's front face; the rear stays flush,
+    # which is how a unit sits against a wall.
     front_inset_mm: float = 0.0
+    # Overrides the unit depth outright, for a panel that is neither full depth
+    # nor merely set back from the front.
     depth_mm: float | None = None
     role: str = ""
     id: str = field(default_factory=new_id)
@@ -115,9 +114,8 @@ Region = Bay | Void | Divide
 class Unit:
     """A shelving unit: outer size, a default material, and a root region.
 
-    There is no shell field and no shell rule. Every panel is a ``Plank`` item
-    somewhere in the tree, so a closed box, a stepped outline, and a framed wall
-    differ only in the shape of that tree.
+    Every panel is a ``Plank`` item somewhere in the tree, so a closed box, a
+    stepped outline, and a framed wall differ only in the shape of that tree.
     """
 
     width_mm: float
@@ -134,9 +132,9 @@ class Unit:
 def solve(unit: Unit, catalog: Catalog) -> dict[str, Rect]:
     """One :class:`Rect` per region and plank id, in the unit's local frame.
 
-    Raises :class:`LayoutSolveError` exactly as the carcass solver does; the
-    shell participates in the same distribution as everything else, so a shell
-    that does not fit is an ordinary overflow.
+    Raises :class:`LayoutSolveError` for the same reasons the carcass solver
+    does; the shell participates in the same distribution as everything else,
+    so a shell that does not fit is an ordinary overflow.
     """
     rects: dict[str, Rect] = {}
     _place(
@@ -168,8 +166,8 @@ def _place(
         if region.orientation is Orientation.HORIZONTAL
         else rect.width_mm
     )
-    # A plank's size along the axis is its thickness, which is exactly a Fixed
-    # rule, so planks and regions go through one distribution.
+    # A plank's size along the axis is its thickness, which is a Fixed rule,
+    # so planks and regions go through one distribution.
     rules: list[SplitRule] = [
         Fixed(size_mm=_thickness_mm(item, unit, catalog))
         if isinstance(item, Plank)

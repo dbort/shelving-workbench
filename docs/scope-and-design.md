@@ -1,6 +1,6 @@
 # Scope and design
 
-What this workbench is for, what it deliberately is not for, and how it is
+What this workbench is for, what it is deliberately not for, and how it is
 built. This is the design of record. It supersedes
 [`architecture.md`](architecture.md), which describes an earlier design
 that is still what the code implements; [`roadmap.md`](roadmap.md) tracks
@@ -57,8 +57,8 @@ expressions.
 Two things about it shape this project. The first is that its substrate is
 the right one: plain axis-aligned solids, with dimensions read directly off
 the object, are readable by everything and outlive any particular add-on.
-This workbench adopts the same conventions deliberately, so that its output
-is Woodworking's input and the reverse.
+This workbench adopts the same conventions, so that its output is
+Woodworking's input and the reverse.
 
 The second is what it does not do. Woodworking's tools are stateless
 operations on the current selection. No tool looks at an arrangement of
@@ -76,15 +76,14 @@ geometry native keep no model, and nothing redistributes.
 
 Four, in order of how much they distinguish it.
 
-**Keeping a layout model without owning the geometry.** A design has
-intent that its geometry cannot express. A 300 mm compartment looks
-identical whether it was set to 300 mm deliberately or came out at 300 mm
-because it shares the leftover space with three others. Resize the unit
-and those two behave completely differently. The intent has to live
-somewhere, and the usual answer is for the tool to own the objects, which
-is what makes the document depend on the tool. The problem is to keep
-enough intent to reflow while leaving every panel a plain solid that
-anything can read.
+**Keeping a layout model without owning the geometry.** A design has intent
+that its geometry cannot express. A 300 mm compartment looks identical
+whether it was set to 300 mm deliberately or came out at 300 mm because it
+shares the leftover space with three others. Resize the unit and those two
+behave differently. The intent has to live somewhere, and the usual answer
+is for the tool to own the objects, which is what makes the document depend
+on the tool. The problem is to keep enough intent to reflow while leaving
+every panel a plain solid that anything can read.
 
 **Recovering structure from an arrangement.** Given a set of panels, work
 out that they form a unit with a particular arrangement of compartments,
@@ -95,12 +94,12 @@ from an earlier project, or from somebody drawing boxes. It is also what
 makes hand-editing safe, because the workbench can always re-read the
 truth off the geometry instead of insisting on its own copy.
 
-**Handling the shapes real projects actually have.** A closed rectangular
-box is the easy case and not a very common one. Real units step at the top
-or the bottom, mix panel depths in one carcass, sit in pairs whose sides
-meet, have panels notched to clear something in the wall, and hold a shelf
-that is a different material from its neighbours. A model that only
-expresses the easy case forces every real design out of it immediately.
+**Handling the shapes real projects have.** A closed rectangular box is the
+easy case and not a very common one. Real units step at the top or the
+bottom, mix panel depths in one carcass, sit in pairs whose sides meet,
+have panels notched to clear something in the wall, and hold a shelf that
+is a different material from its neighbours. A model that only expresses
+the easy case forces every real design out of it immediately.
 
 **Connecting a design to what surrounds it.** A unit is built for a
 particular alcove, and the alcove's dimensions should be able to drive it.
@@ -113,8 +112,8 @@ the first two are worth doing.
 
 ## Deliberately out of scope
 
-Some of these are permanent, and some are simply not near-term. Both kinds
-are listed so the edges are visible.
+Some of these are permanent, and some are not near-term. Both kinds are
+listed so the edges are visible.
 
 **Fabrication.** Kerf, sheet layout and nesting, cost rollups, hardware,
 fasteners, edge banding, line boring, and dowel and pocket holes are
@@ -123,8 +122,8 @@ of this well and operates on the same solids, so the answer is to hand off
 rather than to duplicate.
 
 **Doors, drawers, and face frames** as modelled things with their own
-behaviour. A door is a panel like any other and can be drawn as one; it
-just is not something the layout understands.
+behaviour. A door is a panel like any other and can be drawn as one; it is
+not something the layout understands.
 
 **Panels that are not rectangular boxes.** An L-shaped top cut from one
 sheet, a mitred corner, a shelf notched around a post, and a panel scribed
@@ -133,8 +132,8 @@ carried along and positioned, but the workbench will not generate or
 reshape it. This is the sharpest edge of the whole design and the one most
 likely to be met in practice.
 
-**Anything not axis-aligned.** A cabinet set at forty-five degrees across
-a corner is a normal thing to build and is outside this model entirely.
+**Anything not axis-aligned.** A cabinet set at forty-five degrees across a
+corner is a normal thing to build and is outside this model.
 
 **Layouts that are not made by straight cuts.** Four dividers arranged in
 a pinwheel, each stopping against the next, is a real thing to build and
@@ -164,8 +163,8 @@ it. It works out the arrangement and tells you what it found, including
 anything it could not read. From there it is an ordinary editable unit.
 
 If it cannot read the arrangement, it says which panels defeated it and
-why. It never guesses, and it never quietly produces a plausible answer to
-a question it could not actually resolve.
+why. It never guesses, and it never produces a plausible answer to a
+question it could not resolve.
 
 **Starting from nothing.** You create a unit, give it overall dimensions
 and a material, and get a plain carcass. Editing proceeds identically from
@@ -229,16 +228,15 @@ next is given. The two describe the same positions and diverge only when a
 thickness changes: a clear size holds the opening and moves the shelves,
 while an inclusive size holds the shelves and changes the opening. An
 inclusive size is reduced to a clear one before sizes are distributed, so
-the distribution itself is unchanged.
+the distribution never sees an inclusive size.
 
-Three consequences are worth stating because they are what the model buys.
+Three consequences are what the model buys.
 
 There is **no separate concept of a carcass shell**. The outer panels of a
-unit are simply the outermost items of its outermost divisions. A unit
-whose top runs the full width and a unit whose sides run full height
-differ only in the order the cuts nest, and both are ordinary. This
-matters because generated cabinets in the wild use both, sometimes from
-the same tool.
+unit are the outermost items of its outermost divisions. A unit whose top
+runs the full width and a unit whose sides run full height differ only in
+the order the cuts nest, and both are ordinary. This matters because
+generated cabinets in the wild use both, sometimes from the same tool.
 
 **Which panel runs through a joint is the nesting order**, not a separate
 setting. The panel cut first runs through; panels in the pieces it creates
@@ -389,11 +387,11 @@ that is not there.
 
 Stated because they are the places the design is currently thin.
 
-Whether a panel actually reaches its neighbours is not checked. A shelf
-floating clear of both sides is a valid arrangement of straight cuts, so
-it is accepted, and the gaps beside it are reported as compartments.
-Whether a design is buildable is a separate question from whether it is
-expressible, and only the second is asked.
+Whether a panel reaches its neighbours is not checked. A shelf floating
+clear of both sides is a valid arrangement of straight cuts, so it is
+accepted, and the gaps beside it are reported as compartments. Whether a
+design is buildable is a separate question from whether it is expressible,
+and only the second is asked.
 
 Compartments in different units do not line up unless their rules happen
 to agree. Making a shelf carry across from one unit to the next needs

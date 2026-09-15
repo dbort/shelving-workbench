@@ -114,9 +114,7 @@ core expansion and reconciling child `Part::FeaturePython` planks by
 UUID. No custom editor: the layout is edited by hand-editing the JSON
 property or from the Python console.
 
-M4 removes this object layer. The scripted plank, the driver, and the
-create-unit command are all built on the carcass, and the current design
-writes plain solids instead.
+M4 removes this object layer.
 
 *Verify in FreeCAD:* create a unit from the toolbar; change `Width`,
 `Height`, `Depth`, and `DefaultMaterial` in the property editor and watch
@@ -140,6 +138,10 @@ object, the `ShelvingUnit` driver, the create-unit command, and the object
 smoke are all built on the carcass and none of them survive the new
 design, so porting them would be work done twice.
 
+`spikes/plain_planks/general_model.py` is the worked design; copy from it
+rather than moving it, so the spike keeps running as the fallback for the
+two milestones during which the workbench has no commands.
+
 *Verify:* the core suite, including an equivalence check that a closed box
 built from ordinary items expands to what the carcass model expanded to,
 plank for plank; the demo script prints a plank table for a stepped unit;
@@ -154,8 +156,11 @@ refusal naming the objects out. Detects the elevation plane, cuts at every
 line no plank crosses, treats gaps narrower than the joint clearance as
 joints rather than compartments, and separates space enclosed by planks
 from space open to the outside. Carries what it cannot read rather than
-dropping it, because a missing panel does not fail, it makes enclosed bays
-read as open.
+dropping it: a missing panel does not fail the scan, it makes enclosed
+bays read as open instead.
+
+`spikes/plain_planks/scan.py` and its fixtures are the worked design; copy
+from them, again leaving the spike intact.
 
 *Verify:* the core suite over real exported units, a stepped unit, two
 abutting units whose side panels meet, and a generated Woodworking
@@ -171,9 +176,19 @@ objects a selection reaches by more than one path, and reading each box in
 the container's own frame. A **Scan** command reports what it found,
 including anything it could not read.
 
+`spikes/` is deleted here, in this task. The workbench can now do what the
+spike was standing in for, so the fallback has no remaining job. The
+container walk comes from `export_boxes.py` and the Scan report replaces
+`report.py`. One piece has no planned replacement: `inspect_object.py`
+reports whether a part is a plain box, a box minus rectangular cutouts, or
+something else, which is what a user wants when a scan refuses on a part
+it cannot read. This task decides whether that folds into the Scan refusal
+path or keeps a home under `tools/`.
+
 *Verify in FreeCAD:* select a container of boxes and run Scan; a unit it
 understands reports its compartments, and one it does not names the
-objects and says why. A headless check scans a document built in the test.
+objects and says why. A headless check scans a document built in the test;
+`spikes/` is gone and nothing references it.
 
 ## M7 — Write a container
 
