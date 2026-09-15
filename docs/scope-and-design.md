@@ -175,8 +175,12 @@ there.
 split it, drag a shelf, or type an exact opening size. Everything else
 redistributes according to what is fixed and what is free, and the 3D
 follows. Setting an exact size makes that opening fixed, and its
-neighbours take up the difference. An arrangement that cannot be satisfied
-is an error with an explanation, not a silently wrong result.
+neighbours take up the difference. A dimension says whether it measures
+the clear opening or the spacing from one shelf's top to the next, because
+changing to thicker stock holds one and moves the other. Dragging changes
+the number and not what it measures, so a drag never rewrites intent. An
+arrangement that cannot be satisfied is an error with an explanation, not
+a silently wrong result.
 
 **Editing outside the workbench.** You move or resize a panel with any
 tool you like, then ask the workbench to take the change up. It re-reads
@@ -217,6 +221,15 @@ fixed size, a share of what is left, or an equal share. Fixed sizes drive
 the layout, shares absorb what is left over, and a division whose fixed
 sizes exceed the space available, or which has slack and nothing to absorb
 it, is an error naming the region responsible.
+
+A fixed size states what it measures. By default it is the clear opening
+between the panels either side. It can instead include the panel next to
+it, which is how a shelf spacing quoted from one shelf's top face to the
+next is given. The two describe the same positions and diverge only when a
+thickness changes: a clear size holds the opening and moves the shelves,
+while an inclusive size holds the shelves and changes the opening. An
+inclusive size is reduced to a clear one before sizes are distributed, so
+the distribution itself is unchanged.
 
 Three consequences are worth stating because they are what the model buys.
 
@@ -263,8 +276,10 @@ Three things geometry cannot tell it, all of which are supplied rather
 than inferred:
 
 - **Rules**, because a compartment that is fixed and one that happens to
-  have solved to the same size are identical. Stored intent wins; without
-  it, equal neighbours are treated as sharing and unequal ones as fixed.
+  have solved to the same size are identical. The same holds for what a
+  fixed size measures, since a clear opening and a shelf spacing place the
+  panels in the same positions. Stored intent wins; without it, equal
+  neighbours are treated as sharing and unequal ones as fixed.
 - **Material identity**, because thickness alone does not name a stock
   entry.
 - **Which side the unit faces**, which decides nothing about the geometry

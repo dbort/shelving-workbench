@@ -130,6 +130,7 @@ the spike confirms it is workable.
 | Shell | Not a rule and not a field. A split is an ordered run of planks and sub-regions, so the shell is just its outermost planks. `Carcass` does not survive |
 | Split axis | A split names an axis (X, Y, or Z), not an orientation within an assumed elevation plane. Near-term scanning and editing stay single-plane, but the model never needs changing to hold a second one |
 | Depth | A region's extent along the depth axis, not a field on the unit. A plank fills its region's cross-section with an inset per face, which is the same parameter as a joint clearance |
+| Measurement basis | A fixed size is a clear opening by default, or inclusive of the adjacent plank, which is a shelf spacing. Stored with the rule, since the two place the panels identically and geometry cannot tell them apart. Resolved to a clear size before distribution, in the same pass that resolves a named value |
 | Panel shape | Rectangular boxes only. An L-shaped, mitred, notched, or scribed panel has no representation and is a future path, not a near-term goal |
 | Non-tree layouts | A pinwheel or any partition that is not a tree is refused, naming the planks that form the cycle |
 | Clearance at a joint | A gap up to a tolerance (default 3 mm) is a joint; the gap is stored per plank end and apply reproduces it. Larger gaps refuse |
