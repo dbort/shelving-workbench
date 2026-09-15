@@ -9,8 +9,10 @@ A FreeCAD 1.0 workbench for parametric shelving. A unit is designed as a flat
 front elevation and expands into individually editable 3D plank solids; editing
 the elevation reflows the 3D. The layout math lives in a pure-Python core
 (`shelving_core`) that never imports FreeCAD, so it is testable without a GUI.
-See [`docs/architecture.md`](docs/architecture.md) for the design of record and
-[`docs/roadmap.md`](docs/roadmap.md) for the milestone breakdown.
+See [`docs/scope-and-design.md`](docs/scope-and-design.md) for what the project
+is for and how it is built, and [`docs/roadmap.md`](docs/roadmap.md) for the
+milestone breakdown. [`docs/architecture.md`](docs/architecture.md) describes
+the design the code implements today, which the scope document supersedes.
 
 To eyeball a solved layout, run `pixi run demo`: it builds a sample nested
 carcass, runs the spacing solver, and prints the resulting rectangle for every
@@ -61,7 +63,8 @@ checks that need network access.
 
 ## Glossary
 
-The layout vocabulary and how each term maps onto the code in `shelving_core`.
+The layout vocabulary and how each term maps onto the code in `shelving_core`,
+which follows [`docs/architecture.md`](docs/architecture.md).
 
 - **Carcass**: the shelving box. `Carcass` in `shelving_core.layout` holds the
   outer `width_mm`, `height_mm`, and `depth_mm`, a `default_material`, a root

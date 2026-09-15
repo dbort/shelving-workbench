@@ -1,0 +1,90 @@
+{
+  "container": "Furniture, Module ",
+  "boxes": [
+    {
+      "name": "Floor",
+      "label": "Furniture - Floor",
+      "corner_mm": [
+        18.0,
+        0.0,
+        100.0
+      ],
+      "size_mm": [
+        464.0,
+        394.0,
+        18.0
+      ]
+    },
+    {
+      "name": "Left",
+      "label": "Furniture - Left side",
+      "corner_mm": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "size_mm": [
+        18.0,
+        397.0,
+        760.0
+      ]
+    },
+    {
+      "name": "Right",
+      "label": "Furniture - Right side",
+      "corner_mm": [
+        482.0,
+        0.0,
+        0.0
+      ],
+      "size_mm": [
+        18.0,
+        397.0,
+        760.0
+      ]
+    },
+    {
+      "name": "Back",
+      "label": "Furniture - Back board",
+      "corner_mm": [
+        0.0,
+        397.0,
+        100.0
+      ],
+      "size_mm": [
+        500.0,
+        3.0,
+        660.0
+      ]
+    },
+    {
+      "name": "Top",
+      "label": "Furniture - Top board",
+      "corner_mm": [
+        18.0,
+        0.0,
+        742.0
+      ],
+      "size_mm": [
+        464.0,
+        397.0,
+        18.0
+      ]
+    },
+    {
+      "name": "Shelf",
+      "label": "Furniture - Shelf",
+      "corner_mm": [
+        19.0,
+        0.0,
+        371.0
+      ],
+      "size_mm": [
+        462.0,
+        397.0,
+        18.0
+      ]
+    }
+  ],
+  "skipped": []
+}
