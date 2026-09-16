@@ -184,7 +184,7 @@ a scanned fixture.
 
 ## M6 — Read a container
 
-**Status:** Planned
+**Status:** Task sh-016
 
 The FreeCAD half of scanning: walk a container the user selects, stopping
 at parts rather than descending into a solid's construction, deduplicating
@@ -192,19 +192,29 @@ objects a selection reaches by more than one path, and reading each box in
 the container's own frame. A **Scan** command reports what it found,
 including anything it could not read.
 
-`spikes/` is deleted here, in this task. The workbench can now do what the
-spike was standing in for, so the fallback has no remaining job. The
-container walk comes from `export_boxes.py` and the Scan report replaces
-`report.py`. One piece has no planned replacement: `inspect_object.py`
-reports whether a part is a plain box, a box minus rectangular cutouts, or
-something else, which is what a user wants when a scan refuses on a part
-it cannot read. This task decides whether that folds into the Scan refusal
-path or keeps a home under `tools/`.
+Reading is in the container's own frame, so a unit moved or rotated in a
+room reads the same as one at the origin, and sizes come from each part's
+bounding box rather than its length, width and height properties, so a
+board rotated a quarter turn still reads. A part the walk cannot read is
+reported with the reason in geometric terms, a box minus two rectangular
+cutouts or not axis-aligned, never dropped. Reading one as a board needs a
+flag that lets its size drive its region, which lands with M7 alongside the
+stored metadata that marks it.
+
+An **Export boxes** command writes the same records to JSON, which is how a
+unit that refuses gets captured without sharing a whole document.
+
+`spikes/` is deleted here. The workbench can now do what the spike was
+standing in for, so the fallback has no remaining job: the container walk
+comes from `export_boxes.py`, the report from `report.py`, and
+`inspect_object.py`'s solid classifier folds into the reason a part was
+skipped.
 
 *Verify in FreeCAD:* select a container of boxes and run Scan; a unit it
 understands reports its compartments, and one it does not names the
-objects and says why. A headless check scans a document built in the test;
-`spikes/` is gone and nothing references it.
+objects, says why, and selects them in the 3D view. A headless check reads
+and scans a document built in the test; `spikes/` is gone and nothing
+references it.
 
 ## M7 — Write a container
 
@@ -212,9 +222,14 @@ objects and says why. A headless check scans a document built in the test;
 
 Apply a layout back to a container as plain `Part::Box` objects, matched
 by the object's own name so a rename, a colour, or a downstream reference
-survives. Stores what geometry cannot carry: a board's material and the
-rule beside it, provenance for telling a copy from an original, and on the
-container the unit's identity, plane, facing, and compartment rules. A
+survives. Brings the flag that marks a part the workbench cannot
+regenerate, a notched panel say, so that scanning adopts it by its overall
+size and its size drives the space around it rather than being driven by
+it; apply may move such a part but never rewrites it.
+
+Stores what geometry cannot carry: a board's material and the rule beside
+it, provenance for telling a copy from an original, and on the container
+the unit's identity, plane, facing, and compartment rules. A
 **Create Unit** command builds a starter unit through the same path.
 
 *Verify in FreeCAD:* create a unit and get plain boxes; scan it back and

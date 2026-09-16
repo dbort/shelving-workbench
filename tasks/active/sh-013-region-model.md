@@ -53,6 +53,8 @@ built on the carcass and neither survives the new design. Milestone M4.
 - [ ] `tests/test_layout_demo.py` drives the rebuilt demo and asserts its
       board table; it carries no `--svg` test, because the renderer is gone
       until M5.
+- [ ] `docs/manual-qa.md` carries no M3 case block and no reference to
+      `tools/freecad_object_smoke.py`.
 - [ ] `freecadcmd` still imports the workbench: `tools/freecad_smoke.py` prints
       its OK marker and `tools/run-tests.sh` still greps for it.
 - [ ] `mypy --strict` clean over `shelving_core/`, `tools/`, `tests/`, and
@@ -124,6 +126,11 @@ orphaned until then and that is expected, do not delete it and do not flag it.
 `Initialize` appends an empty toolbar and menu, and its deferred import of
 `create_unit` goes.
 
+`docs/manual-qa.md`'s seven M3 cases all drive the create-unit command, plank
+reflow, or the `Layout` property, and its automation note points at the object
+smoke. All of it goes with the object layer. Do NOT write replacement cases:
+M6 adds its own once there is a command to drive.
+
 STANDING OBLIGATIONS (`CLAUDE.md`). Typed Python applies in full: no bare `Any`,
 no bare `dict`/`list`/`tuple`/`set` in signatures or public attributes, and
 `mypy --strict` over everything changed. Shell stays simple applies trivially:
@@ -140,7 +147,7 @@ on their own.
 
 ## Execution Plan
 
-- [ ] **Step 1** (`freecad/shelving/`, `tools/`): Delete `freecad/shelving/objects/` entirely (`__init__.py`, `feature_types.py`, `geometry.py`, `labels.py`, `plank.py`, `shelving_unit.py`), delete `freecad/shelving/commands/create_unit.py`, and delete `tools/freecad_object_smoke.py`. In `freecad/shelving/init_gui.py`, remove the deferred `from freecad.shelving.commands import create_unit` import and set `command_ids` to an empty list, keeping the `appendToolbar` / `appendMenu` calls and the class docstring corrected to say the workbench registers no commands yet. In `tools/run-tests.sh`, delete the `freecad_object_smoke.py` block (the header printf, the capture, the echo, and the grep guard); leave the `freecad_smoke.py` block untouched. KEEP `freecad/shelving/commands/__init__.py` and `freecad/shelving/default_catalog.py`.
+- [ ] **Step 1** (`freecad/shelving/`, `tools/`, `docs/manual-qa.md`): Delete `freecad/shelving/objects/` entirely (`__init__.py`, `feature_types.py`, `geometry.py`, `labels.py`, `plank.py`, `shelving_unit.py`), delete `freecad/shelving/commands/create_unit.py`, and delete `tools/freecad_object_smoke.py`. In `freecad/shelving/init_gui.py`, remove the deferred `from freecad.shelving.commands import create_unit` import and set `command_ids` to an empty list, keeping the `appendToolbar` / `appendMenu` calls and the class docstring corrected to say the workbench registers no commands yet. In `tools/run-tests.sh`, delete the `freecad_object_smoke.py` block (the header printf, the capture, the echo, and the grep guard); leave the `freecad_smoke.py` block untouched. KEEP `freecad/shelving/commands/__init__.py` and `freecad/shelving/default_catalog.py`. In `docs/manual-qa.md`, delete the entire `## M3` section and its seven numbered cases, and repoint the automation note that names `tools/freecad_object_smoke.py` at `tools/freecad_smoke.py`; leave the loading-from-a-checkout section intact, since it still applies.
 
 - [ ] **Step 2** (`shelving_core/svg.py`, `shelving_core/tests/test_svg.py`, `tools/layout_demo.py`, `tests/test_layout_demo.py`, `README.md`): Delete `shelving_core/svg.py` and `shelving_core/tests/test_svg.py`. In `tools/layout_demo.py`, remove the `--svg` option, the `to_svg` and `rule_label` imports, the argument parsing for it, and every line that writes a file; the script keeps printing the catalog, the solved bays, and the plank table to stdout only, and takes no arguments. In `README.md`, drop the sentence beginning "Add `pixi run demo -- --svg`" and leave the rest of that paragraph intact. In `tests/test_layout_demo.py`, delete `test_demo_svg_flag_writes_a_parseable_svg` entirely along with its `xml.etree` and `Path` imports if nothing else uses them; leave `test_demo_runs_and_prints_the_solved_sample` alone in this step, it still passes against the carcass demo. Do not touch `shelving_core/layout.py` in this step.
 
