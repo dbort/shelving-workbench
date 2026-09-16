@@ -154,16 +154,16 @@ for a stepped unit; `freecadcmd` still loads the workbench.
 
 ## M5 — Scanning and the elevation renderer, no FreeCAD
 
-**Status:** Planned
+**Status:** Tasks sh-014, sh-015
 
-- [ ] scanning: geometry to a region tree, or a refusal
-- [ ] the elevation renderer, rebuilt on the region model (blocked on the
-  scanning task)
+- [ ] sh-014 — scanning: geometry to a region model, or a refusal
+- [ ] sh-015 — the elevation renderer, rebuilt on the region model (blocked
+  on sh-014)
 
 Read a layout from geometry: axis-aligned boxes in, a region tree or a
 refusal naming the objects out. Detects the elevation plane, cuts at every
-line no plank crosses, treats gaps narrower than the joint clearance as
-joints rather than compartments, and separates space enclosed by planks
+line no board crosses, treats gaps narrower than the joint clearance as
+joints rather than compartments, and separates space enclosed by boards
 from space open to the outside. Carries what it cannot read rather than
 dropping it: a missing panel does not fail the scan, it makes enclosed
 bays read as open instead.
@@ -212,7 +212,7 @@ objects and says why. A headless check scans a document built in the test;
 
 Apply a layout back to a container as plain `Part::Box` objects, matched
 by the object's own name so a rename, a colour, or a downstream reference
-survives. Stores what geometry cannot carry: a plank's material and the
+survives. Stores what geometry cannot carry: a board's material and the
 rule beside it, provenance for telling a copy from an original, and on the
 container the unit's identity, plane, facing, and compartment rules. A
 **Create Unit** command builds a starter unit through the same path.
@@ -226,10 +226,10 @@ with the workbench uninstalled, and find the document intact.
 **Status:** Planned
 
 The catalog as a document object, seeded from the in-code default, with a
-command to edit it and a per-plank material override. Editing an entry
-reflows every plank that references it.
+command to edit it and a per-board material override. Editing an entry
+reflows every board that references it.
 
-*Verify in FreeCAD:* change a stock thickness, reflow, and see every plank
+*Verify in FreeCAD:* change a stock thickness, reflow, and see every board
 using it change while the unit's outside dimensions hold.
 
 ## M9 — The elevation editor
@@ -265,7 +265,7 @@ produces a clear error and no stale geometry.
 
 **Status:** Planned
 
-Backs and fronts as planks in the depth axis rather than parts set aside
+Backs and fronts as boards in the depth axis rather than parts set aside
 during scanning, with the treatments that go with them: rabbeted, overlay,
 and captured, and a back material.
 
@@ -311,9 +311,9 @@ Each of these is its own task when it comes up.
 - **Assemblies on more than one plane**: shelving in a corner, a T of
   runs, an aisle. Needs a plan view alongside the elevation editor, and
   needs the cross-unit alignment that named values start.
-- **Panels that are not boxes**, beginning with whether a plank is better
+- **Panels that are not boxes**, beginning with whether a board is better
   modelled as a rectilinear profile extruded through a thickness.
-- **A support check**, since a plank floating clear of its neighbours is a
+- **A support check**, since a board floating clear of its neighbours is a
   valid arrangement of straight cuts and is currently accepted.
 - **Parametric joinery** with promote-to-Body, the cut-list spreadsheet,
   the TechDraw elevation, and assembly joints.
