@@ -123,33 +123,42 @@ count and bounding box.
 
 ## M4 — The region model, no FreeCAD
 
-**Status:** Planned
+**Status:** Task sh-013
 
-Replace the carcass with the region tree: a region is an open bay, a void,
-or a division into an ordered run of planks and sub-regions. `solve` and
-`expand` work on it, reusing the existing slack distribution unchanged,
-because a plank contributes a fixed thickness and a region contributes its
-rule. The shell stops being a rule and becomes the outermost planks of the
-outermost divisions, which is what lets a stepped outline, a through
-shelf, and two planks face to face be ordinary.
+Replace the carcass with the region model: a region is a bay, a void, or a
+division of an ordered run of boards and sub-regions along one axis.
+`solve` and `expand` work on it, reusing the existing slack distribution
+unchanged, because a board contributes a fixed thickness and a region
+contributes its rule. The shell stops being a rule and becomes the
+outermost boards of the outermost divisions, which is what lets a stepped
+outline, a through shelf, and two boards face to face be ordinary.
 
-The FreeCAD object layer goes in the same task. The `Plank` scripted
-object, the `ShelvingUnit` driver, the create-unit command, and the object
-smoke are all built on the carcass and none of them survive the new
-design, so porting them would be work done twice.
+Regions carry a 3D extent and a division names an axis, so the unit-wide
+depth and the special-cased front inset collapse into one per-face inset on
+a board.
+
+The FreeCAD object layer goes in the same task, and so does the SVG
+elevation renderer. The scripted plank, the driver, the create-unit
+command, the object smoke, and the renderer are all built on the carcass
+and none of them survive, so porting them would be work done twice. M5
+rebuilds the renderer on the region model.
 
 `spikes/plain_planks/general_model.py` is the worked design; copy from it
 rather than moving it, so the spike keeps running as the fallback for the
 two milestones during which the workbench has no commands.
 
-*Verify:* the core suite, including an equivalence check that a closed box
-built from ordinary items expands to what the carcass model expanded to,
-plank for plank; the demo script prints a plank table for a stepped unit;
-`freecadcmd` still loads the workbench.
+*Verify:* the core suite, including a check that a closed box built from
+ordinary items expands to the geometry the carcass model produced, board
+for board, against hard-coded values; the demo script prints a board table
+for a stepped unit; `freecadcmd` still loads the workbench.
 
-## M5 — Scanning, no FreeCAD
+## M5 — Scanning and the elevation renderer, no FreeCAD
 
 **Status:** Planned
+
+- [ ] scanning: geometry to a region tree, or a refusal
+- [ ] the elevation renderer, rebuilt on the region model (blocked on the
+  scanning task)
 
 Read a layout from geometry: axis-aligned boxes in, a region tree or a
 refusal naming the objects out. Detects the elevation plane, cuts at every
@@ -162,9 +171,16 @@ bays read as open instead.
 `spikes/plain_planks/scan.py` and its fixtures are the worked design; copy
 from them, again leaving the spike intact.
 
+Then the elevation renderer that M4 removed, rebuilt on the region model
+and drawing bays, boards and voids. It lands here rather than with the
+model so its first subject is a scanned real file rather than a synthetic
+sample, which is a far better check of what scanning made of a stepped
+outline or two abutting units.
+
 *Verify:* the core suite over real exported units, a stepped unit, two
 abutting units whose side panels meet, and a generated Woodworking
-cabinet, plus the refusal cases.
+cabinet, plus the refusal cases; `pixi run demo` writes an SVG elevation of
+a scanned fixture.
 
 ## M6 — Read a container
 
