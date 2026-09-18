@@ -283,7 +283,11 @@ every board using it change while each unit's outside dimensions hold.
 
 ## M9 — The elevation editor
 
-**Status:** Planned
+**Status:** Tasks sh-020, sh-021
+
+- [ ] sh-020 — the panel, the scene, selection, split and merge
+- [ ] sh-021 — dimensions, dragging, the measurement basis, and the
+  untagged-object choice (blocked on sh-020)
 
 The modal task panel: an elevation rendered from the scanned layout, pick
 a compartment, split it, delete a divider to merge. Then dimensions: type
@@ -296,6 +300,19 @@ The panel is also where apply's untagged objects get a choice. M7 leaves
 anything this workbench did not write exactly where it is and reports it;
 a panel has somewhere to put the question, so the editor can offer to
 remove indicated boards or ignore them, with the reason stated.
+
+Built in three layers so most of it is testable. Editing operations are
+tree functions in the core, a unit in and a unit out, covered by the fast
+suite. The Qt scene renders and hit-tests, covered by an offscreen
+`QApplication`, which works under `freecadcmd` along with simulated clicks.
+Only the task-panel shell needs a human, because `FreeCADGui.Control` does
+not exist headlessly.
+
+Typed dimensions go through FreeCAD's own unit parser, with one guard in
+front: a mixed number like `12 1/2"` is refused with a message recommending
+`12 + 1/2"`, which parses correctly. The guard exists because FreeCAD reads
+`1-1/2"` as subtraction and returns 12.70 mm rather than 38.10 mm, with no
+error.
 
 *Verify in FreeCAD:* build a three-shelf bookcase entirely through the
 editor, set one opening exactly and watch the rest redistribute, switch a
