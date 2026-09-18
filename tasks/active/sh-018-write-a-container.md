@@ -40,10 +40,12 @@ part 2 of 2.
 - [ ] The container carries `ShelvingUnitId`, `ShelvingDepthAxis`,
       `ShelvingFacing`, and `ShelvingRules`, the last holding
       `shelving_core.record.rules_to_json`.
-- [ ] `read_container` reads the stored properties back, so `scan` receives
-      pinned boxes and the caller can apply stored rules. A round-trip test
-      asserts a `Fixed` rule that the equal-siblings heuristic would recover as
-      `Fill` survives apply, rescan, and re-apply unchanged.
+- [ ] `read_container` reads the stored properties back, so `scan` receives each
+      board's stored material and pinned flag, and the caller can apply stored
+      rules. A round-trip test asserts a `Fixed` rule that the equal-siblings
+      heuristic would recover as `Fill` survives apply, rescan, and re-apply
+      unchanged. A second asserts a board resolves through its stored material
+      even when that entry's thickness no longer matches its measured extent.
 - [ ] A board whose `ShelvingBornAs` differs from its current `Name` is treated
       as a copy: its stored record is dropped and it is adopted as new geometry.
       A test copies a board within the document and asserts it becomes a new
@@ -72,6 +74,11 @@ would be copied along with the object and two boards would then claim one
 identity with no way to tell which was the original. Set `Board.id` to the
 object's `Name` when reading, and match on it when writing. This makes a
 duplicate a distinct entity by construction rather than a conflict to resolve.
+
+STORED MATERIAL MUST REACH `scan`. Fill `Box.material` from `ShelvingMaterial`
+so scanning uses it rather than matching by thickness. Without this, M8's
+catalog edits are impossible: changing an entry's thickness would leave every
+board using it matching nothing and the rescan would refuse.
 
 PROVENANCE IS TWO FIELDS, and they classify what a mismatch means rather than
 providing identity. `ShelvingBornAs` is the `Name` the board had when tagged and
@@ -144,7 +151,7 @@ Every length identifier carries `_mm`.
 
 - [ ] **Step 1** (`freecad/shelving/properties.py`): Create the module owning every property this workbench writes, so no other module spells a property name. Constants for the group name and for each property: `ShelvingMaterial`, `ShelvingBornAs`, `ShelvingBornIn`, `ShelvingPinned` on a board; `ShelvingUnitId`, `ShelvingDepthAxis`, `ShelvingFacing`, `ShelvingRules` on a container. `ensure_board_properties(obj)` and `ensure_container_properties(obj)` adding any that are missing, idempotent so a second call is a no-op. Typed readers and writers for each, with the facing stored as a string enumeration of `min`, `max`, `unknown` rather than a nullable boolean, because a FreeCAD string property has no null. A `Protocol` for the tagged-object surface.
 
-- [ ] **Step 2** (`freecad/shelving/container.py`): Extend `read_container` to read the stored properties back. Set each `Box.name` to the object's `Name` as before, and set `Box.pinned` for any part the classifier reports as not a plain axis-aligned box. Return, alongside the boxes and the skipped list, the container's stored record: unit id, depth axis, facing, and the raw rules string, each absent when its property is missing. Detect a copy: when a board carries `ShelvingBornAs` differing from its `Name`, or `ShelvingBornIn` differing from the document `Uid`, report it so the caller knows its stored record must be dropped. Do not change the walk itself.
+- [ ] **Step 2** (`freecad/shelving/container.py`): Extend `read_container` to read the stored properties back. Set each `Box.name` to the object's `Name` as before, set `Box.pinned` for any part the classifier reports as not a plain axis-aligned box, and set `Box.material` from `ShelvingMaterial` when present. Return, alongside the boxes and the skipped list, the container's stored record: unit id, depth axis, facing, and the raw rules string, each absent when its property is missing. Detect a copy: when a board carries `ShelvingBornAs` differing from its `Name`, or `ShelvingBornIn` differing from the document `Uid`, report it so the caller knows its stored record must be dropped. Do not change the walk itself.
 
 - [ ] **Step 3** (`freecad/shelving/container.py`): Add `write_container(container, unit, catalog)`. Expand the unit, then reconcile by `Board.id` against `Name`: update a matching object's `Length`, `Width`, `Height` and `Placement` in place, create a `Part::Box` for a board with no match and stamp its provenance from its new `Name` and the document `Uid`, and delete an object that carries provenance and is absent from the tree. Never touch an object without provenance; collect those into a left-alone list. For a pinned board set only `Placement`. Write the container's four properties, with the rules from `shelving_core.record.rules_to_json`. Return a frozen result carrying the four name lists. Do NOT open a transaction here; the commands own that.
 

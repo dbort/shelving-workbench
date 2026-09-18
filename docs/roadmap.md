@@ -259,14 +259,27 @@ intact.
 
 ## M8 — Material catalog
 
-**Status:** Planned
+**Status:** Task sh-019
 
-The catalog as a document object, seeded from the in-code default, with a
-command to edit it and a per-board material override. Editing an entry
-reflows every board that references it.
+The catalog moves out of code and into the document: a group of `VarSet`
+entries, one per stock item, each editable in the property editor. No
+proxy and no edit dialog, so a document whose owner never installed this
+workbench still shows its materials, and editing one is the property
+editor rather than a panel duplicating it. Seeded from the in-code default
+the first time anything needs it, so a fresh document needs no setup.
 
-*Verify in FreeCAD:* change a stock thickness, reflow, and see every board
-using it change while the unit's outside dimensions hold.
+A material id is the stable key rather than an object name, so renaming an
+entry does not orphan the boards using it, and a duplicate id is an error
+naming both entries.
+
+**Reflow All** rescans and rewrites every tagged unit in the document,
+which is what carries a changed thickness to the boards. A rescan picks the
+change up because a board stores its material and scanning prefers that to
+matching by thickness; without that precedence every existing board would
+match no entry and the rescan would refuse.
+
+*Verify in FreeCAD:* change a stock thickness, run Reflow All, and see
+every board using it change while each unit's outside dimensions hold.
 
 ## M9 — The elevation editor
 
@@ -352,6 +365,14 @@ Each of these is its own task when it comes up.
 - **Assemblies on more than one plane**: shelving in a corner, a T of
   runs, an aisle. Needs a plan view alongside the elevation editor, and
   needs the cross-unit alignment that named values start.
+- **Physical materials**, referencing FreeCAD's own material system so a
+  stock entry names a substance rather than describing one. Stock and
+  substance are separate lists: a thickness belongs to the sheet you
+  bought, a density to the material. The first real payoff is mass, since
+  per-board volume is already computed, and colour by material would come
+  with it. Stress analysis is much further off: the model is butt joints
+  with no fasteners, so an analysis would be modelling a pile of loose
+  boards.
 - **Panels that are not boxes**, beginning with whether a board is better
   modelled as a rectilinear profile extruded through a thickness.
 - **A support check**, since a board floating clear of its neighbours is a

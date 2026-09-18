@@ -35,6 +35,12 @@ Milestone M7, part 1 of 2.
 - [ ] `Box` carries `pinned: bool = False`. `scan` places a pinned box as a
       `Board` with `pinned_size_mm` set from its measured extent, rather than
       listing it in `skipped`.
+- [ ] `Box` carries `material: MaterialId | None = None`. When set, `scan` uses
+      it and does NOT match by thickness; an id absent from the catalog raises
+      `ScanError` naming the board. Thickness matching applies only to a box
+      with no material. Two tests: a board whose stored material names an entry
+      whose thickness differs from its measured extent still resolves to that
+      entry; a board with no material still matches by thickness.
 - [ ] `shelving_core/record.py` exports `rule_key`, `rules_to_json`,
       `rules_from_json`, and `with_stored_rules`.
 - [ ] A region's rule key is the names of the boards bounding it along its
@@ -106,7 +112,18 @@ serialise and restore it. A stored `Basis.WITH_NEXT` is the only way that
 intent survives a rescan at all, since a clear opening and a shelf spacing
 place the boards identically and scanning always recovers `Basis.CLEAR`.
 
-SCAN CHANGES ARE SMALL. `Box` gains `pinned: bool = False`. In `scan`, a box
+MATERIAL PRECEDENCE IS LOAD-BEARING, and the reason is not local to this task.
+M8 lets a user change a catalog entry's thickness. If scanning always matched by
+thickness, changing `ply18` from 18 mm to 25 mm would leave every existing 18 mm
+board matching nothing, the scan would refuse, and there would be no path from
+the old geometry to the new. A stored material breaks that: the board says
+`ply18`, the catalog says `ply18` is 25 mm now, and the solve produces 25 mm
+boards. So a `Box` with a material set MUST bypass thickness matching entirely.
+Thickness matching survives only for untagged geometry this workbench never
+wrote.
+
+SCAN CHANGES ARE SMALL. `Box` gains `pinned: bool = False` and
+`material: MaterialId | None = None`. In `scan`, a box
 with `pinned` set is placed as a `Board` carrying `pinned_size_mm` from its
 measured extent, and is NOT added to `skipped`. Everything else about the
 classification is unchanged: a pinned box still has to be axis-aligned and
@@ -125,7 +142,7 @@ Every length identifier carries `_mm`.
 
 - [ ] **Step 2** (`shelving_core/solver.py`, `shelving_core/tests/test_solver.py`): Add `"pinned_mismatch"` to `SolveErrorReason`. In `solve`, after computing a board's `Space`, when that board carries `pinned_size_mm`, compare the derived extent against it on all three axes and raise `LayoutSolveError(board.id, "pinned_mismatch", detail)` when any differs by more than `EPS_MM`; `detail` carries the derived and the pinned extent. Tests: a unit whose layout matches its pinned board solves; the same unit widened raises with the board named; a pinned board agreeing within `EPS_MM` does not raise.
 
-- [ ] **Step 3** (`shelving_core/scan.py`, `shelving_core/tests/test_scan.py`): Add `pinned: bool = False` to `Box`. In `scan`, place a box with `pinned` set as a `Board` whose `pinned_size_mm` is its measured extent, and do not add it to `skipped`. Tests: a synthetic unit whose side is marked pinned scans with that board carrying `pinned_size_mm` and an otherwise identical tree; the same unit unmarked scans identically but without the pinned size; a pinned box that is not axis-aligned still refuses.
+- [ ] **Step 3** (`shelving_core/scan.py`, `shelving_core/tests/test_scan.py`): Add `pinned: bool = False` and `material: MaterialId | None = None` to `Box`. In `scan`, place a box with `pinned` set as a `Board` whose `pinned_size_mm` is its measured extent, and do not add it to `skipped`. Route material resolution through the stored value when present: use it directly, raise `ScanError` naming the board when it is absent from the catalog, and fall back to thickness matching only for a box with no material. The unit's `default_material` becomes the most common resolved material rather than the most common thickness. Tests: a pinned box scans with `pinned_size_mm` set and an otherwise identical tree; a box whose stored material names an entry whose thickness differs from its measured extent resolves to that entry rather than refusing; a box with no material still matches by thickness; a stored material absent from the catalog refuses naming the board.
 
 - [ ] **Step 4** (`shelving_core/record.py`): Create the module. `RULE_RECORD_VERSION: int`. A module-level sentinel constant for "no neighbour on this side" and a separator constant that cannot occur in a FreeCAD object name. `rule_key(before: str | None, after: str | None) -> str` building the key from the two bounding board ids. A private walk yielding `(key, rule)` for every region in a unit, pairing each region with the items either side of it in its division's run; the root region has no division and therefore no key, so skip it. `rules_to_json(unit) -> str` emitting `{"schema_version": ..., "rules": {key: rule_doc}}` with a rule doc per `SizeRule` variant, carrying `basis` for a `Fixed`. `rules_from_json(text) -> Mapping[str, SizeRule]` narrowing every value with isinstance checks before construction and raising `ValueError` on a version mismatch or a malformed rule. `with_stored_rules(unit, rules) -> Unit` rebuilding the tree with a matching region's rule replaced and an unmatched region left alone. Document the key's stability consequences per Frontier Advice.
 
