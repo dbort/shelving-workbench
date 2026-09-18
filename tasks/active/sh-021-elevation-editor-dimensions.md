@@ -15,7 +15,9 @@ one, and choose whether a dimension measures the clear opening or the spacing
 across a board. Dragging changes the number and never what it measures, so a
 drag can never rewrite intent. Also gives apply's untagged objects the
 interactive choice M7 deferred here, since a panel has somewhere to put the
-question. Milestone M9, part 2 of 2.
+question. The dimension field is FreeCAD's own quantity input, so an expression
+naming a variable works and this workbench inspects nothing a user types.
+Milestone M9, part 2 of 2.
 
 ## Status
 - [ ] Planning
@@ -31,14 +33,14 @@ question. Milestone M9, part 2 of 2.
 - [ ] `set_basis(unit, region_id, basis)` changes only what a size measures,
       recomputing the stored number so the geometry is unchanged. A test asserts
       the solved layout before and after is identical.
-- [ ] `shelving_core/parse.py` exports `looks_like_mixed_number(text) -> bool`,
-      true for a whole number followed by a fraction whether spaced or
-      hyphenated, false for a bare fraction, a decimal, and a sum.
-- [ ] A dimension field refuses a mixed number with a message recommending the
-      plus form, and accepts everything FreeCAD accepts otherwise. Verified
-      behaviour: `3/4"` is 19.05 mm, `1 + 1/2"` is 38.10 mm, `2+3/8"` is
-      60.325 mm, while `1-1/2"` reads as 12.70 mm and `12 1/2"` errors, which is
-      why both are refused before FreeCAD sees them.
+- [ ] The dimension field is FreeCAD's own quantity input, obtained through
+      `FreeCADGui.UiLoader().createWidget`, so it accepts exactly what every
+      other length field in FreeCAD accepts, including expressions naming a
+      `VarSet`, and shows the resolved value as the user types. No input is
+      inspected, rewritten, or refused by this workbench.
+- [ ] If that widget proves unobtainable in the GUI, the fallback is a plain
+      field passed verbatim to `FreeCAD.Units.parseQuantity`, with the parse
+      error surfaced. Still no inspection of the text.
 - [ ] Dragging a board sets the size of the region on one side, keeping that
       region's existing basis. A test drives a drag through the session and
       asserts the basis is unchanged and only the number moved.
@@ -74,19 +76,36 @@ of intent, not of geometry. Recompute the stored number so the solved layout is
 identical, and assert that in a test. A user toggling the basis to see which
 they meant must not find their unit has moved.
 
-FRACTION INPUT, verified against this environment's FreeCAD rather than assumed:
-- `3/4"` parses to 19.05 mm, correct.
-- `1 + 1/2"` parses to 38.10 mm and `2+3/8"` to 60.325 mm, both correct; the
-  unit applies to the whole sum.
-- `12 1/2"` raises `ValueError`, so the form a woodworker writes fails.
-- `1-1/2"` returns 12.70 mm, reading the hyphen as subtraction, which is a
-  SILENTLY WRONG dimension and the reason for the guard.
+DO NOT VALIDATE, REWRITE, OR INSPECT WHAT THE USER TYPES. The field accepts
+FreeCAD expression syntax, not a number: `(VarSet.someLength - 2 *
+VarSet.someThickness) + 3/4"` is legitimate input. Any pattern check over that
+grammar produces false refusals, and a false refusal has no workaround. A regex
+looking for a whole number before a fraction matches `VarSet.x2 - 1/2"` on an
+identifier ending in a digit, refusing a valid expression. Pass the text
+through untouched.
 
-So: refuse a mixed number BEFORE handing text to `FreeCAD.Units.parseQuantity`,
-with a message naming the plus form, for example "type 1 + 1/2\" rather than
-1-1/2\"". Do NOT write a unit parser; FreeCAD's honours the user's unit schema
-and everything else it accepts stays accepted. `looks_like_mixed_number` lives
-in the core so the fast suite covers every form without FreeCAD.
+USE FREECAD'S OWN QUANTITY INPUT WIDGET, via
+`FreeCADGui.UiLoader().createWidget("Gui::QuantitySpinBox")` or the equivalent
+input field. That gives expression support, the f(x) binding to a `VarSet`, the
+user's configured unit schema, and a live display of the resolved value, all
+without this workbench parsing anything. It also makes the field behave
+identically to every other length field in FreeCAD, which is its own kind of
+correctness.
+
+NOT VERIFIED HEADLESSLY: `FreeCADGui.UiLoader` does not exist under
+`freecadcmd`, so confirm the widget loads in a real GUI session early in this
+task. If it does not, fall back to a plain field handed verbatim to
+`FreeCAD.Units.parseQuantity`, surfacing its error. Do NOT fall back to
+inspecting the text.
+
+CONTEXT ON FREECAD'S PARSER, verified in this environment, recorded so nobody
+rediscovers it and decides to "fix" it: `3/4"` is 19.05 mm and `1 + 1/2"` is
+38.10 mm, both correct, with the unit applying to the whole sum. `12 1/2"`
+raises. `1-1/2"` returns 12.70 mm, reading the hyphen as subtraction. That last
+one is a wrong answer with no error, but it is FreeCAD's behaviour in every
+length field in the application, so this workbench matches it rather than
+diverging. A resolved-value display is what surfaces it, and it surfaces every
+other surprising input too, which a pattern check never could.
 
 DIMENSION DRAWING MUST DISTINGUISH THE TWO BASES. Use the drafting convention
 the design already implies: witness lines touching the faces actually measured.
@@ -103,8 +122,7 @@ the workbench, so it will not touch them unless told. Any removal happens inside
 the session's transaction so Cancel reverses it.
 
 LAYERING IS UNCHANGED FROM sh-020. Every decision with a right answer goes in
-`shelving_core/edit.py` or `shelving_core/parse.py` and is tested in the fast
-suite. The scene renders and hit-tests, tested offscreen. The session owns the
+`shelving_core/edit.py` and is tested in the fast suite. The scene renders and hit-tests, tested offscreen. The session owns the
 document. The panel holds no logic worth testing. A drag in particular: the
 scene reports which board moved and to what scene position, the session converts
 that to a size and calls the core.
@@ -122,16 +140,16 @@ Every length identifier carries `_mm`.
 
 ## Execution Plan
 
-- [ ] **Step 1** (`shelving_core/parse.py`, `shelving_core/tests/test_parse.py`): Create the module with `looks_like_mixed_number(text) -> bool`, matching a whole number followed by a fraction with either a space or a hyphen between them, before an optional unit suffix. Return false for a bare fraction, a decimal, an integer, a sum with a plus, and a parenthesised expression. Document that the hyphenated form is refused because FreeCAD reads it as subtraction and returns a wrong value rather than an error. Tests covering every form in the Frontier Advice table plus whitespace variants.
+- [ ] **Step 1** (spike, no committed code): Before writing the panel, open a real FreeCAD GUI session and confirm `FreeCADGui.UiLoader().createWidget("Gui::QuantitySpinBox")` returns a usable widget, that it accepts `1 + 1/2"` and an expression naming a `VarSet`, and that it exposes the resolved quantity to Python. Record the answer in `docs/freecadcmd-notes.md` under a heading for GUI-only widget access, including the exact widget name that worked. If none works, record that and use a plain field with `FreeCAD.Units.parseQuantity` for the rest of this task.
 
 - [ ] **Step 2** (`shelving_core/edit.py`, `shelving_core/tests/test_edit.py`): Add `set_size(unit, region_id, size_mm, basis)` replacing that region's rule with a `Fixed` carrying both, refusing an unknown id and a non-positive size. Add `set_basis(unit, region_id, basis)` changing only the basis and recomputing the stored number from the region's currently solved extent so the geometry is unchanged; refuse a `Basis.WITH_NEXT` on a region whose next item is not a board, since sh-013's solver cannot resolve it. Tests: `set_size` leaves siblings' rules untouched; `set_basis` in both directions leaves the solved layout identical, asserted space by space; the refusals; and the behaviour that gives basis its purpose, a layout solved against two catalogs of different thickness holding board positions under `WITH_NEXT` and moving them under `CLEAR`.
 
 - [ ] **Step 3** (`freecad/shelving/editor/scene.py`): Add dimension items. For each region draw a dimension whose witness lines touch the faces its basis measures: a clear dimension spanning the void, a spacing dimension spanning from one board's face to the next and crossing that board. Tag each dimension item with its region id so it can be hit-tested and selected. Add a readout of the other basis's value beside it. Extend the offscreen suite: assert the two bases produce dimension items of different span for the same region, that a dimension item's endpoints lie on the faces expected, and that hit-testing a dimension returns its region id.
 
-- [ ] **Step 4** (`freecad/shelving/editor/session.py`): Add the dimension operations. `set_size(text)` taking the raw field text, refusing it when `looks_like_mixed_number` is true with the plus-form message, otherwise parsing with `FreeCAD.Units.parseQuantity`, converting to millimetres, and calling the core with the selected region's EXISTING basis. `set_basis(basis)` calling the core. `begin_drag(board_id)`, `drag_to(position_mm)` and `end_drag()` converting a board's new position into a size for the region on one side and calling `set_size` with that region's existing basis, re-solving and writing on each step. Every one returns the new state or a structured failure, as in sh-020.
+- [ ] **Step 4** (`freecad/shelving/editor/session.py`): Add the dimension operations. `set_size(size_mm)` taking a millimetre value already resolved by the widget, and calling the core with the selected region's EXISTING basis. The session does not see raw text: parsing belongs to FreeCAD's widget, and a parse failure never reaches here. `set_basis(basis)` calling the core. `begin_drag(board_id)`, `drag_to(position_mm)` and `end_drag()` converting a board's new position into a size for the region on one side and calling `set_size` with that region's existing basis, re-solving and writing on each step. Every one returns the new state or a structured failure, as in sh-020.
 
 - [ ] **Step 5** (`freecad/shelving/editor/session.py`, `freecad/shelving/editor/panel.py`): Add the untagged-object choice. The session exposes what the last write left alone, each with its reason, and a `remove_untagged(ids)` that deletes exactly those inside the session's transaction. The panel shows them in a list with checkboxes, all unchecked by default, with text explaining that these were not generated by the workbench and will be left alone unless selected. Wire the dimension field, the basis control, and drag handling on the view to the session, showing a failure's message without changing the view.
 
-- [ ] **Step 6** (`tools/freecad_editor_smoke.py`): Extend the headless check, driving the session. Assert: a typed size fixes that region and redistributes its siblings; a mixed number is refused with the plus-form message and changes nothing; `1 + 1/2"` is accepted as 38.10 mm; a drag changes the number and leaves the region's basis as it was; toggling basis leaves every board's placement identical; changing the catalog thickness afterwards holds board positions for a `WITH_NEXT` region and moves them for a `CLEAR` one in the same document; an untagged box is listed as left alone and survives unless selected, and is removed inside the transaction when it is; and cancel after all of the above restores the document exactly.
+- [ ] **Step 6** (`tools/freecad_editor_smoke.py`): Extend the headless check, driving the session. Assert: a set size fixes that region and redistributes its siblings; a drag changes the number and leaves the region's basis as it was; toggling basis leaves every board's placement identical; changing the catalog thickness afterwards holds board positions for a `WITH_NEXT` region and moves them for a `CLEAR` one in the same document; an untagged box is listed as left alone and survives unless selected, and is removed inside the transaction when it is; and cancel after all of the above restores the document exactly.
 
-- [ ] **Step 7** (`docs/manual-qa.md`, `README.md`): Extend the `## M9` section with the dimension cases: type an exact opening and watch the rest redistribute; type `12 1/2"` and confirm the message recommends `12 + 1/2"`; type that and confirm it is accepted; drag a board and confirm the readout shows the basis it already had; switch a dimension to spacing and confirm nothing moves; change the stock thickness and confirm the spacing-based shelves hold while the clear-based ones move; and confirm the untagged-object list appears with nothing checked. Extend the README glossary with measurement basis, the drag rule, and the mixed-number guard.
+- [ ] **Step 7** (`docs/manual-qa.md`, `README.md`): Extend the `## M9` section with the dimension cases: type an exact opening and watch the rest redistribute; type `1 + 1/2"` and confirm the field resolves it to 38.10 mm in the readout; bind the field to a `VarSet` property with the f(x) button and confirm it follows; drag a board and confirm the readout shows the basis it already had; switch a dimension to spacing and confirm nothing moves; change the stock thickness and confirm the spacing-based shelves hold while the clear-based ones move; and confirm the untagged-object list appears with nothing checked. Extend the README glossary with measurement basis and the drag rule.

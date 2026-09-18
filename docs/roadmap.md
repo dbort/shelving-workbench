@@ -308,11 +308,11 @@ suite. The Qt scene renders and hit-tests, covered by an offscreen
 Only the task-panel shell needs a human, because `FreeCADGui.Control` does
 not exist headlessly.
 
-Typed dimensions go through FreeCAD's own unit parser, with one guard in
-front: a mixed number like `12 1/2"` is refused with a message recommending
-`12 + 1/2"`, which parses correctly. The guard exists because FreeCAD reads
-`1-1/2"` as subtraction and returns 12.70 mm rather than 38.10 mm, with no
-error.
+The dimension field is FreeCAD's own quantity input, so it accepts what
+every other length field accepts, including an expression naming a
+variable, and this workbench inspects nothing a user types. The field is an
+expression language rather than a number, so any pattern check over it
+produces false refusals, and a false refusal has no workaround.
 
 *Verify in FreeCAD:* build a three-shelf bookcase entirely through the
 editor, set one opening exactly and watch the rest redistribute, switch a
