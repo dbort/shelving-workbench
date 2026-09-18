@@ -218,23 +218,44 @@ references it.
 
 ## M7 — Write a container
 
-**Status:** Planned
+**Status:** Tasks sh-017, sh-018
+
+- [ ] sh-017 — pinned parts and the stored rule record
+- [ ] sh-018 — writing a container, and the create and resize commands
+  (blocked on sh-016 and sh-017)
 
 Apply a layout back to a container as plain `Part::Box` objects, matched
 by the object's own name so a rename, a colour, or a downstream reference
-survives. Brings the flag that marks a part the workbench cannot
-regenerate, a notched panel say, so that scanning adopts it by its overall
-size and its size drives the space around it rather than being driven by
-it; apply may move such a part but never rewrites it.
+survives, and deleting only objects this workbench tagged, so a part it
+did not write is never removed.
 
-Stores what geometry cannot carry: a board's material and the rule beside
-it, provenance for telling a copy from an original, and on the container
-the unit's identity, plane, facing, and compartment rules. A
-**Create Unit** command builds a starter unit through the same path.
+Brings the pinned board, a part the workbench cannot regenerate such as a
+notched panel. The solver verifies its extent rather than deriving it and
+raises when a layout would need a different one, so resizing a unit across
+a fixed panel fails, which is true. Apply moves such a part but never
+rewrites it.
+
+Stores what geometry cannot carry, then reads it back, so a rescan
+recovers the intent it was given rather than re-guessing it: a board's
+material, provenance for telling a copy from an original, and on the
+container the unit's identity, depth axis, facing, and the per-region
+rules. The rules are keyed by the boards bounding each region, because a
+region's own id is fresh on every scan.
+
+**Create Unit** seeds a starter unit and **Resize Unit** takes new outer
+dimensions, both through the same write path. Resize rescans every time
+rather than caching a model, so a board moved by hand between operations
+is taken up rather than overwritten. The unit's size stays geometry rather
+than becoming a container property: a property nothing recomputes would be
+a second source of truth that lies, and making one honest needs the
+live-unit driver under *Later*.
 
 *Verify in FreeCAD:* create a unit and get plain boxes; scan it back and
-get the same layout; change a dimension and watch it reflow; save, reopen
-with the workbench uninstalled, and find the document intact.
+get the same layout; resize it and watch it reflow while labels and
+colours hold; move a board by hand and rescan to take the edit up; put an
+unrelated box in the container and confirm apply leaves it and says so;
+save, reopen with the workbench uninstalled, and find the document
+intact.
 
 ## M8 — Material catalog
 
@@ -257,6 +278,11 @@ an exact size with fractional-inch input, drag a divider, and choose
 whether a size measures the clear opening or the spacing across a shelf.
 Dragging changes the number and never what it measures. OK and Cancel wrap
 one transaction, and the 3D follows as you go.
+
+The panel is also where apply's untagged objects get a choice. M7 leaves
+anything this workbench did not write exactly where it is and reports it;
+a panel has somewhere to put the question, so the editor can offer to
+remove indicated boards or ignore them, with the reason stated.
 
 *Verify in FreeCAD:* build a three-shelf bookcase entirely through the
 editor, set one opening exactly and watch the rest redistribute, switch a
