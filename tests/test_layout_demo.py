@@ -30,7 +30,7 @@ def test_demo_runs_and_prints_the_solved_sample() -> None:
     lines = result.stdout.splitlines()
     assert lines, "demo produced no stdout"
     assert lines[0] == (
-        "Carcass 900 x 1800 x 300 mm, default material 18 mm birch ply (18 mm)"
+        "Unit 1200 x 300 x 1200 mm, default material 18 mm birch ply (18 mm)"
     ), lines[0]
 
     # The in-code catalog block: a header then one row per entry (ply18, mdf12).
@@ -39,28 +39,23 @@ def test_demo_runs_and_prints_the_solved_sample() -> None:
     assert catalog_rows[0].strip().startswith("ply18")
     assert catalog_rows[1].strip().startswith("mdf12")
 
-    # The sample tree: a root HORIZONTAL split over a 3-child VERTICAL split and
-    # a 2-child VERTICAL split -> 3 splits, 5 leaves, 4 dividers (1 + 2 + 1).
-    kinds = [
-        parts[1] for parts in (line.split() for line in lines[1:]) if len(parts) > 1
-    ]
-    assert kinds.count("split") == 3
-    assert kinds.count("leaf") == 5
-    assert kinds.count("divider") == 4
+    boards_start = lines.index("Boards:")
+    region_lines = lines[4:boards_start]
+    assert region_lines, "no region lines printed"
+    # Every region printed names its kind and carries a solved Space.
+    for line in region_lines:
+        assert any(f" {kind} " in line for kind in ("bay", "void", "division"))
+        assert "origin=(" in line and "size=(" in line
+    # The sample's two Voids (the shorter columns' steps) are regions, printed
+    # here, but contribute no board below.
+    assert sum(1 for line in region_lines if " void " in line) == 2
 
-    # Every divider line resolves and prints its material.
-    divider_lines = [
-        line for line in lines if len(line.split()) > 1 and line.split()[1] == "divider"
-    ]
-    assert len(divider_lines) == 4
-    assert all('material="' in line for line in divider_lines)
-    # The one override in the sample tree surfaces the 12 mm MDF entry.
-    assert any('material="12 mm MDF" 12mm' in line for line in divider_lines)
-
-    # The expanded plank table: a "Planks:" header, then one row per physical
-    # plank (4 shell planks plus one per divider), then the total-volume line.
-    planks_start = lines.index("Planks:")
-    total_line = next(line for line in lines if line.startswith("Total plank volume:"))
-    plank_rows = lines[planks_start + 1 : lines.index(total_line)]
-    assert len(plank_rows) == 4 + 4
+    total_line = next(line for line in lines if line.startswith("Total board volume:"))
+    board_rows = lines[boards_start + 1 : lines.index(total_line)]
+    # bottom, left_side, right_side, 2 dividers, 3 tops (one per column), and
+    # the shelf inside the tallest column's body: 9 boards, none for a Void.
+    assert len(board_rows) == 9
+    assert sum(1 for row in board_rows if row.split()[0] == "top") == 3
+    assert any(row.split()[0] == "shelf" for row in board_rows)
+    assert any("12 mm MDF" in row for row in board_rows)
     assert total_line.endswith(" mm^3")

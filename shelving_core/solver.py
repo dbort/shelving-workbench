@@ -1,11 +1,12 @@
-"""Spacing solver: a ``Carcass`` split-tree plus outer dimensions to 2D rects.
+"""Spacing solver: a region tree plus a unit size to 3D spaces.
 
-``solve`` insets the carcass by its default material's panel thickness, then
-walks the tree placing one :class:`Rect` per ``Leaf``, ``Split``, and
-``Divider`` id. Slack along a split's axis is distributed by :func:`distribute`,
-a pure function that knows nothing about rectangles or the tree. A layout that
-cannot be satisfied raises :class:`LayoutSolveError` with a machine-readable
-``reason`` and the id of the offending node.
+``solve`` walks the tree from the unit's outer :class:`~shelving_core.geometry.Space`
+placing one space per region and board id. Slack along a division's axis is
+distributed by :func:`distribute`, a pure function that knows nothing about
+regions, boards, or axes: a board contributes ``Fixed(thickness_mm)`` and a
+region contributes its own rule, so the arithmetic never needs to know which
+is which. A layout that cannot be satisfied raises :class:`LayoutSolveError`
+with a machine-readable ``reason`` and the id of the offending node.
 
 All lengths are float millimetres. There is no rounding or quantisation;
 :data:`EPS_MM` is the tolerance for the "does it fit" and "is it positive"
@@ -13,34 +14,39 @@ comparisons only.
 """
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
 from typing import Literal
 
+from .geometry import AxisIndex, Space, Vec3
 from .layout import (
-    Bay,
-    Carcass,
+    Axis,
+    Basis,
+    Board,
+    Division,
     Fill,
     Fixed,
-    Leaf,
-    Orientation,
-    Split,
-    SplitRule,
+    Item,
+    Region,
+    SizeRule,
+    Unit,
     Weighted,
 )
 from .materials import Catalog
 
 EPS_MM: float = 1e-6
 
-SolveErrorReason = Literal["overflow", "no_slack_absorber", "nonpositive_opening"]
+SolveErrorReason = Literal[
+    "overflow", "no_slack_absorber", "nonpositive_opening", "unresolvable_basis"
+]
 
 
 class LayoutSolveError(Exception):
     """A layout that cannot be satisfied.
 
-    ``node_id`` is the offending ``Split`` id for ``"overflow"`` and
-    ``"no_slack_absorber"`` (or the root bay id when the carcass inset itself
-    collapses), and the child bay id for ``"nonpositive_opening"``. ``detail``
-    carries the numbers that explain the failure.
+    ``node_id`` is the offending ``Division`` id for ``"overflow"`` and
+    ``"no_slack_absorber"``, the region whose ``Basis.WITH_NEXT`` rule could
+    not be resolved for ``"unresolvable_basis"``, and the child item's id for
+    ``"nonpositive_opening"``. ``detail`` carries the numbers that explain the
+    failure.
     """
 
     def __init__(
@@ -54,26 +60,6 @@ class LayoutSolveError(Exception):
         self.detail = detail
 
 
-@dataclass(frozen=True)
-class Rect:
-    """An axis-aligned rectangle in the front elevation (X right, Z up)."""
-
-    x_mm: float
-    z_mm: float
-    width_mm: float
-    height_mm: float
-
-
-@dataclass(frozen=True)
-class SolvedLayout:
-    """Read-only map from node id to its solved :class:`Rect`."""
-
-    rect_by_id: Mapping[str, Rect]
-
-    def __getitem__(self, node_id: str) -> Rect:
-        return self.rect_by_id[node_id]
-
-
 def _driven_weight(rule: Weighted | Fill) -> float:
     """Weight a driven rule contributes to slack sharing; ``Fill`` counts as 1."""
     return rule.weight if isinstance(rule, Weighted) else 1.0
@@ -81,7 +67,7 @@ def _driven_weight(rule: Weighted | Fill) -> float:
 
 def distribute(
     axis_span_mm: float,
-    rules: Sequence[SplitRule],
+    rules: Sequence[SizeRule],
     divider_thicknesses_mm: Sequence[float],
     *,
     node_id: str,
@@ -95,9 +81,11 @@ def distribute(
     exceed the span or the fixed sizes leave negative slack, and
     ``reason="no_slack_absorber"`` when there is leftover positive slack but no
     driven rule to absorb it. Overflow is checked first, so an all-``Fixed``
-    split whose sizes exceed the span reports ``"overflow"``, not
-    ``"no_slack_absorber"``. It does not check for nonpositive openings;
-    ``_place`` does that against the child bay id.
+    run whose sizes exceed the span reports ``"overflow"``, not
+    ``"no_slack_absorber"``. It does not check for nonpositive openings; the
+    caller does that against the offending item's id. Every ``Fixed`` rule
+    here must already be resolved to ``Basis.CLEAR``; this function has no
+    basis case of its own.
     """
     dividers_total_mm = sum(divider_thicknesses_mm)
     if dividers_total_mm > axis_span_mm + EPS_MM:
@@ -114,7 +102,7 @@ def distribute(
     slack_mm = available_mm - fixed_sum_mm
     driven = [rule for rule in rules if isinstance(rule, (Weighted, Fill))]
     # Negative slack is an overflow regardless of whether a driven rule exists,
-    # so this precedes the no_slack_absorber check: an all-Fixed split that
+    # so this precedes the no_slack_absorber check: an all-Fixed run that
     # overruns the span reports the more informative "overflow" reason.
     if slack_mm < -EPS_MM:
         raise LayoutSolveError(
@@ -141,131 +129,128 @@ def distribute(
     return sizes
 
 
-def _interior_rect(carcass: Carcass, default_thickness_mm: float) -> Rect:
-    """Carcass exterior inset by ``default_thickness_mm`` on all four sides."""
-    thickness_mm = default_thickness_mm
-    width_mm = carcass.width_mm - 2 * thickness_mm
-    height_mm = carcass.height_mm - 2 * thickness_mm
-    if width_mm <= EPS_MM or height_mm <= EPS_MM:
-        raise LayoutSolveError(
-            carcass.root.id,
-            "overflow",
-            {
-                "width_mm": width_mm,
-                "height_mm": height_mm,
-                "thickness_mm": thickness_mm,
-            },
-        )
-    return Rect(
-        x_mm=thickness_mm,
-        z_mm=thickness_mm,
-        width_mm=width_mm,
-        height_mm=height_mm,
-    )
+def _axis_index(axis: Axis) -> AxisIndex:
+    match axis:
+        case Axis.X:
+            return 0
+        case Axis.Y:
+            return 1
+        case Axis.Z:
+            return 2
 
 
-def _effective_thicknesses_mm(
-    split: Split, catalog: Catalog, default_thickness_mm: float
-) -> list[float]:
-    """Resolved thickness per divider: its material's, or the carcass default.
+def _component_mm(v: Vec3, axis_index: AxisIndex) -> float:
+    return (v.x_mm, v.y_mm, v.z_mm)[axis_index]
 
-    A ``Divider`` whose ``material`` is set but absent from ``catalog`` raises
-    ``KeyError`` from :meth:`Catalog.__getitem__`.
+
+def _replace_component_mm(v: Vec3, axis_index: AxisIndex, value_mm: float) -> Vec3:
+    components = [v.x_mm, v.y_mm, v.z_mm]
+    components[axis_index] = value_mm
+    return Vec3(*components)
+
+
+def _thickness_mm(board: Board, unit: Unit, catalog: Catalog) -> float:
+    return catalog[board.material or unit.default_material].thickness_mm
+
+
+def _resolve_with_next(
+    rule: Fixed,
+    index: int,
+    items: Sequence[Item],
+    unit: Unit,
+    catalog: Catalog,
+    region_id: str,
+) -> Fixed:
+    """Resolve a ``Basis.WITH_NEXT`` rule to an equivalent ``Basis.CLEAR`` one.
+
+    Subtracts the resolved thickness of the item immediately after ``index``
+    in ``items``. Raises :class:`LayoutSolveError` with reason
+    ``"unresolvable_basis"`` when there is no next item or it is not a
+    ``Board``.
     """
-    return [
-        default_thickness_mm
-        if divider.material is None
-        else catalog[divider.material].thickness_mm
-        for divider in split.dividers
-    ]
+    if index + 1 >= len(items) or not isinstance(items[index + 1], Board):
+        raise LayoutSolveError(region_id, "unresolvable_basis", {})
+    next_board = items[index + 1]
+    assert isinstance(next_board, Board)
+    next_thickness_mm = _thickness_mm(next_board, unit, catalog)
+    return Fixed(size_mm=rule.size_mm - next_thickness_mm)
+
+
+def _rule_for_item(
+    item: Item,
+    index: int,
+    items: Sequence[Item],
+    unit: Unit,
+    catalog: Catalog,
+) -> SizeRule:
+    """The rule ``distribute`` should use for ``item``.
+
+    A board's size along the axis is its thickness, a ``Fixed`` rule, so
+    boards and regions go through one distribution. A region's own
+    ``Basis.WITH_NEXT`` rule is resolved to ``Basis.CLEAR`` first.
+    """
+    if isinstance(item, Board):
+        return Fixed(size_mm=_thickness_mm(item, unit, catalog))
+    rule = item.rule
+    if isinstance(rule, Fixed) and rule.basis is Basis.WITH_NEXT:
+        return _resolve_with_next(rule, index, items, unit, catalog, item.id)
+    return rule
 
 
 def _place(
-    bay: Bay,
-    rect: Rect,
-    out: dict[str, Rect],
+    region: Region,
+    space: Space,
+    unit: Unit,
     catalog: Catalog,
-    default_thickness_mm: float,
+    out: dict[str, Space],
 ) -> None:
-    """Record one :class:`Rect` per node id in the subtree rooted at ``bay``.
+    """Record one :class:`~shelving_core.geometry.Space` per node id in the
+    subtree rooted at ``region``.
 
-    A ``HORIZONTAL`` split shares its ``rect``'s ``height_mm`` along Z; a
-    ``VERTICAL`` split shares its ``width_mm`` along X. Children are laid from
-    the low edge in list order, each filling the parent's cross axis; every
-    divider fills the gap between two consecutive children. ``out`` is mutated
-    in place. ``catalog`` and ``default_thickness_mm`` resolve each
-    ``Divider``'s thickness (its own material, or the carcass default). A
-    resolved opening ``<= EPS_MM`` raises :class:`LayoutSolveError` against that
-    child bay's id.
+    A ``Division`` shares ``space``'s extent along its own axis among its
+    items and passes the other two axes through unchanged. Items are placed
+    from the low edge in list order. ``out`` is mutated in place. A resolved
+    opening ``<= EPS_MM`` raises :class:`LayoutSolveError` against that
+    item's id.
     """
-    match bay:
-        case Leaf():
-            out[bay.id] = rect
-        case Split():
-            out[bay.id] = rect
-            thicknesses_mm = _effective_thicknesses_mm(
-                bay, catalog, default_thickness_mm
+    out[region.id] = space
+    if not isinstance(region, Division):
+        return
+    axis_index = _axis_index(region.axis)
+    axis_span_mm = space.extent_mm(axis_index)
+    rules: list[SizeRule] = [
+        _rule_for_item(item, index, region.items, unit, catalog)
+        for index, item in enumerate(region.items)
+    ]
+    sizes_mm = distribute(axis_span_mm, rules, [], node_id=region.id)
+    cursor_mm = _component_mm(space.origin, axis_index)
+    for item, size_mm in zip(region.items, sizes_mm, strict=True):
+        if size_mm <= EPS_MM:
+            raise LayoutSolveError(
+                item.id,
+                "nonpositive_opening",
+                {"size_mm": size_mm},
             )
-            horizontal = bay.orientation is Orientation.HORIZONTAL
-            axis_span_mm = rect.height_mm if horizontal else rect.width_mm
-            sizes_mm = distribute(
-                axis_span_mm, bay.rules, thicknesses_mm, node_id=bay.id
-            )
-            for size_mm, child in zip(sizes_mm, bay.children, strict=True):
-                if size_mm <= EPS_MM:
-                    raise LayoutSolveError(
-                        child.id,
-                        "nonpositive_opening",
-                        {"size_mm": size_mm},
-                    )
-            cursor_mm = rect.z_mm if horizontal else rect.x_mm
-            for index, child in enumerate(bay.children):
-                size_mm = sizes_mm[index]
-                if horizontal:
-                    child_rect = Rect(
-                        x_mm=rect.x_mm,
-                        z_mm=cursor_mm,
-                        width_mm=rect.width_mm,
-                        height_mm=size_mm,
-                    )
-                else:
-                    child_rect = Rect(
-                        x_mm=cursor_mm,
-                        z_mm=rect.z_mm,
-                        width_mm=size_mm,
-                        height_mm=rect.height_mm,
-                    )
-                _place(child, child_rect, out, catalog, default_thickness_mm)
-                cursor_mm += size_mm
-                if index < len(thicknesses_mm):
-                    thickness_mm = thicknesses_mm[index]
-                    if horizontal:
-                        divider_rect = Rect(
-                            x_mm=rect.x_mm,
-                            z_mm=cursor_mm,
-                            width_mm=rect.width_mm,
-                            height_mm=thickness_mm,
-                        )
-                    else:
-                        divider_rect = Rect(
-                            x_mm=cursor_mm,
-                            z_mm=rect.z_mm,
-                            width_mm=thickness_mm,
-                            height_mm=rect.height_mm,
-                        )
-                    out[bay.dividers[index].id] = divider_rect
-                    cursor_mm += thickness_mm
+        child_space = Space(
+            origin=_replace_component_mm(space.origin, axis_index, cursor_mm),
+            size=_replace_component_mm(space.size, axis_index, size_mm),
+        )
+        cursor_mm += size_mm
+        if isinstance(item, Board):
+            out[item.id] = child_space
+        else:
+            _place(item, child_space, unit, catalog, out)
 
 
-def solve(carcass: Carcass, catalog: Catalog) -> SolvedLayout:
-    """Place every ``Leaf``, ``Split``, and ``Divider`` id in one :class:`Rect`.
+def solve(unit: Unit, catalog: Catalog) -> dict[str, Space]:
+    """One :class:`~shelving_core.geometry.Space` per region and board id.
 
-    A ``default_material`` or ``Divider.material`` id absent from ``catalog``
-    raises ``KeyError`` from :meth:`Catalog.__getitem__`, not
+    The root is placed at the unit's local-frame origin with extent
+    ``unit.size_mm``. A ``default_material`` or ``Board.material`` id absent
+    from ``catalog`` raises ``KeyError`` from :meth:`Catalog.__getitem__`, not
     :class:`LayoutSolveError`.
     """
-    default_thickness_mm = catalog[carcass.default_material].thickness_mm
-    interior_rect = _interior_rect(carcass, default_thickness_mm)
-    out: dict[str, Rect] = {}
-    _place(carcass.root, interior_rect, out, catalog, default_thickness_mm)
-    return SolvedLayout(rect_by_id=out)
+    out: dict[str, Space] = {}
+    root_space = Space(origin=Vec3(0.0, 0.0, 0.0), size=unit.size_mm)
+    _place(unit.root, root_space, unit, catalog, out)
+    return out

@@ -1,26 +1,26 @@
-"""Spacing solver: distribution rules, nested geometry, and failure reasons."""
+"""Spacing solver: distribution rules, region-tree geometry, and failure reasons."""
 
 import pytest
 
+from shelving_core.geometry import Space, Vec3
 from shelving_core.layout import (
-    Carcass,
-    Divider,
+    Axis,
+    Basis,
+    Bay,
+    Board,
+    Division,
     Fill,
     Fixed,
-    Leaf,
-    Orientation,
-    Split,
+    Unit,
+    Void,
     Weighted,
 )
 from shelving_core.materials import Catalog, MaterialEntry, MaterialId
-from shelving_core.solver import (
-    LayoutSolveError,
-    Rect,
-    SolvedLayout,
-    _place,
-    distribute,
-    solve,
-)
+from shelving_core.solver import LayoutSolveError, distribute, solve
+
+T10 = MaterialId("t10")
+T18 = MaterialId("t18")
+T20 = MaterialId("t20")
 
 
 def _catalog(**thicknesses_mm: float) -> Catalog:
@@ -38,70 +38,24 @@ def _catalog(**thicknesses_mm: float) -> Catalog:
     )
 
 
-T10 = MaterialId("t10")
-T18 = MaterialId("t18")
-T20 = MaterialId("t20")
 CATALOG = _catalog(t10=10.0, t18=18.0, t20=20.0)
 
 
-def _assert_rect(
-    actual: Rect, x_mm: float, z_mm: float, width_mm: float, height_mm: float
-) -> None:
-    assert actual.x_mm == pytest.approx(x_mm, abs=1e-6)
-    assert actual.z_mm == pytest.approx(z_mm, abs=1e-6)
-    assert actual.width_mm == pytest.approx(width_mm, abs=1e-6)
-    assert actual.height_mm == pytest.approx(height_mm, abs=1e-6)
-
-
-def _solve_single_split(
+def _assert_space(
+    space: Space,
     *,
-    height_mm: float,
-    width_mm: float,
-    rules: list[Fixed | Weighted | Fill],
-) -> SolvedLayout:
-    """One HORIZONTAL split of ``len(rules)`` children under an 18 mm shell."""
-    children: list[Leaf | Split] = [Leaf(id=f"c{i}") for i in range(len(rules))]
-    dividers = [Divider(material=None, id=f"d{i}") for i in range(len(rules) - 1)]
-    root = Split(
-        orientation=Orientation.HORIZONTAL,
-        children=children,
-        rules=rules,
-        dividers=dividers,
-        id="root",
-    )
-    carcass = Carcass(
-        width_mm=width_mm,
-        height_mm=height_mm,
-        depth_mm=300.0,
-        default_material=T18,
-        root=root,
-    )
-    return solve(carcass, CATALOG)
+    origin: tuple[float, float, float],
+    size: tuple[float, float, float],
+) -> None:
+    assert space.origin.x_mm == pytest.approx(origin[0], abs=1e-6)
+    assert space.origin.y_mm == pytest.approx(origin[1], abs=1e-6)
+    assert space.origin.z_mm == pytest.approx(origin[2], abs=1e-6)
+    assert space.size.x_mm == pytest.approx(size[0], abs=1e-6)
+    assert space.size.y_mm == pytest.approx(size[1], abs=1e-6)
+    assert space.size.z_mm == pytest.approx(size[2], abs=1e-6)
 
 
-def test_three_way_fill_split_gives_equal_openings() -> None:
-    layout = _solve_single_split(
-        height_mm=900.0, width_mm=600.0, rules=[Fill(), Fill(), Fill()]
-    )
-    _assert_rect(layout["c0"], 18.0, 18.0, 564.0, 276.0)
-    _assert_rect(layout["c1"], 18.0, 312.0, 564.0, 276.0)
-    _assert_rect(layout["c2"], 18.0, 606.0, 564.0, 276.0)
-
-
-def test_fixed_plus_fill_split_fill_absorbs_slack() -> None:
-    layout = _solve_single_split(
-        height_mm=1800.0, width_mm=600.0, rules=[Fixed(500.0), Fill()]
-    )
-    _assert_rect(layout["c0"], 18.0, 18.0, 564.0, 500.0)
-    _assert_rect(layout["c1"], 18.0, 536.0, 564.0, 1246.0)
-
-
-def test_weighted_split_shares_slack_two_to_one() -> None:
-    layout = _solve_single_split(
-        height_mm=900.0, width_mm=600.0, rules=[Weighted(2.0), Weighted(1.0)]
-    )
-    _assert_rect(layout["c0"], 18.0, 18.0, 564.0, 564.0)
-    _assert_rect(layout["c1"], 18.0, 600.0, 564.0, 282.0)
+# --- distribute() unit tests, kept verbatim: distribute itself is unchanged. ---
 
 
 def test_distribute_fixed_and_fill() -> None:
@@ -156,198 +110,178 @@ def test_distribute_no_slack_absorber_raises() -> None:
     assert excinfo.value.node_id == "x"
 
 
-def test_place_records_child_and_divider_rects_from_a_literal_rect() -> None:
-    split = Split(
-        orientation=Orientation.VERTICAL,
-        children=[Leaf(id="l"), Leaf(id="r")],
-        rules=[Fixed(200.0), Fill()],
-        dividers=[Divider(material=T20, id="dv")],
-        id="s",
-    )
-    out: dict[str, Rect] = {}
-    _place(
-        split,
-        Rect(x_mm=0.0, z_mm=0.0, width_mm=600.0, height_mm=900.0),
-        out,
-        CATALOG,
-        0.0,
-    )
-    _assert_rect(out["s"], 0.0, 0.0, 600.0, 900.0)
-    _assert_rect(out["l"], 0.0, 0.0, 200.0, 900.0)
-    _assert_rect(out["dv"], 200.0, 0.0, 20.0, 900.0)
-    _assert_rect(out["r"], 220.0, 0.0, 380.0, 900.0)
+# --- solve() over the region tree. ---
 
 
-def test_nested_horizontal_then_vertical_geometry() -> None:
-    inner = Split(
-        orientation=Orientation.VERTICAL,
-        children=[Leaf(id="b"), Leaf(id="c"), Leaf(id="d")],
-        rules=[Fill(), Fill(), Fill()],
-        dividers=[
-            Divider(material=None, id="d1"),
-            Divider(material=None, id="d2"),
+def test_closed_box_places_its_four_shell_boards_and_interior() -> None:
+    root = Division(
+        axis=Axis.Z,
+        items=[
+            Board(role="bottom", id="bottom"),
+            Division(
+                axis=Axis.X,
+                items=[
+                    Board(role="left_side", id="left"),
+                    Bay(id="interior"),
+                    Board(role="right_side", id="right"),
+                ],
+                id="middle",
+            ),
+            Board(role="top", id="top"),
         ],
-        id="inner",
-    )
-    root = Split(
-        orientation=Orientation.HORIZONTAL,
-        children=[Leaf(id="a"), inner],
-        rules=[Fixed(400.0), Fill()],
-        dividers=[Divider(material=None, id="d0")],
         id="root",
     )
-    layout = solve(
-        Carcass(
-            width_mm=900.0,
-            height_mm=1800.0,
-            depth_mm=300.0,
-            default_material=T18,
-            root=root,
-        ),
-        CATALOG,
-    )
-    _assert_rect(layout["root"], 18.0, 18.0, 864.0, 1764.0)
-    _assert_rect(layout["a"], 18.0, 18.0, 864.0, 400.0)
-    _assert_rect(layout["d0"], 18.0, 418.0, 864.0, 18.0)
-    _assert_rect(layout["inner"], 18.0, 436.0, 864.0, 1346.0)
-    _assert_rect(layout["b"], 18.0, 436.0, 276.0, 1346.0)
-    _assert_rect(layout["d1"], 294.0, 436.0, 18.0, 1346.0)
-    _assert_rect(layout["c"], 312.0, 436.0, 276.0, 1346.0)
-    _assert_rect(layout["d2"], 588.0, 436.0, 18.0, 1346.0)
-    _assert_rect(layout["d"], 606.0, 436.0, 276.0, 1346.0)
+    unit = Unit(size_mm=Vec3(900.0, 300.0, 1800.0), default_material=T18, root=root)
+    spaces = solve(unit, CATALOG)
+    _assert_space(spaces["bottom"], origin=(0, 0, 0), size=(900, 300, 18))
+    _assert_space(spaces["top"], origin=(0, 0, 1782), size=(900, 300, 18))
+    _assert_space(spaces["middle"], origin=(0, 0, 18), size=(900, 300, 1764))
+    _assert_space(spaces["left"], origin=(0, 0, 18), size=(18, 300, 1764))
+    _assert_space(spaces["right"], origin=(882, 0, 18), size=(18, 300, 1764))
+    _assert_space(spaces["interior"], origin=(18, 0, 18), size=(864, 300, 1764))
 
 
-def test_carcass_inset_reduces_all_four_sides() -> None:
-    layout = solve(
-        Carcass(
-            width_mm=100.0,
-            height_mm=200.0,
-            depth_mm=50.0,
-            default_material=T10,
-            root=Leaf(id="only"),
-        ),
-        CATALOG,
-    )
-    _assert_rect(layout["only"], 10.0, 10.0, 80.0, 180.0)
-
-
-def test_divider_material_overrides_the_carcass_default_thickness() -> None:
-    root = Split(
-        orientation=Orientation.VERTICAL,
-        children=[Leaf(id="l"), Leaf(id="r")],
-        rules=[Fixed(200.0), Fill()],
-        dividers=[Divider(material=T20, id="dv")],
+def test_division_mixing_fixed_fill_and_boards() -> None:
+    root = Division(
+        axis=Axis.X,
+        items=[
+            Board(id="left_board"),
+            Bay(rule=Fixed(200.0), id="fixed_bay"),
+            Bay(rule=Fill(), id="fill_bay"),
+        ],
         id="root",
     )
-    layout = solve(
-        Carcass(
-            width_mm=636.0,
-            height_mm=400.0,
-            depth_mm=300.0,
-            default_material=T18,
-            root=root,
-        ),
-        CATALOG,
-    )
-    # Interior width 636 - 2*18 = 600; the 20 mm divider from T20 overrides the
-    # T18 default, so 600 - 200 - 20 = 380 is left for the fill child.
-    _assert_rect(layout["dv"], 218.0, 18.0, 20.0, 364.0)
-    _assert_rect(layout["r"], 238.0, 18.0, 380.0, 364.0)
+    unit = Unit(size_mm=Vec3(600.0, 300.0, 900.0), default_material=T18, root=root)
+    spaces = solve(unit, CATALOG)
+    _assert_space(spaces["left_board"], origin=(0, 0, 0), size=(18, 300, 900))
+    _assert_space(spaces["fixed_bay"], origin=(18, 0, 0), size=(200, 300, 900))
+    _assert_space(spaces["fill_bay"], origin=(218, 0, 0), size=(382, 300, 900))
 
 
-def test_solve_missing_default_material_raises_key_error() -> None:
-    root = Leaf(id="only")
-    carcass = Carcass(
-        width_mm=600.0,
-        height_mm=600.0,
-        depth_mm=300.0,
-        default_material=MaterialId("absent"),
-        root=root,
+def test_void_receives_a_space_like_any_region() -> None:
+    root = Division(
+        axis=Axis.Z,
+        items=[Bay(id="bay"), Void(rule=Fixed(100.0), id="void")],
+        id="root",
     )
-    with pytest.raises(KeyError, match="no material 'absent' in catalog"):
-        solve(carcass, CATALOG)
+    unit = Unit(size_mm=Vec3(600.0, 300.0, 500.0), default_material=T18, root=root)
+    spaces = solve(unit, CATALOG)
+    _assert_space(spaces["void"], origin=(0, 0, 400), size=(600, 300, 100))
+
+
+def test_division_along_axis_y_is_solved_the_same_way() -> None:
+    """The solver is axis-agnostic: swapping the division's axis to Y produces
+    the same distribution, just along a different component."""
+    root = Division(
+        axis=Axis.Y,
+        items=[Board(id="front"), Bay(rule=Fill(), id="bay"), Board(id="back")],
+        id="root",
+    )
+    unit = Unit(size_mm=Vec3(600.0, 300.0, 900.0), default_material=T18, root=root)
+    spaces = solve(unit, CATALOG)
+    _assert_space(spaces["front"], origin=(0, 0, 0), size=(600, 18, 900))
+    _assert_space(spaces["bay"], origin=(0, 18, 0), size=(600, 264, 900))
+    _assert_space(spaces["back"], origin=(0, 282, 0), size=(600, 18, 900))
 
 
 def test_solve_overflow_reason_and_node_id() -> None:
-    root = Split(
-        orientation=Orientation.HORIZONTAL,
-        children=[Leaf(id="a"), Leaf(id="b")],
-        rules=[Fixed(5000.0), Fill()],
-        dividers=[Divider(material=None, id="dv")],
+    root = Division(
+        axis=Axis.X,
+        items=[Bay(rule=Fixed(5000.0)), Bay(rule=Fill())],
         id="split",
     )
+    unit = Unit(size_mm=Vec3(600.0, 300.0, 1000.0), default_material=T18, root=root)
     with pytest.raises(LayoutSolveError) as excinfo:
-        solve(
-            Carcass(
-                width_mm=600.0,
-                height_mm=1000.0,
-                depth_mm=300.0,
-                default_material=T18,
-                root=root,
-            ),
-            CATALOG,
-        )
+        solve(unit, CATALOG)
     assert excinfo.value.reason == "overflow"
     assert excinfo.value.node_id == "split"
 
 
 def test_solve_no_slack_absorber_reason_and_node_id() -> None:
-    root = Split(
-        orientation=Orientation.HORIZONTAL,
-        children=[Leaf(id="a"), Leaf(id="b")],
-        rules=[Fixed(100.0), Fixed(200.0)],
-        dividers=[Divider(material=None, id="dv")],
+    root = Division(
+        axis=Axis.X,
+        items=[Bay(rule=Fixed(100.0)), Bay(rule=Fixed(200.0))],
         id="split",
     )
+    unit = Unit(size_mm=Vec3(600.0, 300.0, 1000.0), default_material=T18, root=root)
     with pytest.raises(LayoutSolveError) as excinfo:
-        solve(
-            Carcass(
-                width_mm=600.0,
-                height_mm=1000.0,
-                depth_mm=300.0,
-                default_material=T18,
-                root=root,
-            ),
-            CATALOG,
-        )
+        solve(unit, CATALOG)
     assert excinfo.value.reason == "no_slack_absorber"
     assert excinfo.value.node_id == "split"
 
 
 def test_solve_nonpositive_opening_reason_and_node_id() -> None:
-    root = Split(
-        orientation=Orientation.HORIZONTAL,
-        children=[Leaf(id="top"), Leaf(id="bot")],
-        rules=[Fixed(500.0), Fill()],
-        dividers=[Divider(material=None, id="dv")],
+    root = Division(
+        axis=Axis.Z,
+        items=[Bay(rule=Fixed(500.0), id="top"), Bay(rule=Fill(), id="bot")],
         id="split",
     )
+    unit = Unit(size_mm=Vec3(200.0, 300.0, 500.0), default_material=T18, root=root)
     with pytest.raises(LayoutSolveError) as excinfo:
-        solve(
-            Carcass(
-                width_mm=200.0,
-                height_mm=554.0,
-                depth_mm=300.0,
-                default_material=T18,
-                root=root,
-            ),
-            CATALOG,
-        )
+        solve(unit, CATALOG)
     assert excinfo.value.reason == "nonpositive_opening"
     assert excinfo.value.node_id == "bot"
 
 
-def test_solve_carcass_inset_overflow_targets_root_bay_id() -> None:
+def test_solve_unresolvable_basis_when_region_is_last_item() -> None:
+    root = Division(
+        axis=Axis.Z,
+        items=[
+            Board(id="bottom"),
+            Bay(rule=Fixed(500.0, basis=Basis.WITH_NEXT), id="last"),
+        ],
+        id="root",
+    )
+    unit = Unit(size_mm=Vec3(600.0, 300.0, 1000.0), default_material=T18, root=root)
     with pytest.raises(LayoutSolveError) as excinfo:
-        solve(
-            Carcass(
-                width_mm=30.0,
-                height_mm=200.0,
-                depth_mm=50.0,
-                default_material=T20,
-                root=Leaf(id="r"),
-            ),
-            CATALOG,
+        solve(unit, CATALOG)
+    assert excinfo.value.reason == "unresolvable_basis"
+    assert excinfo.value.node_id == "last"
+
+
+def test_solve_unresolvable_basis_when_next_item_is_not_a_board() -> None:
+    root = Division(
+        axis=Axis.Z,
+        items=[
+            Bay(rule=Fixed(500.0, basis=Basis.WITH_NEXT), id="with_next"),
+            Bay(rule=Fill()),
+        ],
+        id="root",
+    )
+    unit = Unit(size_mm=Vec3(600.0, 300.0, 1000.0), default_material=T18, root=root)
+    with pytest.raises(LayoutSolveError) as excinfo:
+        solve(unit, CATALOG)
+    assert excinfo.value.reason == "unresolvable_basis"
+    assert excinfo.value.node_id == "with_next"
+
+
+def test_basis_with_next_holds_board_position_across_catalog_thickness_change() -> None:
+    """A shelf spacing quoted top face to top face (``WITH_NEXT``, a bay's
+    fixed size covering the bay plus the shelf immediately above it) keeps the
+    upper shelf's position fixed when the catalog's board thickness changes;
+    the same layout measured ``CLEAR`` instead moves it."""
+
+    def build(basis: Basis) -> Unit:
+        root = Division(
+            axis=Axis.Z,
+            items=[
+                Board(id="lower_shelf"),
+                Bay(rule=Fixed(400.0, basis=basis), id="bay"),
+                Board(id="upper_shelf"),
+                Bay(rule=Fill(), id="top_bay"),
+            ],
+            id="root",
         )
-    assert excinfo.value.reason == "overflow"
-    assert excinfo.value.node_id == "r"
+        return Unit(size_mm=Vec3(600.0, 300.0, 1200.0), default_material=T18, root=root)
+
+    thin_catalog = _catalog(t18=10.0)
+
+    with_next_thick = solve(build(Basis.WITH_NEXT), CATALOG)
+    with_next_thin = solve(build(Basis.WITH_NEXT), thin_catalog)
+    assert with_next_thick["upper_shelf"].origin.z_mm == pytest.approx(400.0)
+    assert with_next_thin["upper_shelf"].origin.z_mm == pytest.approx(400.0)
+
+    clear_thick = solve(build(Basis.CLEAR), CATALOG)
+    clear_thin = solve(build(Basis.CLEAR), thin_catalog)
+    assert clear_thick["upper_shelf"].origin.z_mm == pytest.approx(418.0)
+    assert clear_thin["upper_shelf"].origin.z_mm == pytest.approx(410.0)
