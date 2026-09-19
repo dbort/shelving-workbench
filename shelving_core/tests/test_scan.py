@@ -514,3 +514,165 @@ def test_unequal_siblings_recover_as_fixed() -> None:
     ]
     result = scan(boxes, CATALOG)
     assert _region_rules(result.unit.root) == [Fixed, Fixed, Fixed, Fixed]
+
+
+def _kinds_names(division: Division) -> tuple[str, list[str]]:
+    """One character per item (``P`` board, ``o`` open bay, ``x`` void,
+    ``D`` nested division) plus the boards' roles in order, mirroring the
+    spike's own ``_kinds``/``_names`` test helpers."""
+    kinds = ""
+    names: list[str] = []
+    for item in division.items:
+        if isinstance(item, Board):
+            kinds += "P"
+            names.append(item.role)
+        elif isinstance(item, Bay):
+            kinds += "o"
+        elif isinstance(item, Void):
+            kinds += "x"
+        else:
+            kinds += "D"
+    return kinds, names
+
+
+def _division(item: Item) -> Division:
+    assert isinstance(item, Division)
+    return item
+
+
+def test_real_magicstart_f1_whole_tree() -> None:
+    """Sides running the full height with floor, shelf and top captured
+    between them, a 100 mm plinth ``Void`` below the floor, 1 mm insets on
+    the shelf, the back in ``panels``, front at minimum depth."""
+    boxes = boxes_from_json(REAL_MAGICSTART_F1.read_text(encoding="utf-8"))
+    result = scan(boxes, CATALOG)
+
+    assert [p.name for p in result.panels] == ["Back"]
+    assert result.unit.depth_axis is Axis.Y
+    assert result.unit.front_at_min is True
+    assert result.facing_evidence is FacingEvidence.PANEL
+
+    root = _division(result.unit.root)
+    assert root.axis is Axis.X
+    assert _kinds_names(root) == ("PDP", ["Left", "Right"])
+
+    inner = _division(root.items[1])
+    assert inner.axis is Axis.Z
+    assert _kinds_names(inner) == ("xPoPoP", ["Floor", "Shelf", "Top"])
+    plinth = inner.items[0]
+    assert isinstance(plinth, Void)
+
+    floor = inner.items[1]
+    assert isinstance(floor, Board)
+    assert (floor.insets.y_min_mm, floor.insets.y_max_mm) == (0.0, 3.0)
+
+    shelf = inner.items[3]
+    assert isinstance(shelf, Board)
+    assert (shelf.insets.x_min_mm, shelf.insets.x_max_mm) == (1.0, 1.0)
+
+
+def test_real_stair_step_whole_tree() -> None:
+    """A top board over everything, three uprights under it, ``Void`` below
+    each step, and the two inner shelves under their own divider."""
+    boxes = boxes_from_json(REAL_STAIR_STEP.read_text(encoding="utf-8"))
+    result = scan(boxes, CATALOG)
+
+    root = _division(result.unit.root)
+    assert root.axis is Axis.Z
+    assert _kinds_names(root) == ("DP", ["panelYX"])
+
+    columns = _division(root.items[0])
+    assert columns.axis is Axis.Y
+    assert _kinds_names(columns) == (
+        "PDPDP",
+        ["panelZX012", "panelZX007", "panelZX008"],
+    )
+
+    left = _division(columns.items[1])
+    assert left.axis is Axis.Z
+    assert _kinds_names(left) == ("xPo", ["Shelf015"])
+    assert isinstance(left.items[0], Void)
+
+    right = _division(columns.items[3])
+    assert right.axis is Axis.Z
+    assert _kinds_names(right) == ("xPDPo", ["panelYX003", "Shelf013"])
+    assert isinstance(right.items[0], Void)
+
+    middle = _division(right.items[2])
+    assert middle.axis is Axis.Y
+    assert _kinds_names(middle) == ("DPD", ["panelZX011"])
+    shelves = ["Shelf014", "Shelf016"]
+    for item, shelf_name in zip(middle.items[0::2], shelves, strict=True):
+        sub = _division(item)
+        assert sub.axis is Axis.Z
+        assert _kinds_names(sub) == ("oPo", [shelf_name])
+
+
+def test_real_two_units_whole_tree() -> None:
+    """Both seams present as adjacent ``Board`` items, the units' two top
+    boards side by side, and the notched panel appearing in ``skipped``
+    rather than as a board."""
+    boxes, skipped = export_from_json(REAL_TWO_UNITS.read_text(encoding="utf-8"))
+    result = scan(boxes, CATALOG)
+
+    assert [s.name for s in skipped] == ["Sketch006", "Pad003"]
+
+    root = _division(result.unit.root)
+    assert root.axis is Axis.Z
+    assert _kinds_names(root) == ("PDD", ["panelFaceYX"])
+
+    tops = _division(root.items[2])
+    assert tops.axis is Axis.Y
+    # Together the two units' top boards span the width; neither spans it
+    # alone, so they show up as two adjacent Board items, not one.
+    assert _kinds_names(tops) == ("PP", ["panelYX", "panelYX004"])
+
+    body = _division(root.items[1])
+    assert body.axis is Axis.Y
+    assert _kinds_names(body) == ("xDPPDP", ["panelZX008", "panelZX001", "panelZX"])
+    # The seam: one unit's side and the next unit's side, touching.
+    left_side, right_side = body.items[2], body.items[3]
+    assert isinstance(left_side, Board) and left_side.role == "panelZX008"
+    assert isinstance(right_side, Board) and right_side.role == "panelZX001"
+
+
+def _find_pad(nodes: list[dict[str, object]]) -> dict[str, object] | None:
+    for node in nodes:
+        if node.get("type") == "PartDesign::Pad":
+            return node
+        children = node.get("children")
+        if isinstance(children, list):
+            found = _find_pad(children)
+            if found is not None:
+                return found
+    return None
+
+
+REAL_NOTCHED_PANEL = FIXTURES / "real_notched_panel.inspect.json"
+
+
+def test_real_notched_panel_reads_as_skipped() -> None:
+    """The inspection record of a notched panel: a box with a rectangular
+    bite taken out of it, which ``export_boxes.py`` would list under
+    ``skipped`` rather than export as a ``Box``, because it is a PartDesign
+    solid, not a ``Part::Box``."""
+    nodes = json.loads(REAL_NOTCHED_PANEL.read_text(encoding="utf-8"))
+    pad = _find_pad(nodes)
+    assert pad is not None
+    solid = pad["solid"]
+    assert isinstance(solid, dict)
+    assert solid["is_plain_box"] is False
+    assert solid["is_box_minus_boxes"] is True
+
+    skipped = Skipped(
+        name=str(pad["name"]),
+        label=str(pad["label"]),
+        type=str(pad["type"]),
+        reason="a PartDesign solid, not a Part::Box",
+    )
+    assert skipped == Skipped(
+        name="Pad003",
+        label="panel2pad",
+        type="PartDesign::Pad",
+        reason="a PartDesign solid, not a Part::Box",
+    )
