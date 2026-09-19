@@ -1,8 +1,8 @@
 ---
 id: sh-013
 title: "The region model, no FreeCAD"
-current_agent: reviewer
-current_phase: review
+current_agent: user
+current_phase: user_signoff
 review_rejections: 2
 ---
 
@@ -20,7 +20,7 @@ built on the carcass and neither survives the new design. Milestone M4.
 ## Status
 - [x] Planning
 - [x] Implementation
-- [ ] Review
+- [x] Review
 - [ ] User sign-off
 
 ## Must Have
