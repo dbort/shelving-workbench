@@ -2,7 +2,7 @@
 id: sh-015
 title: "The elevation renderer, rebuilt on the region model"
 current_agent: implementer
-current_phase: planning
+current_phase: implementation
 review_rejections: 0
 blocked_by: [sh-014]
 ---
@@ -18,7 +18,7 @@ looks held off. Its test renders a scanned real fixture, which is why it follows
 scanning rather than the model. Milestone M5, part 2 of 2.
 
 ## Status
-- [ ] Planning
+- [x] Planning
 - [ ] Implementation
 - [ ] Review
 - [ ] User sign-off
