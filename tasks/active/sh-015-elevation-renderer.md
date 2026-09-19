@@ -1,8 +1,8 @@
 ---
 id: sh-015
 title: "The elevation renderer, rebuilt on the region model"
-current_agent: reviewer
-current_phase: review
+current_agent: user
+current_phase: user_signoff
 review_rejections: 1
 blocked_by: [sh-014]
 ---
@@ -20,7 +20,7 @@ scanning rather than the model. Milestone M5, part 2 of 2.
 ## Status
 - [x] Planning
 - [x] Implementation
-- [ ] Review
+- [x] Review
 - [ ] User sign-off
 
 ## Must Have
