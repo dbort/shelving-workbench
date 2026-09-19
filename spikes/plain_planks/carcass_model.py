@@ -266,17 +266,15 @@ class PlankRole(enum.StrEnum):
 
 @dataclass(frozen=True)
 class PlankSpec:
-    """One physical plank: its node id, role, extent, minimum corner, material.
+    """One physical plank: its node id, role, extent, minimum corner, material."""
 
-    ``node_id`` is the owning tree node's id for a divider, and the literal
-    ``f"{carcass.id}:{role.value}"`` for a shell plank, which has no tree node
-    of its own. ``size`` and ``placement`` are in the carcass local frame.
-    """
-
+    # The owning tree node's id for a divider, or the literal
+    # ``f"{carcass.id}:{role.value}"`` for a shell plank, which has no tree
+    # node of its own.
     node_id: str
     role: PlankRole
-    size: Vec3
-    placement: Vec3
+    size: Vec3  # Carcass local frame.
+    placement: Vec3  # Carcass local frame.
     material: MaterialId
 
 
