@@ -15,18 +15,10 @@ import enum
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from .geometry import Vec3 as Vec3  # re-exported for existing importers
 from .layout import Bay, Carcass, Orientation, Split
 from .materials import Catalog, MaterialId
 from .solver import SolvedLayout, solve
-
-
-@dataclass(frozen=True)
-class Vec3:
-    """A point or an extent in the carcass local frame, millimetres."""
-
-    x_mm: float
-    y_mm: float
-    z_mm: float
 
 
 class PlankRole(enum.StrEnum):
