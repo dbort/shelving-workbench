@@ -15,8 +15,8 @@ milestone breakdown. [`docs/architecture.md`](docs/architecture.md) describes
 the pre-M4 design; `scope-and-design.md` is the design of record.
 
 To eyeball a solved layout, run `pixi run demo`: it builds a sample stepped
-unit, solves the region tree, and prints the catalog, the solved `Space` for
-every region, and the expanded board table. Add
+unit, solves the region tree, and prints the catalog, the solved position and
+size of every region, and the expanded board table. Add
 `pixi run demo -- --svg layout.svg` to also write the solved layout as an SVG
 elevation, which opens with Quick Look (spacebar in Finder) or any browser.
 
