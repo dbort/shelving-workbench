@@ -20,10 +20,6 @@ Oldest first, by id. One bullet per papercut:
 
 - `friction-NNN` - **<what was needed>**: what happened; the workaround used. Simpler if: <the missing tool/data/doc>.
 
-A date would not identify an entry: two entries logged the same day are
-otherwise indistinguishable, and nobody adding one cares when a prior entry
-was written, only which came first. The id counter fixes both.
-
 ## Assigning an id
 
 This file's front matter carries `next_id`, the only source of truth for
