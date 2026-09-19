@@ -6,12 +6,25 @@ import xml.etree.ElementTree as ET
 import pytest
 
 from shelving_core.geometry import Vec3
-from shelving_core.layout import Axis, Basis, Bay, Board, Division, Fixed, Unit
+from shelving_core.layout import (
+    Axis,
+    Basis,
+    Bay,
+    Board,
+    Division,
+    Fixed,
+    Insets,
+    Unit,
+    Void,
+)
 from shelving_core.materials import Catalog, MaterialEntry, MaterialId
 from shelving_core.solver import solve
 from shelving_core.svg import rule_label, to_svg
 
 SVG_TAG = "{http://www.w3.org/2000/svg}svg"
+RECT_TAG = "{http://www.w3.org/2000/svg}rect"
+TEXT_TAG = "{http://www.w3.org/2000/svg}text"
+TSPAN_TAG = "{http://www.w3.org/2000/svg}tspan"
 
 PLY = MaterialId("ply18")
 MDF = MaterialId("mdf12")
@@ -39,6 +52,51 @@ def _closed_unit(*, depth_axis: Axis | None = Axis.Y) -> Unit:
             id="root",
         ),
     )
+
+
+def _stepped_unit() -> Unit:
+    """Same outer size and rule as ``_closed_unit``, its middle bay a void."""
+    return Unit(
+        size_mm=Vec3(600.0, 300.0, 600.0),
+        default_material=PLY,
+        depth_axis=Axis.Y,
+        root=Division(
+            axis=Axis.Z,
+            items=[
+                Board(role="bottom", id="bottom"),
+                Void(id="middle"),
+                Board(role="top", id="top"),
+            ],
+            id="root",
+        ),
+    )
+
+
+def _unit_with_shelf_insets(insets: Insets) -> Unit:
+    """A single shelf in a division along the depth axis, so its insets show
+    on both projected axes (X and Z) rather than only one."""
+    return Unit(
+        size_mm=Vec3(600.0, 300.0, 600.0),
+        default_material=PLY,
+        depth_axis=Axis.Y,
+        root=Division(
+            axis=Axis.Y,
+            items=[Board(role="shelf", id="shelf", insets=insets), Bay(id="rest")],
+            id="root",
+        ),
+    )
+
+
+def _rects(document: str) -> list[ET.Element]:
+    return ET.fromstring(document).findall(f".//{RECT_TAG}")
+
+
+def _labels(document: str) -> list[str]:
+    """Every ``<text>`` element's joined ``<tspan>`` text, in document order."""
+    return [
+        "".join(tspan.text or "" for tspan in text.iter(TSPAN_TAG))
+        for text in ET.fromstring(document).iter(TEXT_TAG)
+    ]
 
 
 def test_document_parses_with_svg_root_tag() -> None:
@@ -110,3 +168,63 @@ def test_fixed_basis_changes_the_rule_label() -> None:
     clear = rule_label(Fixed(400.0, Basis.CLEAR))
     with_next = rule_label(Fixed(400.0, Basis.WITH_NEXT))
     assert clear != with_next
+
+
+def test_void_renders_distinct_from_a_bay_of_the_same_outer_size() -> None:
+    closed = _closed_unit()
+    stepped = _stepped_unit()
+    closed_document = to_svg(closed, solve(closed, CATALOG), CATALOG)
+    stepped_document = to_svg(stepped, solve(stepped, CATALOG), CATALOG)
+
+    assert closed_document != stepped_document
+    assert not any(r.get("class") == "void" for r in _rects(closed_document))
+    assert any(r.get("class") == "void" for r in _rects(stepped_document))
+
+    # Same outer size: the swapped region solves to the same span either way,
+    # so the difference is attributable to the void, not to a size change.
+    closed_root = ET.fromstring(closed_document)
+    stepped_root = ET.fromstring(stepped_document)
+    assert closed_root.get("viewBox") == stepped_root.get("viewBox")
+
+
+def test_board_insets_render_a_smaller_rect_on_both_projected_axes() -> None:
+    plain = _unit_with_shelf_insets(Insets())
+    inset = _unit_with_shelf_insets(
+        Insets(x_min_mm=10.0, x_max_mm=10.0, z_min_mm=5.0, z_max_mm=5.0)
+    )
+    plain_document = to_svg(plain, solve(plain, CATALOG), CATALOG)
+    inset_document = to_svg(inset, solve(inset, CATALOG), CATALOG)
+
+    plain_rect = next(r for r in _rects(plain_document) if r.get("class") == "board")
+    inset_rect = next(r for r in _rects(inset_document) if r.get("class") == "board")
+    assert float(inset_rect.get("width", "")) < float(plain_rect.get("width", ""))
+    assert float(inset_rect.get("height", "")) < float(plain_rect.get("height", ""))
+
+
+def test_two_boards_face_to_face_render_as_two_adjoining_rects() -> None:
+    unit = Unit(
+        size_mm=Vec3(600.0, 300.0, 600.0),
+        default_material=PLY,
+        depth_axis=Axis.Y,
+        root=Division(
+            axis=Axis.Z,
+            items=[
+                Board(role="lowerboard", id="lower", material=PLY),
+                Board(role="upperboard", id="upper", material=MDF),
+                Bay(id="bay"),
+            ],
+            id="root",
+        ),
+    )
+    document = to_svg(unit, solve(unit, CATALOG), CATALOG)
+    board_rects = [r for r in _rects(document) if r.get("class") == "board"]
+    assert len(board_rects) == 2
+    lower, upper = board_rects
+    # SVG y is flipped relative to the solver's z, but adjoining boards still
+    # share an edge: the lower board's top y equals the upper board's bottom.
+    assert float(lower.get("y", "")) == pytest.approx(
+        float(upper.get("y", "")) + float(upper.get("height", ""))
+    )
+    labels = _labels(document)
+    assert any("lowerboard" in label for label in labels)
+    assert any("upperboard" in label for label in labels)
