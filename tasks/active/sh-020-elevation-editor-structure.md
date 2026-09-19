@@ -115,6 +115,17 @@ neighbours are not both regions, meaning it sits against another board or at the
 end of a run, cannot be merged and must be refused by name rather than producing
 a surprising tree.
 
+IMPORT CORE TYPES FROM ONE PLACE ONLY. `freecad/shelving/editor/session.py`
+does `isinstance` / structural matching on `Region`, `Bay`, `Void`, `Division`,
+`Board` to decide what a selection permits. `shelving_core/` and
+`freecad/shelving/vendor/shelving_core/` are byte-identical but distinct Python
+modules; a `Board` imported from one path is not the same class as one imported
+from the other, so `isinstance` silently returns false across them with no
+error. A prior version of this workbench lost every divider this way (see
+`.claude/docs/friction-log.md`, the vendored-copy entry, before it is swept).
+Import every core type this file matches against from the SAME path used by
+whatever produced the value, consistently through the module.
+
 SELECTION IS A REGION ID OR A BOARD ID, held by the session, not the scene. The
 scene reports what a point hit; the session decides what that means and what the
 buttons do with it. Splitting acts on a selected `Bay`; deleting acts on a
