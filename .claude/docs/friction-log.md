@@ -1,3 +1,7 @@
+---
+next_id: friction-005
+---
+
 # Friction log
 
 Friction log for working in this repo: moments where completing a task forced an unnecessary workaround. An entry qualifies when there is a clear "this would have been simpler if X existed or Y returned this data" - missing tools, missing data, poor return shapes, absent markers, docs that had to be reverse-engineered.
@@ -16,12 +20,27 @@ Oldest first, by id. One bullet per papercut:
 
 - `friction-NNN` - **<what was needed>**: what happened; the workaround used. Simpler if: <the missing tool/data/doc>.
 
-`NNN` is a zero-padded counter, assigned once when an entry is added and never
-reused or reassigned, even when an earlier entry is later deleted. A new entry
-takes the next unused number and is appended at the end of `## Entries`, so id
-order and file order always agree. A date would not do this: two entries
-logged the same day are otherwise indistinguishable, and nobody adding an
-entry cares when a previous one was written, only which came first.
+A date would not identify an entry: two entries logged the same day are
+otherwise indistinguishable, and nobody adding one cares when a prior entry
+was written, only which came first. The id counter fixes both.
+
+## Assigning an id
+
+This file's front matter carries `next_id`, the only source of truth for
+the next number. To add an entry: take the value of `next_id` verbatim as
+the new entry's id, append the entry at the end of `## Entries`, then
+increment `next_id` to the next number and commit both changes together.
+
+Never derive an id by scanning `## Entries`, and never consult git history
+to work one out. Both look plausible and both are wrong the moment the
+highest-numbered entry has been deleted: reading it off the remaining
+entries, or off history, reissues an id that already exists in a past
+commit, in a closed task file, or in another document's cross-reference.
+The counter alone is authoritative, specifically because it still
+increases after the entry it points past is gone.
+
+Deleting an entry never changes `next_id`. The counter only moves forward;
+an id is retired with the entry it named, not returned to the pool.
 
 ## Adding an entry mid-task
 
@@ -29,7 +48,7 @@ An entry written during sh-XXX task work commits on that task's branch with the 
 
 ## Solving a papercut
 
-Fixes route like any other work (`pipeline.md` § Task files and directories, last paragraph): task-sized ones become a sh-XXX task via `new-task`; small ones commit directly. Fix each papercut in its own dedicated commit whose message records BOTH the original papercut (the friction it captured) AND how it was solved, in broad strokes - the code carries the detail. Delete the entry from this file in that same commit: the commit history is the durable record, this file tracks only what is still open.
+Fixes route like any other work (`pipeline.md` § Task files and directories, last paragraph): task-sized ones become a sh-XXX task via `new-task`; small ones commit directly. Fix each papercut in its own dedicated commit whose message records BOTH the original papercut (the friction it captured) AND how it was solved, in broad strokes - the code carries the detail. Delete the entry from this file in that same commit: the commit history is the durable record, this file tracks only what is still open. Do not touch `next_id` when deleting: it only moves forward, per § Assigning an id above.
 
 Sweeping the log is a human-triggered act, like task sign-off: the user asks for a sweep; no agent schedules one on its own.
 
