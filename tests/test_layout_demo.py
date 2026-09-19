@@ -13,10 +13,12 @@ root, the same way ``python tools/layout_demo.py`` and ``pixi run demo`` do.
 
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEMO = REPO_ROOT / "tools" / "layout_demo.py"
+SVG_ROOT_TAG = "{http://www.w3.org/2000/svg}svg"
 
 
 def test_demo_runs_and_prints_the_solved_sample() -> None:
@@ -59,3 +61,24 @@ def test_demo_runs_and_prints_the_solved_sample() -> None:
     assert any(row.split()[0] == "shelf" for row in board_rows)
     assert any("12 mm MDF" in row for row in board_rows)
     assert total_line.endswith(" mm^3")
+
+
+def test_demo_svg_flag_writes_a_parseable_svg(tmp_path: Path) -> None:
+    out = tmp_path / "layout.svg"
+    result = subprocess.run(
+        [sys.executable, str(DEMO), "--svg", str(out)],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert f"wrote {out}" in result.stdout
+    # The text dump still prints; --svg only adds the file and its confirmation.
+    assert result.stdout.splitlines()[0] == (
+        "Unit 1200 x 300 x 1200 mm, default material 18 mm birch ply (18 mm)"
+    )
+
+    assert out.exists()
+    contents = out.read_text(encoding="utf-8")
+    assert contents.strip(), "SVG file is empty"
+    assert ET.fromstring(contents).tag == SVG_ROOT_TAG

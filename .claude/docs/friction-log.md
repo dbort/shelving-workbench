@@ -1,5 +1,5 @@
 ---
-next_id: friction-009
+next_id: friction-010
 ---
 
 # Friction log
@@ -155,3 +155,29 @@ Sweeping the log is a human-triggered act, like task sign-off: the user asks for
   (even a narrow one, over annotated `float` parameters and dataclass fields in
   `shelving_core/`), so the convention failed at lint time instead of costing a
   review round each time a module is ported in from `spikes/`.
+
+- `friction-009` - **`scan`'s default `snap_mm` silently resolves a board to
+  the wrong catalog material when two real thicknesses are close together**:
+  sh-015's end-to-end fixture test needed a catalog built from
+  `real_stair_step.boxes.json`'s own measured thicknesses (no fixed catalog is
+  given for it elsewhere). That fixture has two genuinely distinct board
+  thicknesses only 0.25 mm apart (18.0086 mm, 18.2626 mm). `_material_for_thickness_mm`
+  returns the first catalog entry within `snap_mm` (0.5 mm default) of a
+  board's measured thickness rather than the nearest one, so a board whose
+  true thickness was 18.2626 mm silently resolved to the 18.0086 mm entry.
+  Nothing raised: `scan` and `solve` both succeeded and produced a unit whose
+  boards were the wrong 0.25 mm thinner than the geometry they were scanned
+  from, then failed downstream at `solve` with an opaque
+  `no_slack_absorber` (a division whose one `Fixed` sibling was sized from
+  the *original* measured extent, not from the mis-resolved board, so the two
+  no longer summed to the span). Diagnosed by bisecting: the same
+  `no_slack_absorber` reproduced even with the existing fixed
+  `ply18`/`mdf12` test catalog, which was 0.26 mm off this fixture's real ply
+  thickness in the same direction. Worked around by passing a tighter
+  `snap_mm=0.1` to `scan` for this fixture's test, tight enough to keep each
+  board matching only its own catalog entry. Simpler if: `_material_for_thickness_mm`
+  picked the *nearest* catalog entry within tolerance rather than the first
+  one found, or `scan` raised when a thickness was ambiguously close to more
+  than one catalog entry instead of silently taking the first, so a
+  mismatched material surfaced as a scan-time error naming the board instead
+  of a solve-time `no_slack_absorber` naming an unrelated division.
