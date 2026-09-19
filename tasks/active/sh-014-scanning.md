@@ -1,8 +1,8 @@
 ---
 id: sh-014
 title: "Scanning: geometry to a region model"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 0
 blocked_by: [sh-013]
 ---
@@ -20,40 +20,40 @@ Milestone M5, part 1 of 2.
 
 ## Status
 - [x] Planning
-- [ ] Implementation
+- [x] Implementation
 - [ ] Review
 - [ ] User sign-off
 
 ## Must Have
-- [ ] `pixi run tests` green.
-- [ ] `shelving_core/scan.py` exports `Box`, `Skipped`, `ScanError`,
+- [x] `pixi run tests` green.
+- [x] `shelving_core/scan.py` exports `Box`, `Skipped`, `ScanError`,
       `ScanResult`, `FacingEvidence`, `scan`, `detect_depth_axis`,
       `infer_facing`, `boxes_from_json`, `export_from_json`.
-- [ ] `scan(boxes, catalog, ...)` returns a `ScanResult` whose `unit` is a
+- [x] `scan(boxes, catalog, ...)` returns a `ScanResult` whose `unit` is a
       `shelving_core.layout.Unit`. There is NO second tree type: no `Open`,
       `Outside`, `Cut`, `Divide`, or `Node` in the module.
-- [ ] `Unit` carries `depth_axis: Axis | None` and `front_at_min: bool | None`,
+- [x] `Unit` carries `depth_axis: Axis | None` and `front_at_min: bool | None`,
       both defaulting to `None`, and `scan` fills both.
-- [ ] Every board's end gaps land in its `Insets`, on all four cross-section
+- [x] Every board's end gaps land in its `Insets`, on all four cross-section
       faces, and a scanned board shallower than the unit carries depth insets.
-- [ ] The four real fixtures live under `shelving_core/tests/fixtures/` and each
+- [x] The four real fixtures live under `shelving_core/tests/fixtures/` and each
       has a test asserting its whole tree shape: `real_stair_step` (stepped
       outline with `Void` regions), `real_two_units` (two abutting units, with
       both seams appearing as adjacent `Board` items), `real_magicstart_f1`
       (sides running through, a 100 mm plinth `Void`, 1 mm shelf insets), and
       `real_notched_panel` (read as a `Skipped` record, not a board).
-- [ ] `spikes/plain_planks/` is untouched and its tests still pass.
-- [ ] Round trip: for at least three hand-built units, `scan(expand(unit))`
+- [x] `spikes/plain_planks/` is untouched and its tests still pass.
+- [x] Round trip: for at least three hand-built units, `scan(expand(unit))`
       reproduces the tree shape and every board's size and placement to 1e-6 mm.
-- [ ] `ScanError` carries the offending object names in an `objects` attribute
+- [x] `ScanError` carries the offending object names in an `objects` attribute
       and is raised for each of: an overlap, a board crossing a bay boundary, a
       region with no clean cut line, an empty region part enclosed and part
       open, a unit with no enclosed bay, a box with no single thin axis, and a
       thickness matching no catalog entry. One test each.
-- [ ] `ScanResult.skipped` carries parts the export could not read, and a test
+- [x] `ScanResult.skipped` carries parts the export could not read, and a test
       proves a unit scanned without a board it needs reports that board rather
       than succeeding quietly.
-- [ ] `mypy --strict` clean; `shelving_core` imports no FreeCAD
+- [x] `mypy --strict` clean; `shelving_core` imports no FreeCAD
       (`tests/test_no_freecad.py` still passes).
 
 ## Frontier Advice
