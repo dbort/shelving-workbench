@@ -33,16 +33,16 @@ if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 freecad.__path__ = extend_path(freecad.__path__, "freecad")
 
-from shelving_core.expand import expand  # noqa: E402
-from shelving_core.layout import (  # noqa: E402
+from shelving_core.layout import Fill  # noqa: E402
+from shelving_core.materials import Catalog, MaterialEntry, MaterialId  # noqa: E402
+from spikes.plain_planks.carcass_model import (  # noqa: E402
     Carcass,
     Divider,
-    Fill,
     Leaf,
     Orientation,
     Split,
+    expand,
 )
-from shelving_core.materials import Catalog, MaterialEntry, MaterialId  # noqa: E402
 from spikes.plain_planks.export_boxes import export_container  # noqa: E402
 from spikes.plain_planks.scan import (  # noqa: E402
     Box,

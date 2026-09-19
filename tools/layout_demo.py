@@ -1,50 +1,44 @@
-"""Build a sample nested Carcass, solve it, expand it, and print the result.
+"""Build a sample stepped ``Unit``, solve it, expand it, and print the result.
 
 Run through the pixi environment, which puts ``shelving_core`` on the import
 path:
 
     pixi run demo
-    pixi run demo -- --svg out.svg
 
 The sample tree and catalog are defined in code. Output, in order:
 
 - the material catalog: one row per entry;
-- an indented walk of the split tree: per node, its short id, kind, solved
-  rectangle ``(x, z, width, height)`` in millimetres, and the ``SplitRule``
-  that positioned it (nodes under a split only); divider lines also show the
-  resolved material name and thickness;
-- the expanded plank list: one row per physical plank (role, size,
-  minimum-corner placement, material name), then a total-plank-volume line.
-
-``--svg PATH`` also writes the solved layout to ``PATH`` as an SVG elevation.
+- an indented walk of the region tree: per region, its short id, kind, solved
+  ``Space``, and the ``SizeRule`` that positioned it (every region but the
+  root, which has no parent to size it);
+- the expanded board table: one row per physical board (role, size,
+  minimum-corner placement, material name), then a total-board-volume line.
 """
 
-import argparse
-import pathlib
-
-from shelving_core.expand import PlankSpec, expand, total_volume_mm3
+from shelving_core.expand import BoardSpec, expand, total_volume_mm3
+from shelving_core.geometry import Space, Vec3
 from shelving_core.layout import (
+    Axis,
     Bay,
-    Carcass,
-    Divider,
+    Board,
+    Division,
     Fill,
     Fixed,
-    Leaf,
-    Orientation,
-    Split,
-    SplitRule,
-    Weighted,
+    Item,
+    Region,
+    SizeRule,
+    Unit,
+    Void,
 )
 from shelving_core.materials import Catalog, MaterialEntry, MaterialId
-from shelving_core.solver import Rect, SolvedLayout, solve
-from shelving_core.svg import rule_label, to_svg
+from shelving_core.solver import solve
 
 PLY18 = MaterialId("ply18")
 MDF12 = MaterialId("mdf12")
 
 
 def _sample_catalog() -> Catalog:
-    """A default 18 mm plywood plus a 12 mm MDF for the divider override."""
+    """A default 18 mm plywood plus a 12 mm MDF for the shelf override."""
     return Catalog(
         entries={
             PLY18: MaterialEntry(
@@ -64,37 +58,78 @@ def _sample_catalog() -> Catalog:
     )
 
 
-def _sample_carcass() -> Carcass:
-    """Two split levels, a >= 3-child split, and one of each rule kind."""
-    top = Split(
-        orientation=Orientation.VERTICAL,
-        children=[Leaf(), Leaf(), Leaf()],
-        rules=[Fill(), Fill(), Fill()],
-        dividers=[Divider(material=MDF12), Divider()],
+def _column(void_mm: float, prefix: str, *, with_shelf: bool = False) -> Division:
+    """A stack of a bay, its own top, and (if positive) the void above it.
+
+    The step in the outline is the ``Void`` taking the leftover height above
+    a shorter column; ``with_shelf`` splits the bay in two around a divider
+    board in a second material.
+    """
+    body: Item = (
+        Division(
+            axis=Axis.Z,
+            items=[
+                Bay(id=f"{prefix}_lower_bay"),
+                Board(material=MDF12, role="shelf", id=f"{prefix}_shelf"),
+                Bay(id=f"{prefix}_upper_bay"),
+            ],
+            id=f"{prefix}_body",
+        )
+        if with_shelf
+        else Bay(id=f"{prefix}_bay")
     )
-    bottom = Split(
-        orientation=Orientation.VERTICAL,
-        children=[Leaf(), Leaf()],
-        rules=[Fixed(300.0), Weighted(2.0)],
-        dividers=[Divider()],
-    )
-    root = Split(
-        orientation=Orientation.HORIZONTAL,
-        children=[top, bottom],
-        rules=[Weighted(1.0), Fixed(500.0)],
-        dividers=[Divider()],
-    )
-    return Carcass(
-        width_mm=900.0,
-        height_mm=1800.0,
-        depth_mm=300.0,
+    items: list[Item] = [body, Board(role="top", id=f"{prefix}_top")]
+    if void_mm > 0:
+        items.append(Void(rule=Fixed(void_mm), id=f"{prefix}_void"))
+    return Division(axis=Axis.Z, items=items, id=f"{prefix}_column")
+
+
+def _sample_unit() -> Unit:
+    """Three columns of falling height on a continuous floor: a stepped
+    outline the carcass shell rule could never state."""
+    return Unit(
+        size_mm=Vec3(1200.0, 300.0, 1200.0),
         default_material=PLY18,
-        root=root,
+        root=Division(
+            axis=Axis.Z,
+            items=[
+                Board(role="bottom", id="bottom"),
+                Division(
+                    axis=Axis.X,
+                    items=[
+                        Board(role="left_side", id="left_side"),
+                        _column(0.0, "col0", with_shelf=True),
+                        Board(role="divider", id="divider0"),
+                        _column(300.0, "col1"),
+                        Board(role="divider", id="divider1"),
+                        _column(600.0, "col2"),
+                        Board(role="right_side", id="right_side"),
+                    ],
+                    id="middle",
+                ),
+            ],
+            id="root",
+        ),
     )
 
 
-def _fmt_rect(rect: Rect) -> str:
-    return f"({rect.x_mm:.1f},{rect.z_mm:.1f},{rect.width_mm:.1f},{rect.height_mm:.1f})"
+def _fmt_space(space: Space) -> str:
+    o, s = space.origin, space.size
+    return (
+        f"origin=({o.x_mm:.1f},{o.y_mm:.1f},{o.z_mm:.1f}) "
+        f"size=({s.x_mm:.1f},{s.y_mm:.1f},{s.z_mm:.1f})"
+    )
+
+
+def _rule_label(rule: SizeRule) -> str:
+    """Human-readable one-liner for the rule that positioned a region."""
+    match rule:
+        case Fixed():
+            return f"Fixed {rule.size_mm:g} mm ({rule.basis.value})"
+        case Fill():
+            return "Fill"
+        case _:
+            return f"Weighted {rule.weight:g}"
 
 
 def _print_catalog(catalog: Catalog) -> None:
@@ -109,40 +144,32 @@ def _print_catalog(catalog: Catalog) -> None:
         print(row)
 
 
-def _print_bay(
-    bay: Bay,
-    layout: SolvedLayout,
-    depth: int,
-    rule: SplitRule | None,
-    catalog: Catalog,
-    default_material: MaterialId,
+def _kind(region: Region) -> str:
+    if isinstance(region, Division):
+        return "division"
+    if isinstance(region, Void):
+        return "void"
+    return "bay"
+
+
+def _print_region(
+    region: Region, spaces: dict[str, Space], depth: int, rule: SizeRule | None
 ) -> None:
     indent = "  " * depth
-    kind = "split" if isinstance(bay, Split) else "leaf"
-    suffix = f"  rule={rule_label(rule)}" if rule is not None else ""
-    print(f"{indent}{bay.id[:8]} {kind} rect={_fmt_rect(layout[bay.id])}{suffix}")
-    if isinstance(bay, Split):
-        for index, child in enumerate(bay.children):
-            _print_bay(
-                child, layout, depth + 1, bay.rules[index], catalog, default_material
-            )
-            if index < len(bay.dividers):
-                divider = bay.dividers[index]
-                material_id = (
-                    divider.material
-                    if divider.material is not None
-                    else default_material
-                )
-                entry = catalog[material_id]
-                print(
-                    f"{indent}  {divider.id[:8]} divider "
-                    f"rect={_fmt_rect(layout[divider.id])} "
-                    f'material="{entry.name}" {entry.thickness_mm:g}mm'
-                )
+    suffix = f"  rule={_rule_label(rule)}" if rule is not None else ""
+    print(
+        f"{indent}{region.id[:12]} {_kind(region)} "
+        f"{_fmt_space(spaces[region.id])}{suffix}"
+    )
+    if isinstance(region, Division):
+        for item in region.items:
+            if isinstance(item, Board):
+                continue
+            _print_region(item, spaces, depth + 1, item.rule)
 
 
-def _print_planks(specs: list[PlankSpec], catalog: Catalog) -> None:
-    print("Planks:")
+def _print_boards(specs: list[BoardSpec], catalog: Catalog) -> None:
+    print("Boards:")
     for spec in specs:
         size = f"{spec.size.x_mm:g} x {spec.size.y_mm:g} x {spec.size.z_mm:g} mm"
         placement = (
@@ -150,37 +177,23 @@ def _print_planks(specs: list[PlankSpec], catalog: Catalog) -> None:
             f"{spec.placement.z_mm:g})"
         )
         name = catalog[spec.material].name
-        print(f"  {spec.role.value:<11} {size}  at {placement}  {name}")
-    print(f"Total plank volume: {total_volume_mm3(specs):.0f} mm^3")
+        print(f"  {spec.role:<11} {size}  at {placement}  {name}")
+    print(f"Total board volume: {total_volume_mm3(specs):.0f} mm^3")
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--svg",
-        type=pathlib.Path,
-        default=None,
-        help="also write the solved layout to this path as an SVG elevation",
-    )
-    args = parser.parse_args()
-
-    carcass = _sample_carcass()
+    unit = _sample_unit()
     catalog = _sample_catalog()
-    layout = solve(carcass, catalog)
-    default_entry = catalog[carcass.default_material]
+    spaces = solve(unit, catalog)
+    default_entry = catalog[unit.default_material]
     print(
-        f"Carcass {carcass.width_mm:.0f} x {carcass.height_mm:.0f} x "
-        f"{carcass.depth_mm:.0f} mm, default material "
+        f"Unit {unit.size_mm.x_mm:.0f} x {unit.size_mm.y_mm:.0f} x "
+        f"{unit.size_mm.z_mm:.0f} mm, default material "
         f"{default_entry.name} ({default_entry.thickness_mm:g} mm)"
     )
     _print_catalog(catalog)
-    _print_bay(carcass.root, layout, 0, None, catalog, carcass.default_material)
-    _print_planks(expand(carcass, catalog), catalog)
-
-    svg_path: pathlib.Path | None = args.svg
-    if svg_path is not None:
-        svg_path.write_text(to_svg(carcass, layout, catalog), encoding="utf-8")
-        print(f"wrote {svg_path}")
+    _print_region(unit.root, spaces, 0, None)
+    _print_boards(expand(unit, catalog), catalog)
 
 
 if __name__ == "__main__":

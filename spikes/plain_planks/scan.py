@@ -25,19 +25,18 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import NamedTuple
 
-from shelving_core.expand import PlankSpec
-from shelving_core.layout import (
+from shelving_core.layout import Fill, Fixed
+from shelving_core.materials import MaterialId
+from spikes.plain_planks.carcass_model import (
     Bay,
     Carcass,
     Divider,
-    Fill,
-    Fixed,
     Leaf,
     Orientation,
+    PlankSpec,
     Split,
     SplitRule,
 )
-from shelving_core.materials import MaterialId
 
 # Real geometry disagrees at joints by tens of microns: a unit exported from
 # FreeCAD had four supposedly-coincident edges spread over 0.09 mm. The snap has

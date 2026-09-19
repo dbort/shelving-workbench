@@ -8,10 +8,10 @@ runs through, and two planks face to face, none of which the shell rule can.
 
 import pytest
 
-from shelving_core import expand as core_expand
 from shelving_core import layout as core_layout
 from shelving_core.materials import Catalog, MaterialEntry, MaterialId
 from shelving_core.solver import LayoutSolveError
+from spikes.plain_planks import carcass_model
 from spikes.plain_planks.general_model import (
     Bay,
     Divide,
@@ -33,11 +33,11 @@ CATALOG = Catalog(
         MDF12: MaterialEntry(MDF12, "mdf 12", 12.0, "mdf"),
     }
 )
-HORIZONTAL = core_layout.Orientation.HORIZONTAL
-VERTICAL = core_layout.Orientation.VERTICAL
+HORIZONTAL = carcass_model.Orientation.HORIZONTAL
+VERTICAL = carcass_model.Orientation.VERTICAL
 
 
-def _geometry(specs: list[core_expand.PlankSpec]) -> list[tuple[float, ...]]:
+def _geometry(specs: list[carcass_model.PlankSpec]) -> list[tuple[float, ...]]:
     """Plank sizes and placements, order-independent, for comparing two models."""
     return sorted(
         tuple(
@@ -69,15 +69,15 @@ def test_closed_box_matches_the_carcass_model(openings: int) -> None:
     """The general tree reproduces the carcass expansion plank for plank."""
     general = closed_box(900.0, 1800.0, 300.0, PLY18, _shelves(openings))
     if openings == 1:
-        root: core_layout.Bay = core_layout.Leaf()
+        root: carcass_model.Bay = carcass_model.Leaf()
     else:
-        root = core_layout.Split(
+        root = carcass_model.Split(
             orientation=HORIZONTAL,
-            children=[core_layout.Leaf() for _ in range(openings)],
+            children=[carcass_model.Leaf() for _ in range(openings)],
             rules=[core_layout.Fill() for _ in range(openings)],
-            dividers=[core_layout.Divider() for _ in range(openings - 1)],
+            dividers=[carcass_model.Divider() for _ in range(openings - 1)],
         )
-    carcass = core_layout.Carcass(
+    carcass = carcass_model.Carcass(
         width_mm=900.0,
         height_mm=1800.0,
         depth_mm=300.0,
@@ -85,7 +85,7 @@ def test_closed_box_matches_the_carcass_model(openings: int) -> None:
         root=root,
     )
     assert _geometry(expand(general, CATALOG)) == _geometry(
-        core_expand.expand(carcass, CATALOG)
+        carcass_model.expand(carcass, CATALOG)
     )
     assert len(bays(general)) == openings
 
@@ -107,28 +107,28 @@ def test_closed_box_matches_the_carcass_model_when_nested() -> None:
             ],
         ),
     )
-    carcass = core_layout.Carcass(
+    carcass = carcass_model.Carcass(
         width_mm=1200.0,
         height_mm=1800.0,
         depth_mm=300.0,
         default_material=PLY18,
-        root=core_layout.Split(
+        root=carcass_model.Split(
             orientation=VERTICAL,
             children=[
-                core_layout.Leaf(),
-                core_layout.Split(
+                carcass_model.Leaf(),
+                carcass_model.Split(
                     orientation=HORIZONTAL,
-                    children=[core_layout.Leaf() for _ in range(3)],
+                    children=[carcass_model.Leaf() for _ in range(3)],
                     rules=[core_layout.Fill() for _ in range(3)],
-                    dividers=[core_layout.Divider(), core_layout.Divider()],
+                    dividers=[carcass_model.Divider(), carcass_model.Divider()],
                 ),
             ],
             rules=[core_layout.Fixed(size_mm=300.0), core_layout.Fill()],
-            dividers=[core_layout.Divider(material=MDF12)],
+            dividers=[carcass_model.Divider(material=MDF12)],
         ),
     )
     assert _geometry(expand(general, CATALOG)) == _geometry(
-        core_expand.expand(carcass, CATALOG)
+        carcass_model.expand(carcass, CATALOG)
     )
 
 

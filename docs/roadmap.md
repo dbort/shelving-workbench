@@ -123,7 +123,7 @@ count and bounding box.
 
 ## M4 — The region model, no FreeCAD
 
-**Status:** Task sh-013
+**Status:** Done sh-013
 
 Replace the carcass with the region model: a region is a bay, a void, or a
 division of an ordered run of boards and sub-regions along one axis.
