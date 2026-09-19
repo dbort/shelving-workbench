@@ -321,16 +321,41 @@ shelves hold, then undo the whole session in one step.
 
 ## M10 — v1 polish
 
-**Status:** Planned
+**Status:** Tasks sh-022, sh-023, sh-024
 
-Colour by material, generated labels that stay correct when a unit's
-facing is unknown, error surfacing for an over-constrained layout, a
-preferences page, finalised `package.xml`, and user documentation.
+- [ ] sh-022 — appearance and error surfacing (blocked on sh-021)
+- [ ] sh-023 — the preferences page (blocked on sh-021)
+- [ ] sh-024 — user documentation and the release (blocked on sh-022 and
+  sh-023)
+
+The workbench states an opinion when it creates something and never again.
+A board takes its material's colour and a readable label when it is
+written, and an update rewrites neither, so a rename or a recolour
+survives every resize. Two commands take that opinion back on request.
+Colour maps deterministically from the material id, so the same stock is
+the same colour in every unit.
+
+Every refusal takes one shape: a summary, the objects responsible, and a
+suggested next step, with the objects selected in the 3D view. A refusal a
+user cannot act on reads as a bug, so the suggestion is data beside each
+reason rather than prose scattered through the commands.
+
+The preferences page holds six values and no more: the starter unit's four,
+and the snap and joint-clearance tolerances. The tolerances are there
+because real geometry has coincident edges disagreeing by up to 0.09 mm,
+and someone whose model is worse needs a way forward that is not editing
+the source.
+
+Then the user guide, which leads with scanning geometry you already have
+rather than with creating a unit, documents what each refusal means, and
+states the three limits a user will meet. `architecture.md` is deleted
+here: its supersession banner has done its job.
 
 *Verify in FreeCAD:* install from the GitHub repository through the Addon
 Manager on a clean profile, model a real unit, move it into a second
-document with an ordinary placement, and confirm an over-constrained input
-produces a clear error and no stale geometry.
+document with an ordinary placement, confirm an over-constrained input
+produces a clear error and no stale geometry, and walk the user guide's
+steps exactly as written.
 
 ## M11 — Back panels
 

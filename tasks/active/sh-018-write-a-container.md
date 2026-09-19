@@ -37,6 +37,10 @@ part 2 of 2.
       that the result names them as left alone.
 - [ ] Each board carries `ShelvingMaterial`, `ShelvingBornAs`, `ShelvingBornIn`,
       and `ShelvingPinned`, in a `Shelving` property group.
+- [ ] A newly created board gets a readable `Label` derived from its position in
+      the tree, never containing left or right while the unit's facing is
+      unknown. A label is set at creation only and never rewritten, so a user
+      rename sticks; asserted by renaming a board and resizing.
 - [ ] The container carries `ShelvingUnitId`, `ShelvingDepthAxis`,
       `ShelvingFacing`, and `ShelvingRules`, the last holding
       `shelving_core.record.rules_to_json`.
@@ -92,6 +96,20 @@ merging them forces a rename the first check catches.
 A COPY IS ADOPTED, NOT REJECTED. When `Name != ShelvingBornAs`, drop the board's
 stored record and treat it as new geometry. Somebody copying a shelf to make
 another shelf wanted a new shelf, and this is what gives it to them.
+
+LABELS ARE GENERATED AT CREATION ONLY. A board created by the write path gets a
+`Label` from its role, derived from its division's axis and its position in that
+division's run: the outermost boards of a vertical-axis division are `Bottom`
+and `Top`, of a horizontal-axis division are the two sides, and an interior
+board is `Shelf N` or `Divider N` by axis. While `front_at_min` is `None` the
+sides are `Side 1` and `Side 2` in axis order; once facing is known they are
+`Left Side` and `Right Side` accordingly. NEVER contain left or right while
+facing is unknown: a mirrored label is the exact failure this design has been
+avoiding, and a scanned unit usually has no facing.
+
+A label is written only when the object is created and is NEVER rewritten on an
+update, so a user rename survives every resize. Taking the workbench's opinion
+back is an explicit command in M10, alongside the equivalent for colour.
 
 DELETION RULE, decided in planning. An object is a deletion candidate ONLY if it
 carries the provenance properties AND is absent from the tree. Anything untagged
@@ -153,13 +171,13 @@ Every length identifier carries `_mm`.
 
 - [ ] **Step 2** (`freecad/shelving/container.py`): Extend `read_container` to read the stored properties back. Set each `Box.name` to the object's `Name` as before, set `Box.pinned` for any part the classifier reports as not a plain axis-aligned box, and set `Box.material` from `ShelvingMaterial` when present. Return, alongside the boxes and the skipped list, the container's stored record: unit id, depth axis, facing, and the raw rules string, each absent when its property is missing. Detect a copy: when a board carries `ShelvingBornAs` differing from its `Name`, or `ShelvingBornIn` differing from the document `Uid`, report it so the caller knows its stored record must be dropped. Do not change the walk itself.
 
-- [ ] **Step 3** (`freecad/shelving/container.py`): Add `write_container(container, unit, catalog)`. Expand the unit, then reconcile by `Board.id` against `Name`: update a matching object's `Length`, `Width`, `Height` and `Placement` in place, create a `Part::Box` for a board with no match and stamp its provenance from its new `Name` and the document `Uid`, and delete an object that carries provenance and is absent from the tree. Never touch an object without provenance; collect those into a left-alone list. For a pinned board set only `Placement`. Write the container's four properties, with the rules from `shelving_core.record.rules_to_json`. Return a frozen result carrying the four name lists. Do NOT open a transaction here; the commands own that.
+- [ ] **Step 3** (`freecad/shelving/container.py`): Add `write_container(container, unit, catalog)`. Expand the unit, then reconcile by `Board.id` against `Name`: update a matching object's `Length`, `Width`, `Height` and `Placement` in place, create a `Part::Box` for a board with no match, stamp its provenance from its new `Name` and the document `Uid`, and set its `Label` from its derived role per Frontier Advice, and delete an object that carries provenance and is absent from the tree. Never touch an object without provenance; collect those into a left-alone list. For a pinned board set only `Placement`. Write the container's four properties, with the rules from `shelving_core.record.rules_to_json`. Return a frozen result carrying the four name lists. Do NOT open a transaction here; the commands own that.
 
 - [ ] **Step 4** (`freecad/shelving/unit_ops.py`): Create the plain functions the commands and the smoke both call, so no command logic lives behind a `Gui` guard. `create_unit(doc) -> DocumentObject` building an `App::Part`, constructing a closed single-bay unit at fixed defaults against the in-code catalog, and calling `write_container`. `resize_unit(container, size_mm, catalog)` reading the container, scanning it, applying the stored rules with `shelving_core.record.with_stored_rules`, substituting the new outer size, and calling `write_container`. `rescan_unit(container, catalog)` doing the same without a size change, which is what a reflow after a hand edit is. Each returns the write result so a caller can report it.
 
 - [ ] **Step 5** (`freecad/shelving/commands/create_unit.py`, `freecad/shelving/commands/resize_unit.py`, `freecad/shelving/init_gui.py`): Add the two commands in the established shape: a `GetResources` returning menu text, tooltip and the workbench icon, an `IsActive` requiring an active document, and for resize also requiring exactly one container selected. Each opens one transaction, calls its `unit_ops` function, commits, and prints the write result to the report view including the left-alone list; on exception, abort the transaction and print the error. Resize prompts for width, height and depth with FreeCAD's input dialog, seeded from the container's current measured extent. Register both behind the headless-safe `Gui.addCommand` guard and add their ids to `init_gui`'s `command_ids`.
 
-- [ ] **Step 6** (`tools/freecad_write_smoke.py`, `tools/run-tests.sh`): Create the headless functional check, following `tools/freecad_smoke.py`'s preamble. Assert, in order: `create_unit` produces a container of plain `Part::Box` objects with the four container properties and four board properties set; scanning it back yields the same tree; `resize_unit` to a larger size updates the same document objects rather than recreating them, checked by `Name`; a board's `Label` and colour survive that resize; an untagged box and a padded notched body placed in the container are left alone and named in the result; the notched body's solid is unchanged after a resize that moves it; a board copied within the document is adopted as a new board on the next rescan; a `Fixed` rule the heuristic would recover as `Fill` survives apply, rescan and re-apply; and after `saveAs`, `closeDocument` and `openDocument`, every board is present and correctly sized while the `Document.xml` inside the archive contains no `Proxy`, `FeaturePython`, or `PythonObject` entry. Print `shelving write OK` last. Add a matching block to `tools/run-tests.sh`.
+- [ ] **Step 6** (`tools/freecad_write_smoke.py`, `tools/run-tests.sh`): Create the headless functional check, following `tools/freecad_smoke.py`'s preamble. Assert, in order: `create_unit` produces a container of plain `Part::Box` objects with the four container properties and four board properties set; scanning it back yields the same tree; `resize_unit` to a larger size updates the same document objects rather than recreating them, checked by `Name`; a newly created board's `Label` names its role and contains neither left nor right when the unit's facing is unknown, and contains them when it is known; a board's `Label` and colour survive that resize; an untagged box and a padded notched body placed in the container are left alone and named in the result; the notched body's solid is unchanged after a resize that moves it; a board copied within the document is adopted as a new board on the next rescan; a `Fixed` rule the heuristic would recover as `Fill` survives apply, rescan and re-apply; and after `saveAs`, `closeDocument` and `openDocument`, every board is present and correctly sized while the `Document.xml` inside the archive contains no `Proxy`, `FeaturePython`, or `PythonObject` entry. Print `shelving write OK` last. Add a matching block to `tools/run-tests.sh`.
   > **Checkpoint:** `pixi run tests` must be green here (Steps 2-6 are one write path; the reconciler has no caller until the commands and the smoke exist).
 
 - [ ] **Step 7** (`docs/manual-qa.md`, `README.md`): Add an `## M7` section in the file's numbered-steps-then-expected-result shape, with cases for: create a unit and confirm the tree holds plain boxes with a `Shelving` property group; resize it and confirm boards move while labels and colours hold; move a board by hand, rescan, and confirm the layout takes the edit up; put an unrelated box in the container and confirm apply leaves it and says so; and save, quit, move the workbench off the path, reopen, and confirm the document is intact. Extend the README glossary with `write_container`, the property names, the provenance rule, and the deletion rule, in the section's existing one-bullet-per-term shape.
