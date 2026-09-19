@@ -136,26 +136,6 @@ Sweeping the log is a human-triggered act, like task sign-off: the user asks for
   risk, not just the two the plan actively reused, or the Must Have list
   included an import check for the directory the plan promised to keep alive.
 
-- `friction-008` - **the `_mm` suffix convention has no automated check**:
-  `CLAUDE.md` § Project conventions makes the unit suffix mandatory on every
-  identifier bound to a physical quantity, and it is the project's whole
-  mechanism for unit safety (there is no units type), but neither `ruff` nor
-  `mypy --strict` nor anything else in `pixi run tests` looks at identifier
-  names. sh-014's review has now spent three rounds on it by hand: round 1
-  rejected on a list of unsuffixed names, the implementer swept the ones the
-  finding enumerated, round 2 found more of the same class still there, and
-  round 3 still found one comprehension target the round-2 finding's own
-  "exhaustive" list had missed.
-  Worked around by writing a throwaway `ast`-walking script in the scratchpad
-  that lists every `arg`, assignment target, and attribute name in the changed
-  files without an `_mm`/`_mm3` suffix, then reading the list by hand to decide
-  which ones hold millimetres. The script leaves no trace, so the next round
-  and the next reviewer start over. Simpler if: a check inside `pixi run tests`
-  flagged a float-valued parameter or attribute whose name lacks a unit suffix
-  (even a narrow one, over annotated `float` parameters and dataclass fields in
-  `shelving_core/`), so the convention failed at lint time instead of costing a
-  review round each time a module is ported in from `spikes/`.
-
 - `friction-009` - **a board snapped to its catalog material keeps its raw
   measured extent everywhere else, so a within-tolerance match can still fail
   to solve**: sh-015's end-to-end fixture test needed a catalog built from
