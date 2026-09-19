@@ -166,3 +166,15 @@ which follows [`docs/scope-and-design.md`](docs/scope-and-design.md).
   board spans, so two boards meeting face to face (an abutting seam, a
   framed wall's double top plate) cut just as cleanly as a single board
   would.
+- **to_svg**: `to_svg(unit, spaces, catalog, *, axis=None, scale=1.0,
+  margin_mm=20.0, font_size_mm=12.0)` in `shelving_core.svg`. Renders a
+  solved `unit` as a standalone SVG elevation string, projected along `axis`
+  when given, else `unit.depth_axis` (raising `ValueError` naming the unit
+  when neither is set) and drawn onto the other two axes. A `Void` renders
+  distinctly from a `Bay` so a stepped outline reads at a glance, and a
+  `Board` renders at its inset extent so a shelf held off its sides looks
+  held off.
+- **rule_label**: `rule_label(rule)` in `shelving_core.svg`. Turns a
+  `SizeRule` into the short display string `to_svg` draws next to each
+  region: `Fixed` reads differently per `Basis` (`WITH_NEXT` distinct from
+  `CLEAR`), since the two mean different spacings.

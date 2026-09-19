@@ -1,8 +1,8 @@
 ---
 id: sh-015
 title: "The elevation renderer, rebuilt on the region model"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 0
 blocked_by: [sh-014]
 ---
@@ -19,31 +19,31 @@ scanning rather than the model. Milestone M5, part 2 of 2.
 
 ## Status
 - [x] Planning
-- [ ] Implementation
+- [x] Implementation
 - [ ] Review
 - [ ] User sign-off
 
 ## Must Have
-- [ ] `pixi run tests` green.
-- [ ] `shelving_core/svg.py` exports `to_svg` and `rule_label`. `to_svg` takes a
+- [x] `pixi run tests` green.
+- [x] `shelving_core/svg.py` exports `to_svg` and `rule_label`. `to_svg` takes a
       `Unit`, its solved `Space` map, and a `Catalog`, and returns a complete
       SVG document string.
-- [ ] A `Void` renders visibly distinct from a `Bay`, asserted by a test that
+- [x] A `Void` renders visibly distinct from a `Bay`, asserted by a test that
       renders a stepped unit and a closed unit of the same outer size and shows
       the documents differ in a way attributable to the void.
-- [ ] A board with non-zero `Insets` renders at its inset extent, asserted
+- [x] A board with non-zero `Insets` renders at its inset extent, asserted
       against the plain-board case.
-- [ ] Two boards face to face render as two rectangles sharing an edge, not one.
-- [ ] `to_svg` projects along the unit's `depth_axis`, accepts an explicit axis
+- [x] Two boards face to face render as two rectangles sharing an edge, not one.
+- [x] `to_svg` projects along the unit's `depth_axis`, accepts an explicit axis
       override, and raises `ValueError` naming the unit when neither is set.
-- [ ] A test renders a scanned real fixture end to end: read the fixture, scan
+- [x] A test renders a scanned real fixture end to end: read the fixture, scan
       it, solve it, render it, and parse the result as XML with the expected
       root tag.
-- [ ] `pixi run demo -- --svg PATH` writes a parseable SVG again, and
+- [x] `pixi run demo -- --svg PATH` writes a parseable SVG again, and
       `tests/test_layout_demo.py` asserts it.
-- [ ] Output is deterministic: rendering the same unit twice returns identical
+- [x] Output is deterministic: rendering the same unit twice returns identical
       strings, asserted by a test.
-- [ ] `mypy --strict` clean; `shelving_core` imports no FreeCAD.
+- [x] `mypy --strict` clean; `shelving_core` imports no FreeCAD.
 
 ## Frontier Advice
 
@@ -116,4 +116,4 @@ did.
 
 - [x] **Step 6** (`tools/layout_demo.py`, `tests/test_layout_demo.py`, `README.md`): Restore the `--svg PATH` option: the script keeps printing its text dump unconditionally and writes the SVG plus a confirmation line only when the flag is given. Parse arguments with `argparse`. Restore `test_demo_svg_flag_writes_a_parseable_svg` in `tests/test_layout_demo.py`, driving the script as a subprocess, parsing the written file as XML, and asserting the text dump still prints. In `README.md`, restore the sentence describing `pixi run demo -- --svg layout.svg` to the paragraph it was removed from.
 
-- [ ] **Step 7** (`README.md`): Extend the Glossary with `to_svg` and `rule_label` in the section's existing one-bullet-per-term shape, and state under the elevation entry that the renderer projects along the unit's depth axis and draws a void distinctly from a bay.
+- [x] **Step 7** (`README.md`): Extend the Glossary with `to_svg` and `rule_label` in the section's existing one-bullet-per-term shape, and state under the elevation entry that the renderer projects along the unit's depth axis and draws a void distinctly from a bay.
