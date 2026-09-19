@@ -30,6 +30,7 @@ with a fixed ``.3f`` spec instead of ``str``/``repr``.
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import NamedTuple
 from xml.sax.saxutils import escape
 
 from .geometry import AxisIndex, Space, Vec3
@@ -149,8 +150,8 @@ def _svg_y(
 
 def _rect_line(
     css_class: str,
-    x: float,
-    y: float,
+    x_mm: float,
+    y_mm: float,
     width_mm: float,
     height_mm: float,
     *,
@@ -163,15 +164,15 @@ def _rect_line(
     """
     fill_attr = "" if fill is None else f' fill="{fill}"'
     return (
-        f'  <rect class="{css_class}"{fill_attr} x="{_fmt(x)}" y="{_fmt(y)}" '
+        f'  <rect class="{css_class}"{fill_attr} x="{_fmt(x_mm)}" y="{_fmt(y_mm)}" '
         f'width="{_fmt(width_mm)}" height="{_fmt(height_mm)}" />'
     )
 
 
 def _label_line(
     lines: Sequence[str],
-    x: float,
-    y: float,
+    x_mm: float,
+    y_mm: float,
     width_mm: float,
     height_mm: float,
     font_size_mm: float,
@@ -180,16 +181,16 @@ def _label_line(
     """A centered ``<text>`` with one ``<tspan>`` per entry in ``lines``,
     stacked vertically about the rect's centre at already-projected SVG
     coordinates. ``css_class`` distinguishes the per-kind label styles."""
-    cx = x + width_mm / 2.0
-    cy = y + height_mm / 2.0
-    line_height = font_size_mm * _LINE_HEIGHT_FACTOR
-    first_y = cy - (len(lines) - 1) / 2.0 * line_height
+    cx_mm = x_mm + width_mm / 2.0
+    cy_mm = y_mm + height_mm / 2.0
+    line_height_mm = font_size_mm * _LINE_HEIGHT_FACTOR
+    first_y_mm = cy_mm - (len(lines) - 1) / 2.0 * line_height_mm
     tspans: list[str] = []
     for index, text in enumerate(lines):
         if index == 0:
-            pos = f'x="{_fmt(cx)}" y="{_fmt(first_y)}"'
+            pos = f'x="{_fmt(cx_mm)}" y="{_fmt(first_y_mm)}"'
         else:
-            pos = f'x="{_fmt(cx)}" dy="{_fmt(line_height)}"'
+            pos = f'x="{_fmt(cx_mm)}" dy="{_fmt(line_height_mm)}"'
         tspans.append(f"<tspan {pos}>{_xml_escape(text)}</tspan>")
     return f'  <text class="{css_class}">{"".join(tspans)}</text>'
 
@@ -245,16 +246,16 @@ def _legend_block(
     ]
     for index, material_id in enumerate(used_ids):
         entry = catalog[material_id]
-        row_y = top_mm + (index + 1) * line_height_mm
+        row_y_mm = top_mm + (index + 1) * line_height_mm
         lines.append(
             f'  <rect class="swatch" fill="{colour_by_id[material_id]}" '
-            f'x="{_fmt(left_mm)}" y="{_fmt(row_y - font_size_mm)}" '
+            f'x="{_fmt(left_mm)}" y="{_fmt(row_y_mm - font_size_mm)}" '
             f'width="{_fmt(font_size_mm)}" height="{_fmt(font_size_mm)}" />'
         )
         text = f"{entry.name}  {entry.thickness_mm:g} mm  {entry.material_type}"
         lines.append(
             f'  <text class="legend" x="{_fmt(left_mm + font_size_mm * 1.6)}" '
-            f'y="{_fmt(row_y)}">{_xml_escape(text)}</text>'
+            f'y="{_fmt(row_y_mm)}">{_xml_escape(text)}</text>'
         )
     return lines
 
@@ -315,6 +316,20 @@ def _space(spaces: Mapping[str, Space], node_id: str) -> Space:
         raise KeyError(f"no solved space for node {node_id!r}") from None
 
 
+class _Rect(NamedTuple):
+    """A rect already projected onto SVG user-unit (millimetre) coordinates.
+
+    Field order matches the positional parameters of :func:`_rect_line` and
+    :func:`_label_line`, so a caller can splat an instance straight into
+    either with ``*rect``.
+    """
+
+    x_mm: float
+    y_mm: float
+    width_mm: float
+    height_mm: float
+
+
 @dataclass(frozen=True)
 class _Frame:
     """Fixed layout parameters threaded through the walk's drawing calls."""
@@ -326,22 +341,22 @@ class _Frame:
     title_band_mm: float
     font_size_mm: float
 
-    def rect(self, space: Space) -> tuple[float, float, float, float]:
-        """``space`` projected onto this frame's axis pair as SVG ``(x, y,
-        width, height)``, with the vertical axis flipped."""
+    def rect(self, space: Space) -> _Rect:
+        """``space`` projected onto this frame's axis pair, with the
+        vertical axis flipped."""
         h_index = _axis_index(self.horizontal)
         v_index = _axis_index(self.vertical)
         width_mm = space.extent_mm(h_index)
         height_mm = space.extent_mm(v_index)
-        x = _svg_x(_component_mm(space.origin, h_index), self.margin_mm)
-        y = _svg_y(
+        x_mm = _svg_x(_component_mm(space.origin, h_index), self.margin_mm)
+        y_mm = _svg_y(
             _component_mm(space.origin, v_index),
             height_mm,
             self.unit_vertical_mm,
             self.margin_mm,
             self.title_band_mm,
         )
-        return x, y, width_mm, height_mm
+        return _Rect(x_mm=x_mm, y_mm=y_mm, width_mm=width_mm, height_mm=height_mm)
 
 
 def _walk(
@@ -440,13 +455,13 @@ def to_svg(
 
     # One heading row plus one row per material, then a bottom margin.
     legend_band_mm = line_height_mm * (len(material_order) + 1) + margin_mm
-    view_w = unit_h_mm + 2.0 * margin_mm
-    view_h = unit_v_mm + 2.0 * margin_mm + title_band_mm + legend_band_mm
+    view_w_mm = unit_h_mm + 2.0 * margin_mm
+    view_h_mm = unit_v_mm + 2.0 * margin_mm + title_band_mm + legend_band_mm
 
     parts: list[str] = [
         '<svg xmlns="http://www.w3.org/2000/svg" '
-        f'width="{_fmt(view_w * scale)}" height="{_fmt(view_h * scale)}" '
-        f'viewBox="0 0 {_fmt(view_w)} {_fmt(view_h)}">',
+        f'width="{_fmt(view_w_mm * scale)}" height="{_fmt(view_h_mm * scale)}" '
+        f'viewBox="0 0 {_fmt(view_w_mm)} {_fmt(view_h_mm)}">',
     ]
     parts.extend(_style_block(font_size_mm))
 
@@ -454,37 +469,31 @@ def to_svg(
     # board with its label: boards paint over the open regions beneath them,
     # and every label sits above the fills it names.
     outline_space = Space(origin=Vec3(0.0, 0.0, 0.0), size=unit.size_mm)
-    x, y, width_mm, height_mm = frame.rect(outline_space)
-    parts.append(_rect_line("unit", x, y, width_mm, height_mm))
+    outline_rect = frame.rect(outline_space)
+    parts.append(_rect_line("unit", *outline_rect))
 
     for bay, space in bays:
-        x, y, width_mm, height_mm = frame.rect(space)
-        parts.append(_rect_line("bay", x, y, width_mm, height_mm))
+        rect = frame.rect(space)
+        parts.append(_rect_line("bay", *rect))
         parts.append(
             _label_line(
-                [f"{width_mm:g} x {height_mm:g} mm", rule_label(bay.rule)],
-                x,
-                y,
-                width_mm,
-                height_mm,
+                [f"{rect.width_mm:g} x {rect.height_mm:g} mm", rule_label(bay.rule)],
+                *rect,
                 font_size_mm,
             )
         )
 
     for void, space in voids:
-        x, y, width_mm, height_mm = frame.rect(space)
-        parts.append(_rect_line("void", x, y, width_mm, height_mm))
+        rect = frame.rect(space)
+        parts.append(_rect_line("void", *rect))
         parts.append(
             _label_line(
                 [
                     "not part of the unit",
-                    f"{width_mm:g} x {height_mm:g} mm",
+                    f"{rect.width_mm:g} x {rect.height_mm:g} mm",
                     rule_label(void.rule),
                 ],
-                x,
-                y,
-                width_mm,
-                height_mm,
+                *rect,
                 font_size_mm,
                 css_class="void-label",
             )
@@ -493,21 +502,14 @@ def to_svg(
     for board, space in boards:
         material_id = board.material or unit.default_material
         entry = catalog[material_id]
-        x, y, width_mm, height_mm = frame.rect(space)
-        parts.append(
-            _rect_line(
-                "board", x, y, width_mm, height_mm, fill=colour_by_id[material_id]
-            )
-        )
+        rect = frame.rect(space)
+        parts.append(_rect_line("board", *rect, fill=colour_by_id[material_id]))
         label_lines = [line for line in (board.role,) if line]
         label_lines.append(f"{entry.name} {entry.thickness_mm:g} mm")
         parts.append(
             _label_line(
                 label_lines,
-                x,
-                y,
-                width_mm,
-                height_mm,
+                *rect,
                 font_size_mm,
                 css_class="board-label",
             )

@@ -79,6 +79,26 @@ def _stepped_unit() -> Unit:
     )
 
 
+def _unit_with_distinct_dims(*, depth_axis: Axis | None) -> Unit:
+    """Same shape as ``_closed_unit`` but with three different extents on
+    X, Y, and Z, so projecting onto the wrong axis pair changes the viewBox
+    rather than coincidentally matching it."""
+    return Unit(
+        size_mm=Vec3(600.0, 300.0, 900.0),
+        default_material=PLY,
+        depth_axis=depth_axis,
+        root=Division(
+            axis=Axis.Z,
+            items=[
+                Board(role="bottom", id="bottom"),
+                Bay(id="middle"),
+                Board(role="top", id="top"),
+            ],
+            id="root",
+        ),
+    )
+
+
 def _unit_with_shelf_insets(insets: Insets) -> Unit:
     """A single shelf in a division along the depth axis, so its insets show
     on both projected axes (X and Z) rather than only one."""
@@ -96,6 +116,12 @@ def _unit_with_shelf_insets(insets: Insets) -> Unit:
 
 def _rects(document: str) -> list[ET.Element]:
     return ET.fromstring(document).findall(f".//{RECT_TAG}")
+
+
+def _view_box(document: str) -> tuple[float, float, float, float]:
+    raw = (ET.fromstring(document).get("viewBox") or "").split()
+    min_x, min_y, view_w, view_h = (float(v) for v in raw)
+    return min_x, min_y, view_w, view_h
 
 
 def _labels(document: str) -> list[str]:
@@ -193,10 +219,73 @@ def test_unit_with_no_depth_axis_and_no_axis_argument_raises_value_error() -> No
         to_svg(unit, spaces, CATALOG)
 
 
+def test_axis_override_renders_a_unit_with_no_depth_axis() -> None:
+    unit = _unit_with_distinct_dims(depth_axis=None)
+    spaces = solve(unit, CATALOG)
+    document = to_svg(unit, spaces, CATALOG, axis=Axis.Y)
+    assert ET.fromstring(document).tag == SVG_TAG
+
+
+def test_axis_override_projects_onto_the_given_axis_pair() -> None:
+    """``axis=Axis.Y`` projects onto (X, Z); ``axis=Axis.Z`` projects onto
+    (X, Y), exercising ``_elevation_axes``'s Z-is-depth branch and the
+    ``v_index == 1`` path through ``_Frame.rect`` that every other test in
+    this suite (all built with ``depth_axis=Axis.Y``) leaves unexercised."""
+    unit = _unit_with_distinct_dims(depth_axis=None)
+    spaces = solve(unit, CATALOG)
+    document_y = to_svg(unit, spaces, CATALOG, axis=Axis.Y)
+    document_z = to_svg(unit, spaces, CATALOG, axis=Axis.Z)
+
+    _, _, view_w_y, view_h_y = _view_box(document_y)
+    _, _, view_w_z, view_h_z = _view_box(document_z)
+
+    # Both project X (600 mm) horizontally, so the viewBox width agrees.
+    assert view_w_y == pytest.approx(view_w_z)
+    # axis=Y draws Z (900 mm) vertical; axis=Z draws Y (300 mm) vertical. The
+    # title band and legend band are identical (same boards, same
+    # materials), so the whole height difference is attributable to the
+    # swapped vertical extent.
+    assert (view_h_y - view_h_z) == pytest.approx(unit.size_mm.z_mm - unit.size_mm.y_mm)
+
+
+def test_axis_override_wins_over_a_conflicting_depth_axis() -> None:
+    conflicting = _unit_with_distinct_dims(depth_axis=Axis.Z)
+    overridden_document = to_svg(
+        conflicting, solve(conflicting, CATALOG), CATALOG, axis=Axis.Y
+    )
+
+    reference = _unit_with_distinct_dims(depth_axis=Axis.Y)
+    reference_document = to_svg(reference, solve(reference, CATALOG), CATALOG)
+
+    # axis=Y overrides depth_axis=Z, so both project the same axis pair and
+    # their viewBoxes agree despite the differing depth_axis.
+    assert _view_box(overridden_document) == _view_box(reference_document)
+
+
 def test_rendering_the_same_unit_twice_is_identical() -> None:
     unit = _closed_unit()
     spaces = solve(unit, CATALOG)
     assert to_svg(unit, spaces, CATALOG) == to_svg(unit, spaces, CATALOG)
+
+
+def test_rendering_the_same_fixture_scanned_twice_from_scratch_is_identical() -> None:
+    """Rendering one shared ``Unit``/``Space`` map twice (as the test above
+    does) is true for any pure function and would not catch output that
+    depends on iteration order of a ``set`` or unordered ``dict``, because
+    such a set iterates the same way twice in one process. Scanning the
+    fixture twice gives each render its own fresh ``uuid4`` node ids and its
+    own freshly-inserted catalog dict, so this fails if legend colour
+    assignment or the walk ever starts depending on that incidental order
+    rather than tree order and first-appearance order."""
+
+    def render() -> str:
+        boxes, skipped = export_from_json(REAL_STAIR_STEP.read_text(encoding="utf-8"))
+        catalog = _catalog_from_thicknesses(boxes)
+        result = scan(boxes, catalog, skipped=skipped, snap_mm=0.1)
+        spaces = solve(result.unit, catalog)
+        return to_svg(result.unit, spaces, catalog)
+
+    assert render() == render()
 
 
 def test_fixed_basis_changes_the_rule_label() -> None:
@@ -222,18 +311,31 @@ def test_void_renders_distinct_from_a_bay_of_the_same_outer_size() -> None:
     assert closed_root.get("viewBox") == stepped_root.get("viewBox")
 
 
-def test_board_insets_render_a_smaller_rect_on_both_projected_axes() -> None:
+def test_board_insets_render_at_their_inset_extent_on_both_projected_axes() -> None:
+    insets = Insets(x_min_mm=10.0, x_max_mm=10.0, z_min_mm=5.0, z_max_mm=5.0)
     plain = _unit_with_shelf_insets(Insets())
-    inset = _unit_with_shelf_insets(
-        Insets(x_min_mm=10.0, x_max_mm=10.0, z_min_mm=5.0, z_max_mm=5.0)
-    )
+    inset = _unit_with_shelf_insets(insets)
     plain_document = to_svg(plain, solve(plain, CATALOG), CATALOG)
     inset_document = to_svg(inset, solve(inset, CATALOG), CATALOG)
 
     plain_rect = next(r for r in _rects(plain_document) if r.get("class") == "board")
     inset_rect = next(r for r in _rects(inset_document) if r.get("class") == "board")
-    assert float(inset_rect.get("width", "")) < float(plain_rect.get("width", ""))
-    assert float(inset_rect.get("height", "")) < float(plain_rect.get("height", ""))
+    plain_x, plain_y, plain_w, plain_h = (
+        float(plain_rect.get(attr, "")) for attr in ("x", "y", "width", "height")
+    )
+    inset_x, inset_y, inset_w, inset_h = (
+        float(inset_rect.get(attr, "")) for attr in ("x", "y", "width", "height")
+    )
+
+    # Horizontal (X) is not flipped: the low inset shifts x right by exactly
+    # x_min_mm, and the width shrinks by x_min_mm + x_max_mm.
+    assert inset_x == pytest.approx(plain_x + insets.x_min_mm)
+    assert inset_w == pytest.approx(plain_w - insets.x_min_mm - insets.x_max_mm)
+    # Vertical (Z) is flipped about the unit's height: the low (bottom)
+    # inset still shifts y down by z_min_mm, because the flip and the
+    # height shrink cancel one of the two terms that would otherwise apply.
+    assert inset_y == pytest.approx(plain_y + insets.z_min_mm)
+    assert inset_h == pytest.approx(plain_h - insets.z_min_mm - insets.z_max_mm)
 
 
 def test_two_boards_face_to_face_render_as_two_adjoining_rects() -> None:
