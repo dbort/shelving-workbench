@@ -156,7 +156,7 @@ for a stepped unit; `freecadcmd` still loads the workbench.
 
 **Status:** Tasks sh-014, sh-015
 
-- [ ] sh-014 — scanning: geometry to a region model, or a refusal
+- [x] sh-014 — scanning: geometry to a region model, or a refusal
 - [ ] sh-015 — the elevation renderer, rebuilt on the region model (blocked
   on sh-014)
 

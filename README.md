@@ -128,3 +128,39 @@ which follows [`docs/scope-and-design.md`](docs/scope-and-design.md).
   `solve`, then returns the `list[BoardSpec]` for every `Board` in the tree,
   in pre-order. Like the solver, it has no FreeCAD dependency and produces
   plain data.
+- **Box**: the input record `scan` reads, a frozen dataclass `(name,
+  corner_mm, size_mm)` in `shelving_core.scan`, both `Vec3`. One axis-aligned
+  solid: a document object's name, minimum corner, and extent.
+- **Skipped**: a part `scan` could not read as a board, carried through
+  rather than dropped: a frozen dataclass `(name, label, type, reason)`. A
+  dropped board makes an enclosed bay read as open, without failing the
+  scan.
+- **ScanError**: `scan`'s refusal, a `ValueError` subclass carrying the
+  offending object names in an `objects` attribute.
+- **ScanResult**: `scan`'s return value, a frozen dataclass `(unit, panels,
+  skipped, facing_evidence, thicknesses_mm)`. `panels` are the boards thin
+  through the depth axis, set aside rather than placed; `thicknesses_mm` is
+  every distinct board thickness found.
+- **FacingEvidence**: what settled which way a unit faces: `GIVEN` (the
+  caller said so), `PANEL` (a depth-thin board proud of the members),
+  `FLUSH_BACK` (the end the members sit flush with), or `NONE`. Unknown is
+  the normal answer.
+- **depth axis**: the `Axis` a scan treats as running front to back, detected
+  as the bounding-box axis with the smallest span unless given explicitly.
+  Scanning divides only along the other two axes, never along the depth
+  axis.
+- **facing**: which end of the depth axis is the front, recorded on
+  `Unit.front_at_min` (`True` at the axis's minimum end, `False` at its
+  maximum, `None` when undetermined). Affects presentation only: which end
+  of a division reads as left, never the tree `scan` builds.
+- **snap tolerance**: `snap_mm`, a `scan` parameter defaulting to 0.5 mm.
+  Edges within this distance of each other collapse to one grid line, wide
+  enough to absorb the tens-of-microns disagreement real exported geometry
+  has at a joint.
+- **joint clearance**: `clearance_mm`, a `scan` parameter defaulting to
+  3.0 mm. A board end may stop up to this far short of the region edge it
+  spans to without splitting that edge into its own compartment.
+- **the cut rule**: a cut is any line no board crosses, not a line some one
+  board spans, so two boards meeting face to face (an abutting seam, a
+  framed wall's double top plate) cut just as cleanly as a single board
+  would.
