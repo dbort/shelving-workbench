@@ -193,19 +193,19 @@ def _classify_thin_axis(box: Box) -> Axis:
     box has no direction a reader would call "thickness", such as a square
     post, and the geometry cannot be read as a board.
     """
-    sizes = (box.size_mm.x_mm, box.size_mm.y_mm, box.size_mm.z_mm)
-    if min(sizes) <= 0:
+    sizes_mm = (box.size_mm.x_mm, box.size_mm.y_mm, box.size_mm.z_mm)
+    if min(sizes_mm) <= 0:
         raise ScanError(
             f"{box.name}: every extent must be positive, got "
-            f"{sizes[0]:g} x {sizes[1]:g} x {sizes[2]:g}",
+            f"{sizes_mm[0]:g} x {sizes_mm[1]:g} x {sizes_mm[2]:g}",
             (box.name,),
         )
-    smallest = min(sizes)
-    thin_axes = [index for index in range(3) if sizes[index] == smallest]
+    smallest_mm = min(sizes_mm)
+    thin_axes = [index for index in range(3) if sizes_mm[index] == smallest_mm]
     if len(thin_axes) != 1:
         raise ScanError(
             f"{box.name}: no single thin axis (extents "
-            f"{sizes[0]:g} x {sizes[1]:g} x {sizes[2]:g})",
+            f"{sizes_mm[0]:g} x {sizes_mm[1]:g} x {sizes_mm[2]:g})",
             (box.name,),
         )
     return _AXES[thin_axes[0]]
@@ -221,8 +221,8 @@ def detect_depth_axis(boxes: Sequence[Box]) -> Axis:
         raise ScanError("no boxes to scan")
 
     def bounding_span_mm(axis_index: AxisIndex) -> float:
-        spans = [_span_mm(b, axis_index) for b in boxes]
-        return max(hi for _, hi in spans) - min(lo for lo, _ in spans)
+        spans_mm = [_span_mm(b, axis_index) for b in boxes]
+        return max(hi_mm for _, hi_mm in spans_mm) - min(lo_mm for lo_mm, _ in spans_mm)
 
     depth_index = min(_AXIS_INDICES, key=bounding_span_mm)
     return _AXES[depth_index]
@@ -273,8 +273,8 @@ def infer_facing(
     if not members:
         return None, FacingEvidence.NONE
     member_spans_mm = [_span_mm(b, depth_index) for b in members]
-    lo_mm = min(lo for lo, _ in member_spans_mm)
-    hi_mm = max(hi for _, hi in member_spans_mm)
+    lo_mm = min(member_lo_mm for member_lo_mm, _ in member_spans_mm)
+    hi_mm = max(member_hi_mm for _, member_hi_mm in member_spans_mm)
 
     # A panel much thinner than the stock around it is backing material, not
     # a door. Without this a Woodworking cabinet's overlay back, which sits
@@ -288,8 +288,8 @@ def infer_facing(
     if len(votes) == 1:
         return votes.pop(), FacingEvidence.PANEL
 
-    inset_at_min_mm = sum(lo - lo_mm for lo, _ in member_spans_mm)
-    inset_at_max_mm = sum(hi_mm - hi for _, hi in member_spans_mm)
+    inset_at_min_mm = sum(member_lo_mm - lo_mm for member_lo_mm, _ in member_spans_mm)
+    inset_at_max_mm = sum(hi_mm - member_hi_mm for _, member_hi_mm in member_spans_mm)
     if abs(inset_at_min_mm - inset_at_max_mm) <= tol_mm:
         return None, FacingEvidence.NONE
     # The flush end is the back, so the front is the end with more inset.
@@ -385,8 +385,8 @@ class _Grid:
     marks uncovered cells reachable from the border."""
 
     def __init__(self, members: Sequence[_Elevated], snap_mm: float) -> None:
-        h_values_mm = [v for p in members for v in (p.h0_mm, p.h1_mm)]
-        v_values_mm = [v for p in members for v in (p.v0_mm, p.v1_mm)]
+        h_values_mm = [value_mm for p in members for value_mm in (p.h0_mm, p.h1_mm)]
+        v_values_mm = [value_mm for p in members for value_mm in (p.v0_mm, p.v1_mm)]
         self.hs_mm = _snap_lines(h_values_mm, snap_mm)
         self.vs_mm = _snap_lines(v_values_mm, snap_mm)
         self.planks: list[_Elevated] = []
@@ -804,8 +804,10 @@ def _unit_size_mm(
     v_mm: float,
     d_mm: float,
 ) -> Vec3:
-    extent_by_axis = {horizontal: h_mm, vertical: v_mm, depth_axis: d_mm}
-    return Vec3(extent_by_axis[Axis.X], extent_by_axis[Axis.Y], extent_by_axis[Axis.Z])
+    extent_mm_by_axis = {horizontal: h_mm, vertical: v_mm, depth_axis: d_mm}
+    return Vec3(
+        extent_mm_by_axis[Axis.X], extent_mm_by_axis[Axis.Y], extent_mm_by_axis[Axis.Z]
+    )
 
 
 @dataclass(frozen=True)

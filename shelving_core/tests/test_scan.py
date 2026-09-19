@@ -56,9 +56,11 @@ REAL_MAGICSTART_F1 = FIXTURES / "real_magicstart_f1.boxes.json"
 
 
 def _box_json(
-    name: str, corner: tuple[float, float, float], size: tuple[float, float, float]
+    name: str,
+    corner_mm: tuple[float, float, float],
+    size_mm: tuple[float, float, float],
 ) -> dict[str, object]:
-    return {"name": name, "corner_mm": list(corner), "size_mm": list(size)}
+    return {"name": name, "corner_mm": list(corner_mm), "size_mm": list(size_mm)}
 
 
 def test_boxes_from_json_parses_real_stair_step() -> None:
@@ -136,9 +138,11 @@ def _uniform_depth_boxes() -> list[Box]:
 
 
 def _box(
-    name: str, corner: tuple[float, float, float], size: tuple[float, float, float]
+    name: str,
+    corner_mm: tuple[float, float, float],
+    size_mm: tuple[float, float, float],
 ) -> Box:
-    return Box(name=name, corner_mm=Vec3(*corner), size_mm=Vec3(*size))
+    return Box(name=name, corner_mm=Vec3(*corner_mm), size_mm=Vec3(*size_mm))
 
 
 def test_detect_depth_axis_picks_the_smallest_bounding_box_extent() -> None:
@@ -614,6 +618,26 @@ def test_thicknesses_mm_reports_every_distinct_board_thickness() -> None:
     assert result.thicknesses_mm == frozenset({18.0, 12.0})
 
 
+def test_thicknesses_mm_rounds_out_real_geometry_jitter() -> None:
+    """Real geometry measures nominally identical stock as slightly
+    different floats: a real FreeCAD export had four supposedly coincident
+    edges spread over 0.09 mm, so two 18 mm boards can measure a few
+    microns apart. The round to four decimal places in
+    ``thicknesses_mm`` is what keeps such a pair reporting as one thickness
+    rather than two; without it this assertion would see a two-element set."""
+    boxes = _closed_box([])
+    jittered = [
+        dataclasses.replace(
+            b, size_mm=Vec3(b.size_mm.x_mm, b.size_mm.y_mm, b.size_mm.z_mm + 3e-6)
+        )
+        if b.name == "Top"
+        else b
+        for b in boxes
+    ]
+    result = scan(jittered, CATALOG)
+    assert result.thicknesses_mm == frozenset({18.0})
+
+
 def _kinds_names(division: Division) -> tuple[str, list[str]]:
     """One character per item (``P`` board, ``o`` open bay, ``x`` void,
     ``D`` nested division) plus the boards' roles in order, mirroring the
@@ -753,7 +777,15 @@ def test_real_notched_panel_reads_as_skipped() -> None:
     """The inspection record of a notched panel: a box with a rectangular
     bite taken out of it, which ``export_boxes.py`` would list under
     ``skipped`` rather than export as a ``Box``, because it is a PartDesign
-    solid, not a ``Part::Box``."""
+    solid, not a ``Part::Box``.
+
+    This reads the raw inspection JSON and hand-builds the expected
+    ``Skipped`` from it; no ``shelving_core`` reader for this format exists,
+    since the export never emits it as a ``skipped`` entry to parse. The
+    coverage that a real skipped part reaches ``ScanResult.skipped`` through
+    an actual reader is ``test_real_two_units_whole_tree``, where ``Pad003``
+    reaches it via ``export_from_json`` and ``scan``.
+    """
     nodes = json.loads(REAL_NOTCHED_PANEL.read_text(encoding="utf-8"))
     pad = _find_pad(nodes)
     assert pad is not None
