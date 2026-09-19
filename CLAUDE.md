@@ -23,9 +23,23 @@ absolutes must never be style-swept.
   `dispatch-tasks`, `approve-task` — never by calling the
   Implementer/Reviewer subagents directly as a shortcut, unless the user
   explicitly says to skip a pipeline step (`pipeline.md` § Phase
-  transitions).
+  transitions). This binds every agent working in this repo, not only the
+  session a human is talking to: a subagent spawned for an unrelated
+  purpose (a hygiene pass, a review, a research task) must never advance a
+  task's phase, merge a branch, or otherwise carry out `new-task`,
+  `dispatch-tasks`, or `approve-task`'s steps itself. Reading one of those
+  skills' `SKILL.md` files is reading documentation, not an invocation of
+  it; finding the file and hand-executing its steps with Bash is exactly
+  the shortcut this rule forbids, whether or not the Skill tool was used to
+  get there. If a task's state in the repo looks ready for the next
+  pipeline step, that is not addressed to you unless a human said so this
+  turn, for that task, specifically.
 - `planning`, `user_signoff`, and `blocked_needs_human` are human gates:
-  never auto-advance past one, never reset `review_rejections`.
+  never auto-advance past one, never reset `review_rejections`. This is
+  unconditional and applies to every agent regardless of what tools it
+  holds or what it infers from commit messages, task-file phase, or
+  `docs/roadmap.md` — a gate exists so a human decides, not so an agent
+  can conclude the human would obviously agree.
 - One task in flight at a time — all task work shares one working tree.
 - Task ids are never reused; allocation scans `tasks/active/`,
   `tasks/completed/`, and `tasks/abandoned/`.
