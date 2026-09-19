@@ -1,5 +1,5 @@
 ---
-next_id: friction-010
+next_id: friction-011
 ---
 
 # Friction log
@@ -181,3 +181,22 @@ Sweeping the log is a human-triggered act, like task sign-off: the user asks for
   than one catalog entry instead of silently taking the first, so a
   mismatched material surfaced as a scan-time error naming the board instead
   of a solve-time `no_slack_absorber` naming an unrelated division.
+
+- `friction-010` - **every `shelving_core` edit pays a vendored-copy tax**:
+  sh-013, sh-014, and sh-015 each touched `shelving_core/` (`geometry.py`,
+  `scan.py`, `layout.py`, `svg.py`) and each time paid the same tax twice
+  over: `tools/vendor-core.sh` had to re-run to keep
+  `freecad/shelving/vendor/shelving_core/` byte-identical, and the
+  post-approval `doc-hygiene` sweep had to deliberately group each file with
+  its vendored twin in the same pipeline group so both copies got edited in
+  step, rather than independently and possibly inconsistently. None of this
+  is new: the user already decided the fix at sh-012 sign-off (collapse to
+  one copy under `freecad/shelving/`, delete `vendor-core.sh` and its drift
+  gate, no relative-import workaround) but deferred it until after sh-012
+  landed, "before M4+ adds more consumers of the vendored path." M4 (sh-013)
+  and M5 (sh-014, sh-015) have both landed since, each adding more files to
+  keep in sync, and the task was never opened. Worked around, each time, by
+  re-running the sync script and hand-pairing files into doc-hygiene groups.
+  Simpler if: the already-decided consolidation task had been created and
+  dispatched before M4 started, since every milestone since has only grown
+  the set of files paying this tax.
