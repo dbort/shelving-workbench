@@ -2,7 +2,7 @@
 id: sh-016
 title: "Read a container"
 current_agent: implementer
-current_phase: planning
+current_phase: implementation
 review_rejections: 0
 blocked_by: [sh-013, sh-014]
 ---
@@ -18,7 +18,7 @@ which is how a unit that refuses gets captured for a bug report. Deletes
 `spikes/`, whose job this task takes over. Milestone M6.
 
 ## Status
-- [ ] Planning
+- [x] Planning
 - [ ] Implementation
 - [ ] Review
 - [ ] User sign-off
