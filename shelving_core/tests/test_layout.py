@@ -90,6 +90,28 @@ def test_new_id_calls_differ() -> None:
     assert new_id() != new_id()
 
 
+def test_unit_depth_axis_and_front_at_min_default_to_none() -> None:
+    unit = Unit(
+        size_mm=Vec3(900.0, 1800.0, 300.0),
+        default_material=PLY,
+        root=Bay(),
+    )
+    assert unit.depth_axis is None
+    assert unit.front_at_min is None
+
+
+def test_unit_depth_axis_and_front_at_min_can_be_set() -> None:
+    unit = Unit(
+        size_mm=Vec3(900.0, 1800.0, 300.0),
+        default_material=PLY,
+        root=Bay(),
+        depth_axis=Axis.Y,
+        front_at_min=True,
+    )
+    assert unit.depth_axis is Axis.Y
+    assert unit.front_at_min is True
+
+
 def test_ids_survive_construction() -> None:
     board = Board(id="my-board")
     bay = Bay(id="my-bay")
