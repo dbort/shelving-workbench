@@ -301,8 +301,8 @@ def test_overlap_is_refused_naming_both() -> None:
 
 def test_board_crossing_a_bay_boundary_is_refused() -> None:
     """The guillotine recursion never hands ``_contained`` a window a
-    contained board straddles (every cut line it chooses is a face of every
-    board inside the parent window), so this exercises the check directly:
+    contained board straddles, since every cut line it chooses is a face of
+    every board inside the parent window. This exercises the check directly:
     a caller asking whether board "A" is confined to a narrower window than
     its own face reaches into.
     """
@@ -403,7 +403,7 @@ def _shape(region: Bay | Division | Void) -> object:
 def test_missing_board_reports_its_bay_as_void_not_open_quietly() -> None:
     """A dropped board does not fail a scan; it makes an enclosed bay read as
     open, which is why the missing board must be reported in ``skipped``
-    rather than the scan simply succeeding as if the unit had fewer bays."""
+    rather than the scan succeeding as if the unit had fewer bays."""
 
     def shape(with_top: bool) -> list[Box]:
         boxes = [

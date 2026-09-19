@@ -164,14 +164,14 @@ class Unit:
     size_mm: Vec3
     default_material: MaterialId
     root: Region
-    # Presentation, not structure: the model divides along any axis
-    # regardless of these. ``depth_axis`` says which axis a reader projects
-    # along to see the unit as a flat elevation; ``front_at_min`` says
-    # whether the low or the high end of that axis faces the viewer.
-    # ``None`` means undetermined, and facing is undetermined more often
-    # than not, so code deriving a left or a right from ``front_at_min``
-    # must handle not knowing.
+    # The axis a reader projects along to see the unit as a flat elevation.
+    # Affects presentation only: the model divides along any axis
+    # regardless of this.
     depth_axis: Axis | None = None
+    # Whether the low or the high end of depth_axis faces the viewer.
+    # ``None`` means undetermined, and facing is undetermined more often
+    # than not, so code deriving a left or a right from this must handle
+    # not knowing.
     front_at_min: bool | None = None
     id: str = field(default_factory=new_id)
 

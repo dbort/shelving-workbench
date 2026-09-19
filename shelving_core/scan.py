@@ -3,8 +3,8 @@
 Real geometry, not stored intent: a FreeCAD export names solids and their
 placements, and ``scan`` has to recover the same ``Unit`` shape
 :mod:`shelving_core.expand` would have produced from it, or refuse and name
-what it could not read. There is no second tree type here — the recursion
-builds ``Bay``, ``Void``, ``Division``, and ``Board`` directly — because the
+what it could not read. There is no second tree type here: the recursion
+builds ``Bay``, ``Void``, ``Division``, and ``Board`` directly, because the
 region model can already express what a scan needs to say: an enclosed
 compartment, a stepped outline's void, a run of boards and sub-regions along
 one axis, and a board's own end clearances as ``Insets``.
@@ -505,9 +505,9 @@ def _finalize_items(
     equal-siblings heuristic, sized from its span in ``bounds``/``coords_mm``.
 
     A ``Board``'s size along its division's axis is its own thickness, never
-    a rule, so it is excluded from the sibling comparison entirely: two
-    boards happening to be the same thickness as some region must not make
-    that region ``Fill``.
+    a rule, so it is excluded from the sibling comparison: two boards
+    happening to be the same thickness as some region must not make that
+    region ``Fill``.
     """
     region_positions = [i for i, item in enumerate(raw) if not isinstance(item, Board)]
     region_sizes_mm = [

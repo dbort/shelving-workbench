@@ -133,7 +133,8 @@ which follows [`docs/scope-and-design.md`](docs/scope-and-design.md).
   solid: a document object's name, minimum corner, and extent.
 - **Skipped**: a part `scan` could not read as a board, carried through
   rather than dropped: a frozen dataclass `(name, label, type, reason)`. A
-  dropped board does not fail a scan, it makes an enclosed bay read as open.
+  dropped board makes an enclosed bay read as open, without failing the
+  scan.
 - **ScanError**: `scan`'s refusal, a `ValueError` subclass carrying the
   offending object names in an `objects` attribute.
 - **ScanResult**: `scan`'s return value, a frozen dataclass `(unit, panels,
@@ -150,9 +151,8 @@ which follows [`docs/scope-and-design.md`](docs/scope-and-design.md).
   axis.
 - **facing**: which end of the depth axis is the front, recorded on
   `Unit.front_at_min` (`True` at the axis's minimum end, `False` at its
-  maximum, `None` when undetermined). Presentation, not structure: it
-  affects which end of a division reads as left, never the tree `scan`
-  builds.
+  maximum, `None` when undetermined). Affects presentation only: which end
+  of a division reads as left, never the tree `scan` builds.
 - **snap tolerance**: `snap_mm`, a `scan` parameter defaulting to 0.5 mm.
   Edges within this distance of each other collapse to one grid line, wide
   enough to absorb the tens-of-microns disagreement real exported geometry
