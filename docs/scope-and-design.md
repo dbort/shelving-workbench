@@ -2,8 +2,8 @@
 
 What this workbench is for, what it is deliberately not for, and how it is
 built. This is the design of record. It supersedes
-[`architecture.md`](architecture.md), which describes an earlier design
-that is still what the code implements; [`roadmap.md`](roadmap.md) tracks
+[`architecture.md`](architecture.md), which describes the pre-M4 design the
+code no longer matches; [`roadmap.md`](roadmap.md) tracks
 the milestones, and
 [`parametric-model-evaluation.md`](parametric-model-evaluation.md) carries
 the evidence and the reasoning behind the decisions stated here.

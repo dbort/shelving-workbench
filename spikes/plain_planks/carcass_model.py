@@ -5,9 +5,10 @@ themselves against this exact model, and ``docs/roadmap.md`` (M4, M5) commits
 to keeping the whole ``spikes/plain_planks/`` package running as the fallback
 until M6 deletes the directory outright. sh-013 deleted the carcass split
 tree, its solver, and its expansion from ``shelving_core`` itself, so this
-module is a byte-for-byte copy of what those modules held immediately before
-that deletion (``git show main:shelving_core/layout.py`` etc., at the commit
-sh-013 branched from), minus the JSON interop layer nothing here calls.
+module is a copy of what those modules held immediately before that deletion
+(``git show main:shelving_core/layout.py`` etc., at the commit sh-013
+branched from), minus the JSON interop layer nothing here calls and the
+reserved, never-read ``Divider.lap`` / ``LapOrder``.
 Nothing outside ``spikes/plain_planks/`` imports it, and it gains no new
 features: a real port to the region model is M5's job, not this file's.
 

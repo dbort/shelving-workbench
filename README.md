@@ -12,7 +12,8 @@ the elevation reflows the 3D. The layout math lives in a pure-Python core
 See [`docs/scope-and-design.md`](docs/scope-and-design.md) for what the project
 is for and how it is built, and [`docs/roadmap.md`](docs/roadmap.md) for the
 milestone breakdown. [`docs/architecture.md`](docs/architecture.md) describes
-the design the code implements today, which the scope document supersedes.
+the pre-M4 design the code no longer matches; `scope-and-design.md` is the
+design of record.
 
 To eyeball a solved layout, run `pixi run demo`: it builds a sample stepped
 unit, solves the region tree, and prints the catalog, the solved `Space` for
@@ -61,7 +62,7 @@ checks that need network access.
 ## Glossary
 
 The layout vocabulary and how each term maps onto the code in `shelving_core`,
-which follows [`docs/architecture.md`](docs/architecture.md).
+which follows [`docs/scope-and-design.md`](docs/scope-and-design.md).
 
 - **Unit**: a shelving unit. `Unit` in `shelving_core.layout` holds the outer
   `size_mm` (a `Vec3`), a `default_material`, a root `Region`, and a

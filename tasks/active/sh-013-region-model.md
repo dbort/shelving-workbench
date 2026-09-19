@@ -1,8 +1,8 @@
 ---
 id: sh-013
 title: "The region model, no FreeCAD"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 2
 ---
 
