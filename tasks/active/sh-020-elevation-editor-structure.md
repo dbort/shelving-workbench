@@ -122,7 +122,7 @@ does `isinstance` / structural matching on `Region`, `Bay`, `Void`, `Division`,
 modules; a `Board` imported from one path is not the same class as one imported
 from the other, so `isinstance` silently returns false across them with no
 error. A prior version of this workbench lost every divider this way (see
-`.claude/docs/friction-log.md`, the vendored-copy entry, before it is swept).
+`.claude/docs/friction-log.md` `friction-001`, if it has not been swept).
 Import every core type this file matches against from the SAME path used by
 whatever produced the value, consistently through the module.
 
