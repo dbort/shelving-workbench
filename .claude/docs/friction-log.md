@@ -141,9 +141,11 @@ Sweeping the log is a human-triggered act, like task sign-off: the user asks for
   identifier bound to a physical quantity, and it is the project's whole
   mechanism for unit safety (there is no units type), but neither `ruff` nor
   `mypy --strict` nor anything else in `pixi run tests` looks at identifier
-  names. sh-014's review has now spent two rounds on it by hand: round 1
+  names. sh-014's review has now spent three rounds on it by hand: round 1
   rejected on a list of unsuffixed names, the implementer swept the ones the
-  finding enumerated, and round 2 found more of the same class still there.
+  finding enumerated, round 2 found more of the same class still there, and
+  round 3 still found one comprehension target the round-2 finding's own
+  "exhaustive" list had missed.
   Worked around by writing a throwaway `ast`-walking script in the scratchpad
   that lists every `arg`, assignment target, and attribute name in the changed
   files without an `_mm`/`_mm3` suffix, then reading the list by hand to decide
