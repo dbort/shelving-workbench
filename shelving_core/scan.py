@@ -313,14 +313,14 @@ def _panel_vote(
     return (d0_mm + d1_mm) / 2.0 > (lo_mm + hi_mm) / 2.0
 
 
-def _median(sorted_values: Sequence[float]) -> float:
-    n = len(sorted_values)
+def _median(sorted_values_mm: Sequence[float]) -> float:
+    n = len(sorted_values_mm)
     if n == 0:
         return 0.0
     mid = n // 2
     if n % 2:
-        return sorted_values[mid]
-    return (sorted_values[mid - 1] + sorted_values[mid]) / 2.0
+        return sorted_values_mm[mid]
+    return (sorted_values_mm[mid - 1] + sorted_values_mm[mid]) / 2.0
 
 
 def _elevation_axes(depth_axis: Axis) -> tuple[Axis, Axis]:
@@ -385,19 +385,21 @@ class _Grid:
     marks uncovered cells reachable from the border."""
 
     def __init__(self, members: Sequence[_Elevated], snap_mm: float) -> None:
-        self.hs = _snap_lines([v for p in members for v in (p.h0_mm, p.h1_mm)], snap_mm)
-        self.vs = _snap_lines([v for p in members for v in (p.v0_mm, p.v1_mm)], snap_mm)
+        h_values_mm = [v for p in members for v in (p.h0_mm, p.h1_mm)]
+        v_values_mm = [v for p in members for v in (p.v0_mm, p.v1_mm)]
+        self.hs_mm = _snap_lines(h_values_mm, snap_mm)
+        self.vs_mm = _snap_lines(v_values_mm, snap_mm)
         self.planks: list[_Elevated] = []
         self.cols: list[tuple[int, int]] = []
         self.rows: list[tuple[int, int]] = []
-        nh = len(self.hs) - 1
-        nv = len(self.vs) - 1
+        nh = len(self.hs_mm) - 1
+        nv = len(self.vs_mm) - 1
         self.cover: list[list[int]] = [[_EMPTY] * nh for _ in range(nv)]
         for index, plank in enumerate(members):
-            i0 = _index_of(self.hs, plank.h0_mm, snap_mm)
-            i1 = _index_of(self.hs, plank.h1_mm, snap_mm)
-            j0 = _index_of(self.vs, plank.v0_mm, snap_mm)
-            j1 = _index_of(self.vs, plank.v1_mm, snap_mm)
+            i0 = _index_of(self.hs_mm, plank.h0_mm, snap_mm)
+            i1 = _index_of(self.hs_mm, plank.h1_mm, snap_mm)
+            j0 = _index_of(self.vs_mm, plank.v0_mm, snap_mm)
+            j1 = _index_of(self.vs_mm, plank.v1_mm, snap_mm)
             if i0 == i1 or j0 == j1:
                 raise ScanError(
                     f"{plank.name}: an extent collapses at the {snap_mm:g} mm snap "
@@ -470,32 +472,37 @@ def _region(
     # which is how furniture is described. Either choice is a valid tree;
     # this only has to be deterministic.
     if up and len(up) >= len(across):
-        axis, coords, bounds = ctx.vertical, grid.vs, [j0, *up, j1]
+        axis, coords_mm, bounds = ctx.vertical, grid.vs_mm, [j0, *up, j1]
         raw = [
             _slab(grid, ctx, i0, i1, lo, hi, across=False)
             for lo, hi in zip(bounds[:-1], bounds[1:], strict=True)
         ]
     elif across:
-        axis, coords, bounds = ctx.horizontal, grid.hs, [i0, *across, i1]
+        axis, coords_mm, bounds = ctx.horizontal, grid.hs_mm, [i0, *across, i1]
         raw = [
             _slab(grid, ctx, lo, hi, j0, j1, across=True)
             for lo, hi in zip(bounds[:-1], bounds[1:], strict=True)
         ]
     else:
         raise ScanError(
-            f"no line crosses the region ({grid.hs[i0]:g}, {grid.vs[j0]:g})-"
-            f"({grid.hs[i1]:g}, {grid.vs[j1]:g}) without cutting through a board; "
-            "the layout is not a tree",
+            f"no line crosses the region ({grid.hs_mm[i0]:g}, {grid.vs_mm[j0]:g})-"
+            f"({grid.hs_mm[i1]:g}, {grid.vs_mm[j1]:g}) without cutting through a "
+            "board; the layout is not a tree",
             (grid.planks[index].name for index in inside),
         )
-    return Division(axis=axis, items=_finalize_items(raw, bounds, coords, ctx.snap_mm))
+    return Division(
+        axis=axis, items=_finalize_items(raw, bounds, coords_mm, ctx.snap_mm)
+    )
 
 
 def _finalize_items(
-    raw: Sequence[Item], bounds: Sequence[int], coords: Sequence[float], snap_mm: float
+    raw: Sequence[Item],
+    bounds: Sequence[int],
+    coords_mm: Sequence[float],
+    snap_mm: float,
 ) -> list[Item]:
     """``raw`` with each non-``Board`` item's ``rule`` set by the
-    equal-siblings heuristic, sized from its span in ``bounds``/``coords``.
+    equal-siblings heuristic, sized from its span in ``bounds``/``coords_mm``.
 
     A ``Board``'s size along its division's axis is its own thickness, never
     a rule, so it is excluded from the sibling comparison entirely: two
@@ -504,7 +511,7 @@ def _finalize_items(
     """
     region_positions = [i for i, item in enumerate(raw) if not isinstance(item, Board)]
     region_sizes_mm = [
-        coords[bounds[i + 1]] - coords[bounds[i]] for i in region_positions
+        coords_mm[bounds[i + 1]] - coords_mm[bounds[i]] for i in region_positions
     ]
     rules = _recover_rules(region_sizes_mm, snap_mm)
     items = list(raw)
@@ -531,24 +538,41 @@ def _slab(
     pi0, pi1 = grid.cols[index]
     pj0, pj1 = grid.rows[index]
     if across:
-        low = _gap(
-            grid, range(pj0 - 1, j0 - 1, -1), range(pi0, pi1), grid.vs, horizontal=False
+        low_mm = _gap(
+            grid,
+            range(pj0 - 1, j0 - 1, -1),
+            range(pi0, pi1),
+            grid.vs_mm,
+            horizontal=False,
         )
-        high = _gap(grid, range(pj1, j1), range(pi0, pi1), grid.vs, horizontal=False)
+        high_mm = _gap(
+            grid, range(pj1, j1), range(pi0, pi1), grid.vs_mm, horizontal=False
+        )
         cross_axis = ctx.vertical
     else:
-        low = _gap(
-            grid, range(pi0 - 1, i0 - 1, -1), range(pj0, pj1), grid.hs, horizontal=True
+        low_mm = _gap(
+            grid,
+            range(pi0 - 1, i0 - 1, -1),
+            range(pj0, pj1),
+            grid.hs_mm,
+            horizontal=True,
         )
-        high = _gap(grid, range(pi1, i1), range(pj0, pj1), grid.hs, horizontal=True)
+        high_mm = _gap(
+            grid, range(pi1, i1), range(pj0, pj1), grid.hs_mm, horizontal=True
+        )
         cross_axis = ctx.horizontal
-    if low is None or high is None or low > ctx.clearance_mm or high > ctx.clearance_mm:
+    if (
+        low_mm is None
+        or high_mm is None
+        or low_mm > ctx.clearance_mm
+        or high_mm > ctx.clearance_mm
+    ):
         # It sits alone in the slab but does not reach across it, so the slab
         # divides again along the other axis and the board spans whatever is
         # left. Refusing here would reject a shelf that fills its own column
         # but not the full height of the region the column was cut from.
         return _region(grid, ctx, i0, i1, j0, j1)
-    return _make_board(plank, cross_axis, low, high, ctx)
+    return _make_board(plank, cross_axis, low_mm, high_mm, ctx)
 
 
 def _make_board(
@@ -589,7 +613,7 @@ def _gap(
     grid: _Grid,
     along: range,
     across: range,
-    lines: Sequence[float],
+    lines_mm: Sequence[float],
     *,
     horizontal: bool,
 ) -> float | None:
@@ -606,7 +630,7 @@ def _gap(
             if not grid.outside[j][i]:
                 enclosed = True
         if enclosed:
-            gap_mm += lines[a + 1] - lines[a]
+            gap_mm += lines_mm[a + 1] - lines_mm[a]
     return gap_mm
 
 
@@ -618,8 +642,8 @@ def _empty(grid: _Grid, i0: int, i1: int, j0: int, j1: int) -> Region:
     if outside_count == 0:
         return Bay()
     raise ScanError(
-        f"the empty region ({grid.hs[i0]:g}, {grid.vs[j0]:g})-"
-        f"({grid.hs[i1]:g}, {grid.vs[j1]:g}) is partly enclosed and partly open "
+        f"the empty region ({grid.hs_mm[i0]:g}, {grid.vs_mm[j0]:g})-"
+        f"({grid.hs_mm[i1]:g}, {grid.vs_mm[j1]:g}) is partly enclosed and partly open "
         "to the outside; the outline is not a tree"
     )
 
@@ -654,18 +678,18 @@ def _clean_lines(
         if grid.planks[index].thin_axis is preferred_thin_axis
         for edge in (grid.cols[index] if across else grid.rows[index])
     }
-    coords = grid.hs if across else grid.vs
+    coords_mm = grid.hs_mm if across else grid.vs_mm
     kept: list[int] = []
     for line in range(lo + 1, hi):
         if line not in faces or any(a < line < b for a, b in spans):
             continue
-        if kept and coords[line] - coords[kept[-1]] <= clearance_mm:
+        if kept and coords_mm[line] - coords_mm[kept[-1]] <= clearance_mm:
             if line in preferred and kept[-1] not in preferred:
                 kept[-1] = line
             continue
-        if coords[line] - coords[lo] <= clearance_mm:
+        if coords_mm[line] - coords_mm[lo] <= clearance_mm:
             continue
-        if coords[hi] - coords[line] <= clearance_mm:
+        if coords_mm[hi] - coords_mm[line] <= clearance_mm:
             continue
         kept.append(line)
     return kept
@@ -698,7 +722,7 @@ def _has_bay(region: Region) -> bool:
     return False
 
 
-def _snap_lines(values: Iterable[float], snap_mm: float) -> list[float]:
+def _snap_lines(values_mm: Iterable[float], snap_mm: float) -> list[float]:
     """Sorted grid lines: each cluster of values within ``snap_mm`` of its own
     first member collapses to one line at the cluster's midpoint.
 
@@ -707,24 +731,24 @@ def _snap_lines(values: Iterable[float], snap_mm: float) -> list[float]:
     edges that should coincide from splitting because the outermost pair is a
     hair over the tolerance.
     """
-    lines: list[float] = []
-    cluster: list[float] = []
-    for value in sorted(values):
-        if cluster and value - cluster[0] > snap_mm:
-            lines.append((cluster[0] + cluster[-1]) / 2.0)
-            cluster = []
-        cluster.append(value)
-    if cluster:
-        lines.append((cluster[0] + cluster[-1]) / 2.0)
-    return lines
+    lines_mm: list[float] = []
+    cluster_mm: list[float] = []
+    for value_mm in sorted(values_mm):
+        if cluster_mm and value_mm - cluster_mm[0] > snap_mm:
+            lines_mm.append((cluster_mm[0] + cluster_mm[-1]) / 2.0)
+            cluster_mm = []
+        cluster_mm.append(value_mm)
+    if cluster_mm:
+        lines_mm.append((cluster_mm[0] + cluster_mm[-1]) / 2.0)
+    return lines_mm
 
 
-def _index_of(lines: Sequence[float], value: float, snap_mm: float) -> int:
-    """Index of the grid line ``value`` snapped to; the nearest one, since a
+def _index_of(lines_mm: Sequence[float], value_mm: float, snap_mm: float) -> int:
+    """Index of the grid line ``value_mm`` snapped to; the nearest one, since a
     cluster midpoint can sit up to half the tolerance from any member."""
-    best = min(range(len(lines)), key=lambda index: abs(lines[index] - value))
-    if abs(lines[best] - value) > snap_mm:
-        raise AssertionError(f"{value} is not on the grid")
+    best = min(range(len(lines_mm)), key=lambda index: abs(lines_mm[index] - value_mm))
+    if abs(lines_mm[best] - value_mm) > snap_mm:
+        raise AssertionError(f"{value_mm} is not on the grid")
     return best
 
 
@@ -859,7 +883,7 @@ def scan(
         materials_by_name=materials_by_name,
         default_material=default_material,
     )
-    root = _region(grid, ctx, 0, len(grid.hs) - 1, 0, len(grid.vs) - 1)
+    root = _region(grid, ctx, 0, len(grid.hs_mm) - 1, 0, len(grid.vs_mm) - 1)
     if not _has_bay(root):
         raise ScanError(
             "no enclosed bay: the outside reaches every void, so the shell has a gap "
@@ -871,8 +895,8 @@ def scan(
             horizontal,
             vertical,
             depth_axis,
-            grid.hs[-1] - grid.hs[0],
-            grid.vs[-1] - grid.vs[0],
+            grid.hs_mm[-1] - grid.hs_mm[0],
+            grid.vs_mm[-1] - grid.vs_mm[0],
             depth_hi_mm - depth_lo_mm,
         ),
         default_material=default_material,

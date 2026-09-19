@@ -145,6 +145,65 @@ def test_detect_depth_axis_picks_the_smallest_bounding_box_extent() -> None:
     assert detect_depth_axis(_uniform_depth_boxes()) is Axis.Y
 
 
+def _six_sided_shell(
+    width_mm: float = 600.0,
+    depth_mm: float = 400.0,
+    height_mm: float = 300.0,
+    thickness_mm: float = 18.0,
+) -> list[Box]:
+    """A fully enclosed shell: a wall on every face, so any axis is a valid
+    depth axis and scanning still finds an enclosed bay whichever one a
+    caller picks."""
+    t_mm = thickness_mm
+    return [
+        _box("Left", (0.0, 0.0, 0.0), (t_mm, depth_mm, height_mm)),
+        _box("Right", (width_mm - t_mm, 0.0, 0.0), (t_mm, depth_mm, height_mm)),
+        _box("Bottom", (t_mm, 0.0, 0.0), (width_mm - 2 * t_mm, depth_mm, t_mm)),
+        _box(
+            "Top",
+            (t_mm, 0.0, height_mm - t_mm),
+            (width_mm - 2 * t_mm, depth_mm, t_mm),
+        ),
+        _box(
+            "Front",
+            (t_mm, 0.0, t_mm),
+            (width_mm - 2 * t_mm, t_mm, height_mm - 2 * t_mm),
+        ),
+        _box(
+            "Back",
+            (t_mm, depth_mm - t_mm, t_mm),
+            (width_mm - 2 * t_mm, t_mm, height_mm - 2 * t_mm),
+        ),
+    ]
+
+
+def test_explicit_depth_axis_changes_which_axis_the_tree_divides_along() -> None:
+    """``detect_depth_axis`` would pick Z, the shell's smallest extent; an
+    explicit ``depth_axis=Axis.Y`` overrides that, setting aside the Front
+    and Back panels instead of Bottom and Top, and the inner division cuts
+    along Z instead of Y."""
+    boxes = _six_sided_shell()
+    assert detect_depth_axis(boxes) is Axis.Z
+
+    default = scan(boxes, CATALOG)
+    assert default.unit.depth_axis is Axis.Z
+    assert sorted(p.name for p in default.panels) == ["Bottom", "Top"]
+    default_root = default.unit.root
+    assert isinstance(default_root, Division)
+    default_inner = default_root.items[1]
+    assert isinstance(default_inner, Division)
+    assert default_inner.axis is Axis.Y
+
+    override = scan(boxes, CATALOG, depth_axis=Axis.Y)
+    assert override.unit.depth_axis is Axis.Y
+    assert sorted(p.name for p in override.panels) == ["Back", "Front"]
+    override_root = override.unit.root
+    assert isinstance(override_root, Division)
+    override_inner = override_root.items[1]
+    assert isinstance(override_inner, Division)
+    assert override_inner.axis is Axis.Z
+
+
 def test_uniform_depth_leaves_facing_undetermined() -> None:
     boxes = _uniform_depth_boxes()
     front_at_min, evidence = infer_facing(boxes, detect_depth_axis(boxes))
@@ -185,14 +244,41 @@ def test_stair_step_fixture_infers_facing_from_the_inset() -> None:
     assert evidence is FacingEvidence.FLUSH_BACK
 
 
+@pytest.mark.parametrize("front_at_min", [True, False])
+def test_explicit_front_at_min_is_never_second_guessed(front_at_min: bool) -> None:
+    """The magicStart fixture's overlay back infers front at the minimum end
+    (``FacingEvidence.PANEL``); passing an explicit ``front_at_min``, in both
+    directions, must come back verbatim with ``FacingEvidence.GIVEN`` rather
+    than being recomputed from the geometry."""
+    boxes = boxes_from_json(REAL_MAGICSTART_F1.read_text(encoding="utf-8"))
+    result = scan(boxes, CATALOG, front_at_min=front_at_min)
+    assert result.unit.front_at_min is front_at_min
+    assert result.facing_evidence is FacingEvidence.GIVEN
+
+
 def _closed_box(
-    interior: list[Box], size_mm: float = 1000.0, t: float = 18.0, d: float = 300.0
+    interior: list[Box],
+    size_mm: float = 1000.0,
+    thickness_mm: float = 18.0,
+    depth_mm: float = 300.0,
 ) -> list[Box]:
     return [
-        _box("Bottom", (0.0, 0.0, 0.0), (size_mm, d, t)),
-        _box("Top", (0.0, 0.0, size_mm - t), (size_mm, d, t)),
-        _box("LeftSide", (0.0, 0.0, t), (t, d, size_mm - 2 * t)),
-        _box("RightSide", (size_mm - t, 0.0, t), (t, d, size_mm - 2 * t)),
+        _box("Bottom", (0.0, 0.0, 0.0), (size_mm, depth_mm, thickness_mm)),
+        _box(
+            "Top",
+            (0.0, 0.0, size_mm - thickness_mm),
+            (size_mm, depth_mm, thickness_mm),
+        ),
+        _box(
+            "LeftSide",
+            (0.0, 0.0, thickness_mm),
+            (thickness_mm, depth_mm, size_mm - 2 * thickness_mm),
+        ),
+        _box(
+            "RightSide",
+            (size_mm - thickness_mm, 0.0, thickness_mm),
+            (thickness_mm, depth_mm, size_mm - 2 * thickness_mm),
+        ),
         *interior,
     ]
 
@@ -221,8 +307,8 @@ def test_board_crossing_a_bay_boundary_is_refused() -> None:
         _Elevated("B", 50.0, 90.0, 18.0, 118.0, 0.0, 300.0, Axis.X, 18.0),
     )
     grid = _Grid(members, 0.5)
-    i0, i1 = grid.hs.index(0.0), grid.hs.index(50.0)
-    j0, j1 = grid.vs.index(0.0), grid.vs.index(18.0)
+    i0, i1 = grid.hs_mm.index(0.0), grid.hs_mm.index(50.0)
+    j0, j1 = grid.vs_mm.index(0.0), grid.vs_mm.index(18.0)
     with pytest.raises(
         ScanError, match="crosses the boundary of the bay it lies in"
     ) as info:
@@ -231,13 +317,13 @@ def test_board_crossing_a_bay_boundary_is_refused() -> None:
 
 
 def test_pinwheel_is_refused_naming_the_cycle() -> None:
-    t, d = 18.0, 300.0
+    thickness_mm, depth_mm = 18.0, 300.0
     pinwheel = _closed_box(
         [
-            _box("A", (18.0, 0.0, 300.0), (582.0, d, t)),
-            _box("B", (600.0, 0.0, 18.0), (t, d, 682.0)),
-            _box("C", (400.0, 0.0, 700.0), (582.0, d, t)),
-            _box("D", (382.0, 0.0, 318.0), (t, d, 664.0)),
+            _box("A", (18.0, 0.0, 300.0), (582.0, depth_mm, thickness_mm)),
+            _box("B", (600.0, 0.0, 18.0), (thickness_mm, depth_mm, 682.0)),
+            _box("C", (400.0, 0.0, 700.0), (582.0, depth_mm, thickness_mm)),
+            _box("D", (382.0, 0.0, 318.0), (thickness_mm, depth_mm, 664.0)),
         ]
     )
     with pytest.raises(ScanError, match="not a tree") as info:
@@ -263,19 +349,19 @@ def test_partly_enclosed_partly_open_region_is_refused() -> None:
     ]
     elevated = tuple(_elevate(b, Axis.X, Axis.Z, Axis.Y) for b in boxes)
     grid = _Grid(elevated, 0.5)
-    i0, i1 = grid.hs.index(18.0), grid.hs.index(1082.0)
-    j0, j1 = grid.vs.index(18.0), grid.vs.index(118.0)
+    i0, i1 = grid.hs_mm.index(18.0), grid.hs_mm.index(1082.0)
+    j0, j1 = grid.vs_mm.index(18.0), grid.vs_mm.index(118.0)
     with pytest.raises(ScanError, match="partly enclosed and partly open"):
         _empty(grid, i0, i1, j0, j1)
 
 
 def test_no_enclosed_bay_is_refused() -> None:
-    d = 300.0
+    depth_mm = 300.0
     boxes = [
-        _box("Bottom", (0.0, 0.0, 0.0), (1000.0, d, 18.0)),
-        _box("ShortTop", (0.0, 0.0, 982.0), (900.0, d, 18.0)),
-        _box("LeftSide", (0.0, 0.0, 18.0), (18.0, d, 964.0)),
-        _box("RightSide", (982.0, 0.0, 18.0), (18.0, d, 964.0)),
+        _box("Bottom", (0.0, 0.0, 0.0), (1000.0, depth_mm, 18.0)),
+        _box("ShortTop", (0.0, 0.0, 982.0), (900.0, depth_mm, 18.0)),
+        _box("LeftSide", (0.0, 0.0, 18.0), (18.0, depth_mm, 964.0)),
+        _box("RightSide", (982.0, 0.0, 18.0), (18.0, depth_mm, 964.0)),
     ]
     with pytest.raises(ScanError, match="no enclosed bay"):
         scan(boxes, CATALOG)
@@ -516,6 +602,18 @@ def test_unequal_siblings_recover_as_fixed() -> None:
     assert _region_rules(result.unit.root) == [Fixed, Fixed, Fixed, Fixed]
 
 
+def test_thicknesses_mm_reports_every_distinct_board_thickness() -> None:
+    """``_second_material_unit`` mixes 18 mm ply with a 12 mm MDF shelf, so
+    the reported set must carry both rather than collapsing to one."""
+    original = _second_material_unit()
+    boxes = [
+        Box(name=s.node_id, corner_mm=s.placement, size_mm=s.size)
+        for s in expand(original, CATALOG)
+    ]
+    result = scan(boxes, CATALOG)
+    assert result.thicknesses_mm == frozenset({18.0, 12.0})
+
+
 def _kinds_names(division: Division) -> tuple[str, list[str]]:
     """One character per item (``P`` board, ``o`` open bay, ``x`` void,
     ``D`` nested division) plus the boards' roles in order, mirroring the
@@ -613,9 +711,9 @@ def test_real_two_units_whole_tree() -> None:
     boards side by side, and the notched panel appearing in ``skipped``
     rather than as a board."""
     boxes, skipped = export_from_json(REAL_TWO_UNITS.read_text(encoding="utf-8"))
-    result = scan(boxes, CATALOG)
+    result = scan(boxes, CATALOG, skipped=skipped)
 
-    assert [s.name for s in skipped] == ["Sketch006", "Pad003"]
+    assert [s.name for s in result.skipped] == ["Sketch006", "Pad003"]
 
     root = _division(result.unit.root)
     assert root.axis is Axis.Z
