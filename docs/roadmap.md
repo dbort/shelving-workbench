@@ -154,10 +154,10 @@ for a stepped unit; `freecadcmd` still loads the workbench.
 
 ## M5 — Scanning and the elevation renderer, no FreeCAD
 
-**Status:** Tasks sh-014, sh-015
+**Status:** Done sh-014, sh-015
 
 - [x] sh-014 — scanning: geometry to a region model, or a refusal
-- [ ] sh-015 — the elevation renderer, rebuilt on the region model (blocked
+- [x] sh-015 — the elevation renderer, rebuilt on the region model (blocked
   on sh-014)
 
 Read a layout from geometry: axis-aligned boxes in, a region tree or a
