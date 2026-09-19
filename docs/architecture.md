@@ -2,11 +2,11 @@
 
 > **Superseded by [`scope-and-design.md`](scope-and-design.md).** That
 > document is the design of record. This one describes the design the code
-> currently implements, in which the workbench owns its plank objects and
-> drives them from a serialised split-tree. It is kept because it is still
-> an accurate description of the code until the rewrite lands, and because
-> its decision table records why several choices were made. Where the two
-> disagree, `scope-and-design.md` wins.
+> implemented before the region-model rewrite (`docs/roadmap.md` M4), in
+> which the workbench owned its plank objects and drove them from a
+> serialised split-tree. It is kept because its decision table records why
+> several choices were made, not because the rest of the document still
+> matches the code. Where the two disagree, `scope-and-design.md` wins.
 
 A FreeCAD 1.0 workbench for parametric shelving. A unit is designed as a
 flat front elevation (a "2.5D" view: 2D layout plus a depth value per

@@ -1,5 +1,5 @@
 ---
-next_id: friction-006
+next_id: friction-007
 ---
 
 # Friction log
@@ -99,3 +99,24 @@ Sweeping the log is a human-triggered act, like task sign-off: the user asks for
   `ruff` flagged a non-frozen-dataclass-instance default the same way they'd
   flag a bare `[]` or `{}`, so the mistake surfaced at lint time instead of
   first import.
+
+- `friction-006` - **a task's `## Frontier Advice` named only two of five spike
+  files it put at risk**: sh-013's Frontier Advice called
+  `spikes/plain_planks/general_model.py` and `test_general_model.py` CRITICAL
+  and said not to delete them, but Step 4's deletion of `Carcass`, `Leaf`,
+  `Split`, `Divider`, `Orientation`, and `SplitRule` from `shelving_core.layout`
+  (and `PlankRole`/`PlankSpec`/`Rect` from `expand.py`/`solver.py`) also broke
+  three files the advice never mentioned: `scan.py`, `test_scan.py`, and
+  `freecad_spike.py`, none of which the plan's Must Haves or `pixi run tests`
+  cover (`pytest shelving_core tests` never touches `spikes/`). The round-1
+  review caught it; nothing in the task file said the whole package, not just
+  the two named modules, had to keep importing. Reverse-engineered the actual
+  scope from `docs/roadmap.md`'s M4/M5/M6 entries, which do commit to the
+  entire `spikes/plain_planks/` directory surviving until M6. Worked around by
+  vendoring the deleted carcass model verbatim into
+  `spikes/plain_planks/carcass_model.py` and repointing all five files' imports
+  at it, plus a `tests/test_spike_importable.py` import-collection guard so
+  `pixi run tests` catches the next name this package depends on. Simpler if:
+  the task file's Frontier Advice had named every file a deletion step put at
+  risk, not just the two the plan actively reused, or the Must Have list
+  included an import check for the directory the plan promised to keep alive.

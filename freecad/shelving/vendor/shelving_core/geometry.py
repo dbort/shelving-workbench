@@ -16,7 +16,7 @@ AxisIndex = Literal[0, 1, 2]
 
 @dataclass(frozen=True)
 class Vec3:
-    """A point or an extent in the carcass local frame, millimetres."""
+    """A point or an extent in the unit's local frame, millimetres."""
 
     x_mm: float
     y_mm: float

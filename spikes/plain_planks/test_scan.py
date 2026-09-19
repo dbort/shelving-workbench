@@ -9,19 +9,19 @@ from pathlib import Path
 
 import pytest
 
-from shelving_core.expand import PlankSpec, expand
-from shelving_core.layout import (
+from shelving_core.layout import Fill, Fixed
+from shelving_core.materials import Catalog, MaterialEntry, MaterialId
+from spikes.plain_planks.carcass_model import (
     Bay,
     Carcass,
     Divider,
-    Fill,
-    Fixed,
     Leaf,
     Orientation,
+    PlankSpec,
     Split,
+    expand,
+    solve,
 )
-from shelving_core.materials import Catalog, MaterialEntry, MaterialId
-from shelving_core.solver import solve
 from spikes.plain_planks.scan import (
     Box,
     Cut,

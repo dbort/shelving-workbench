@@ -127,10 +127,10 @@ def test_stepped_outline_expands_with_falling_tops_and_no_void_boards() -> None:
     unit = _stepped_unit()
     specs = expand(unit, _catalog())
 
-    tops = sorted(
+    tops_mm = sorted(
         spec.placement.z_mm + spec.size.z_mm for spec in specs if spec.role == "top"
     )
-    assert [round(z, 1) for z in tops] == [600.0, 900.0, 1200.0]
+    assert [round(z, 1) for z in tops_mm] == [600.0, 900.0, 1200.0]
     assert all(
         spec.size.x_mm < unit.size_mm.x_mm for spec in specs if spec.role == "top"
     )
@@ -180,5 +180,5 @@ def test_board_insets_apply_to_cross_section_axes_only() -> None:
 def test_total_volume_mm3_sums_the_closed_box() -> None:
     unit = _closed_box(900.0, 300.0, 1800.0)
     specs = expand(unit, _catalog())
-    expected = 2 * (900.0 * 300.0 * 18.0) + 2 * (18.0 * 300.0 * 1764.0)
-    assert total_volume_mm3(specs) == pytest.approx(expected, abs=1e-6)
+    expected_mm3 = 2 * (900.0 * 300.0 * 18.0) + 2 * (18.0 * 300.0 * 1764.0)
+    assert total_volume_mm3(specs) == pytest.approx(expected_mm3, abs=1e-6)

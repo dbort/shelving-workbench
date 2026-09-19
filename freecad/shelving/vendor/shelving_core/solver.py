@@ -166,14 +166,23 @@ def _resolve_with_next(
     Subtracts the resolved thickness of the item immediately after ``index``
     in ``items``. Raises :class:`LayoutSolveError` with reason
     ``"unresolvable_basis"`` when there is no next item or it is not a
-    ``Board``.
+    ``Board``, and with reason ``"nonpositive_opening"`` when the next item
+    is at least as thick as the quoted spacing.
     """
     if index + 1 >= len(items) or not isinstance(items[index + 1], Board):
         raise LayoutSolveError(region_id, "unresolvable_basis", {})
     next_board = items[index + 1]
     assert isinstance(next_board, Board)
     next_thickness_mm = _thickness_mm(next_board, unit, catalog)
-    return Fixed(size_mm=rule.size_mm - next_thickness_mm)
+    resolved_size_mm = rule.size_mm - next_thickness_mm
+    if resolved_size_mm <= 0:
+        # Fixed.__post_init__ would reject this with a bare ValueError, which
+        # breaks the LayoutSolveError contract solve's callers are told to
+        # catch; raise the uniform error before constructing it.
+        raise LayoutSolveError(
+            region_id, "nonpositive_opening", {"size_mm": resolved_size_mm}
+        )
+    return Fixed(size_mm=resolved_size_mm)
 
 
 def _rule_for_item(

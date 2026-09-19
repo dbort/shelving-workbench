@@ -14,9 +14,9 @@ is for and how it is built, and [`docs/roadmap.md`](docs/roadmap.md) for the
 milestone breakdown. [`docs/architecture.md`](docs/architecture.md) describes
 the design the code implements today, which the scope document supersedes.
 
-To eyeball a solved layout, run `pixi run demo`: it builds a sample nested
-carcass, runs the spacing solver, and prints the resulting rectangle for every
-bay and divider.
+To eyeball a solved layout, run `pixi run demo`: it builds a sample stepped
+unit, solves the region tree, and prints the catalog, the solved `Space` for
+every region, and the expanded board table.
 
 ## Setup
 
@@ -66,7 +66,7 @@ which follows [`docs/architecture.md`](docs/architecture.md).
 - **Unit**: a shelving unit. `Unit` in `shelving_core.layout` holds the outer
   `size_mm` (a `Vec3`), a `default_material`, a root `Region`, and a
   persistent `id`. There is no distinguished shell: the outermost boards of
-  the outermost divisions are what a carcass used to name specially.
+  the outermost divisions are the shell.
 - **Region**: `Bay | Void | Division`, one node of the tree. Every region
   carries a persistent `id`; `Bay` and `Void` and `Division` also carry the
   `SizeRule` their parent division sizes them by (unused and unvalidated on

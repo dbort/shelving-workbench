@@ -27,10 +27,17 @@ import enum
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from shelving_core.expand import PlankRole, PlankSpec, Vec3
-from shelving_core.layout import Fill, Fixed, Orientation, SplitRule, new_id
+from shelving_core.geometry import Vec3
+from shelving_core.layout import Fill, Fixed, new_id
 from shelving_core.materials import Catalog, MaterialId
-from shelving_core.solver import EPS_MM, LayoutSolveError, Rect, distribute
+from shelving_core.solver import EPS_MM, LayoutSolveError, distribute
+from spikes.plain_planks.carcass_model import (
+    Orientation,
+    PlankRole,
+    PlankSpec,
+    Rect,
+    SplitRule,
+)
 
 # A role is a free-form string here: the general tree has no closed set of
 # shell positions, and a stepped outline has several tops. The mapping exists

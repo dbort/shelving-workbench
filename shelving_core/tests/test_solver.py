@@ -255,6 +255,26 @@ def test_solve_unresolvable_basis_when_next_item_is_not_a_board() -> None:
     assert excinfo.value.node_id == "with_next"
 
 
+def test_solve_with_next_thinner_than_next_board_raises_layout_solve_error() -> None:
+    """A ``WITH_NEXT`` spacing quoted narrower than the following board's
+    thickness resolves to a non-positive size; that must surface as
+    ``LayoutSolveError``, not a bare ``ValueError`` from ``Fixed``'s own
+    validation."""
+    root = Division(
+        axis=Axis.Z,
+        items=[
+            Bay(rule=Fixed(5.0, basis=Basis.WITH_NEXT), id="too_thin"),
+            Board(material=T18, id="next_board"),
+        ],
+        id="root",
+    )
+    unit = Unit(size_mm=Vec3(600.0, 300.0, 1000.0), default_material=T18, root=root)
+    with pytest.raises(LayoutSolveError) as excinfo:
+        solve(unit, CATALOG)
+    assert excinfo.value.reason == "nonpositive_opening"
+    assert excinfo.value.node_id == "too_thin"
+
+
 def test_basis_with_next_holds_board_position_across_catalog_thickness_change() -> None:
     """A shelf spacing quoted top face to top face (``WITH_NEXT``, a bay's
     fixed size covering the bay plus the shelf immediately above it) keeps the
