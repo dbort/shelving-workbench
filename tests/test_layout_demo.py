@@ -73,7 +73,7 @@ def test_demo_svg_flag_writes_a_parseable_svg(tmp_path: Path) -> None:
     )
     assert result.returncode == 0, result.stderr
     assert f"wrote {out}" in result.stdout
-    # The text dump still prints; --svg only adds the file and its confirmation.
+    # --svg adds the file and its confirmation line on top of the text dump.
     assert result.stdout.splitlines()[0] == (
         "Unit 1200 x 300 x 1200 mm, default material 18 mm birch ply (18 mm)"
     )
