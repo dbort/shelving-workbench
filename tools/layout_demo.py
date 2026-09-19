@@ -4,6 +4,7 @@ Run through the pixi environment, which puts ``shelving_core`` on the import
 path:
 
     pixi run demo
+    pixi run demo -- --svg out.svg
 
 The sample tree and catalog are defined in code. Output, in order:
 
@@ -13,7 +14,12 @@ The sample tree and catalog are defined in code. Output, in order:
   root, which has no parent to size it);
 - the expanded board table: one row per physical board (role, size,
   minimum-corner placement, material name), then a total-board-volume line.
+
+``--svg PATH`` also writes the solved layout to ``PATH`` as an SVG elevation.
 """
+
+import argparse
+import pathlib
 
 from shelving_core.expand import BoardSpec, expand, total_volume_mm3
 from shelving_core.geometry import Space, Vec3
@@ -32,6 +38,7 @@ from shelving_core.layout import (
 )
 from shelving_core.materials import Catalog, MaterialEntry, MaterialId
 from shelving_core.solver import solve
+from shelving_core.svg import to_svg
 
 PLY18 = MaterialId("ply18")
 MDF12 = MaterialId("mdf12")
@@ -90,6 +97,7 @@ def _sample_unit() -> Unit:
     return Unit(
         size_mm=Vec3(1200.0, 300.0, 1200.0),
         default_material=PLY18,
+        depth_axis=Axis.Y,
         root=Division(
             axis=Axis.Z,
             items=[
@@ -182,6 +190,15 @@ def _print_boards(specs: list[BoardSpec], catalog: Catalog) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--svg",
+        type=pathlib.Path,
+        default=None,
+        help="also write the solved layout to this path as an SVG elevation",
+    )
+    args = parser.parse_args()
+
     unit = _sample_unit()
     catalog = _sample_catalog()
     spaces = solve(unit, catalog)
@@ -194,6 +211,11 @@ def main() -> None:
     _print_catalog(catalog)
     _print_region(unit.root, spaces, 0, None)
     _print_boards(expand(unit, catalog), catalog)
+
+    svg_path: pathlib.Path | None = args.svg
+    if svg_path is not None:
+        svg_path.write_text(to_svg(unit, spaces, catalog), encoding="utf-8")
+        print(f"wrote {svg_path}")
 
 
 if __name__ == "__main__":
