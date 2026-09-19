@@ -1,0 +1,218 @@
+[
+  {
+    "name": "Part003",
+    "label": "Part, panel2pad",
+    "type": "App::Part",
+    "depth": 0,
+    "has_shape": true,
+    "placement": {
+      "base_mm": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation_deg": 0.0,
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    "solid": {
+      "bbox_min_mm": [
+        4591.049999999998,
+        1.04e-13,
+        939.8
+      ],
+      "bbox_size_mm": [
+        292.10000000000036,
+        18.262600000000003,
+        1480.3373999999997
+      ],
+      "volume_mm3": 6618488.499706207,
+      "bbox_volume_mm3": 7896867.942942213,
+      "faces": 10,
+      "solids": 1,
+      "axis_aligned": true,
+      "is_solid": true,
+      "missing_mm3": 1278379.4432360064,
+      "is_plain_box": false,
+      "cutouts": [
+        {
+          "min_mm": [
+            4591.049999999998,
+            -3.410605131648481e-13,
+            1498.5999999999997
+          ],
+          "size_mm": [
+            196.85000000000036,
+            18.262600000000855,
+            355.60000000000014
+          ],
+          "volume_mm3": 1278379.4432360015,
+          "faces": 6,
+          "is_box": true
+        }
+      ],
+      "is_box_minus_boxes": true
+    },
+    "children": [
+      {
+        "name": "Body001",
+        "label": "Body, panel2pad",
+        "type": "PartDesign::Body",
+        "depth": 1,
+        "has_shape": true,
+        "placement": {
+          "base_mm": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotation_deg": 0.0,
+          "axis": [
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "solid": {
+          "bbox_min_mm": [
+            4591.049999999998,
+            1.04e-13,
+            939.8
+          ],
+          "bbox_size_mm": [
+            292.10000000000036,
+            18.262600000000003,
+            1480.3373999999997
+          ],
+          "volume_mm3": 6618488.499706207,
+          "bbox_volume_mm3": 7896867.942942213,
+          "faces": 10,
+          "solids": 1,
+          "axis_aligned": true,
+          "is_solid": true,
+          "missing_mm3": 1278379.4432360064,
+          "is_plain_box": false,
+          "cutouts": [
+            {
+              "min_mm": [
+                4591.049999999998,
+                -3.410605131648481e-13,
+                1498.5999999999997
+              ],
+              "size_mm": [
+                196.85000000000036,
+                18.262600000000855,
+                355.60000000000014
+              ],
+              "volume_mm3": 1278379.4432360015,
+              "faces": 6,
+              "is_box": true
+            }
+          ],
+          "is_box_minus_boxes": true
+        },
+        "children": [
+          {
+            "name": "Sketch006",
+            "label": "Pattern, panel2pad",
+            "type": "Sketcher::SketchObject",
+            "depth": 2,
+            "has_shape": true,
+            "placement": {
+              "base_mm": [
+                4591.049999999998,
+                3.1297751970854443e-13,
+                939.8
+              ],
+              "rotation_deg": 90.0,
+              "axis": [
+                1.0,
+                0.0,
+                0.0
+              ]
+            },
+            "solid": {
+              "bbox_min_mm": [
+                4591.049999999998,
+                3.1297751970854443e-13,
+                939.8
+              ],
+              "bbox_size_mm": [
+                292.10000000000036,
+                3.28700933138748e-13,
+                1480.3373999999997
+              ],
+              "volume_mm3": 0.0,
+              "bbox_volume_mm3": 1.421324379726091e-07,
+              "faces": 0,
+              "solids": 0,
+              "axis_aligned": true,
+              "is_solid": false
+            }
+          },
+          {
+            "name": "Pad003",
+            "label": "panel2pad",
+            "type": "PartDesign::Pad",
+            "depth": 2,
+            "has_shape": true,
+            "placement": {
+              "base_mm": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "rotation_deg": 90.00000000000001,
+              "axis": [
+                1.0,
+                0.0,
+                0.0
+              ]
+            },
+            "solid": {
+              "bbox_min_mm": [
+                4591.049999999998,
+                3.1299999999999993e-13,
+                939.8
+              ],
+              "bbox_size_mm": [
+                292.10000000000036,
+                18.2626,
+                1480.3373999999997
+              ],
+              "volume_mm3": 6618488.499706207,
+              "bbox_volume_mm3": 7896867.942942212,
+              "faces": 10,
+              "solids": 1,
+              "axis_aligned": true,
+              "is_solid": true,
+              "missing_mm3": 1278379.4432360055,
+              "is_plain_box": false,
+              "cutouts": [
+                {
+                  "min_mm": [
+                    4591.049999999998,
+                    3.1299999999999993e-13,
+                    1498.6
+                  ],
+                  "size_mm": [
+                    196.85000000000036,
+                    18.262600000000614,
+                    355.5999999999999
+                  ],
+                  "volume_mm3": 1278379.443236001,
+                  "faces": 6,
+                  "is_box": true
+                }
+              ],
+              "is_box_minus_boxes": true
+            }
+          }
+        ]
+      }
+    ]
+  }
+]
