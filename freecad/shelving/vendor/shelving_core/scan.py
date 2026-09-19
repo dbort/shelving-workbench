@@ -27,17 +27,22 @@ them are recursed into.
 
 from __future__ import annotations
 
+import enum
 import json
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
-from .geometry import Vec3
+from .geometry import AxisIndex, Vec3
+from .layout import Axis
 
 # Real geometry disagrees at joints by tens of microns: a unit exported from
 # FreeCAD had four supposedly-coincident edges spread over 0.09 mm. The snap
 # has to absorb that and stay far below any real feature size.
 DEFAULT_SNAP_MM = 0.5
 DEFAULT_CLEARANCE_MM = 3.0
+
+_AXES: tuple[Axis, Axis, Axis] = (Axis.X, Axis.Y, Axis.Z)
+_AXIS_INDICES: tuple[AxisIndex, AxisIndex, AxisIndex] = (0, 1, 2)
 
 
 @dataclass(frozen=True)
@@ -143,3 +148,160 @@ def _req_vec(obj: Mapping[str, object], key: str) -> Vec3:
             raise ValueError(f"key {key!r} must hold numbers, got {item!r}")
         out.append(float(item))
     return Vec3(out[0], out[1], out[2])
+
+
+def _axis_index(axis: Axis) -> AxisIndex:
+    match axis:
+        case Axis.X:
+            return 0
+        case Axis.Y:
+            return 1
+        case Axis.Z:
+            return 2
+
+
+def _component_mm(v: Vec3, axis_index: AxisIndex) -> float:
+    return (v.x_mm, v.y_mm, v.z_mm)[axis_index]
+
+
+def _span_mm(box: Box, axis_index: AxisIndex) -> tuple[float, float]:
+    """``box``'s minimum and maximum extent along ``axis_index``."""
+    lo_mm = _component_mm(box.corner_mm, axis_index)
+    return lo_mm, lo_mm + _component_mm(box.size_mm, axis_index)
+
+
+def _classify_thin_axis(box: Box) -> Axis:
+    """The one axis ``box`` is thinnest along, or ``ScanError`` naming it.
+
+    Every board has exactly one thin axis: two or three tied extents mean the
+    box has no direction a reader would call "thickness", such as a square
+    post, and the geometry cannot be read as a board.
+    """
+    sizes = (box.size_mm.x_mm, box.size_mm.y_mm, box.size_mm.z_mm)
+    if min(sizes) <= 0:
+        raise ScanError(
+            f"{box.name}: every extent must be positive, got "
+            f"{sizes[0]:g} x {sizes[1]:g} x {sizes[2]:g}",
+            (box.name,),
+        )
+    smallest = min(sizes)
+    thin_axes = [index for index in range(3) if sizes[index] == smallest]
+    if len(thin_axes) != 1:
+        raise ScanError(
+            f"{box.name}: no single thin axis (extents "
+            f"{sizes[0]:g} x {sizes[1]:g} x {sizes[2]:g})",
+            (box.name,),
+        )
+    return _AXES[thin_axes[0]]
+
+
+def detect_depth_axis(boxes: Sequence[Box]) -> Axis:
+    """The elevation's depth axis: the bounding-box axis with the smallest span.
+
+    A guess, not a measurement: a unit deeper than it is wide or tall would
+    fool it. ``scan`` takes an explicit ``depth_axis`` for that case.
+    """
+    if not boxes:
+        raise ScanError("no boxes to scan")
+
+    def bounding_span_mm(axis_index: AxisIndex) -> float:
+        spans = [_span_mm(b, axis_index) for b in boxes]
+        return max(hi for _, hi in spans) - min(lo for lo, _ in spans)
+
+    depth_index = min(_AXIS_INDICES, key=bounding_span_mm)
+    return _AXES[depth_index]
+
+
+class FacingEvidence(enum.StrEnum):
+    """What settled which way a unit faces."""
+
+    # The caller said so, or a stored property did.
+    GIVEN = "given"
+    # A depth-thin board proud of the members: a door when stock-thickness, an
+    # overlay back when much thinner, and those point opposite ways.
+    PANEL = "panel"
+    # The rear of a unit is almost always flush and the front may be inset
+    # for looks, so the end the members sit flush with is the back.
+    FLUSH_BACK = "flush_back"
+    # Nothing distinguishes the two faces; the normal answer.
+    NONE = "none"
+
+
+def infer_facing(
+    boxes: Sequence[Box], depth_axis: Axis, tol_mm: float = DEFAULT_SNAP_MM
+) -> tuple[bool | None, FacingEvidence]:
+    """Which end of ``depth_axis`` is the front, and what said so.
+
+    ``True`` means the front is at the minimum end of ``depth_axis``,
+    ``False`` the maximum, and ``None`` means undetermined, the normal
+    answer for a plain rectangular box whose two faces are identical.
+
+    Two signals, strongest first. A board thin through the depth settles it:
+    one lying within the members is a back, and one lying proud of them is a
+    door when it is stock-thickness and an overlay back when it is thin,
+    which point opposite ways. Failing that, the rear of a unit is almost
+    always flush against the wall while the front may be inset for looks, so
+    the end the members sit flush with is the back.
+    """
+    depth_index = _axis_index(depth_axis)
+    members: list[Box] = []
+    panels: list[Box] = []
+    thin_mm_by_name: dict[str, float] = {}
+    for box in boxes:
+        thin_axis = _classify_thin_axis(box)
+        thin_mm_by_name[box.name] = _component_mm(box.size_mm, _axis_index(thin_axis))
+        if thin_axis is depth_axis:
+            panels.append(box)
+        else:
+            members.append(box)
+    if not members:
+        return None, FacingEvidence.NONE
+    member_spans_mm = [_span_mm(b, depth_index) for b in members]
+    lo_mm = min(lo for lo, _ in member_spans_mm)
+    hi_mm = max(hi for _, hi in member_spans_mm)
+
+    # A panel much thinner than the stock around it is backing material, not
+    # a door. Without this a Woodworking cabinet's overlay back, which sits
+    # proud behind the carcass, reads as a front and mirrors the whole
+    # elevation.
+    thin_stock_mm = _median(sorted(thin_mm_by_name[b.name] for b in members)) / 2.0
+    votes = set[bool]()
+    for box in panels:
+        backing = thin_mm_by_name[box.name] < thin_stock_mm
+        votes.add(_panel_vote(_span_mm(box, depth_index), lo_mm, hi_mm, backing))
+    if len(votes) == 1:
+        return votes.pop(), FacingEvidence.PANEL
+
+    inset_at_min_mm = sum(lo - lo_mm for lo, _ in member_spans_mm)
+    inset_at_max_mm = sum(hi_mm - hi for _, hi in member_spans_mm)
+    if abs(inset_at_min_mm - inset_at_max_mm) <= tol_mm:
+        return None, FacingEvidence.NONE
+    # The flush end is the back, so the front is the end with more inset.
+    return inset_at_min_mm > inset_at_max_mm, FacingEvidence.FLUSH_BACK
+
+
+def _panel_vote(
+    span_mm: tuple[float, float], lo_mm: float, hi_mm: float, backing: bool
+) -> bool:
+    """Whether this panel says the front is at the low end of ``depth_axis``.
+
+    A panel proud of the members is a door when it is stock-thickness and an
+    overlay back when it is thin, and those point opposite ways.
+    """
+    d0_mm, d1_mm = span_mm
+    if d1_mm <= lo_mm:
+        return not backing
+    if d0_mm >= hi_mm:
+        return backing
+    # Set within the members: a back, so the front is the far end.
+    return (d0_mm + d1_mm) / 2.0 > (lo_mm + hi_mm) / 2.0
+
+
+def _median(sorted_values: Sequence[float]) -> float:
+    n = len(sorted_values)
+    if n == 0:
+        return 0.0
+    mid = n // 2
+    if n % 2:
+        return sorted_values[mid]
+    return (sorted_values[mid - 1] + sorted_values[mid]) / 2.0
