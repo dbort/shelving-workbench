@@ -19,7 +19,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Literal, TypedDict
 
-from shelving_core.materials import MaterialId
+from .materials import MaterialId
 
 SCHEMA_VERSION: int = 1
 

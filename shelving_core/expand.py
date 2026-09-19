@@ -15,9 +15,9 @@ import enum
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from shelving_core.layout import Bay, Carcass, Orientation, Split
-from shelving_core.materials import Catalog, MaterialId
-from shelving_core.solver import SolvedLayout, solve
+from .layout import Bay, Carcass, Orientation, Split
+from .materials import Catalog, MaterialId
+from .solver import SolvedLayout, solve
 
 
 @dataclass(frozen=True)

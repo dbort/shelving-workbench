@@ -119,12 +119,17 @@ IMPORT CORE TYPES FROM ONE PLACE ONLY. `freecad/shelving/editor/session.py`
 does `isinstance` / structural matching on `Region`, `Bay`, `Void`, `Division`,
 `Board` to decide what a selection permits. `shelving_core/` and
 `freecad/shelving/vendor/shelving_core/` are byte-identical but distinct Python
-modules; a `Board` imported from one path is not the same class as one imported
+packages; a `Board` imported from one is not the same class as one imported
 from the other, so `isinstance` silently returns false across them with no
-error. A prior version of this workbench lost every divider this way (see
-`.claude/docs/friction-log.md` `friction-001`, if it has not been swept).
-Import every core type this file matches against from the SAME path used by
-whatever produced the value, consistently through the module.
+error. `shelving_core`'s own modules import each other relatively, so the
+vendored copy is internally self-consistent no matter what else is on
+`sys.path` (enforced by a test in `shelving_core/tests/`, named for this
+invariant), but that guarantee is about `shelving_core`'s own internals, not
+about this file: import every core type `session.py` matches against from
+`shelving_core.*` (never `freecad.shelving.vendor.shelving_core.*`),
+consistently through the module, the same way every other FreeCAD-layer
+module in this codebase does. A prior version of this workbench lost every
+divider by breaking that rule.
 
 SELECTION IS A REGION ID OR A BOARD ID, held by the session, not the scene. The
 scene reports what a point hit; the session decides what that means and what the

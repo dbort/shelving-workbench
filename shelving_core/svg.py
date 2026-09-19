@@ -23,7 +23,7 @@ in ascending string order, and every coordinate is formatted with a fixed
 from collections.abc import Mapping, Sequence
 from xml.sax.saxutils import escape
 
-from shelving_core.layout import (
+from .layout import (
     Bay,
     Carcass,
     Fill,
@@ -33,8 +33,8 @@ from shelving_core.layout import (
     SplitRule,
     Weighted,
 )
-from shelving_core.materials import Catalog, MaterialId
-from shelving_core.solver import Rect, SolvedLayout
+from .materials import Catalog, MaterialId
+from .solver import Rect, SolvedLayout
 
 _COORD_SPEC = ".3f"
 _LINE_HEIGHT_FACTOR = 1.2
