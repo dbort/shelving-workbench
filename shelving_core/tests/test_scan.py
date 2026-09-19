@@ -7,17 +7,27 @@ from pathlib import Path
 import pytest
 
 from shelving_core.geometry import Vec3
-from shelving_core.layout import Axis
+from shelving_core.layout import Axis, Bay, Board, Division, Item, Void
+from shelving_core.materials import Catalog, MaterialEntry, MaterialId
 from shelving_core.scan import (
     Box,
     FacingEvidence,
     ScanError,
     Skipped,
+    _contained,
+    _elevate,
+    _Elevated,
+    _empty,
+    _Grid,
     boxes_from_json,
     detect_depth_axis,
     export_from_json,
     infer_facing,
+    scan,
 )
+
+PLY = MaterialId("ply18")
+CATALOG = Catalog(entries={PLY: MaterialEntry(PLY, "ply 18", 18.0, "plywood")})
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -154,3 +164,167 @@ def test_stair_step_fixture_infers_facing_from_the_inset() -> None:
     front_at_min, evidence = infer_facing(boxes, depth_axis)
     assert front_at_min is True
     assert evidence is FacingEvidence.FLUSH_BACK
+
+
+def _closed_box(
+    interior: list[Box], size_mm: float = 1000.0, t: float = 18.0, d: float = 300.0
+) -> list[Box]:
+    return [
+        _box("Bottom", (0.0, 0.0, 0.0), (size_mm, d, t)),
+        _box("Top", (0.0, 0.0, size_mm - t), (size_mm, d, t)),
+        _box("LeftSide", (0.0, 0.0, t), (t, d, size_mm - 2 * t)),
+        _box("RightSide", (size_mm - t, 0.0, t), (t, d, size_mm - 2 * t)),
+        *interior,
+    ]
+
+
+def test_overlap_is_refused_naming_both() -> None:
+    boxes = _closed_box(
+        [
+            _box("ShelfA", (18.0, 0.0, 400.0), (964.0, 300.0, 18.0)),
+            _box("ShelfB", (18.0, 0.0, 410.0), (964.0, 300.0, 18.0)),
+        ]
+    )
+    with pytest.raises(ScanError, match="overlaps") as info:
+        scan(boxes, CATALOG)
+    assert sorted(info.value.objects) == ["ShelfA", "ShelfB"]
+
+
+def test_board_crossing_a_bay_boundary_is_refused() -> None:
+    """The guillotine recursion never hands ``_contained`` a window a
+    contained board straddles (every cut line it chooses is a face of every
+    board inside the parent window), so this exercises the check directly:
+    a caller asking whether board "A" is confined to a narrower window than
+    its own face reaches into.
+    """
+    members = (
+        _Elevated("A", 0.0, 70.0, 0.0, 18.0, 0.0, 300.0, Axis.Z, 18.0),
+        _Elevated("B", 50.0, 90.0, 18.0, 118.0, 0.0, 300.0, Axis.X, 18.0),
+    )
+    grid = _Grid(members, 0.5)
+    i0, i1 = grid.hs.index(0.0), grid.hs.index(50.0)
+    j0, j1 = grid.vs.index(0.0), grid.vs.index(18.0)
+    with pytest.raises(
+        ScanError, match="crosses the boundary of the bay it lies in"
+    ) as info:
+        _contained(grid, i0, i1, j0, j1)
+    assert info.value.objects == ("A",)
+
+
+def test_pinwheel_is_refused_naming_the_cycle() -> None:
+    t, d = 18.0, 300.0
+    pinwheel = _closed_box(
+        [
+            _box("A", (18.0, 0.0, 300.0), (582.0, d, t)),
+            _box("B", (600.0, 0.0, 18.0), (t, d, 682.0)),
+            _box("C", (400.0, 0.0, 700.0), (582.0, d, t)),
+            _box("D", (382.0, 0.0, 318.0), (t, d, 664.0)),
+        ]
+    )
+    with pytest.raises(ScanError, match="not a tree") as info:
+        scan(pinwheel, CATALOG)
+    assert sorted(info.value.objects) == ["A", "B", "C", "D"]
+
+
+def test_partly_enclosed_partly_open_region_is_refused() -> None:
+    """A caller may query any window, not only ones the recursion would
+    naturally construct; this drives ``_empty`` directly with a window
+    spanning a fully enclosed box and a separate, open-topped one, since the
+    recursion itself never straddles two unrelated cavities with no board
+    face between them to cut at.
+    """
+    boxes = [
+        _box("L-Bottom", (0.0, 0.0, 0.0), (118.0, 300.0, 18.0)),
+        _box("L-Top", (0.0, 0.0, 118.0), (118.0, 300.0, 18.0)),
+        _box("L-Left", (0.0, 0.0, 18.0), (18.0, 300.0, 100.0)),
+        _box("L-Right", (100.0, 0.0, 18.0), (18.0, 300.0, 100.0)),
+        _box("R-Bottom", (1000.0, 0.0, 0.0), (118.0, 300.0, 18.0)),
+        _box("R-Left", (1000.0, 0.0, 18.0), (18.0, 300.0, 100.0)),
+        _box("R-Right", (1082.0, 0.0, 18.0), (18.0, 300.0, 100.0)),
+    ]
+    elevated = tuple(_elevate(b, Axis.X, Axis.Z, Axis.Y) for b in boxes)
+    grid = _Grid(elevated, 0.5)
+    i0, i1 = grid.hs.index(18.0), grid.hs.index(1082.0)
+    j0, j1 = grid.vs.index(18.0), grid.vs.index(118.0)
+    with pytest.raises(ScanError, match="partly enclosed and partly open"):
+        _empty(grid, i0, i1, j0, j1)
+
+
+def test_no_enclosed_bay_is_refused() -> None:
+    d = 300.0
+    boxes = [
+        _box("Bottom", (0.0, 0.0, 0.0), (1000.0, d, 18.0)),
+        _box("ShortTop", (0.0, 0.0, 982.0), (900.0, d, 18.0)),
+        _box("LeftSide", (0.0, 0.0, 18.0), (18.0, d, 964.0)),
+        _box("RightSide", (982.0, 0.0, 18.0), (18.0, d, 964.0)),
+    ]
+    with pytest.raises(ScanError, match="no enclosed bay"):
+        scan(boxes, CATALOG)
+
+
+def test_square_section_box_is_refused() -> None:
+    boxes = _closed_box([_box("Post", (18.0, 0.0, 18.0), (50.0, 300.0, 50.0))])
+    with pytest.raises(ScanError, match="no single thin axis") as info:
+        scan(boxes, CATALOG)
+    assert info.value.objects == ("Post",)
+
+
+def test_thickness_matching_no_catalog_entry_is_refused() -> None:
+    wrong_catalog = Catalog(
+        entries={PLY: MaterialEntry(PLY, "ply 12", 12.0, "plywood")}
+    )
+    boxes = _closed_box([])
+    with pytest.raises(ScanError, match="no material has thickness") as info:
+        scan(boxes, wrong_catalog)
+    assert info.value.objects == ("Bottom",)
+
+
+def _shape(region: Bay | Division | Void) -> object:
+    if isinstance(region, Bay):
+        return "Bay"
+    if isinstance(region, Void):
+        return "Void"
+
+    def item_shape(item: Item) -> object:
+        return item.role if isinstance(item, Board) else _shape(item)
+
+    return (region.axis.value, tuple(item_shape(item) for item in region.items))
+
+
+def test_missing_board_reports_its_bay_as_void_not_open_quietly() -> None:
+    """A dropped board does not fail a scan; it makes an enclosed bay read as
+    open, which is why the missing board must be reported in ``skipped``
+    rather than the scan simply succeeding as if the unit had fewer bays."""
+
+    def shape(with_top: bool) -> list[Box]:
+        boxes = [
+            _box("Bottom", (0.0, 0.0, 0.0), (1000.0, 300.0, 18.0)),
+            _box("LeftSide", (0.0, 0.0, 18.0), (18.0, 300.0, 964.0)),
+            _box("RightSide", (982.0, 0.0, 18.0), (18.0, 300.0, 964.0)),
+            _box("Shelf", (18.0, 0.0, 500.0), (964.0, 300.0, 18.0)),
+        ]
+        if with_top:
+            boxes.append(_box("Top", (0.0, 0.0, 982.0), (1000.0, 300.0, 18.0)))
+        return boxes
+
+    complete = scan(shape(True), CATALOG)
+    missing_top = Skipped(
+        name="Top", label="Top", type="Part::Box", reason="missing from export"
+    )
+    incomplete = scan(shape(False), CATALOG, skipped=[missing_top])
+
+    assert incomplete.skipped == (missing_top,)
+    complete_root = complete.unit.root
+    incomplete_root = incomplete.unit.root
+    assert isinstance(complete_root, Division)
+    assert isinstance(incomplete_root, Division)
+    complete_shelf_div = complete_root.items[1]
+    incomplete_shelf_div = incomplete_root.items[1]
+    assert isinstance(complete_shelf_div, Division)
+    assert isinstance(incomplete_shelf_div, Division)
+    complete_inner = complete_shelf_div.items[1]
+    incomplete_inner = incomplete_shelf_div.items[1]
+    assert isinstance(complete_inner, Division)
+    assert isinstance(incomplete_inner, Division)
+    assert _shape(complete_inner) == ("z", ("Bay", "Shelf", "Bay"))
+    assert _shape(incomplete_inner) == ("z", ("Bay", "Shelf", "Void"))
