@@ -66,9 +66,9 @@ The layout vocabulary and how each term maps onto the code in `shelving_core`,
 which follows [`docs/scope-and-design.md`](docs/scope-and-design.md).
 
 - **Unit**: a shelving unit. `Unit` in `shelving_core.layout` holds the outer
-  `size_mm` (a `Vec3`), a `default_material`, a root `Region`, and a
-  persistent `id`. There is no distinguished shell: the outermost boards of
-  the outermost divisions are the shell.
+  `size_mm`, a `default_material`, a root `Region`, and a persistent `id`.
+  There is no distinguished shell: the outermost boards of the outermost
+  divisions are the shell.
 - **Region**: `Bay | Void | Division`, one node of the tree. Every region
   carries a persistent `id`; `Bay` and `Void` and `Division` also carry the
   `SizeRule` their parent division sizes them by (unused and unvalidated on
@@ -81,11 +81,10 @@ which follows [`docs/scope-and-design.md`](docs/scope-and-design.md).
   along one `Axis`. Items run in order and need not alternate, so two
   adjacent `Board` items are two boards face to face.
 - **Item**: `Board | Region`, one entry in a `Division`'s `items` list.
-- **Board**: one physical member of the finished unit. `expand` emits one
-  `BoardSpec` per `Board`; user-facing documentation calls the same thing a
-  panel. `Board.role` is a free-form string set by the caller; there is no
-  closed role enum, because a stepped outline can have several tops and none
-  of them is *the* top.
+- **Board**: one physical member of the finished unit; user-facing
+  documentation calls the same thing a panel. `Board.role` is a free-form
+  string set by the caller; there is no closed role enum, because a stepped
+  outline can have several tops and none of them is *the* top.
 - **Insets**: how far a `Board` is set back from its region on each of six
   faces (`x_min_mm` / `x_max_mm` / `y_min_mm` / `y_max_mm` / `z_min_mm` /
   `z_max_mm`, all defaulting to `0.0`). The pair on the board's own division
@@ -108,45 +107,10 @@ which follows [`docs/scope-and-design.md`](docs/scope-and-design.md).
   The solver resolves a `MaterialId` to `thickness_mm`.
 - **MaterialId**: a `NewType('MaterialId', str)`. `Unit.default_material`
   applies to any `Board` that sets no `material` of its own.
-- **BoardSpec**: the output record of `expand`, a frozen dataclass
-  `(node_id, role, size, placement, material)`. `node_id` is the owning
-  `Board.id`. `size` and `placement` are `Vec3`. There is no grain field yet.
-- **Vec3**: a frozen dataclass `(x_mm, y_mm, z_mm)` in `shelving_core.geometry`,
-  used for a point or an extent.
-- **Space**: a frozen dataclass in `shelving_core.geometry`, an axis-aligned
-  box as a minimum corner `origin` (`Vec3`) plus an extent `size` (`Vec3`).
 - **Local coordinate frame**: origin at the unit's front-bottom-left corner,
-  `+X` right (width), `+Y` back (depth), `+Z` up (height). A
-  `BoardSpec.placement` is the board's minimum corner in that frame; `size`
-  is its extent along each axis. All lengths are float millimetres.
-- **distribute**: `distribute(axis_span_mm, rules, divider_thicknesses_mm,
-  node_id=...)` in `shelving_core.solver`. One opening size per rule, sharing
-  slack by fixed / weighted / fill; it knows nothing about regions, boards,
-  or axes, and does not resolve `Basis`.
-- **solve**: `solve(unit, catalog)` in `shelving_core.solver`. Walks the
-  region tree from the unit's outer `Space`, returning one `Space` per region
-  and board id.
-- **expand**: `expand(unit, catalog)` in `shelving_core.expand`. Calls
-  `solve`, then returns the `list[BoardSpec]` for every `Board` in the tree,
-  in pre-order. Like the solver, it has no FreeCAD dependency and produces
-  plain data.
-- **Box**: the input record `scan` reads, a frozen dataclass `(name,
-  corner_mm, size_mm)` in `shelving_core.scan`, both `Vec3`. One axis-aligned
-  solid: a document object's name, minimum corner, and extent.
-- **Skipped**: a part `scan` could not read as a board, carried through
-  rather than dropped: a frozen dataclass `(name, label, type, reason)`. A
-  dropped board makes an enclosed bay read as open, without failing the
-  scan.
-- **ScanError**: `scan`'s refusal, a `ValueError` subclass carrying the
-  offending object names in an `objects` attribute.
-- **ScanResult**: `scan`'s return value, a frozen dataclass `(unit, panels,
-  skipped, facing_evidence, thicknesses_mm)`. `panels` are the boards thin
-  through the depth axis, set aside rather than placed; `thicknesses_mm` is
-  every distinct board thickness found.
-- **FacingEvidence**: what settled which way a unit faces: `GIVEN` (the
-  caller said so), `PANEL` (a depth-thin board proud of the members),
-  `FLUSH_BACK` (the end the members sit flush with), or `NONE`. Unknown is
-  the normal answer.
+  `+X` right (width), `+Y` back (depth), `+Z` up (height). A board's
+  placement in that frame is its minimum corner; its size is its extent
+  along each axis. All lengths are float millimetres.
 - **depth axis**: the `Axis` a scan treats as running front to back, detected
   as the bounding-box axis with the smallest span unless given explicitly.
   Scanning divides only along the other two axes, never along the depth
@@ -166,15 +130,3 @@ which follows [`docs/scope-and-design.md`](docs/scope-and-design.md).
   board spans, so two boards meeting face to face (an abutting seam, a
   framed wall's double top plate) cut just as cleanly as a single board
   would.
-- **to_svg**: `to_svg(unit, spaces, catalog, *, axis=None, scale=1.0,
-  margin_mm=20.0, font_size_mm=12.0)` in `shelving_core.svg`. Renders a
-  solved `unit` as a standalone SVG elevation string, projected along `axis`
-  when given, else `unit.depth_axis` (raising `ValueError` naming the unit
-  when neither is set) and drawn onto the other two axes. A `Void` renders
-  distinctly from a `Bay` so a stepped outline reads at a glance, and a
-  `Board` renders at its inset extent so a shelf held off its sides looks
-  held off.
-- **rule_label**: `rule_label(rule)` in `shelving_core.svg`. Turns a
-  `SizeRule` into the short display string `to_svg` draws next to each
-  region: `Fixed` reads differently per `Basis` (`WITH_NEXT` distinct from
-  `CLEAR`), since the two mean different spacings.
