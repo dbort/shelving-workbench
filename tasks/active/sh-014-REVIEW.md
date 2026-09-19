@@ -1,78 +1,74 @@
-# sh-014 Review — Round 1
+# sh-014 Review — Round 2
 
 **Verdict:** REJECTED
 
-`pixi run tests` is green on `sh-014` (153 passed, mypy strict over 32 files,
-ruff, vendor-core --check, workflow lint, FreeCAD smoke), the spike suite
-still passes untouched (37 passed under `spikes/plain_planks`), the four
-fixtures are byte-identical to their `spikes/plain_planks/` originals, and the
-tree/refusal/round-trip Must Haves are met. Two things block approval.
+Round 1's F2 is closed: `test_thicknesses_mm_reports_every_distinct_board_thickness`,
+`test_explicit_front_at_min_is_never_second_guessed` (parametrized both ways,
+against the magicStart fixture whose inferred facing disagrees), and
+`test_explicit_depth_axis_changes_which_axis_the_tree_divides_along` all land,
+and N2 is folded in (`test_real_two_units_whole_tree` now scans with
+`skipped=skipped` and asserts `result.skipped`). `pixi run tests` is green on
+`sh-014` (157 passed, mypy strict over 32 files, ruff, `vendor-core --check`,
+workflow lint, FreeCAD smoke), `python -m pytest spikes` is green (37 passed)
+with `spikes/` byte-untouched by the diff, the four fixtures are byte-identical
+to their `spikes/plain_planks/` originals, and the vendored
+`freecad/shelving/vendor/shelving_core/scan.py` matches the core copy. Every
+`## Must Have` is met. One thing blocks approval.
 
 ## Blocking findings
 
-- **F1: length identifiers without the `_mm` suffix**
-  (`shelving_core/scan.py:534`, `shelving_core/tests/test_scan.py:189`):
-  `CLAUDE.md` § Project conventions makes the unit suffix mandatory on every
-  identifier bound to a physical quantity, including function parameters and
-  locals, and the task restates it ("Every length identifier carries `_mm`").
-  The ported code carries the spike's unsuffixed names through:
-  - `shelving_core/scan.py:534-551` — `low` / `high` are millimetre gap
-    widths; they are compared against `ctx.clearance_mm` at line 545 and
-    passed to `_make_board`'s `low_mm` / `high_mm` at line 551.
-  - `shelving_core/scan.py:388-389` — `self.hs` / `self.vs` are millimetre
-    grid-line coordinates, and the same values flow through `coords`
-    (`:473`, `:479`, `:495`, `:657`) and `_gap`'s `lines` parameter (`:592`).
-  - `shelving_core/scan.py:701-719` — `_snap_lines`'s `values`, `lines`,
-    `cluster`, and `value`; `shelving_core/scan.py:722` — `_index_of`'s
-    `value`; `shelving_core/scan.py:316-323` — `_median`'s `sorted_values`
-    (millimetre thicknesses at the only call site, `:283`).
-  - `shelving_core/tests/test_scan.py:189` — `_closed_box(..., t: float =
-    18.0, d: float = 300.0)`, and the same names as locals at `:234`
-    (`t, d = 18.0, 300.0`) and `:273` (`d = 300.0`). Existing tests set the
-    bar here: `shelving_core/tests/test_expand.py:45` uses
-    `width_mm`/`depth_mm`/`height_mm`.
-  Copying from the spike is what the task asked for, but the spike predates
-  nothing: the convention applies to the new module. Rename in `scan.py` and
-  `test_scan.py`; the spike itself must stay untouched.
+- **F1: round 1's `_mm` sweep is incomplete** (`shelving_core/scan.py:196`,
+  `shelving_core/tests/test_scan.py:59`): commit dedc94c's message says it
+  suffixed "every millimetre identifier in scan.py and test_scan.py", but the
+  same class of violation round 1 rejected on is still present, including two
+  function parameters, the category `CLAUDE.md` § Project conventions names
+  first. The remaining millimetre-valued identifiers, exhaustively, so this
+  finding can be closed in one pass:
+  - `shelving_core/tests/test_scan.py:59-61` — `_box_json`'s `corner` and
+    `size` parameters, which the body writes straight into `"corner_mm"` and
+    `"size_mm"`.
+  - `shelving_core/tests/test_scan.py:138-140` — `_box`'s `corner` and `size`
+    parameters, which the body passes straight to `Box(corner_mm=...,
+    size_mm=...)`. This helper is called 42 times in the file, so the
+    unsuffixed names are the ones a reader of the tests actually sees.
+  - `shelving_core/scan.py:196,203-204` — `sizes` (the box's three extents)
+    and `smallest` (their minimum).
+  - `shelving_core/scan.py:224-225` — `spans` inside `bounding_span_mm`, and
+    the `hi` / `lo` generator targets over it.
+  - `shelving_core/scan.py:276-277,291-292` — the `lo` / `hi` generator
+    targets over `member_spans_mm`.
+  - `shelving_core/scan.py:388-389` — the `v` comprehension target over
+    `(p.h0_mm, p.h1_mm)` / `(p.v0_mm, p.v1_mm)`.
 
-- **F2: public scan surface with no test at all**
-  (`shelving_core/scan.py:800`, `:823-829`): three affordances the Frontier
-  Advice names explicitly have zero coverage, and nothing in `test_scan.py`
-  mentions them (`grep` for `thicknesses_mm`, `GIVEN`, `depth_axis=`,
-  `front_at_min=` in the test file returns nothing):
-  - `ScanResult.thicknesses_mm` (`:800`, populated at `:888` with a
-    `round(..., 4)` that is itself an untested decision) is never asserted by
-    any test.
-  - `scan(..., front_at_min=...)` — the `else` branch at `:828-829` is the
-    only producer of `FacingEvidence.GIVEN`, which the Must Have lists as a
-    required export. The spike had `test_an_explicit_facing_is_never_
-    second_guessed` for exactly this; the port dropped it.
-  - `scan(..., depth_axis=...)` — the override at `:823-824` that
-    `detect_depth_axis`'s own docstring points callers at for the
-    deeper-than-wide case ("`scan` takes an explicit `depth_axis` for that
-    case") is never exercised.
-  Add unit tests: one asserting `thicknesses_mm` for a unit with two stock
-  thicknesses, one asserting an explicit `front_at_min` is returned verbatim
-  with `FacingEvidence.GIVEN` and is not second-guessed against the geometry
-  (a fixture whose inferred facing is the opposite makes the point), and one
-  asserting an explicit `depth_axis` that differs from the detected one
-  changes which axis the tree divides along.
+  Out of scope deliberately, so the list above is the whole job: locals bound
+  to grid indices or counts (`i0`/`i1`/`j0`/`j1`, `spans` at `:673`, `bounds`,
+  `nh`/`nv`, `along`/`across`, `a`/`b` in `_gap`) carry no physical unit and
+  take no suffix. `extent_by_axis` at `:807` is a judgment call: its values are
+  millimetres but its name reads as a mapping, so either leaving it or
+  `extent_mm_by_axis` closes it.
+
+  Renaming the listed identifiers in `shelving_core/scan.py` and
+  `shelving_core/tests/test_scan.py`, then re-running `tools/vendor-core.sh` so
+  `freecad/shelving/vendor/shelving_core/scan.py` stays in sync, closes F1.
+  `spikes/plain_planks/` must stay untouched.
 
 ## Non-blocking notes
 
-- **N1: two refusal tests drive private helpers, not `scan`**
-  (`shelving_core/tests/test_scan.py:212`, `:248`): the bay-boundary and
-  partly-enclosed cases call `_contained` / `_empty` with hand-built
-  `_Elevated` records and hand-picked grid indices. The docstrings argue the
-  recursion never constructs such a window, which reads correct — every cut
-  line is a face of every board inside the parent, so a sub-window cannot
-  straddle one. That makes these guards unreachable from `scan` and the tests
-  pins on internals rather than behavior. Worth one line in each docstring
-  saying the guard is defensive (kept because the spike raised it), or a
-  public-entry-point input if one exists.
-- **N2: `skipped` is asserted on the parse, not the scan**
-  (`shelving_core/tests/test_scan.py:611-618`): `test_real_two_units_whole_
-  tree` reads `skipped` from `export_from_json` but scans without
-  `skipped=skipped`, so `result.skipped` is empty and the Must Have's "the
-  notched panel appearing in `skipped`" is only proven of the parser. Passing
-  it through and asserting on `result.skipped` ties the two halves together.
+- **N1: the `round(..., 4)` in `thicknesses_mm` is still unpinned**
+  (`shelving_core/scan.py:912`): the new
+  `test_thicknesses_mm_reports_every_distinct_board_thickness` builds its boxes
+  from `expand`, so the thicknesses are exactly 18.0 and 12.0 and the rounding
+  never fires. What the round is for is real geometry, where two boards of the
+  same stock measure 17.999999 and 18.000001 and would otherwise report as two
+  distinct thicknesses. One assertion over a fixture-derived or
+  deliberately-jittered pair of boxes would pin the behavior the constant
+  exists for.
+- **N2: the notched-panel test asserts the fixture, not any product code**
+  (`shelving_core/tests/test_scan.py:752-776`): it reads `pad["name"]`,
+  `pad["label"]`, `pad["type"]` out of the inspection JSON with a test-local
+  `_find_pad`, hand-builds a `Skipped` from them, and compares against literals
+  it also supplies, so no `shelving_core` code path runs. The Must Have's real
+  proof is `test_real_two_units_whole_tree`, where `Pad003` reaches
+  `result.skipped` through `export_from_json` and `scan`. Worth a line in the
+  docstring saying so, so a future reader does not mistake this for coverage of
+  a reader that does not exist.

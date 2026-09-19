@@ -1,9 +1,9 @@
 ---
 id: sh-014
 title: "Scanning: geometry to a region model"
-current_agent: reviewer
-current_phase: review
-review_rejections: 1
+current_agent: implementer
+current_phase: implementation
+review_rejections: 2
 blocked_by: [sh-013]
 ---
 
