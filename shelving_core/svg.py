@@ -17,7 +17,10 @@ pointing down, so every rectangle and text anchor is mapped through
 scale-flip transform would mirror the label text).
 
 A unit has no single "the" elevation plane: it is projected along whichever
-axis is given, or else its ``depth_axis``, onto the other two.
+axis is given, or else its ``depth_axis``, onto the other two. A ``Division``
+along the depth axis places its items front to back, invisible to a flat
+projection; the walk still draws each one, so two boards stacked that way
+paint the same rectangle in tree order rather than merge into one.
 
 Output is byte-deterministic for a given input: the tree is walked in
 pre-order rather than iterating a dict or a set, legend colours are assigned
@@ -26,10 +29,25 @@ with a fixed ``.3f`` spec instead of ``str``/``repr``.
 """
 
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from xml.sax.saxutils import escape
 
-from .geometry import AxisIndex, Vec3
-from .layout import Axis, Basis, Fill, Fixed, SizeRule, Weighted
+from .geometry import AxisIndex, Space, Vec3
+from .layout import (
+    Axis,
+    Basis,
+    Bay,
+    Board,
+    Division,
+    Fill,
+    Fixed,
+    Insets,
+    Region,
+    SizeRule,
+    Unit,
+    Void,
+    Weighted,
+)
 from .materials import Catalog, MaterialId
 
 _COORD_SPEC = ".3f"
@@ -239,3 +257,282 @@ def _legend_block(
             f'y="{_fmt(row_y)}">{_xml_escape(text)}</text>'
         )
     return lines
+
+
+def _apply_insets(axis: Axis, space: Space, insets: Insets) -> Space:
+    """``space`` with ``insets`` applied to its two cross-section axes.
+
+    The pair on ``axis`` itself (the enclosing division's axis) is ignored: a
+    board always fills that axis with its solved extent, its own thickness,
+    never an inset. Mirrors :func:`shelving_core.expand._apply_insets`; kept
+    as its own copy here rather than imported, the way each module in this
+    package keeps its own small geometry helpers instead of reaching into
+    another module's private names.
+    """
+    origin = space.origin
+    size = space.size
+    match axis:
+        case Axis.X:
+            origin = Vec3(
+                origin.x_mm,
+                origin.y_mm + insets.y_min_mm,
+                origin.z_mm + insets.z_min_mm,
+            )
+            size = Vec3(
+                size.x_mm,
+                size.y_mm - insets.y_min_mm - insets.y_max_mm,
+                size.z_mm - insets.z_min_mm - insets.z_max_mm,
+            )
+        case Axis.Y:
+            origin = Vec3(
+                origin.x_mm + insets.x_min_mm,
+                origin.y_mm,
+                origin.z_mm + insets.z_min_mm,
+            )
+            size = Vec3(
+                size.x_mm - insets.x_min_mm - insets.x_max_mm,
+                size.y_mm,
+                size.z_mm - insets.z_min_mm - insets.z_max_mm,
+            )
+        case Axis.Z:
+            origin = Vec3(
+                origin.x_mm + insets.x_min_mm,
+                origin.y_mm + insets.y_min_mm,
+                origin.z_mm,
+            )
+            size = Vec3(
+                size.x_mm - insets.x_min_mm - insets.x_max_mm,
+                size.y_mm - insets.y_min_mm - insets.y_max_mm,
+                size.z_mm,
+            )
+    return Space(origin=origin, size=size)
+
+
+def _space(spaces: Mapping[str, Space], node_id: str) -> Space:
+    try:
+        return spaces[node_id]
+    except KeyError:
+        raise KeyError(f"no solved space for node {node_id!r}") from None
+
+
+@dataclass(frozen=True)
+class _Frame:
+    """Fixed layout parameters threaded through the walk's drawing calls."""
+
+    horizontal: Axis
+    vertical: Axis
+    unit_vertical_mm: float
+    margin_mm: float
+    title_band_mm: float
+    font_size_mm: float
+
+    def rect(self, space: Space) -> tuple[float, float, float, float]:
+        """``space`` projected onto this frame's axis pair as SVG ``(x, y,
+        width, height)``, with the vertical axis flipped."""
+        h_index = _axis_index(self.horizontal)
+        v_index = _axis_index(self.vertical)
+        width_mm = space.extent_mm(h_index)
+        height_mm = space.extent_mm(v_index)
+        x = _svg_x(_component_mm(space.origin, h_index), self.margin_mm)
+        y = _svg_y(
+            _component_mm(space.origin, v_index),
+            height_mm,
+            self.unit_vertical_mm,
+            self.margin_mm,
+            self.title_band_mm,
+        )
+        return x, y, width_mm, height_mm
+
+
+def _walk(
+    region: Region,
+    spaces: Mapping[str, Space],
+    bays_out: list[tuple[Bay, Space]],
+    voids_out: list[tuple[Void, Space]],
+    boards_out: list[tuple[Board, Space]],
+) -> None:
+    """Pre-order walk collecting each drawn region and board's placement.
+
+    A ``Division`` contributes no rect of its own, its area is the union of
+    its items, so only ``Bay``, ``Void``, and ``Board`` are recorded; each
+    ``Board``'s space already has its ``Insets`` applied against the
+    enclosing division's axis.
+    """
+    match region:
+        case Bay():
+            bays_out.append((region, _space(spaces, region.id)))
+        case Void():
+            voids_out.append((region, _space(spaces, region.id)))
+        case Division():
+            for item in region.items:
+                if isinstance(item, Board):
+                    board_space = _apply_insets(
+                        region.axis, _space(spaces, item.id), item.insets
+                    )
+                    boards_out.append((item, board_space))
+                else:
+                    _walk(item, spaces, bays_out, voids_out, boards_out)
+
+
+def to_svg(
+    unit: Unit,
+    spaces: Mapping[str, Space],
+    catalog: Catalog,
+    *,
+    axis: Axis | None = None,
+    scale: float = 1.0,
+    margin_mm: float = 20.0,
+    font_size_mm: float = 12.0,
+) -> str:
+    """Complete SVG document for ``unit`` as placed by ``spaces``.
+
+    ``spaces`` must be a complete solve of ``unit`` (see
+    :func:`shelving_core.solver.solve`); a node id absent from it is a
+    programmer error and raises ``KeyError``. ``catalog`` supplies the
+    material each board resolves to (its own ``material``, else
+    ``unit.default_material``); a material id absent from it raises
+    ``KeyError``. The projection is onto ``axis`` when given, else
+    ``unit.depth_axis``; when both are ``None`` this raises ``ValueError``
+    naming ``unit.id``, because a unit that has never been scanned has no
+    depth axis and guessing one would draw a wrong picture silently.
+    ``scale`` multiplies only the root ``width``/``height`` attributes,
+    leaving the millimetre ``viewBox`` unchanged. ``margin_mm`` pads all four
+    sides; a title band of twice ``font_size_mm`` sits above the drawing and
+    a material legend below it.
+    """
+    depth_axis = axis if axis is not None else unit.depth_axis
+    if depth_axis is None:
+        raise ValueError(f"unit {unit.id!r} has no depth_axis and no axis was given")
+    horizontal, vertical = _elevation_axes(depth_axis)
+
+    unit_h_mm = _component_mm(unit.size_mm, _axis_index(horizontal))
+    unit_v_mm = _component_mm(unit.size_mm, _axis_index(vertical))
+    title_band_mm = font_size_mm * _TITLE_BAND_FACTOR
+    line_height_mm = font_size_mm * _LINE_HEIGHT_FACTOR
+    frame = _Frame(
+        horizontal=horizontal,
+        vertical=vertical,
+        unit_vertical_mm=unit_v_mm,
+        margin_mm=margin_mm,
+        title_band_mm=title_band_mm,
+        font_size_mm=font_size_mm,
+    )
+
+    bays: list[tuple[Bay, Space]] = []
+    voids: list[tuple[Void, Space]] = []
+    boards: list[tuple[Board, Space]] = []
+    _walk(unit.root, spaces, bays, voids, boards)
+
+    # Distinct resolved material ids, in first-appearance order of the walk
+    # (tree order), so the palette assignment does not depend on a sort of
+    # the id strings.
+    material_order: list[MaterialId] = []
+    seen_materials: set[MaterialId] = set()
+    for board, _ in boards:
+        material_id = board.material or unit.default_material
+        if material_id not in seen_materials:
+            seen_materials.add(material_id)
+            material_order.append(material_id)
+    colour_by_id: dict[MaterialId, str] = {
+        material_id: _MATERIAL_PALETTE[index % len(_MATERIAL_PALETTE)]
+        for index, material_id in enumerate(material_order)
+    }
+
+    # One heading row plus one row per material, then a bottom margin.
+    legend_band_mm = line_height_mm * (len(material_order) + 1) + margin_mm
+    view_w = unit_h_mm + 2.0 * margin_mm
+    view_h = unit_v_mm + 2.0 * margin_mm + title_band_mm + legend_band_mm
+
+    parts: list[str] = [
+        '<svg xmlns="http://www.w3.org/2000/svg" '
+        f'width="{_fmt(view_w * scale)}" height="{_fmt(view_h * scale)}" '
+        f'viewBox="0 0 {_fmt(view_w)} {_fmt(view_h)}">',
+    ]
+    parts.extend(_style_block(font_size_mm))
+
+    # The unit outline first, then every bay, then every void, then every
+    # board with its label: boards paint over the open regions beneath them,
+    # and every label sits above the fills it names.
+    outline_space = Space(origin=Vec3(0.0, 0.0, 0.0), size=unit.size_mm)
+    x, y, width_mm, height_mm = frame.rect(outline_space)
+    parts.append(_rect_line("unit", x, y, width_mm, height_mm))
+
+    for bay, space in bays:
+        x, y, width_mm, height_mm = frame.rect(space)
+        parts.append(_rect_line("bay", x, y, width_mm, height_mm))
+        parts.append(
+            _label_line(
+                [f"{width_mm:g} x {height_mm:g} mm", rule_label(bay.rule)],
+                x,
+                y,
+                width_mm,
+                height_mm,
+                font_size_mm,
+            )
+        )
+
+    for void, space in voids:
+        x, y, width_mm, height_mm = frame.rect(space)
+        parts.append(_rect_line("void", x, y, width_mm, height_mm))
+        parts.append(
+            _label_line(
+                [
+                    "not part of the unit",
+                    f"{width_mm:g} x {height_mm:g} mm",
+                    rule_label(void.rule),
+                ],
+                x,
+                y,
+                width_mm,
+                height_mm,
+                font_size_mm,
+                css_class="void-label",
+            )
+        )
+
+    for board, space in boards:
+        material_id = board.material or unit.default_material
+        entry = catalog[material_id]
+        x, y, width_mm, height_mm = frame.rect(space)
+        parts.append(
+            _rect_line(
+                "board", x, y, width_mm, height_mm, fill=colour_by_id[material_id]
+            )
+        )
+        label_lines = [line for line in (board.role,) if line]
+        label_lines.append(f"{entry.name} {entry.thickness_mm:g} mm")
+        parts.append(
+            _label_line(
+                label_lines,
+                x,
+                y,
+                width_mm,
+                height_mm,
+                font_size_mm,
+                css_class="board-label",
+            )
+        )
+
+    default_entry = catalog[unit.default_material]
+    title = (
+        f"Unit {unit.size_mm.x_mm:g} x {unit.size_mm.y_mm:g} x "
+        f"{unit.size_mm.z_mm:g} mm, default material: "
+        f"{default_entry.name} ({default_entry.thickness_mm:g} mm)"
+    )
+    parts.append(
+        f'  <text class="title" x="{_fmt(margin_mm)}" '
+        f'y="{_fmt(margin_mm + font_size_mm)}">{_xml_escape(title)}</text>'
+    )
+    parts.extend(
+        _legend_block(
+            material_order,
+            colour_by_id,
+            catalog,
+            unit_v_mm,
+            margin_mm,
+            title_band_mm,
+            font_size_mm,
+        )
+    )
+    parts.append("</svg>")
+    return "\n".join(parts) + "\n"
