@@ -70,7 +70,7 @@ In loop mode:
 
 ## Constraints
 - Never act on any task other than the one explicitly named by the caller — no scanning `tasks/active/` for something else to work on, even if the named task turns out to be blocked or already done.
-- This file is a procedure for the user, or a session acting on the user's explicit request this turn, to trigger against a named task — not reference material for a subagent doing unrelated work to notice, find applicable, and carry out on its own. Finding a task at `planning` or `implementation` and reproducing this skill's steps with Bash, without the skill ever being invoked for that task, is not dispatching; it is an unauthorized phase advance wearing this skill's shape.
+- This skill's legitimacy comes from being actually invoked, this turn, for the named task — not from a subagent independently reproducing its steps with Bash after finding a task at `planning` or `implementation` (`pipeline.md` § Phase transitions go through skills, not direct agent calls).
 - The `planning` → `implementation` flip is the one phase transition this skill performs directly rather than delegating to a subagent (`pipeline.md` § Phase transitions) — it's a bookkeeping-only commit representing the user's already-given approval, not code generation. Never treat it as license to touch the task file's actual content (Must Have, Frontier Advice, Execution Plan) — that's `new-task`'s job, not this skill's.
 - Never advance a task past a human-gated phase (`user_signoff`, `blocked_needs_human`, or a still-blocked `planning`) yourself — those exist specifically to require a person.
 - Never reset `review_rejections` or move a task out of `blocked_needs_human` — only the user does that (`pipeline.md` § Phases).

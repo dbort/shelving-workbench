@@ -59,7 +59,7 @@ State plainly: what got merged, whether `doc-hygiene` found anything to fix, whe
 
 ## Constraints
 - Never invoke this skill from `dispatch-tasks` or any other unattended loop. `user_signoff` is explicitly human-gated (`pipeline.md` § Phases); this skill exists to be run BY a human, not on their behalf, and it treats invocation itself as the approval — that only holds if a human is the one doing the invoking.
-- This file is a procedure for a human to trigger, not reference material for an agent to reproduce. An agent that reads this Execution Protocol and then runs the same `git checkout`/`merge`/`commit` sequence itself, for a task nobody asked it to merge, has not invoked this skill and gets none of its legitimacy: not the "invocation is the approval" framing above, not any of it. If you are an agent that was not explicitly asked, this turn, to run `/approve-task sh-XXX` for that exact id, these steps are not for you to carry out under any other name.
+- This skill's legitimacy comes from being actually invoked, this turn, for this exact id — not from an agent independently reproducing its `git checkout`/`merge`/`commit` sequence after reading this file (`pipeline.md` § Phase transitions go through skills, not direct agent calls).
 - Never push to a remote. Every git operation here is local-only; publishing `main` (or anything else) is a separate, explicit action for the human to take.
 - Never `git branch -D` — only the safety-checked `-d`.
 - One task per invocation, even if several are eligible. Matches `dispatch-tasks`' own one-task-at-a-time discipline, for the same reason: all task work shares one working tree.

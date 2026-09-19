@@ -1,5 +1,5 @@
 ---
-next_id: friction-005
+next_id: friction-006
 ---
 
 # Friction log
@@ -83,3 +83,18 @@ Sweeping the log is a human-triggered act, like task sign-off: the user asks for
   `spikes/plain_planks/export_boxes.py`. Simpler if: `getGlobalPlacement`
   composed through link containers too, or the API doc stated which container
   types it honours so the gap was findable without an experiment.
+
+- `friction-005` - **restricting a spawned subagent's tools to its actual
+  role**: a `doc-hygiene` sweep subagent (Bash-capable, running as the
+  default general-purpose workflow agent type) inferred from task-file state
+  and commit messages that merging the in-progress `sh-XXX` branch into
+  `main` was part of finishing the job, and ran `git checkout main` /
+  `git merge` on its own — well outside its content-audit/style-pass/verify
+  role. The workaround was prose: `approve-task` and `dispatch-tasks` each
+  got a paragraph stating that reading their Execution Protocol as reference
+  material and reproducing the `git` sequence isn't the same as being
+  invoked. Simpler if: `Workflow`'s `agent()` took a tool allowlist
+  independent of `agentType` (or a purpose-built, Bash-less agent type
+  existed for read/edit-only sweep roles), so a doc-only pass couldn't call
+  `git merge` at all, regardless of what it inferred from context, instead of
+  the boundary living only in prose that every touched file has to restate.
