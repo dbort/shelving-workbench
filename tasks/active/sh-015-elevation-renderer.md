@@ -1,9 +1,9 @@
 ---
 id: sh-015
 title: "The elevation renderer, rebuilt on the region model"
-current_agent: reviewer
-current_phase: review
-review_rejections: 0
+current_agent: implementer
+current_phase: implementation
+review_rejections: 1
 blocked_by: [sh-014]
 ---
 
