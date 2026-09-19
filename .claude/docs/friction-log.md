@@ -12,9 +12,16 @@ From Benjamin André-Micolon's [linkedin post](https://lnkd.in/p/g4ARbEpH) on 20
 
 ## Format
 
-Newest first. One bullet per papercut:
+Oldest first, by id. One bullet per papercut:
 
-- `YYYY-MM-DD` - **<what was needed>**: what happened; the workaround used. Simpler if: <the missing tool/data/doc>.
+- `friction-NNN` - **<what was needed>**: what happened; the workaround used. Simpler if: <the missing tool/data/doc>.
+
+`NNN` is a zero-padded counter, assigned once when an entry is added and never
+reused or reassigned, even when an earlier entry is later deleted. A new entry
+takes the next unused number and is appended at the end of `## Entries`, so id
+order and file order always agree. A date would not do this: two entries
+logged the same day are otherwise indistinguishable, and nobody adding an
+entry cares when a previous one was written, only which came first.
 
 ## Adding an entry mid-task
 
@@ -28,41 +35,7 @@ Sweeping the log is a human-triggered act, like task sign-off: the user asks for
 
 ## Entries
 
-- `2026-09-04` - **`freecad-stubs` types names that do not exist at runtime**:
-  the plain-planks spike annotated a `Protocol` with `FreeCAD.Quantity` for a
-  `Part::Box`'s `Length`. `mypy --strict` accepted it, but FreeCAD 1.0.0 raised
-  `module 'FreeCAD' has no attribute 'Quantity'` when the class body evaluated
-  the annotation (the runtime name is `FreeCAD.Units.Quantity`). Worked around
-  with `from __future__ import annotations` so the annotations are never
-  evaluated. Simpler if: the stubs matched the runtime module layout, or the
-  repo's type check had a runtime-import smoke that caught a stub-only name
-  before it reached a script.
-
-- `2026-09-04` - **no documented way to get a box's global placement under an
-  `App::LinkGroup`**: the spike needed each plank's document-frame corner.
-  `getGlobalPlacement` composes only through geo-feature groups, and an
-  `App::LinkGroup` is not one, so it silently returns the local placement for a
-  Woodworking-style unit (`magicStart` puts its cabinets in a `LinkGroup`).
-  Found by testing both container types rather than from any doc; Woodworking
-  hits the same wall and hand-rolls `getContainersOffset`. Worked around by
-  walking the container chain and multiplying placements in
-  `spikes/plain_planks/export_boxes.py`. Simpler if: `getGlobalPlacement`
-  composed through link containers too, or the API doc stated which container
-  types it honours so the gap was findable without an experiment.
-
-- `2026-09-03` - **no headless signal for GUI rendering**: sh-012's sign-off
-  defect was that a `Part::FeaturePython` plank with a valid `Shape` never drew
-  in the FreeCAD 1.0.0 GUI, because it had no `ViewProvider` proxy. The fix
-  (`PlankViewProvider`) can only be exercised in a real GUI: under `freecadcmd`
-  `obj.ViewObject` is `None`, so `pixi run tests` cannot assert
-  `ViewObject.isVisible()` or that the view-provider binding took. Worked around
-  with a Python-console macro in `docs/manual-qa.md` case 2 that the user runs
-  once by hand. Simpler if: `freecadcmd` exposed a minimal `ViewObject` (even a
-  headless stub whose `isVisible()` / display-mode wiring could be asserted), or
-  there were an offscreen-GUI test mode, so view-provider regressions were caught
-  by the merge gate instead of at human sign-off.
-
-- `2026-09-03` - **vendored `shelving_core` splits into two class identities**:
+- `friction-001` - **vendored `shelving_core` splits into two class identities**:
   sh-012's `ShelvingUnit.execute` calls `expand(carcass, ...)`. The Frontier
   Advice said to import `Carcass` / `Leaf` / `expand` from
   `freecad.shelving.vendor.shelving_core.*`, but the vendored `expand.py` /
@@ -80,3 +53,37 @@ Sweeping the log is a human-triggered act, like task sign-off: the user asks for
   `tools/vendor-core.sh` rewrote the intra-package imports to the
   `freecad.shelving.vendor.shelving_core` prefix, so there is one class identity
   regardless of which path a consumer imports.
+
+- `friction-002` - **no headless signal for GUI rendering**: sh-012's sign-off
+  defect was that a `Part::FeaturePython` plank with a valid `Shape` never drew
+  in the FreeCAD 1.0.0 GUI, because it had no `ViewProvider` proxy. The fix
+  (`PlankViewProvider`) can only be exercised in a real GUI: under `freecadcmd`
+  `obj.ViewObject` is `None`, so `pixi run tests` cannot assert
+  `ViewObject.isVisible()` or that the view-provider binding took. Worked around
+  with a Python-console macro in `docs/manual-qa.md` case 2 that the user runs
+  once by hand. Simpler if: `freecadcmd` exposed a minimal `ViewObject` (even a
+  headless stub whose `isVisible()` / display-mode wiring could be asserted), or
+  there were an offscreen-GUI test mode, so view-provider regressions were caught
+  by the merge gate instead of at human sign-off.
+
+- `friction-003` - **`freecad-stubs` types names that do not exist at runtime**:
+  the plain-planks spike annotated a `Protocol` with `FreeCAD.Quantity` for a
+  `Part::Box`'s `Length`. `mypy --strict` accepted it, but FreeCAD 1.0.0 raised
+  `module 'FreeCAD' has no attribute 'Quantity'` when the class body evaluated
+  the annotation (the runtime name is `FreeCAD.Units.Quantity`). Worked around
+  with `from __future__ import annotations` so the annotations are never
+  evaluated. Simpler if: the stubs matched the runtime module layout, or the
+  repo's type check had a runtime-import smoke that caught a stub-only name
+  before it reached a script.
+
+- `friction-004` - **no documented way to get a box's global placement under an
+  `App::LinkGroup`**: the spike needed each plank's document-frame corner.
+  `getGlobalPlacement` composes only through geo-feature groups, and an
+  `App::LinkGroup` is not one, so it silently returns the local placement for a
+  Woodworking-style unit (`magicStart` puts its cabinets in a `LinkGroup`).
+  Found by testing both container types rather than from any doc; Woodworking
+  hits the same wall and hand-rolls `getContainersOffset`. Worked around by
+  walking the container chain and multiplying placements in
+  `spikes/plain_planks/export_boxes.py`. Simpler if: `getGlobalPlacement`
+  composed through link containers too, or the API doc stated which container
+  types it honours so the gap was findable without an experiment.
