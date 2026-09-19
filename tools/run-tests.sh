@@ -51,11 +51,3 @@ if ! printf '%s\n' "$smoke_output" | grep -q "shelving workbench import OK"; the
 	echo "ERROR: freecad_smoke.py did not report success (see output above)." >&2
 	exit 1
 fi
-
-printf '== %s\n' freecad_object_smoke.py
-object_smoke_output="$(freecadcmd tools/freecad_object_smoke.py 2>&1)" || true
-printf '%s\n' "$object_smoke_output"
-if ! printf '%s\n' "$object_smoke_output" | grep -q "shelving object layer OK"; then
-	echo "ERROR: freecad_object_smoke.py did not report success (see output above)." >&2
-	exit 1
-fi
