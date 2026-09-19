@@ -4,7 +4,6 @@ Run through the pixi environment, which puts ``shelving_core`` on the import
 path:
 
     pixi run demo
-    pixi run demo -- --svg out.svg
 
 The sample tree and catalog are defined in code. Output, in order:
 
@@ -15,12 +14,7 @@ The sample tree and catalog are defined in code. Output, in order:
   resolved material name and thickness;
 - the expanded plank list: one row per physical plank (role, size,
   minimum-corner placement, material name), then a total-plank-volume line.
-
-``--svg PATH`` also writes the solved layout to ``PATH`` as an SVG elevation.
 """
-
-import argparse
-import pathlib
 
 from shelving_core.expand import PlankSpec, expand, total_volume_mm3
 from shelving_core.layout import (
@@ -37,7 +31,6 @@ from shelving_core.layout import (
 )
 from shelving_core.materials import Catalog, MaterialEntry, MaterialId
 from shelving_core.solver import Rect, SolvedLayout, solve
-from shelving_core.svg import rule_label, to_svg
 
 PLY18 = MaterialId("ply18")
 MDF12 = MaterialId("mdf12")
@@ -97,6 +90,17 @@ def _fmt_rect(rect: Rect) -> str:
     return f"({rect.x_mm:.1f},{rect.z_mm:.1f},{rect.width_mm:.1f},{rect.height_mm:.1f})"
 
 
+def _rule_label(rule: SplitRule) -> str:
+    """Human-readable one-liner for the rule that positioned a bay."""
+    match rule:
+        case Fixed():
+            return f"Fixed {rule.size_mm:g} mm"
+        case Weighted():
+            return f"Weighted {rule.weight:g}"
+        case Fill():
+            return "Fill"
+
+
 def _print_catalog(catalog: Catalog) -> None:
     print("Catalog:")
     for entry in catalog:
@@ -119,7 +123,7 @@ def _print_bay(
 ) -> None:
     indent = "  " * depth
     kind = "split" if isinstance(bay, Split) else "leaf"
-    suffix = f"  rule={rule_label(rule)}" if rule is not None else ""
+    suffix = f"  rule={_rule_label(rule)}" if rule is not None else ""
     print(f"{indent}{bay.id[:8]} {kind} rect={_fmt_rect(layout[bay.id])}{suffix}")
     if isinstance(bay, Split):
         for index, child in enumerate(bay.children):
@@ -155,15 +159,6 @@ def _print_planks(specs: list[PlankSpec], catalog: Catalog) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--svg",
-        type=pathlib.Path,
-        default=None,
-        help="also write the solved layout to this path as an SVG elevation",
-    )
-    args = parser.parse_args()
-
     carcass = _sample_carcass()
     catalog = _sample_catalog()
     layout = solve(carcass, catalog)
@@ -176,11 +171,6 @@ def main() -> None:
     _print_catalog(catalog)
     _print_bay(carcass.root, layout, 0, None, catalog, carcass.default_material)
     _print_planks(expand(carcass, catalog), catalog)
-
-    svg_path: pathlib.Path | None = args.svg
-    if svg_path is not None:
-        svg_path.write_text(to_svg(carcass, layout, catalog), encoding="utf-8")
-        print(f"wrote {svg_path}")
 
 
 if __name__ == "__main__":
