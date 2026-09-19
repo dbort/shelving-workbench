@@ -2,12 +2,25 @@
 
 import dataclasses
 import json
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
 
+from shelving_core.expand import BoardSpec, expand
 from shelving_core.geometry import Vec3
-from shelving_core.layout import Axis, Bay, Board, Division, Item, Void
+from shelving_core.layout import (
+    Axis,
+    Basis,
+    Bay,
+    Board,
+    Division,
+    Fill,
+    Fixed,
+    Item,
+    Unit,
+    Void,
+)
 from shelving_core.materials import Catalog, MaterialEntry, MaterialId
 from shelving_core.scan import (
     Box,
@@ -27,7 +40,13 @@ from shelving_core.scan import (
 )
 
 PLY = MaterialId("ply18")
-CATALOG = Catalog(entries={PLY: MaterialEntry(PLY, "ply 18", 18.0, "plywood")})
+MDF = MaterialId("mdf12")
+CATALOG = Catalog(
+    entries={
+        PLY: MaterialEntry(PLY, "ply 18", 18.0, "plywood"),
+        MDF: MaterialEntry(MDF, "mdf 12", 12.0, "mdf"),
+    }
+)
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -328,3 +347,170 @@ def test_missing_board_reports_its_bay_as_void_not_open_quietly() -> None:
     assert isinstance(incomplete_inner, Division)
     assert _shape(complete_inner) == ("z", ("Bay", "Shelf", "Bay"))
     assert _shape(incomplete_inner) == ("z", ("Bay", "Shelf", "Void"))
+
+
+def _b(role: str, material: MaterialId | None = None) -> Board:
+    """A board whose id matches its role, so a scanned board's role (set
+    from the ``Box.name`` scanning read, which is ``expand``'s ``node_id``,
+    the board's id) can be compared directly against the hand-built role."""
+    return Board(role=role, id=role, material=material)
+
+
+def _closed_box_unit() -> Unit:
+    """Four equal bays behind three shelves: the equal-siblings case."""
+    return Unit(
+        size_mm=Vec3(900.0, 300.0, 1800.0),
+        default_material=PLY,
+        root=Division(
+            axis=Axis.Z,
+            items=[
+                _b("bottom"),
+                Division(
+                    axis=Axis.X,
+                    items=[
+                        _b("left"),
+                        Division(
+                            axis=Axis.Z,
+                            items=[
+                                Bay(),
+                                _b("shelf1"),
+                                Bay(),
+                                _b("shelf2"),
+                                Bay(),
+                                _b("shelf3"),
+                                Bay(),
+                            ],
+                        ),
+                        _b("right"),
+                    ],
+                ),
+                _b("top"),
+            ],
+        ),
+    )
+
+
+def _stepped_unit() -> Unit:
+    """A short column with open space above its top, captured as a ``Void``."""
+    return Unit(
+        size_mm=Vec3(1218.0, 300.0, 1200.0),
+        default_material=PLY,
+        root=Division(
+            axis=Axis.Z,
+            items=[
+                _b("floor"),
+                Division(
+                    axis=Axis.X,
+                    items=[
+                        _b("left"),
+                        Division(axis=Axis.Z, items=[Bay(), _b("top_left")]),
+                        _b("mid"),
+                        Division(axis=Axis.Z, items=[Bay(), _b("top_right"), Void()]),
+                        _b("right"),
+                    ],
+                ),
+            ],
+        ),
+    )
+
+
+def _second_material_unit() -> Unit:
+    """One MDF shelf splitting the interior into two unequal bays: the
+    unequal-siblings case, and the second-material case together."""
+    return Unit(
+        size_mm=Vec3(900.0, 300.0, 1800.0),
+        default_material=PLY,
+        root=Division(
+            axis=Axis.Z,
+            items=[
+                _b("bottom"),
+                Division(
+                    axis=Axis.X,
+                    items=[
+                        _b("left"),
+                        Division(
+                            axis=Axis.Z,
+                            items=[
+                                Bay(rule=Fixed(300.0, basis=Basis.CLEAR)),
+                                _b("shelf", material=MDF),
+                                Bay(rule=Fill()),
+                            ],
+                        ),
+                        _b("right"),
+                    ],
+                ),
+                _b("top"),
+            ],
+        ),
+    )
+
+
+ROUND_TRIP_UNITS = {
+    "closed_box": _closed_box_unit,
+    "stepped": _stepped_unit,
+    "second_material": _second_material_unit,
+}
+
+
+def _board_multiset(
+    specs: Sequence[BoardSpec],
+) -> list[tuple[float, float, float, float, float, float]]:
+    return sorted(
+        (
+            round(s.size.x_mm, 6),
+            round(s.size.y_mm, 6),
+            round(s.size.z_mm, 6),
+            round(s.placement.x_mm, 6),
+            round(s.placement.y_mm, 6),
+            round(s.placement.z_mm, 6),
+        )
+        for s in specs
+    )
+
+
+def _region_rules(region: Bay | Void | Division) -> list[type[object]]:
+    """Every non-``Board`` item's rule type, pre-order, for asserting the
+    equal-siblings recovery separately from the shape comparison."""
+    rules: list[type[object]] = []
+    if isinstance(region, Division):
+        for item in region.items:
+            if not isinstance(item, Board):
+                rules.append(type(item.rule))
+                rules.extend(_region_rules(item))
+    return rules
+
+
+@pytest.mark.parametrize("name", sorted(ROUND_TRIP_UNITS))
+def test_round_trip_reproduces_tree_shape_and_boards(name: str) -> None:
+    original = ROUND_TRIP_UNITS[name]()
+    specs = expand(original, CATALOG)
+    boxes = [Box(name=s.node_id, corner_mm=s.placement, size_mm=s.size) for s in specs]
+
+    result = scan(boxes, CATALOG)
+
+    assert _shape(result.unit.root) == _shape(original.root)
+    recovered_specs = expand(result.unit, CATALOG)
+    assert _board_multiset(recovered_specs) == _board_multiset(specs)
+
+
+def test_equal_siblings_recover_as_fill() -> None:
+    original = _closed_box_unit()
+    boxes = [
+        Box(name=s.node_id, corner_mm=s.placement, size_mm=s.size)
+        for s in expand(original, CATALOG)
+    ]
+    result = scan(boxes, CATALOG)
+    # The outermost two levels have exactly one region sibling each (nothing
+    # to compare against), then the four equal bays behind the three
+    # shelves: those must recover as Fill, not Fixed at their solved size.
+    assert _region_rules(result.unit.root) == [Fixed, Fixed, Fill, Fill, Fill, Fill]
+
+
+def test_unequal_siblings_recover_as_fixed() -> None:
+    original = _second_material_unit()
+    boxes = [
+        Box(name=s.node_id, corner_mm=s.placement, size_mm=s.size)
+        for s in expand(original, CATALOG)
+    ]
+    result = scan(boxes, CATALOG)
+    assert _region_rules(result.unit.root) == [Fixed, Fixed, Fixed, Fixed]
