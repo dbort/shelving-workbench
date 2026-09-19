@@ -2,7 +2,7 @@
 id: sh-013
 title: "The region model, no FreeCAD"
 current_agent: implementer
-current_phase: planning
+current_phase: implementation
 review_rejections: 0
 ---
 
@@ -18,7 +18,7 @@ the FreeCAD object layer and the SVG renderer in the same task, because both are
 built on the carcass and neither survives the new design. Milestone M4.
 
 ## Status
-- [ ] Planning
+- [x] Planning
 - [ ] Implementation
 - [ ] Review
 - [ ] User sign-off
