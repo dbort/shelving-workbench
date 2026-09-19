@@ -15,7 +15,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from .geometry import Space
-from .geometry import Vec3 as Vec3  # re-exported for existing importers
+from .geometry import Vec3 as Vec3  # explicit "as" re-export: mypy --strict requires it
 from .layout import Axis, Board, Division, Insets, Region, Unit
 from .materials import Catalog, MaterialId
 from .solver import solve

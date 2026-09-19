@@ -25,7 +25,7 @@ class Vec3:
 
 @dataclass(frozen=True)
 class Space:
-    """An axis-aligned box: a minimum corner ``origin`` plus an ``size`` extent."""
+    """An axis-aligned box: a minimum corner ``origin`` plus a ``size`` extent."""
 
     origin: Vec3
     size: Vec3

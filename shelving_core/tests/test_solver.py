@@ -55,7 +55,7 @@ def _assert_space(
     assert space.size.z_mm == pytest.approx(size[2], abs=1e-6)
 
 
-# --- distribute() unit tests, kept verbatim: distribute itself is unchanged. ---
+# --- distribute(): the pure slack-sharing function, no region tree involved ---
 
 
 def test_distribute_fixed_and_fill() -> None:

@@ -12,8 +12,7 @@ the elevation reflows the 3D. The layout math lives in a pure-Python core
 See [`docs/scope-and-design.md`](docs/scope-and-design.md) for what the project
 is for and how it is built, and [`docs/roadmap.md`](docs/roadmap.md) for the
 milestone breakdown. [`docs/architecture.md`](docs/architecture.md) describes
-the pre-M4 design the code no longer matches; `scope-and-design.md` is the
-design of record.
+the pre-M4 design; `scope-and-design.md` is the design of record.
 
 To eyeball a solved layout, run `pixi run demo`: it builds a sample stepped
 unit, solves the region tree, and prints the catalog, the solved `Space` for

@@ -44,8 +44,8 @@ def _by_id(specs: list[BoardSpec], node_id: str) -> BoardSpec:
 
 def _closed_box(width_mm: float, depth_mm: float, height_mm: float) -> Unit:
     """A bottom and a top running the full width, two sides captured between
-    them: the shell rule the old split-tree hard-coded, written as ordinary
-    items."""
+    them: a carcass shell expressed as ordinary items, since regions carry no
+    distinguished shell rule of their own."""
     return Unit(
         size_mm=Vec3(width_mm, depth_mm, height_mm),
         default_material=PLY18,
@@ -68,9 +68,9 @@ def _closed_box(width_mm: float, depth_mm: float, height_mm: float) -> Unit:
 
 
 def test_closed_box_matches_the_carcass_models_geometry() -> None:
-    """Hard-coded against the carcass model's own expansion of the same
-    900x300x1800 mm box, from ``shelving_core.expand.expand`` before sh-013;
-    the carcass is gone, so there is nothing to compare against at runtime."""
+    """Expected values are hard-coded: with the carcass model gone, there is
+    nothing to compute an expected result from and compare against at
+    runtime."""
     unit = _closed_box(900.0, 300.0, 1800.0)
     specs = expand(unit, _catalog())
     assert len(specs) == 4
