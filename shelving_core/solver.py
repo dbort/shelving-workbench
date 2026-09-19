@@ -16,7 +16,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
-from shelving_core.layout import (
+from .layout import (
     Bay,
     Carcass,
     Fill,
@@ -27,7 +27,7 @@ from shelving_core.layout import (
     SplitRule,
     Weighted,
 )
-from shelving_core.materials import Catalog
+from .materials import Catalog
 
 EPS_MM: float = 1e-6
 
