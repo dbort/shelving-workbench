@@ -1,8 +1,8 @@
 ---
 id: sh-013
 title: "The region model, no FreeCAD"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 0
 ---
 
@@ -19,45 +19,45 @@ built on the carcass and neither survives the new design. Milestone M4.
 
 ## Status
 - [x] Planning
-- [ ] Implementation
+- [x] Implementation
 - [ ] Review
 - [ ] User sign-off
 
 ## Must Have
-- [ ] `pixi run tests` green.
-- [ ] `shelving_core.layout` exports `Axis`, `Basis`, `Fixed`, `Weighted`,
+- [x] `pixi run tests` green.
+- [x] `shelving_core.layout` exports `Axis`, `Basis`, `Fixed`, `Weighted`,
       `Fill`, `SizeRule`, `Insets`, `Board`, `Bay`, `Void`, `Division`,
       `Region`, `Item`, `Unit`. `grep -rn 'Carcass\|LapOrder\|PlankRole\|PlankSpec\|SplitRule\|class Split\|class Leaf\|class Divider' shelving_core/ freecad/ tools/ --include=*.py` (excluding `vendor/`) returns nothing.
-- [ ] `shelving_core/geometry.py` defines `Vec3` and `Space`; `Space` is an
+- [x] `shelving_core/geometry.py` defines `Vec3` and `Space`; `Space` is an
       axis-aligned box as a minimum corner plus an extent, both `Vec3`.
-- [ ] `solve(unit, catalog)` returns one `Space` per region id and board id.
+- [x] `solve(unit, catalog)` returns one `Space` per region id and board id.
       `expand(unit, catalog)` returns `list[BoardSpec]`, one per `Board`, in
       tree order.
-- [ ] A closed box built from ordinary items expands to the geometry the
+- [x] A closed box built from ordinary items expands to the geometry the
       carcass model produced, asserted against hard-coded expected values (the
       carcass is gone, so there is nothing to compare against at runtime).
-- [ ] A stepped unit of three columns of falling height expands to one top per
+- [x] A stepped unit of three columns of falling height expands to one top per
       column and emits no board for either `Void`.
-- [ ] Two `Board` items adjacent in one division expand touching, with the
+- [x] Two `Board` items adjacent in one division expand touching, with the
       second's minimum corner equal to the first's maximum along the axis.
-- [ ] A `Fixed` rule with `Basis.WITH_NEXT` holds board positions when the
+- [x] A `Fixed` rule with `Basis.WITH_NEXT` holds board positions when the
       catalog thickness changes; the same layout with `Basis.CLEAR` moves them.
       Both asserted in one test.
-- [ ] `LayoutSolveError` is raised with reason `overflow`,
+- [x] `LayoutSolveError` is raised with reason `overflow`,
       `no_slack_absorber`, `nonpositive_opening`, and `unresolvable_basis`,
       one test each.
-- [ ] `freecad/shelving/objects/`, `freecad/shelving/commands/create_unit.py`,
+- [x] `freecad/shelving/objects/`, `freecad/shelving/commands/create_unit.py`,
       `tools/freecad_object_smoke.py`, `shelving_core/svg.py`,
       `shelving_core/tests/test_svg.py`, `shelving_core/layout.schema.json`,
       and `shelving_core/tests/test_schema.py` do not exist.
-- [ ] `tests/test_layout_demo.py` drives the rebuilt demo and asserts its
+- [x] `tests/test_layout_demo.py` drives the rebuilt demo and asserts its
       board table; it carries no `--svg` test, because the renderer is gone
       until M5.
-- [ ] `docs/manual-qa.md` carries no M3 case block and no reference to
+- [x] `docs/manual-qa.md` carries no M3 case block and no reference to
       `tools/freecad_object_smoke.py`.
-- [ ] `freecadcmd` still imports the workbench: `tools/freecad_smoke.py` prints
+- [x] `freecadcmd` still imports the workbench: `tools/freecad_smoke.py` prints
       its OK marker and `tools/run-tests.sh` still greps for it.
-- [ ] `mypy --strict` clean over `shelving_core/`, `tools/`, `tests/`, and
+- [x] `mypy --strict` clean over `shelving_core/`, `tools/`, `tests/`, and
       `freecad/shelving/`.
 
 ## Frontier Advice
@@ -168,4 +168,4 @@ on their own.
 - [x] **Step 10** (`tools/layout_demo.py`, `tests/test_layout_demo.py`): Rebuild on the region model. Build a stepped sample unit, three columns of falling height on a continuous bottom board with a `Void` above the two shorter columns, plus at least one interior shelf and one board in a second material. Print the catalog, then one line per region id with its solved `Space`, then the board table with role, size, placement, and material, then the total volume. No arguments, no file output. Rewrite `tests/test_layout_demo.py::test_demo_runs_and_prints_the_solved_sample` against the new output: it drives the script as a subprocess exactly as it does now, and asserts the catalog line, the presence of a region line per region, a `Boards:` header, one row per board including the per-column tops and excluding anything for either `Void`, and the total-volume line. Keep the module docstring's point that this test is what catches a refactor of a name the demo imports.
   > **Checkpoint:** `pixi run tests` must be green here (Steps 4-10 are one atomic replacement of the core model).
 
-- [ ] **Step 11** (`README.md`): Rewrite the Glossary section for the region model. Define exactly the terms the code now uses: Unit, Region, Bay, Void, Division, Item, Board, Insets, Axis, size rule (Fixed, Weighted, Fill), Basis and what clear versus with-next measure, Catalog, MaterialEntry, MaterialId, BoardSpec, Vec3, Space, local coordinate frame, `distribute`, `solve`, `expand`. Delete the entries for Carcass, Leaf, Split, Divider, Plank, Joint, Butt joint, Lap order, Default carcass rule, PlankSpec, PlankRole, and Spacing solver. State under Board that user-facing documentation calls the same thing a panel. Keep the section's existing shape: one bullet per term, naming where it lives in `shelving_core`.
+- [x] **Step 11** (`README.md`): Rewrite the Glossary section for the region model. Define exactly the terms the code now uses: Unit, Region, Bay, Void, Division, Item, Board, Insets, Axis, size rule (Fixed, Weighted, Fill), Basis and what clear versus with-next measure, Catalog, MaterialEntry, MaterialId, BoardSpec, Vec3, Space, local coordinate frame, `distribute`, `solve`, `expand`. Delete the entries for Carcass, Leaf, Split, Divider, Plank, Joint, Butt joint, Lap order, Default carcass rule, PlankSpec, PlankRole, and Spacing solver. State under Board that user-facing documentation calls the same thing a panel. Keep the section's existing shape: one bullet per term, naming where it lives in `shelving_core`.

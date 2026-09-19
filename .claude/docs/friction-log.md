@@ -1,5 +1,5 @@
 ---
-next_id: friction-005
+next_id: friction-006
 ---
 
 # Friction log
@@ -83,3 +83,19 @@ Sweeping the log is a human-triggered act, like task sign-off: the user asks for
   `spikes/plain_planks/export_boxes.py`. Simpler if: `getGlobalPlacement`
   composed through link containers too, or the API doc stated which container
   types it honours so the gap was findable without an experiment.
+
+- `friction-005` - **a dataclass default instance of an unhashable class fails
+  at import time, not at review time**: sh-013's task file literally specified
+  `Bay(rule: SizeRule = Fill(), id)`-shaped defaults for `Bay`, `Void`, and
+  `Division`. `Fill`/`Fixed`/`Weighted` are plain (non-frozen) dataclasses, so
+  `@dataclass`-generated `__hash__` is `None` for them; CPython's dataclass
+  machinery (3.11+) rejects any unhashable default value as a mutable default,
+  not only the `list`/`dict`/`set` cases the "mutable default" rule is usually
+  remembered for. `ruff` and `mypy --strict` both accept the code silently; the
+  failure only surfaces as a `ValueError` the first time the module is
+  imported, which the pytest suite already exercises but a plain `python
+  tools/layout_demo.py` run caught first. Worked around with
+  `field(default_factory=Fill)` on all three. Simpler if: `mypy --strict` or
+  `ruff` flagged a non-frozen-dataclass-instance default the same way they'd
+  flag a bare `[]` or `{}`, so the mistake surfaced at lint time instead of
+  first import.

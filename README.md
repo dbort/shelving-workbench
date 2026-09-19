@@ -51,8 +51,7 @@ checkout; both put `shelving_core` on the import path for scripts such as
   vendored-core drift check;
 - the workflow-hardening lint over `.github/workflows/` (see
   [`docs/github-actions-hardening.md`](docs/github-actions-hardening.md));
-- two headless `freecadcmd` checks: a workbench import smoke and an
-  object-layer functional check.
+- a headless `freecadcmd` workbench import smoke.
 
 It runs inside the pixi environment, which supplies every tool including
 FreeCAD. To run only the workflow lint, use `bash tools/lint-workflows.sh` from
@@ -64,60 +63,68 @@ checks that need network access.
 The layout vocabulary and how each term maps onto the code in `shelving_core`,
 which follows [`docs/architecture.md`](docs/architecture.md).
 
-- **Carcass**: the shelving box. `Carcass` in `shelving_core.layout` holds the
-  outer `width_mm`, `height_mm`, and `depth_mm`, a `default_material`, a root
-  `Bay`, and a persistent `id`.
-- **Bay**: a rectangular region of the elevation. `Bay = Leaf | Split`: it is
-  either open or subdivided.
-- **Leaf**: an open compartment, a `Bay` with no further subdivision. `Leaf`
-  carries only its `id`.
-- **Split**: a `Bay` divided along one axis into two or more child bays.
-  `Split` holds an `Orientation` (`HORIZONTAL` or `VERTICAL`), the ordered
-  `children`, one `SplitRule` per child (`Fixed`, `Weighted`, or `Fill`), and
-  one `Divider` per gap between consecutive children.
-- **Divider**: the panel in the gap between two consecutive split children.
-  `Divider` in `shelving_core.layout` carries an optional `material` override
-  and a reserved `lap`. A divider in a `HORIZONTAL` split is a shelf
-  (`PlankRole.SHELF`); a divider in a `VERTICAL` split is a vertical divider
-  (`PlankRole.DIVIDER`).
-- **Plank**: one physical panel of the finished unit. `expand` emits one
-  `PlankSpec` per plank; the FreeCAD layer turns each into a solid.
-- **Joint**: where the edge of one plank meets another plank. v1 has no joint
-  data type; the carcass rule alone decides how planks meet.
-- **Butt joint**: the only construction in v1. One plank's square end meets the
-  face of another; there is no dado, rabbet, or groove.
-- **Lap order**: at a joint, which plank runs **continuous** (its length passes
-  straight through the joint) and which is **captured** (its length stops
-  against the neighbour's face). `LapOrder` in `shelving_core.layout` has the
-  members `THROUGH` and `CAPTURED`; `Divider.lap` is a reserved per-joint
-  override that no layout or expansion code reads in M2.
-- **Default carcass rule**: the top and bottom run continuous the full width
-  and depth; the two sides and every divider are captured. `expand` always
-  applies this rule.
+- **Unit**: a shelving unit. `Unit` in `shelving_core.layout` holds the outer
+  `size_mm` (a `Vec3`), a `default_material`, a root `Region`, and a
+  persistent `id`. There is no distinguished shell: the outermost boards of
+  the outermost divisions are what a carcass used to name specially.
+- **Region**: `Bay | Void | Division`, one node of the tree. Every region
+  carries a persistent `id`; `Bay` and `Void` and `Division` also carry the
+  `SizeRule` their parent division sizes them by (unused and unvalidated on
+  the root, which has no parent).
+- **Bay**: an enclosed compartment: open, and part of the unit.
+- **Void**: space inside the unit's bounding box that is not part of the
+  unit. What makes an outline stepped. A `Void` holds no boards and is not a
+  compartment.
+- **Division**: a region cut into an ordered run of boards and sub-regions
+  along one `Axis`. Items run in order and need not alternate, so two
+  adjacent `Board` items are two boards face to face.
+- **Item**: `Board | Region`, one entry in a `Division`'s `items` list.
+- **Board**: one physical member of the finished unit. `expand` emits one
+  `BoardSpec` per `Board`; user-facing documentation calls the same thing a
+  panel. `Board.role` is a free-form string set by the caller; there is no
+  closed role enum, because a stepped outline can have several tops and none
+  of them is *the* top.
+- **Insets**: how far a `Board` is set back from its region on each of six
+  faces (`x_min_mm` / `x_max_mm` / `y_min_mm` / `y_max_mm` / `z_min_mm` /
+  `z_max_mm`, all defaulting to `0.0`). The pair on the board's own division
+  axis is ignored: a board always fills that axis with its own thickness.
+- **Axis**: `X`, `Y`, or `Z`, which of a unit's three dimensions a `Division`
+  cuts along.
+- **Size rule**: `SizeRule = Fixed | Weighted | Fill`, how a division sizes
+  one item along its axis. `Fixed` takes an exact `size_mm` (see `Basis`
+  below); `Weighted` takes a share of slack proportional to `weight`; `Fill`
+  is shorthand for `Weighted(1.0)`.
+- **Basis**: what a `Fixed` rule's `size_mm` measures. `CLEAR` is the
+  region's own extent along the axis. `WITH_NEXT` is the region plus the
+  item immediately after it in the run, the way a shelf spacing is usually
+  quoted top face to top face; the solver resolves it to a clear size before
+  distributing.
 - **Catalog**: the material table. `Catalog` in `shelving_core.materials` maps
   a `MaterialId` to a `MaterialEntry`.
 - **Material entry**: one stock record. `MaterialEntry` carries `id`, `name`,
   `thickness_mm`, `material_type`, and an optional `nominal_thickness` label.
   The solver resolves a `MaterialId` to `thickness_mm`.
-- **MaterialId**: a `NewType('MaterialId', str)`. `Carcass.default_material`
-  applies to the shell and to any `Divider` that sets no `material` of its own.
-- **PlankSpec**: the output record of `expand`, a frozen dataclass
+- **MaterialId**: a `NewType('MaterialId', str)`. `Unit.default_material`
+  applies to any `Board` that sets no `material` of its own.
+- **BoardSpec**: the output record of `expand`, a frozen dataclass
   `(node_id, role, size, placement, material)`. `node_id` is the owning
-  `Divider.id` for a divider plank and the literal `f"{carcass.id}:{role.value}"`
-  for a shell plank. `size` and `placement` are `Vec3`. There is no grain
-  field yet.
-- **PlankRole**: a `StrEnum` naming what a plank is: `LEFT_SIDE`, `RIGHT_SIDE`,
-  `TOP`, `BOTTOM`, `SHELF`, `DIVIDER`.
-- **Local coordinate frame**: origin at the carcass front-bottom-left corner,
+  `Board.id`. `size` and `placement` are `Vec3`. There is no grain field yet.
+- **Vec3**: a frozen dataclass `(x_mm, y_mm, z_mm)` in `shelving_core.geometry`,
+  used for a point or an extent.
+- **Space**: a frozen dataclass in `shelving_core.geometry`, an axis-aligned
+  box as a minimum corner `origin` (`Vec3`) plus an extent `size` (`Vec3`).
+- **Local coordinate frame**: origin at the unit's front-bottom-left corner,
   `+X` right (width), `+Y` back (depth), `+Z` up (height). A
-  `PlankSpec.placement` is the plank's minimum corner in that frame; `size` is
-  its extent along each axis. All lengths are float millimetres.
-- **Vec3**: a frozen dataclass `(x_mm, y_mm, z_mm)` in `shelving_core.expand`,
-  used for both a plank's `size` and its `placement`.
-- **Spacing solver**: `solve(carcass, catalog)` in `shelving_core.solver`. It
-  insets the carcass by the default panel thickness, then places one `Rect`
-  per `Leaf`, `Split`, and `Divider` id, distributing slack along each split's
-  axis by its `SplitRule`s.
-- **expand**: `expand(carcass, catalog)` in `shelving_core.expand`. It calls
-  `solve`, then returns the `list[PlankSpec]` for the shell and every divider.
-  Like the solver, it has no FreeCAD dependency and produces plain data.
+  `BoardSpec.placement` is the board's minimum corner in that frame; `size`
+  is its extent along each axis. All lengths are float millimetres.
+- **distribute**: `distribute(axis_span_mm, rules, divider_thicknesses_mm,
+  node_id=...)` in `shelving_core.solver`. One opening size per rule, sharing
+  slack by fixed / weighted / fill; it knows nothing about regions, boards,
+  or axes, and does not resolve `Basis`.
+- **solve**: `solve(unit, catalog)` in `shelving_core.solver`. Walks the
+  region tree from the unit's outer `Space`, returning one `Space` per region
+  and board id.
+- **expand**: `expand(unit, catalog)` in `shelving_core.expand`. Calls
+  `solve`, then returns the `list[BoardSpec]` for every `Board` in the tree,
+  in pre-order. Like the solver, it has no FreeCAD dependency and produces
+  plain data.
