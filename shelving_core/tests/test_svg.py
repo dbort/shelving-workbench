@@ -2,6 +2,8 @@
 
 import re
 import xml.etree.ElementTree as ET
+from collections.abc import Sequence
+from pathlib import Path
 
 import pytest
 
@@ -18,6 +20,7 @@ from shelving_core.layout import (
     Void,
 )
 from shelving_core.materials import Catalog, MaterialEntry, MaterialId
+from shelving_core.scan import Box, export_from_json, scan
 from shelving_core.solver import solve
 from shelving_core.svg import rule_label, to_svg
 
@@ -25,6 +28,10 @@ SVG_TAG = "{http://www.w3.org/2000/svg}svg"
 RECT_TAG = "{http://www.w3.org/2000/svg}rect"
 TEXT_TAG = "{http://www.w3.org/2000/svg}text"
 TSPAN_TAG = "{http://www.w3.org/2000/svg}tspan"
+
+FIXTURES = Path(__file__).parent / "fixtures"
+REAL_STAIR_STEP = FIXTURES / "real_stair_step.boxes.json"
+REAL_MAGICSTART_F1 = FIXTURES / "real_magicstart_f1.boxes.json"
 
 PLY = MaterialId("ply18")
 MDF = MaterialId("mdf12")
@@ -97,6 +104,34 @@ def _labels(document: str) -> list[str]:
         "".join(tspan.text or "" for tspan in text.iter(TSPAN_TAG))
         for text in ET.fromstring(document).iter(TEXT_TAG)
     ]
+
+
+def _catalog_from_thicknesses(boxes: Sequence[Box]) -> Catalog:
+    """A generic material per distinct board thickness in ``boxes``.
+
+    Built from the fixture's own geometry rather than a hand-picked catalog.
+    The round to four decimal places only merges the sub-thousandth jitter
+    real exported geometry has between nominally identical boards (see
+    :attr:`~shelving_core.scan.ScanResult.thicknesses_mm`); it must not round
+    away real precision the way a whole-millimetre bucket would, because a
+    region ``scan`` recovers as ``Fixed`` at its exact measured size only
+    solves again if the catalog resolves its board back to that same
+    thickness.
+    """
+    thicknesses_mm = sorted(
+        {round(min(b.size_mm.x_mm, b.size_mm.y_mm, b.size_mm.z_mm), 4) for b in boxes}
+    )
+    return Catalog(
+        entries={
+            MaterialId(f"generic{t}"): MaterialEntry(
+                id=MaterialId(f"generic{t}"),
+                name=f"{t} mm stock",
+                thickness_mm=float(t),
+                material_type="generic",
+            )
+            for t in thicknesses_mm
+        }
+    )
 
 
 def test_document_parses_with_svg_root_tag() -> None:
@@ -228,3 +263,27 @@ def test_two_boards_face_to_face_render_as_two_adjoining_rects() -> None:
     labels = _labels(document)
     assert any("lowerboard" in label for label in labels)
     assert any("upperboard" in label for label in labels)
+
+
+def test_real_stair_step_renders_end_to_end_with_a_void() -> None:
+    boxes, skipped = export_from_json(REAL_STAIR_STEP.read_text(encoding="utf-8"))
+    catalog = _catalog_from_thicknesses(boxes)
+    # Two of this fixture's real thicknesses (18.0086 mm, 18.2626 mm) are only
+    # 0.25 mm apart, closer together than scan's default 0.5 mm snap; a tight
+    # snap here keeps each board matching its own catalog entry rather than
+    # its neighbour's, which a solve downstream depends on to balance exactly.
+    result = scan(boxes, catalog, skipped=skipped, snap_mm=0.1)
+    spaces = solve(result.unit, catalog)
+    document = to_svg(result.unit, spaces, catalog)
+    assert ET.fromstring(document).tag == SVG_TAG
+    assert any(r.get("class") == "void" for r in _rects(document))
+
+
+def test_real_magicstart_f1_renders_end_to_end_with_its_plinth_void() -> None:
+    boxes, skipped = export_from_json(REAL_MAGICSTART_F1.read_text(encoding="utf-8"))
+    catalog = _catalog_from_thicknesses(boxes)
+    result = scan(boxes, catalog, skipped=skipped, snap_mm=0.1)
+    spaces = solve(result.unit, catalog)
+    document = to_svg(result.unit, spaces, catalog)
+    assert ET.fromstring(document).tag == SVG_TAG
+    assert any(r.get("class") == "void" for r in _rects(document))
