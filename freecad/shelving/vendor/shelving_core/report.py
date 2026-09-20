@@ -48,7 +48,7 @@ def _facing_line(result: ScanResult) -> str:
     if front_at_min is None:
         return (
             "WARNING: nothing says which side this unit faces, so left and "
-            "right below are a coin flip -- the tree is correct either way."
+            "right below are a coin flip: the tree is correct either way."
         )
     end = "minimum" if front_at_min else "maximum"
     why = _FACING_WHY[result.facing_evidence]

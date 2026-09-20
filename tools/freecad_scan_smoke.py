@@ -177,8 +177,8 @@ def _add_notched_body(
     ``Sketcher::SketchObject`` and a ``PartDesign::Pad`` whose solid is a
     200 x 100 x 18 mm plank with a 50 x 30 mm notch cut from one corner: the
     box-minus-cutouts skip case, and proof that a body's sketch and pad are
-    not read as two boards -- the walk never descends into a body, so it
-    only ever sees the body itself, as one leaf.
+    not read as two boards. The walk never descends into a body, so it only
+    ever sees the body itself, as one leaf.
     """
     raw_body = doc.addObject("PartDesign::Body", "NotchedBody")
     body = cast("FreeCAD.DocumentObject", raw_body)

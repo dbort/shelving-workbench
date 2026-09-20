@@ -1,8 +1,8 @@
 ---
 id: sh-016
 title: "Read a container"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 0
 blocked_by: [sh-013, sh-014]
 ---
@@ -19,43 +19,43 @@ which is how a unit that refuses gets captured for a bug report. Deletes
 
 ## Status
 - [x] Planning
-- [ ] Implementation
+- [x] Implementation
 - [ ] Review
 - [ ] User sign-off
 
 ## Must Have
-- [ ] `pixi run tests` green.
-- [ ] `freecad/shelving/container.py` exports `read_container`, returning the
+- [x] `pixi run tests` green.
+- [x] `freecad/shelving/container.py` exports `read_container`, returning the
       core's `Box` records plus `Skipped` records for parts it could not read.
-- [ ] Sizes come from each part's solid bounding box, NOT from `Length`,
+- [x] Sizes come from each part's solid bounding box, NOT from `Length`,
       `Width`, `Height`. A box rotated by a multiple of 90 degrees reads
       correctly; a skewed one is refused by name.
-- [ ] Reading is in the container's own frame: the container's own placement is
+- [x] Reading is in the container's own frame: the container's own placement is
       excluded, nested container placements are composed. A test moves and
       rotates the container and asserts the records are unchanged.
-- [ ] The walk descends only into `App::Part`, `App::LinkGroup`, and
+- [x] The walk descends only into `App::Part`, `App::LinkGroup`, and
       `App::DocumentObjectGroup`. A `PartDesign::Body` is one part; a test
       asserts its sketch and its pad are not read as two boards.
-- [ ] The walk yields each document object at most once. A test builds a
+- [x] The walk yields each document object at most once. A test builds a
       selection reaching one object by two paths and asserts one record.
-- [ ] A skip reason names why a part could not be read, in the terms the spike's
+- [x] A skip reason names why a part could not be read, in the terms the spike's
       inspector used: a plain box, a box minus N rectangular cutouts, not
       axis-aligned, carries no solid, or holds N solids. A test asserts the
       box-minus-cutouts wording against a padded notched profile.
-- [ ] `shelving_core/report.py` renders a `ScanResult` as text, with a test in
+- [x] `shelving_core/report.py` renders a `ScanResult` as text, with a test in
       the fast suite asserting the tree shape and the skipped block for a real
       fixture. It imports no FreeCAD.
-- [ ] `Shelving_Scan` and `Shelving_ExportBoxes` are registered, appear in the
+- [x] `Shelving_Scan` and `Shelving_ExportBoxes` are registered, appear in the
       toolbar and menu, and are inactive without a document.
-- [ ] `tools/freecad_scan_smoke.py` builds a document, reads it, scans it, and
+- [x] `tools/freecad_scan_smoke.py` builds a document, reads it, scans it, and
       asserts the tree, printing `shelving scan OK`; `tools/run-tests.sh` greps
       for that marker.
-- [ ] `spikes/` does not exist and nothing references it
+- [x] `spikes/` does not exist and nothing references it
       (`grep -rn 'spikes' --include=* . | grep -v '^\./\.git'` returns nothing
       outside this task file's history).
-- [ ] `docs/manual-qa.md` has an M6 section with cases for a successful scan, a
+- [x] `docs/manual-qa.md` has an M6 section with cases for a successful scan, a
       refusal selecting its offenders, and the export command.
-- [ ] `mypy --strict` clean.
+- [x] `mypy --strict` clean.
 
 ## Frontier Advice
 
@@ -156,4 +156,4 @@ Every length identifier carries `_mm`.
 
 - [x] **Step 8** (`spikes/`): Delete the directory entirely. Confirm nothing references it: grep the tree for `spikes` and fix any pointer, including in `docs/parametric-model-evaluation.md` where the spike paths are named; in that document, change each to state what the spike proved rather than where it lived, since the code is gone but the findings stand.
 
-- [ ] **Step 9** (`docs/manual-qa.md`, `README.md`): Add an `## M6` section with three cases in the file's numbered-steps-then-expected-result shape: scan a container of boxes and read the tree in the report view; scan a container holding a part the walk cannot read and confirm the refusal names it and selects it in the 3D view; run the export command and confirm the JSON lands beside the document. Extend the README glossary with the two command ids and the container's-own-frame rule, in the section's existing one-bullet-per-term shape — NOT `read_container` itself: the glossary holds general and woodworking vocabulary and high-level model concepts, not specific functions (sh-015's sign-off trimmed the glossary of exactly this kind of entry; do not reintroduce the pattern).
+- [x] **Step 9** (`docs/manual-qa.md`, `README.md`): Add an `## M6` section with three cases in the file's numbered-steps-then-expected-result shape: scan a container of boxes and read the tree in the report view; scan a container holding a part the walk cannot read and confirm the refusal names it and selects it in the 3D view; run the export command and confirm the JSON lands beside the document. Extend the README glossary with the two command ids and the container's-own-frame rule, in the section's existing one-bullet-per-term shape — NOT `read_container` itself: the glossary holds general and woodworking vocabulary and high-level model concepts, not specific functions (sh-015's sign-off trimmed the glossary of exactly this kind of entry; do not reintroduce the pattern).

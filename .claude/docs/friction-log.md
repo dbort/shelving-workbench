@@ -1,5 +1,5 @@
 ---
-next_id: friction-011
+next_id: friction-013
 ---
 
 # Friction log
@@ -186,3 +186,34 @@ Sweeping the log is a human-triggered act, like task sign-off: the user asks for
   Simpler if: the already-decided consolidation task had been created and
   dispatched before M4 started, since every milestone since has only grown
   the set of files paying this tax.
+
+- `friction-011` - **`App::DocumentObjectGroup` carries no `Placement`
+  property at all**: sh-016's container walk composed `obj.Placement` for
+  every container with children, on the reasonable-looking assumption that
+  any container a document tree can nest (`App::Part`, `App::LinkGroup`,
+  `App::DocumentObjectGroup`) has one, since the first two do. A headless
+  smoke-test run raised `AttributeError` the moment a plain
+  `App::DocumentObjectGroup` entered the tree (used to prove the same object
+  reachable by two paths still yields one record). Nothing in
+  `docs/freecadcmd-notes.md` or `freecad-stubs` flagged the gap; it only
+  surfaced by running real geometry through `freecadcmd`. Worked around by
+  reading `Placement` with `getattr(obj, "Placement", None)` and skipping the
+  compose step when it is absent. Simpler if: `freecad-stubs` distinguished
+  the `GeoFeatureGroup`-derived container types (which carry `Placement`)
+  from `App::DocumentObjectGroup` (which does not), or
+  `docs/freecadcmd-notes.md` carried this alongside its existing
+  container-behavior entries.
+
+- `friction-012` - **no documented recipe for building a `PartDesign::Body`
+  headlessly**: sh-016's functional smoke test needed a real notched panel
+  (a `PartDesign::Body` holding a `Sketcher::SketchObject` and a
+  `PartDesign::Pad`) to exercise the box-minus-cutouts skip path, and neither
+  `docs/freecadcmd-notes.md` nor any surviving code showed the construction:
+  the tuple shape a sketch's `AttachmentSupport` needs, that a fresh
+  `PartDesign::Body` auto-creates an `Origin` whose `XY_Plane` is reachable
+  via `doc.getObject("XY_Plane")`, or that a body's own children come from
+  `GroupExtension.newObject`, not `Document.addObject`. Reverse-engineered by
+  trial against a real `freecadcmd` interpreter. Simpler if:
+  `docs/freecadcmd-notes.md` carried a short "building a PartDesign feature
+  headlessly" recipe, since this task is unlikely to be the last one needing
+  more than a bare `Part::Box`.

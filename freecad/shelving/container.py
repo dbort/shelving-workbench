@@ -14,8 +14,8 @@ one, so the chain is composed by hand.
 A leaf's solid decides whether it is read as a board: a plain axis-aligned
 box becomes a ``Box``, sized from ``Shape.BoundBox`` rather than from
 ``Length`` / ``Width`` / ``Height`` so a box rotated a quarter turn still
-reads correctly. Anything else -- not axis-aligned, a box minus rectangular
-cutouts, no solid, or several solids -- is reported in ``Skipped`` with the
+reads correctly. Anything else, not axis-aligned, a box minus rectangular
+cutouts, no solid, or several solids, is reported in ``Skipped`` with the
 reason rather than adopted: a part read as a board needs a pinned flag that
 lets its size drive its region, which this task does not add.
 """
