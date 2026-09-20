@@ -186,7 +186,7 @@ a scanned fixture.
 
 ## M6 — Read a container
 
-**Status:** Task sh-016
+**Status:** Done sh-016
 
 The FreeCAD half of scanning: walk a container the user selects, stopping
 at parts rather than descending into a solid's construction, deduplicating
