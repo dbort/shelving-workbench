@@ -5,9 +5,11 @@ headless assertion yet: property-editor reflow, toolbar and menu wiring, and
 tree presentation only exist once a real `FreeCADGui` is running.
 
 Every case here is a candidate for automation. When a headless path to a check
-becomes possible, move it into `tools/freecad_smoke.py` (run by
-`pixi run tests`) and delete it from this file. The commit history keeps the
-record; this file tracks only what still needs a human.
+becomes possible, move it into the relevant headless `freecadcmd` pytest
+module under `tools/` (run by `pixi run tests`; `tools/freecad_scan_smoke.py`
+for scanning, others as milestones add them) and delete it from this file.
+The commit history keeps the record; this file tracks only what still needs
+a human.
 
 Each case is numbered steps followed by an explicit expected result, written so
 someone who did not build the feature can run it. Cases are grouped by

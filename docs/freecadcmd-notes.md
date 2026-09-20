@@ -1,7 +1,7 @@
 # Writing `freecadcmd` headless scripts
 
 `freecadcmd` runs a Python script inside a FreeCAD interpreter with no GUI.
-`pixi run tests` uses it for `tools/freecad_smoke.py`. Several of its
+`pixi run tests` uses it for `tools/freecad_scan_smoke.py`. Several of its
 behaviors differ from a plain `python script.py` run; most are handled in
 the code cited below.
 
@@ -13,15 +13,11 @@ failure code. Both `sys.exit(N)` and `os._exit(N)` are unaffected and
 propagate `N` as the real process exit status (verified directly: both
 were tested against this repo's pinned FreeCAD 1.0.0 build).
 
-`tools/freecad_smoke.py` predates this finding and still reports success
-by printing a marker line for its caller to grep, since it never confirmed
-`sys.exit` would work: see `tools/run-tests.sh`, which captures its output
-and greps for `shelving workbench import OK`, treating a missing marker as
-failure. `tools/freecad_scan_smoke.py` uses the newer, more direct
-approach: it is a real pytest module (see the next two sections) whose
-trailing `sys.exit(pytest.main([...]))` makes the process exit status
-itself the pass/fail signal, so `tools/run-tests.sh` checks that directly
-instead of grepping.
+`tools/freecad_scan_smoke.py` uses this directly: it is a real pytest
+module (see the next two sections) whose trailing
+`sys.exit(pytest.main([...]))` makes the process exit status itself the
+pass/fail signal, so `tools/run-tests.sh` checks that directly rather than
+grepping captured output for a marker line.
 
 ## A run script's `__name__` is its filename stem, not `"__main__"`
 
@@ -100,7 +96,7 @@ new location. After inserting the repo root on `sys.path`, the script also
 has to refresh the namespace path with
 `freecad.__path__ = extend_path(freecad.__path__, "freecad")`.
 
-See `tools/freecad_smoke.py`, which does the `sys.path` insert and the
+See `tools/freecad_scan_smoke.py`, which does the `sys.path` insert and the
 `extend_path` refresh together before importing `freecad.shelving`. An
 installed workbench never needs this, because FreeCAD's addon discovery
 puts it on the frozen path in the first place.
@@ -118,6 +114,8 @@ not enough to protect GUI-only code: the import passes and the
 See `freecad/shelving/init_gui.py`, which catches `ImportError` and, on the
 success path, drops `Gui` to `None` when `hasattr(Gui, "Workbench")` is
 false so the workbench base class and the `addWorkbench` call are skipped.
+`tools/freecad_scan_smoke.py`'s `test_init_gui_imports_cleanly` is what
+exercises this: nothing else imports `init_gui.py` as a side effect.
 
 ## `App::Part` does not call a Python `Proxy.execute`
 

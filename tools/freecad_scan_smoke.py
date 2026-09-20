@@ -1,14 +1,18 @@
-"""Headless functional check for reading a container into the core scanner.
+"""Headless functional check for the workbench: import safety plus reading
+a container into the core scanner.
 
 A real pytest module, not a hand-rolled assert-and-marker script: run via
 ``freecadcmd tools/freecad_scan_smoke.py``, which (see the bottom of this
 file) turns around and invokes pytest against itself, so a failure gets a
 named test, a fixture-argument dump, and a full traceback instead of a bare
-``AssertionError`` somewhere in a linear script. It builds a closed unit in
-a real FreeCAD document, reads it with ``read_container``, scans it, and
-asserts the geometry, the region tree, and the container's-own-frame and
-solid-classification rules a unit test cannot exercise without a FreeCAD
-interpreter.
+``AssertionError`` somewhere in a linear script. Besides the container-walk
+and scan checks, it confirms the workbench package and its GUI-registration
+module import cleanly under ``freecadcmd`` (`test_init_gui_imports_cleanly`),
+since neither is exercised as a side effect of anything else here. The rest
+builds a closed unit in a real FreeCAD document, reads it with
+``read_container``, scans it, and asserts the geometry, the region tree,
+and the container's-own-frame and solid-classification rules a unit test
+cannot exercise without a FreeCAD interpreter.
 
 FreeCAD's own recompute progress bar ("Recompute......") writes through a
 channel that bypasses ordinary stdout/stderr redirection and Python-level
@@ -18,8 +22,14 @@ changes when it appears), so it cannot be made to interleave with this
 module's own output or be suppressed from here. It reliably appears after
 everything this module prints, in one block.
 
-The ``sys.path`` insert plus ``freecad.__path__`` refresh mirror
-``tools/freecad_smoke.py``, which explains why they are needed.
+The ``sys.path`` insert below adds the repo root so ``freecad.shelving``
+resolves from this checkout. FreeCAD imports its own ``freecad`` namespace
+package during start-up and freezes its ``__path__`` at that point, before
+this script runs, so the plain ``sys.path`` insert alone is not enough:
+the ``freecad.__path__ = extend_path(...)`` call after it refreshes the
+namespace package's own search path to include the checkout too. An
+installed workbench never needs either, because FreeCAD's addon discovery
+puts it on the frozen path in the first place.
 """
 
 import math
@@ -226,6 +236,18 @@ def _add_notched_body(
 # rather than threading return values through fixtures, since the
 # document itself is already the shared, authoritative state.
 # ---------------------------------------------------------------------------
+
+
+def test_init_gui_imports_cleanly() -> None:
+    """The workbench registration module is the one part of the package
+    nothing else here imports as a side effect: `commands.scan` and
+    `commands.export_boxes` (imported at module level above) do not import
+    it, and it does not import them except deferred inside `Initialize`,
+    which a headless run never calls. `import FreeCADGui` under
+    `freecadcmd` returns a stub without `Workbench`
+    (docs/freecadcmd-notes.md), so this also covers that the module's own
+    guard drops to a plain-`object` base instead of raising."""
+    import freecad.shelving.init_gui  # noqa: F401
 
 
 def test_inactive_without_a_document() -> None:
