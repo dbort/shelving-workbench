@@ -1,5 +1,5 @@
 ---
-next_id: friction-014
+next_id: friction-015
 ---
 
 # Friction log
@@ -198,3 +198,24 @@ Sweeping the log is a human-triggered act, like task sign-off: the user asks for
   `docs/freecadcmd-notes.md` carried a short "building a PartDesign feature
   headlessly" recipe, since this task is unlikely to be the last one needing
   more than a bare `Part::Box`.
+
+- `friction-014` - **`sed -i` silently dropped a tracked file's executable
+  bit in this sandbox**: sh-027's Step 1 rewrote `tools/run-tests.sh`'s
+  `freecad/shelving` path with a plain `sed -i 's/.../.../g' tools/run-tests.sh`,
+  the same command used on every other file in the same pass. Every other
+  file kept its mode, but this one's git-tracked mode flipped from `100755`
+  to `100644` (confirmed via `git diff --stat`, which reports a mode change
+  with zero line changes as its own diff line, easy to miss among 40-odd
+  real file diffs). `pixi run tests` kept working locally regardless, because
+  this checkout's filesystem carries a POSIX ACL (the `+` in `ls -la`'s mode
+  column) that masked the loss for the local user; a fresh clone or CI
+  checkout, which only sees the git-stored mode bit, would not get that
+  cover and `tools/run-tests.sh` (invoked directly by the `tests` pixi task,
+  not via `bash tools/run-tests.sh`) would fail to exec. Caught only by
+  `git diff --stat` on the final branch diff before commit, not by `pixi run
+  tests` itself. Worked around with a follow-up `chmod 755` and a dedicated
+  commit. Simpler if: `git status`/`git diff --stat` surfaced a mode-only
+  change more prominently (it does show it, but as one line indistinguishable
+  in weight from a content change, easy to skim past among many files), or
+  this repo's own pre-commit tooling flagged a mode change on a shell script
+  under `tools/`.
