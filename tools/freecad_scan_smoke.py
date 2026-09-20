@@ -12,11 +12,13 @@ The ``sys.path`` insert plus ``freecad.__path__`` refresh mirror
 ``tools/freecad_smoke.py``, which explains why they are needed.
 """
 
+import functools
 import math
 import os
 import sys
+from collections.abc import Callable
 from pkgutil import extend_path
-from typing import Protocol, cast
+from typing import ParamSpec, Protocol, TypeVar, cast
 
 import freecad
 
@@ -44,6 +46,27 @@ _TOL_MM = 1e-6
 _THICKNESS_MM = 18.0
 _SIZE_MM = 600.0
 _DEPTH_MM = 300.0
+
+_P = ParamSpec("_P")
+_T = TypeVar("_T")
+
+
+def _case(func: Callable[_P, _T]) -> Callable[_P, _T]:
+    """Print ``func``'s name before running it.
+
+    FreeCAD's recompute progress bar writes through a channel plain
+    stdout/stderr redirection does not reach (verified: ``os.dup2`` on both
+    fd 1 and fd 2 around ``doc.recompute()`` does not suppress it), so this
+    is what makes a failure's traceback legible against the interleaved
+    progress noise, rather than trying to hide the noise itself.
+    """
+
+    @functools.wraps(func)
+    def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _T:
+        print(f"-- case: {func.__name__.removeprefix('_case_').replace('_', ' ')}")
+        return func(*args, **kwargs)
+
+    return wrapper
 
 
 class _Placeable(Protocol):
@@ -81,7 +104,8 @@ class _PadFeature(Protocol):
     Length: float
 
 
-def _check_inactive_without_a_document() -> None:
+@_case
+def _case_inactive_without_a_document() -> None:
     """Both commands are inactive before any document exists, and active
     once one does, regardless of whether the GUI ever registered them."""
     assert FreeCAD.ActiveDocument is None, FreeCAD.ActiveDocument
@@ -215,24 +239,27 @@ def _add_notched_body(
     return body
 
 
-def main() -> None:
-    _check_inactive_without_a_document()
-
-    doc = FreeCAD.newDocument("shelving_scan_smoke")
-    part = cast("FreeCAD.DocumentObject", doc.addObject("App::Part", "Unit"))
+@_case
+def _case_closed_shell_with_a_shelf(
+    doc: FreeCAD.Document, part: FreeCAD.DocumentObject
+) -> list[Box]:
     _build_shell(doc, part)
     doc.recompute()
-
     boxes, skipped = read_container(part)
     assert len(boxes) == 5, len(boxes)
     assert len(skipped) == 0, skipped
     _assert_shelf_reads_correctly(boxes)
-
     result = scan(boxes, DEFAULT_CATALOG, skipped=skipped)
     _assert_shell_tree_shape(result.unit.root)
+    return boxes
 
-    # Move and rotate the container: the records must not change, since
-    # read_container excludes the selected container's own placement.
+
+@_case
+def _case_move_and_rotate_the_container(
+    doc: FreeCAD.Document, part: FreeCAD.DocumentObject, boxes: list[Box]
+) -> None:
+    """The records must not change, since ``read_container`` excludes the
+    selected container's own placement."""
     before = sorted((b.name, b.corner_mm, b.size_mm) for b in boxes)
     shelf = cast("FreeCAD.GeoFeature", doc.getObject("Shelf"))
     shelf_global_before = shelf.getGlobalPlacement().Base
@@ -242,9 +269,9 @@ def main() -> None:
     )
     cast("_Placeable", part).Placement = new_placement
     doc.recompute()
-    # Prove the write moved the shelf before trusting "records
-    # unchanged" below as evidence of the exclusion rule, rather than of a
-    # placement write that silently had no effect.
+    # Prove the write moved the shelf before trusting "records unchanged"
+    # below as evidence of the exclusion rule, rather than of a placement
+    # write that silently had no effect.
     assert cast("_Placeable", part).Placement.Base.isEqual(new_placement.Base, _TOL_MM)
     shelf_global_after = shelf.getGlobalPlacement().Base
     assert not shelf_global_after.isEqual(shelf_global_before, _TOL_MM), (
@@ -256,8 +283,13 @@ def main() -> None:
     assert before == after, (before, after)
     assert len(moved_skipped) == 0, moved_skipped
 
-    # A PartDesign::Body with a padded notched sketch: one Skipped record
-    # naming the box-minus-cutouts reason, not two board records.
+
+@_case
+def _case_notched_partdesign_body(
+    doc: FreeCAD.Document, part: FreeCAD.DocumentObject
+) -> FreeCAD.DocumentObject:
+    """One ``Skipped`` record naming the box-minus-cutouts reason, not two
+    board records."""
     body = _add_notched_body(doc, part)
     boxes, skipped = read_container(part)
     assert len(boxes) == 5, len(boxes)
@@ -265,8 +297,15 @@ def main() -> None:
     assert skipped[0].name == body.Name
     assert "box minus 1 rectangular cutout" in skipped[0].reason, skipped[0].reason
     assert "50 x 30 x 18 mm" in skipped[0].reason, skipped[0].reason
+    return body
 
-    # The same body reachable through a second group: still one record.
+
+@_case
+def _case_notched_body_reached_through_a_second_group(
+    doc: FreeCAD.Document, part: FreeCAD.DocumentObject, body: FreeCAD.DocumentObject
+) -> None:
+    """The same body reachable through a second group still yields one
+    record."""
     raw_alias = doc.addObject("App::DocumentObjectGroup", "AliasGroup")
     alias_group = cast("FreeCAD.DocumentObject", raw_alias)
     cast("FreeCAD.DocumentObjectGroup", part).addObject(alias_group)
@@ -276,8 +315,13 @@ def main() -> None:
     assert len(boxes) == 5, len(boxes)
     assert len(skipped) == 1, skipped
 
-    # A box rotated a quarter turn: Length/Width swap in the bounding box,
-    # and read_container has to follow the bounding box, not the properties.
+
+@_case
+def _case_box_rotated_a_quarter_turn(
+    doc: FreeCAD.Document, part: FreeCAD.DocumentObject
+) -> None:
+    """Length/Width swap in the bounding box, and ``read_container`` has to
+    follow the bounding box, not the properties."""
     _add_box(
         doc,
         part,
@@ -299,11 +343,16 @@ def main() -> None:
     assert math.isclose(rotated.corner_mm.x_mm, 660.0, abs_tol=_TOL_MM)
     assert math.isclose(rotated.corner_mm.y_mm, 5.0, abs_tol=_TOL_MM)
 
-    # A box inside a nested App::Part carrying a quarter-turn rotation: the
-    # walk composes the nested container's placement on top of the leaf's
-    # own (only the selected top-level container's placement is excluded),
-    # so the composed rotation must swap the extents the same way a
-    # rotation on the leaf itself does, not just move the minimum corner.
+
+@_case
+def _case_box_inside_a_nested_rotated_container(
+    doc: FreeCAD.Document, part: FreeCAD.DocumentObject
+) -> None:
+    """A box inside a nested ``App::Part`` carrying a quarter-turn rotation:
+    the walk composes the nested container's placement on top of the leaf's
+    own (only the selected top-level container's placement is excluded), so
+    the composed rotation must swap the extents the same way a rotation on
+    the leaf itself does, not just move the minimum corner."""
     raw_nested = doc.addObject("App::Part", "NestedUnit")
     nested_obj = cast("FreeCAD.DocumentObject", raw_nested)
     cast("FreeCAD.DocumentObjectGroup", part).addObject(nested_obj)
@@ -327,9 +376,15 @@ def main() -> None:
     assert math.isclose(nested_box.corner_mm.y_mm, 0.0, abs_tol=_TOL_MM)
     assert math.isclose(nested_box.corner_mm.z_mm, 0.0, abs_tol=_TOL_MM)
 
-    # A box skewed off-axis, directly in the selected container: no multiple
-    # of 90 degrees rescues it, so _axis_aligned refuses it by name rather
-    # than adopting a bounding box that does not describe the solid.
+
+@_case
+def _case_skewed_box_refusal(
+    doc: FreeCAD.Document, part: FreeCAD.DocumentObject
+) -> None:
+    """A box skewed off-axis, directly in the selected container: no
+    multiple of 90 degrees rescues it, so ``_axis_aligned`` refuses it by
+    name rather than adopting a bounding box that does not describe the
+    solid."""
     _add_box(
         doc,
         part,
@@ -344,6 +399,21 @@ def main() -> None:
     assert len(skipped) == 2, skipped
     skewed = next(s for s in skipped if s.name == "Skewed")
     assert skewed.reason == "not axis-aligned", skewed.reason
+
+
+def main() -> None:
+    _case_inactive_without_a_document()
+
+    doc = FreeCAD.newDocument("shelving_scan_smoke")
+    part = cast("FreeCAD.DocumentObject", doc.addObject("App::Part", "Unit"))
+
+    boxes = _case_closed_shell_with_a_shelf(doc, part)
+    _case_move_and_rotate_the_container(doc, part, boxes)
+    body = _case_notched_partdesign_body(doc, part)
+    _case_notched_body_reached_through_a_second_group(doc, part, body)
+    _case_box_rotated_a_quarter_turn(doc, part)
+    _case_box_inside_a_nested_rotated_container(doc, part)
+    _case_skewed_box_refusal(doc, part)
 
     print("shelving scan OK")
 
