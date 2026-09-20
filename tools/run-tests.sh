@@ -58,7 +58,14 @@ if ! printf '%s\n' "$smoke_output" | grep -q "shelving workbench import OK"; the
 fi
 
 printf '== %s\n' freecad_scan_smoke.py
-if ! freecadcmd tools/freecad_scan_smoke.py; then
+scan_smoke_status=0
+freecadcmd tools/freecad_scan_smoke.py || scan_smoke_status=$?
+# The recompute progress bar's last write ends in a bare carriage return
+# with no newline (docs/freecadcmd-notes.md), so without this, whatever
+# prints next lands on the same line. Unconditional and before the status
+# check, so the failure message below never inherits it either.
+printf '\n'
+if [ "$scan_smoke_status" -ne 0 ]; then
 	echo "ERROR: freecad_scan_smoke.py failed (see output above)." >&2
 	exit 1
 fi
