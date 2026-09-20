@@ -1,8 +1,8 @@
 ---
 id: sh-027
 title: "Collapse shelving_core to a single copy under freecad/shelving/core/"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 0
 ---
 
@@ -21,32 +21,32 @@ one copy that lives inside the workbench itself, at
 
 ## Status
 - [x] Planning
-- [ ] Implementation
+- [x] Implementation
 - [ ] Review
 - [ ] User sign-off
 
 ## Must Have
-- [ ] `pixi run tests` green.
-- [ ] `shelving_core/` no longer exists at the repo root. Its modules
+- [x] `pixi run tests` green.
+- [x] `shelving_core/` no longer exists at the repo root. Its modules
       (`layout.py`, `solver.py`, `expand.py`, `materials.py`, `scan.py`,
       `svg.py`, `geometry.py`, `__init__.py`) live at
       `freecad/shelving/core/`; its tests live at
       `freecad/shelving/core/tests/`, a one-to-one rename, not a merge into
       the repo-root `tests/` directory.
-- [ ] `freecad/shelving/vendor/` does not exist. `tools/vendor-core.sh` does
+- [x] `freecad/shelving/vendor/` does not exist. `tools/vendor-core.sh` does
       not exist. `tools/run-tests.sh` no longer runs a
       `vendor-core.sh --check` step.
-- [ ] Every module under `freecad/shelving/core/` imports its own siblings
+- [x] Every module under `freecad/shelving/core/` imports its own siblings
       via fully-qualified `freecad.shelving.core.X` imports — not the old
       bare `shelving_core.X`, and not the relative `.X` imports the dual-copy
       setup required as a stopgap.
-- [ ] `freecad/shelving/core/tests/test_relative_intra_package_imports.py`
+- [x] `freecad/shelving/core/tests/test_relative_intra_package_imports.py`
       does not exist. Its entire justification (keeping a second,
       simultaneously-importable copy self-consistent) no longer applies
       once there is one copy.
-- [ ] `freecad/shelving/core/tests/test_no_freecad.py` still exists,
+- [x] `freecad/shelving/core/tests/test_no_freecad.py` still exists,
       retargeted to the new package location, and still passes.
-- [ ] Every consumer outside the moved package imports from
+- [x] Every consumer outside the moved package imports from
       `freecad.shelving.core`, not `shelving_core`:
       `freecad/shelving/default_catalog.py`, `freecad/shelving/__init__.py`'s
       docstring, `tools/freecad_scan_smoke.py`, `tools/layout_demo.py`. If
@@ -54,7 +54,7 @@ one copy that lives inside the workbench itself, at
       not — see Frontier Advice's sequencing note), update its imports too:
       `carcass_model.py`, `freecad_spike.py`, `general_model.py`, `scan.py`,
       `test_general_model.py`, `test_scan.py`.
-- [ ] `pyproject.toml`'s `[tool.hatch.build.targets.wheel]` `packages` lists
+- [x] `pyproject.toml`'s `[tool.hatch.build.targets.wheel]` `packages` lists
       `freecad`, not `shelving_core`, so `import freecad.shelving.core...`
       resolves the same way `import shelving_core` did today for
       non-pytest script invocations (`tools/layout_demo.py`,
@@ -62,25 +62,25 @@ one copy that lives inside the workbench itself, at
       vendor-path `exclude`/override block are retargeted to the new
       location; the vendor-specific override is deleted outright, since
       there is no second copy left to skip.
-- [ ] `pixi.toml`'s comments referencing `shelving_core` by its old location
+- [x] `pixi.toml`'s comments referencing `shelving_core` by its old location
       are updated to match; fix the stale `shelving_core/tests/test_schema.py`
       reference in passing (that file no longer exists, from an earlier,
       unrelated cleanup).
-- [ ] `README.md`'s Tests section no longer lists a "vendored-core drift
+- [x] `README.md`'s Tests section no longer lists a "vendored-core drift
       check" among what `pixi run tests` covers.
-- [ ] `docs/manual-qa.md`'s "link the whole repo, not just
+- [x] `docs/manual-qa.md`'s "link the whole repo, not just
       `freecad/shelving/`" note no longer cites `shelving_core` living only
       at the repo root, or an unlanded "vendored-core rework," as its
       reason. Confirm whether linking the whole repo is still necessary
       (check where `package.xml` lives) and reword the note's stated reason
       accordingly; do not just delete the note without checking.
-- [ ] `docs/architecture.md` and `docs/parametric-model-evaluation.md` are
+- [x] `docs/architecture.md` and `docs/parametric-model-evaluation.md` are
       NOT touched by this task. Both are frozen historical records (the
       first explicitly describes the pre-M4 design per `README.md`'s own
       pointer; the second is an evaluation doc that states nothing in it is
       a decision of record). Editing either to reflect the new layout would
       misrepresent what was true at the time each was written.
-- [ ] `mypy --strict` clean over every changed file.
+- [x] `mypy --strict` clean over every changed file.
 
 ## Frontier Advice
 
@@ -147,24 +147,24 @@ meaningfully testable until the move, the import updates, and the
 packaging config are all in place together, so `pixi run tests` is
 required green once, after the last step, not after each one.
 
-- [ ] **Step 1** (`shelving_core/` → `freecad/shelving/core/`): Move the
+- [x] **Step 1** (`shelving_core/` → `freecad/shelving/core/`): Move the
       package and its tests via `git mv`. Rewrite every internal
       cross-module import to the fully-qualified `freecad.shelving.core.X`
       form. Delete `test_relative_intra_package_imports.py`. Retarget
       `test_no_freecad.py` to the new package location.
-- [ ] **Step 2** (`freecad/shelving/vendor/`, `tools/vendor-core.sh`,
+- [x] **Step 2** (`freecad/shelving/vendor/`, `tools/vendor-core.sh`,
       `tools/run-tests.sh`): Delete the vendor tree and the sync script.
       Remove the `vendor-core.sh --check` step from `run-tests.sh`.
-- [ ] **Step 3** (`freecad/shelving/default_catalog.py`,
+- [x] **Step 3** (`freecad/shelving/default_catalog.py`,
       `freecad/shelving/__init__.py`, `tools/freecad_scan_smoke.py`,
       `tools/layout_demo.py`, and `spikes/plain_planks/`'s six files if
       still present): Update every remaining `shelving_core` import to
       `freecad.shelving.core`.
-- [ ] **Step 4** (`pyproject.toml`, `pixi.toml`): Switch the wheel
+- [x] **Step 4** (`pyproject.toml`, `pixi.toml`): Switch the wheel
       `packages` target and retarget the `mypy` config per Frontier
       Advice's packaging note. Update `pixi.toml`'s stale comments,
       including the `test_schema.py` reference.
-- [ ] **Step 5** (`README.md`, `docs/manual-qa.md`): Update the Tests
+- [x] **Step 5** (`README.md`, `docs/manual-qa.md`): Update the Tests
       section and the "link the whole repo" note per the Must Haves above.
       Do not touch `docs/architecture.md` or
       `docs/parametric-model-evaluation.md`.

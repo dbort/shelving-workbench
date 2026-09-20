@@ -1,5 +1,5 @@
 ---
-next_id: friction-013
+next_id: friction-014
 ---
 
 # Friction log
@@ -168,25 +168,6 @@ Sweeping the log is a human-triggered act, like task sign-off: the user asks for
   could surface a within-tolerance match instead of applying it silently,
   and let the user confirm snapping the board to the catalog dimension.
 
-- `friction-010` - **every `shelving_core` edit pays a vendored-copy tax**:
-  sh-013, sh-014, and sh-015 each touched `shelving_core/` (`geometry.py`,
-  `scan.py`, `layout.py`, `svg.py`) and each time paid the same tax twice
-  over: `tools/vendor-core.sh` had to re-run to keep
-  `freecad/shelving/vendor/shelving_core/` byte-identical, and the
-  post-approval `doc-hygiene` sweep had to deliberately group each file with
-  its vendored twin in the same pipeline group so both copies got edited in
-  step, rather than independently and possibly inconsistently. None of this
-  is new: the user already decided the fix at sh-012 sign-off (collapse to
-  one copy under `freecad/shelving/`, delete `vendor-core.sh` and its drift
-  gate, no relative-import workaround) but deferred it until after sh-012
-  landed, "before M4+ adds more consumers of the vendored path." M4 (sh-013)
-  and M5 (sh-014, sh-015) have both landed since, each adding more files to
-  keep in sync, and the task was never opened. Worked around, each time, by
-  re-running the sync script and hand-pairing files into doc-hygiene groups.
-  Simpler if: the already-decided consolidation task had been created and
-  dispatched before M4 started, since every milestone since has only grown
-  the set of files paying this tax.
-
 - `friction-011` - **`App::DocumentObjectGroup` carries no `Placement`
   property at all**: sh-016's container walk composed `obj.Placement` for
   every container with children, on the reasonable-looking assumption that
@@ -217,3 +198,30 @@ Sweeping the log is a human-triggered act, like task sign-off: the user asks for
   `docs/freecadcmd-notes.md` carried a short "building a PartDesign feature
   headlessly" recipe, since this task is unlikely to be the last one needing
   more than a bare `Part::Box`.
+
+- `friction-013` - **`sys.path.insert` guarded by `if path not in sys.path`
+  silently no-ops when an editable install already appended that same path
+  further back**: sh-027 moved `tools/layout_demo.py`'s imports to
+  `freecad.shelving.core.X` and needed the repo root at the *front* of
+  `sys.path` so this checkout's `freecad/__init__.py` (a thin
+  `pkgutil.extend_path` shim) wins the module-identity race against the
+  conda environment's own `freecad` package (FreeCAD's Python bindings,
+  whose `__init__.py` prints `PATH_TO_FREECAD_LIBDIR not specified...` as a
+  side effect of importing `FreeCAD`). Copying `tools/freecad_scan_smoke.py`'s
+  existing `if _REPO_ROOT not in sys.path: sys.path.insert(0, _REPO_ROOT)`
+  guard looked safe but silently did nothing under `pixi run`/`pixi run
+  python3`: the project's editable install already appends the repo root to
+  the *end* of `sys.path` via a `.pth` file, so the membership check was
+  already true and the insert never ran, leaving the conda package's
+  `freecad` first in line. `tools/freecad_scan_smoke.py`'s copy of the same
+  guard never hit this because `freecadcmd` uses a separate interpreter
+  without that `.pth` entry. Diagnosed with `python3 -X importtime` and
+  `-v`, which showed `FreeCAD` and the site-packages `freecad/__init__.py`
+  loading before this checkout's copy. Worked around by dropping the
+  membership guard and inserting unconditionally. Simpler if: the editable
+  install's `.pth` prepended the repo root instead of appending it (so
+  `sys.path[0]` already carried a checkout's own packages ahead of any
+  same-named installed package), or `docs/freecadcmd-notes.md` /
+  a script-invocation doc called out that "not already in sys.path" is not
+  the same question as "not already ahead of the package it needs to
+  shadow."

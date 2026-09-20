@@ -40,17 +40,16 @@ the checkout.
 
 If the script just installed pixi, open a new shell (or `source ~/.profile`)
 so `~/.local/bin` is on `PATH`. `pixi run` and `pixi shell` then work from the
-checkout; both put `shelving_core` on the import path for scripts such as
-`tools/layout_demo.py`, which carry no `sys.path` shim of their own.
+checkout, putting `freecad` (this checkout's namespace package) on the import
+path via the editable install.
 
 ## Tests
 
 `pixi run tests` is the pre-merge gate and what CI runs. In one pass it covers:
 
 - static analysis: `ruff` lint and format, and a strict `mypy` type check;
-- the `shelving_core` unit suite;
-- repository-consistency checks: the `pixi.lock` path guard and the
-  vendored-core drift check;
+- the `freecad.shelving.core` unit suite;
+- the `pixi.lock` path guard;
 - the workflow-hardening lint over `.github/workflows/` (see
   [`docs/github-actions-hardening.md`](docs/github-actions-hardening.md));
 - a headless `freecadcmd` workbench import smoke.

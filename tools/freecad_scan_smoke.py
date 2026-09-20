@@ -53,14 +53,14 @@ import pytest  # noqa: E402
 from freecad.shelving.commands.export_boxes import ExportBoxesCommand  # noqa: E402
 from freecad.shelving.commands.scan import ScanCommand  # noqa: E402
 from freecad.shelving.container import read_container  # noqa: E402
-from freecad.shelving.default_catalog import DEFAULT_CATALOG  # noqa: E402
-from freecad.shelving.vendor.shelving_core.layout import (  # noqa: E402
+from freecad.shelving.core.layout import (  # noqa: E402
     Bay,
     Board,
     Division,
     Region,
 )
-from freecad.shelving.vendor.shelving_core.scan import Box, scan  # noqa: E402
+from freecad.shelving.core.scan import Box, scan  # noqa: E402
+from freecad.shelving.default_catalog import DEFAULT_CATALOG  # noqa: E402
 
 _TOL_MM = 1e-6
 _THICKNESS_MM = 18.0
@@ -124,7 +124,7 @@ def _add_box(
 
 def _build_shell(doc: FreeCAD.Document, part: FreeCAD.DocumentObject) -> None:
     """A closed 600 x 600 x 300 mm shell with one shelf: four walls captured
-    the way ``shelving_core.tests.test_scan``'s ``_closed_box`` helper builds
+    the way ``freecad.shelving.core.tests.test_scan``'s ``_closed_box`` helper builds
     one, plus a shelf between the sides."""
     t, size, depth = _THICKNESS_MM, _SIZE_MM, _DEPTH_MM
     _add_box(doc, part, "Bottom", (size, depth, t), (0.0, 0.0, 0.0))

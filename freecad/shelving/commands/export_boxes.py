@@ -3,7 +3,7 @@
 The command id is ``Shelving_ExportBoxes``. ``Gui.addCommand`` runs behind a
 headless guard so ``import freecad.shelving.commands.export_boxes`` succeeds
 under ``freecadcmd``, where there is no GUI. This command never calls
-``shelving_core.scan.scan``: it is the mechanism for capturing a unit that
+``freecad.shelving.core.scan.scan``: it is the mechanism for capturing a unit that
 scanning would refuse, so it has to write regardless of whether the boxes it
 read would scan.
 """
@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, TypedDict, cast
 import FreeCAD
 
 from freecad.shelving.container import read_container
-from freecad.shelving.vendor.shelving_core.scan import ScanError
+from freecad.shelving.core.scan import ScanError
 
 _RESOURCE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources")
 _ICON = os.path.join(_RESOURCE_DIR, "shelving.svg")

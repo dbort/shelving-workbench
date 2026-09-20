@@ -12,9 +12,9 @@ from typing import TYPE_CHECKING, TypedDict, cast
 import FreeCAD
 
 from freecad.shelving.container import read_container
+from freecad.shelving.core.report import report
+from freecad.shelving.core.scan import ScanError, scan
 from freecad.shelving.default_catalog import DEFAULT_CATALOG
-from freecad.shelving.vendor.shelving_core.report import report
-from freecad.shelving.vendor.shelving_core.scan import ScanError, scan
 
 _RESOURCE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources")
 _ICON = os.path.join(_RESOURCE_DIR, "shelving.svg")

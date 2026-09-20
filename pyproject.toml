@@ -15,7 +15,7 @@ authors = [{ name = "Dave Bort", email = "freecad@dbort.com" }]
 Repository = "https://github.com/dbort/shelving-workbench"
 
 [tool.hatch.build.targets.wheel]
-packages = ["shelving_core"]
+packages = ["freecad"]
 
 [tool.ruff]
 target-version = "py311"
@@ -34,16 +34,7 @@ known-third-party = ["FreeCAD", "FreeCADGui", "Part"]
 [tool.mypy]
 strict = true
 files = [
-    "shelving_core",
-    "freecad/shelving/",
+    "freecad/",
     "tools/",
     "tests/",
 ]
-# The vendored core is byte-identical to `shelving_core/`, already in `files`;
-# analyzing it a second time under this module name collides ("duplicate module
-# named 'shelving_core'").
-exclude = ["^freecad/shelving/vendor/"]
-
-[[tool.mypy.overrides]]
-module = "freecad.shelving.vendor.*"
-follow_imports = "skip"

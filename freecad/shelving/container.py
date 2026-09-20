@@ -26,8 +26,8 @@ from typing import Protocol, cast
 import FreeCAD
 import Part
 
-from freecad.shelving.vendor.shelving_core.geometry import Vec3
-from freecad.shelving.vendor.shelving_core.scan import Box, Skipped
+from freecad.shelving.core.geometry import Vec3
+from freecad.shelving.core.scan import Box, Skipped
 
 # A PartDesign Body also exposes a Group, holding that body's own feature
 # history rather than separate parts, so it is deliberately absent here.

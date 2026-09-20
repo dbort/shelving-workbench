@@ -6,7 +6,7 @@ only; no `FreeCAD` import, so it loads under a bare `python` as well as inside
 FreeCAD.
 """
 
-from freecad.shelving.vendor.shelving_core.materials import (
+from freecad.shelving.core.materials import (
     Catalog,
     MaterialEntry,
     MaterialId,
