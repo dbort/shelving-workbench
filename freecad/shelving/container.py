@@ -50,12 +50,12 @@ class _PartObject(Protocol):
 
 
 class _ContainerObject(Protocol):
-    """The property surface a container carries while ``_walk`` descends
-    into it: its own placement, plus one of ``Group`` (``App::Part``,
-    ``App::DocumentObjectGroup``) or ``ElementList`` (``App::LinkGroup``,
-    which ``freecad-stubs`` does not type at all)."""
+    """The property surface ``_children`` reads to find a container's
+    members: ``Group`` (``App::Part``, ``App::DocumentObjectGroup``) or
+    ``ElementList`` (``App::LinkGroup``, which ``freecad-stubs`` does not
+    type at all). No container type carries both, so ``_children`` still
+    probes with ``getattr`` rather than assuming either is present."""
 
-    Placement: FreeCAD.Placement
     Group: list[FreeCAD.DocumentObject]
     ElementList: list[FreeCAD.DocumentObject]
 
@@ -63,11 +63,12 @@ class _ContainerObject(Protocol):
 def _children(obj: FreeCAD.DocumentObject) -> list[FreeCAD.DocumentObject]:
     if not any(obj.isDerivedFrom(kind) for kind in _CONTAINERS):
         return []
+    container = cast("_ContainerObject", obj)
     # LinkGroup children live in ElementList, Part and plain groups use
     # Group; neither attribute exists on every container type, so this
     # reads whichever one the concrete object actually carries.
     for attr in ("ElementList", "Group"):
-        members = getattr(obj, attr, None)
+        members = getattr(container, attr, None)
         if isinstance(members, list):
             return [m for m in members if isinstance(m, FreeCAD.DocumentObject)]
     return []
@@ -91,8 +92,13 @@ def _walk(
             seen.add(obj.Name)
             yield obj, placement
         return
-    container = cast("_ContainerObject", obj)
-    composed = placement.multiply(container.Placement)
+    # An App::DocumentObjectGroup carries no Placement at all (it is a plain
+    # group, not a geo-feature group), so this stays defensive rather than
+    # assuming every container type has one.
+    own = getattr(obj, "Placement", None)
+    composed = (
+        placement.multiply(own) if isinstance(own, FreeCAD.Placement) else placement
+    )
     for child in children:
         yield from _walk(child, composed, seen)
 
