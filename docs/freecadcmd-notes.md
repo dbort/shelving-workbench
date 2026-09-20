@@ -86,6 +86,38 @@ lands on top of it. This looks like output arriving after the process has
 already exited, but it is a cursor-position artifact from a missing final
 newline.
 
+## FreeCAD freezes the `freecad` namespace package's `__path__`
+
+FreeCAD imports its own `freecad` namespace package during startup and
+fixes its `__path__` at that point: the one-time `pkgutil.extend_path` scan
+that builds `__path__` only sees whatever is on `sys.path` at that moment,
+so a directory added afterward is not picked up by a bare `sys.path`
+insert alone. This is real and general to FreeCAD, not specific to this
+repo's layout.
+
+This repo's scripts do not need to work around it, because by the time
+`freecadcmd` (or any interpreter in the pixi environment) reaches its own
+internal `import freecad`, the repo root is already on `sys.path`: the
+project's editable install (`pixi.toml`'s `[pypi-dependencies]`) places a
+`.pth` file that `site.py` processes at interpreter startup, before either
+`freecadcmd`'s internal import or pytest's own collection logic runs.
+Verified directly this session: `import freecad.Shelving.core.X` resolves
+correctly under `freecadcmd` with no `sys.path` insert of any kind, and no
+`extend_path` refresh, present in the calling script at all.
+
+`freecad/` itself carries no `__init__.py` (a PEP 420 namespace-package
+portion, not a regular package), so importing anything under
+`freecad.Shelving` first resolves the *installed* FreeCAD distribution's
+own `freecad/__init__.py` (a regular package always wins resolution over a
+namespace-portion directory of the same name, verified this session) —
+which unconditionally imports the `FreeCAD` App module as part of its own
+`extend_path` bookkeeping, and, when `PATH_TO_FREECAD_LIBDIR` is unset,
+prints a diagnostic line to stdout the first time this happens in a plain
+Python process (not under `freecadcmd`, which has already imported `FreeCAD`
+by the time a script runs). `tools/layout_demo.py` sets
+`PATH_TO_FREECAD_LIBDIR` defensively before its own imports to suppress
+that diagnostic; see its module docstring.
+
 ## `import FreeCADGui` returns a stub that lacks `Workbench`
 
 Under `freecadcmd` there is no GUI, but `import FreeCADGui` still succeeds.
@@ -96,7 +128,7 @@ not enough to protect GUI-only code: the import passes and the
 `Gui.Workbench` also has to check `hasattr(Gui, "Workbench")` (or
 `getattr(Gui, "Workbench", None)`) and fall back when it is absent.
 
-See `shelving/init_gui.py`, which catches `ImportError` and, on the
+See `freecad/Shelving/init_gui.py`, which catches `ImportError` and, on the
 success path, drops `Gui` to `None` when `hasattr(Gui, "Workbench")` is
 false so the workbench base class and the `addWorkbench` call are skipped.
 `tools/freecad_scan_smoke.py`'s `test_init_gui_imports_cleanly` is what

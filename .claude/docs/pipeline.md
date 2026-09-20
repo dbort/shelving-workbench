@@ -24,7 +24,7 @@ reference this section rather than naming a command themselves. Edit the
 command below to match this repo's tooling.
 
 **The checks** — one command is the repo's whole verification surface:
-static analysis, the `shelving.core` unit suite, the `pixi.lock`
+static analysis, the `freecad.Shelving.core` unit suite, the `pixi.lock`
 path guard, the workflow-hardening lint, and a headless FreeCAD import
 smoke. It runs its steps in order and aborts at the first failure. A few
 seconds end to end, so it is cheap enough to run many times per task.

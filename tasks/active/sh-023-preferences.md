@@ -27,7 +27,7 @@ a reasonable answer. Milestone M10, part 2 of 3.
 - [ ] A preferences page appears under FreeCAD's Shelving group holding exactly
       six values: `CreateWidth`, `CreateHeight`, `CreateDepth`,
       `CreateMaterial`, `SnapTolerance`, `JointClearance`.
-- [ ] `shelving/preferences.py` exports a typed reader per value, each
+- [ ] `freecad/Shelving/preferences.py` exports a typed reader per value, each
       returning the stored value or the module's documented default, and each
       falling back to that default rather than raising on a missing, malformed
       or out-of-range stored value.
@@ -104,12 +104,12 @@ Every length identifier carries `_mm`.
 
 ## Execution Plan
 
-- [ ] **Step 1** (`shelving/preferences.py`, tests): Create the module with an injected parameter source. A `Protocol` with typed getters for a float and a string. One reader per value, each carrying its documented default as a module constant imported from the core where one exists, validating and falling back. `read_tolerances()` returning both together and falling back to both defaults when the snap is at or above the clearance. A reporting hook the caller supplies, so the module itself does not import FreeCAD. Tests over an injected mapping covering: each value read cleanly; each missing, each malformed, each out of range; the tolerance cross-validation; and an assertion that every default equals the core constant it replaces.
+- [ ] **Step 1** (`freecad/Shelving/preferences.py`, tests): Create the module with an injected parameter source. A `Protocol` with typed getters for a float and a string. One reader per value, each carrying its documented default as a module constant imported from the core where one exists, validating and falling back. `read_tolerances()` returning both together and falling back to both defaults when the snap is at or above the clearance. A reporting hook the caller supplies, so the module itself does not import FreeCAD. Tests over an injected mapping covering: each value read cleanly; each missing, each malformed, each out of range; the tolerance cross-validation; and an assertion that every default equals the core constant it replaces.
 
-- [ ] **Step 2** (`shelving/preferences.py`): Add the FreeCAD-backed adapter implementing the protocol over `FreeCAD.ParamGet` under this workbench's parameter path, and a module-level accessor returning readers bound to it. Keep the adapter thin: no validation lives here, only the parameter reads.
+- [ ] **Step 2** (`freecad/Shelving/preferences.py`): Add the FreeCAD-backed adapter implementing the protocol over `FreeCAD.ParamGet` under this workbench's parameter path, and a module-level accessor returning readers bound to it. Keep the adapter thin: no validation lives here, only the parameter reads.
 
-- [ ] **Step 3** (`shelving/unit_ops.py`, `shelving/container.py`, `shelving/commands/`): Replace every hard-coded use of the six values with a preferences read. Create Unit takes its four; the read path takes both tolerances and passes them to `scan`. Grep for the constants afterwards and confirm no command names one directly. Route the reporting hook to the report view so an ignored preference is visible.
+- [ ] **Step 3** (`freecad/Shelving/unit_ops.py`, `freecad/Shelving/container.py`, `freecad/Shelving/commands/`): Replace every hard-coded use of the six values with a preferences read. Create Unit takes its four; the read path takes both tolerances and passes them to `scan`. Grep for the constants afterwards and confirm no command names one directly. Route the reporting hook to the report view so an ignored preference is visible.
 
-- [ ] **Step 4** (`shelving/resources/preferences.ui`, `shelving/init_gui.py`): Create the page with FreeCAD's own preference widgets bound to the six parameter paths, grouped as starter unit and tolerances, each with a tooltip saying what it affects and, for the tolerances, what a refusal looks like when they are wrong. Register it from `init_gui` with `FreeCADGui.addPreferencePage` behind the headless-safe guard.
+- [ ] **Step 4** (`freecad/Shelving/resources/preferences.ui`, `freecad/Shelving/init_gui.py`): Create the page with FreeCAD's own preference widgets bound to the six parameter paths, grouped as starter unit and tolerances, each with a tooltip saying what it affects and, for the tolerances, what a refusal looks like when they are wrong. Register it from `init_gui` with `FreeCADGui.addPreferencePage` behind the headless-safe guard.
 
 - [ ] **Step 5** (`tools/freecad_prefs_smoke.py`, `tools/run-tests.sh`, `docs/manual-qa.md`): The headless check. Assert: the readers bound to FreeCAD's parameter store return the documented defaults on a clean profile; writing a value through `ParamGet` changes what Create Unit produces; writing a bad value leaves behaviour at the default and reports; the tolerance cross-validation fires when both are written incompatibly; and registering the page does not raise when the GUI is absent. Print `shelving prefs OK` and add a matching block to `tools/run-tests.sh`. Add a manual case for opening the page, changing the starter width, and creating a unit at the new size.

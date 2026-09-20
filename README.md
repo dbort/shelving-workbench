@@ -8,7 +8,7 @@
 A FreeCAD 1.0 workbench for parametric shelving. A unit is designed as a flat
 front elevation and expands into individually editable 3D plank solids; editing
 the elevation reflows the 3D. The layout math lives in a pure-Python core
-(`shelving.core`) that never imports FreeCAD, so it is testable
+(`freecad.Shelving.core`) that never imports FreeCAD, so it is testable
 without a GUI.
 See [`docs/scope-and-design.md`](docs/scope-and-design.md) for what the project
 is for and how it is built, and [`docs/roadmap.md`](docs/roadmap.md) for the
@@ -40,18 +40,19 @@ To install pixi yourself instead, follow its docs, then run `pixi install` in
 the checkout.
 
 If the script just installed pixi, open a new shell (or `source ~/.profile`)
-so `~/.local/bin` is on `PATH`. `shelving/` is a plain package (its own
-`__init__.py`, no `__init__.py` at the repo root above it), so nothing needs
-installing: pytest's prepend-mode rootdir walk inserts the repo root on
-`sys.path` for the test suite, and each `tools/*.py` script carries its own
-explicit `sys.path` insert.
+so `~/.local/bin` is on `PATH`. `pixi install` installs the project itself
+editable (`pixi.toml`'s `[pypi-dependencies]`), so `import
+freecad.Shelving.core` resolves to the checkout under `pixi run` / `pixi
+shell` with no separate packaging step: the editable install's `.pth` file
+puts the repo root on `sys.path` at interpreter startup, before pytest's
+own collection or `freecadcmd`'s internal FreeCAD imports run.
 
 ## Tests
 
 `pixi run tests` is the pre-merge gate and what CI runs. In one pass it covers:
 
 - static analysis: `ruff` lint and format, and a strict `mypy` type check;
-- the `shelving.core` unit suite;
+- the `freecad.Shelving.core` unit suite;
 - the `pixi.lock` path guard;
 - the workflow-hardening lint over `.github/workflows/` (see
   [`docs/github-actions-hardening.md`](docs/github-actions-hardening.md));
@@ -65,10 +66,10 @@ checks that need network access.
 ## Glossary
 
 The layout vocabulary and how each term maps onto the code in
-`shelving.core`, which follows
+`freecad.Shelving.core`, which follows
 [`docs/scope-and-design.md`](docs/scope-and-design.md).
 
-- **Unit**: a shelving unit. `Unit` in `shelving.core.layout` holds
+- **Unit**: a shelving unit. `Unit` in `freecad.Shelving.core.layout` holds
   the outer `size_mm`, a `default_material`, a root `Region`, and a
   persistent `id`.
   There is no distinguished shell: the outermost boards of the outermost
@@ -105,7 +106,7 @@ The layout vocabulary and how each term maps onto the code in
   quoted top face to top face; the solver resolves it to a clear size before
   distributing.
 - **Catalog**: the material table. `Catalog` in
-  `shelving.core.materials` maps a `MaterialId` to a `MaterialEntry`.
+  `freecad.Shelving.core.materials` maps a `MaterialId` to a `MaterialEntry`.
 - **Material entry**: one stock record. `MaterialEntry` carries `id`, `name`,
   `thickness_mm`, `material_type`, and an optional `nominal_thickness` label.
   The solver resolves a `MaterialId` to `thickness_mm`.

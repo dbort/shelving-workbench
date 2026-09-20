@@ -1,13 +1,51 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "shelving-workbench"
+version = "0.0.1"
+description = "Parametric shelving workbench for FreeCAD 1.0, with a pure-Python layout core."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Dave Bort", email = "freecad@dbort.com" }]
+
+[project.urls]
+Repository = "https://github.com/dbort/shelving-workbench"
+
+[tool.hatch.build.targets.wheel]
+packages = ["freecad"]
+
 [tool.ruff]
 target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
+[tool.ruff.lint.isort]
+# FreeCAD's runtime modules are C extensions with no source in this tree. On a
+# case-insensitive filesystem ruff resolves `import FreeCAD` to the `freecad/`
+# namespace-package directory and files it as first-party, so an import order
+# that passes on a developer's Mac fails I001 on the case-sensitive CI runner.
+# Pinning the classification makes the grouping identical on both.
+known-third-party = ["FreeCAD", "FreeCADGui", "Part"]
+
 [tool.mypy]
 strict = true
 files = [
-    "shelving/",
+    "freecad/",
     "tools/",
     "tests/",
 ]
+# `freecad/` deliberately carries no `__init__.py` (a PEP 420 namespace-package
+# portion, see the wheel-packaging comment above), so mypy's default file-to-
+# module mapping (walk up through `__init__.py`-bearing ancestors) computes
+# `Shelving.core.X` for a source file here while also computing
+# `freecad.Shelving.core.X` for the same file via an import elsewhere,
+# raising "Source file found twice under different module names". Explicit
+# package bases fixes this: each source root below (`freecad/`, the repo
+# root implied by these relative paths) is used to compute module names
+# directly, rather than only the nearest `__init__.py` ancestor.
+explicit_package_bases = true
+mypy_path = "."

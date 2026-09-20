@@ -1,8 +1,9 @@
 """Build a sample stepped ``Unit``, solve it, expand it, and print the result.
 
 Run through the pixi environment, or directly with ``python3``; either way
-this script's own ``sys.path`` insert below resolves ``shelving`` from the
-checkout, no packaging step involved:
+``freecad.Shelving.core`` resolves from the checkout via the project's
+editable install (`pixi.toml`'s `[pypi-dependencies]`), which puts the repo
+root on `sys.path` before this script's own imports run:
 
     pixi run demo
     pixi run demo -- --svg out.svg
@@ -24,20 +25,33 @@ import os
 import pathlib
 import sys
 
-# Run as a script (not via pytest), sys.path[0] is this file's own directory
-# (`tools/`), not the repo root, so this insert is the sole mechanism that
-# resolves `shelving` from the checkout; nothing else puts the repo root on
-# the path.
+# Defensive against someone running this script outside `pixi run`/`pixi
+# shell` (e.g. a bare venv with the editable install skipped): the editable
+# install's `.pth` file is what resolves `freecad.Shelving.core` in the
+# normal case (verified this session), so this insert is redundant coverage,
+# not the primary mechanism.
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _REPO_ROOT)
 
-from shelving.core.expand import (  # noqa: E402
+# `freecad/Shelving/` living under a `freecad` namespace-package portion
+# means importing anything under it resolves the installed FreeCAD
+# distribution's own `freecad/__init__.py` first (a regular package always
+# wins over a namespace-portion directory of the same name). That file
+# falls back to guessing its own lib directory and prints a diagnostic line
+# to stdout whenever `PATH_TO_FREECAD_LIBDIR` is unset — verified directly:
+# without this, `pixi run demo`'s first line of output was that diagnostic,
+# not the catalog header below. Setting it to this interpreter's own lib
+# directory (what the fallback guesses anyway, for the pixi-provided
+# interpreter) makes the import resolve the same FreeCAD build silently.
+os.environ.setdefault("PATH_TO_FREECAD_LIBDIR", os.path.join(sys.prefix, "lib"))
+
+from freecad.Shelving.core.expand import (  # noqa: E402
     BoardSpec,
     expand,
     total_volume_mm3,
 )
-from shelving.core.geometry import Space, Vec3  # noqa: E402
-from shelving.core.layout import (  # noqa: E402
+from freecad.Shelving.core.geometry import Space, Vec3  # noqa: E402
+from freecad.Shelving.core.layout import (  # noqa: E402
     Axis,
     Bay,
     Board,
@@ -50,13 +64,13 @@ from shelving.core.layout import (  # noqa: E402
     Unit,
     Void,
 )
-from shelving.core.materials import (  # noqa: E402
+from freecad.Shelving.core.materials import (  # noqa: E402
     Catalog,
     MaterialEntry,
     MaterialId,
 )
-from shelving.core.solver import solve  # noqa: E402
-from shelving.core.svg import to_svg  # noqa: E402
+from freecad.Shelving.core.solver import solve  # noqa: E402
+from freecad.Shelving.core.svg import to_svg  # noqa: E402
 
 PLY18 = MaterialId("ply18")
 MDF12 = MaterialId("mdf12")

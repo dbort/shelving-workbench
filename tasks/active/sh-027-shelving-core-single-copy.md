@@ -1,8 +1,8 @@
 ---
 id: sh-027
 title: "Move to freecad/Shelving/ (PEP 420 portion) with pip/uv installability restored"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 2
 ---
 
@@ -36,20 +36,20 @@ session), the `PYTHONPATH` activation-env setting.
 - [ ] User sign-off
 
 ## Must Have
-- [ ] `pixi run tests` green.
-- [ ] `freecad/Shelving/` exists (capital `S`, matching `package.xml`'s
+- [x] `pixi run tests` green.
+- [x] `freecad/Shelving/` exists (capital `S`, matching `package.xml`'s
       `<name>Shelving</name>`), moved from the current `shelving/` via
       `git mv` preserving history: `freecad/Shelving/core/` (with
       `freecad/Shelving/core/tests/`), `freecad/Shelving/commands/`,
       `freecad/Shelving/container.py`, `freecad/Shelving/default_catalog.py`,
       `freecad/Shelving/init_gui.py`, `freecad/Shelving/resources/`, and
       anything else currently under `shelving/`.
-- [ ] `freecad/` itself has no `__init__.py` and no other file directly in
+- [x] `freecad/` itself has no `__init__.py` and no other file directly in
       it — only the `Shelving/` subdirectory. This is load-bearing, not
       cosmetic: it is what makes `freecad/` a PEP 420 namespace-package
       portion instead of a regular package that collides with FreeCAD's own
       installed `freecad/__init__.py` the way the pre-this-task layout did.
-- [ ] Every import of the moved package, inside it and in every consumer,
+- [x] Every import of the moved package, inside it and in every consumer,
       uses the `freecad.Shelving.` prefix: `import freecad.Shelving.core.X`,
       `from freecad.Shelving.core.X import Y`,
       `from freecad.Shelving.container import Z`, and so on. `git grep -n
@@ -57,7 +57,7 @@ session), the `PYTHONPATH` activation-env setting.
       shelving\.init_gui\|shelving\.commands'` outside `tasks/`, `pixi.lock`,
       and historical friction-log narratives, with no `freecad.` prefix
       immediately before the match, returns nothing.
-- [ ] `pyproject.toml` has `[build-system]` (hatchling), `[project]`
+- [x] `pyproject.toml` has `[build-system]` (hatchling), `[project]`
       (restored, matching what existed before the prior round deleted it —
       confirm against `git show main:pyproject.toml` or an earlier commit
       rather than re-typing it from memory), and
@@ -70,16 +70,16 @@ session), the `PYTHONPATH` activation-env setting.
       `freecad/Shelving/...` before trusting it. `[tool.ruff]` and
       `[tool.mypy]` remain; `[tool.mypy]`'s `files` list reads
       `["freecad/", "tools/", "tests/"]`.
-- [ ] `pyproject.toml`'s `[tool.ruff.lint.isort]` `known-third-party` pin
+- [x] `pyproject.toml`'s `[tool.ruff.lint.isort]` `known-third-party` pin
       (`["FreeCAD", "FreeCADGui", "Part"]`) and its comment about
       `import FreeCAD` case-insensitively resolving to this repo's own
       `freecad/` directory are restored: the case-insensitive collision risk
       the comment describes returns the moment a real `freecad/` directory
       exists in the repo again, regardless of what's inside it.
-- [ ] `pixi.toml`'s `[pypi-dependencies]` table has
+- [x] `pixi.toml`'s `[pypi-dependencies]` table has
       `shelving-workbench = { path = ".", editable = true }` restored
       alongside `freecad-stubs`.
-- [ ] Whether `pixi.toml` also needs `[activation.env] PYTHONPATH =
+- [x] Whether `pixi.toml` also needs `[activation.env] PYTHONPATH =
       "$PIXI_PROJECT_ROOT"` restored is a verified fact, not an assumption:
       with only the editable install in place (no `PYTHONPATH`), run
       `pixi run tests` and separately `freecadcmd tools/freecad_scan_smoke.py`
@@ -94,7 +94,12 @@ session), the `PYTHONPATH` activation-env setting.
       `.pth` timing wasn't sufficient — don't restore it reflexively on the
       assumption it's still needed, and don't state a reason that isn't the
       one actually observed.
-- [ ] `tools/freecad_scan_smoke.py`: drop the `import freecad` /
+
+      VERIFIED: editable install alone is sufficient. `pixi run pytest
+      freecad/Shelving/core tests` (173 passed) and
+      `freecadcmd tools/freecad_scan_smoke.py` (9 passed) both succeed with
+      no `PYTHONPATH` set. `[activation.env] PYTHONPATH` was NOT restored.
+- [x] `tools/freecad_scan_smoke.py`: drop the `import freecad` /
       `extend_path` dance. Whether it still needs its own
       `sys.path.insert(0, _REPO_ROOT)` depends on the same verified fact as
       above — if the editable install (plus `PYTHONPATH` if that turned out
@@ -105,11 +110,11 @@ session), the `PYTHONPATH` activation-env setting.
       say so in the docstring) rather than load-bearing. Do not reintroduce
       `extend_path` unless direct verification shows the import still fails
       without it.
-- [ ] `tools/layout_demo.py`: same treatment — retarget imports to
+- [x] `tools/layout_demo.py`: same treatment — retarget imports to
       `freecad.Shelving.core...`, keep the defensive `sys.path.insert`, and
       describe it in the comment as defensive against someone running the
       script outside `pixi run`/`pixi shell`, not as the primary mechanism.
-- [ ] `docs/freecadcmd-notes.md`'s "FreeCAD freezes the `freecad` namespace
+- [x] `docs/freecadcmd-notes.md`'s "FreeCAD freezes the `freecad` namespace
       package's `__path__`" section (deleted by the prior round) is restored
       and rewritten to state the current, verified mechanism precisely: the
       freezing behavior is real and general to FreeCAD, but this repo's
@@ -118,25 +123,25 @@ session), the `PYTHONPATH` activation-env setting.
       that was verified necessary) before FreeCAD's own internal `import
       freecad` ever triggers extend_path's one-time scan — state this as
       the verified reason, not as a guess.
-- [ ] `package.xml`'s `<subdirectory>` reads `freecad/Shelving/` and
+- [x] `package.xml`'s `<subdirectory>` reads `freecad/Shelving/` and
       `<icon>` reads `freecad/Shelving/resources/shelving.svg`.
-- [ ] `README.md`'s Getting Started section restores language describing
+- [x] `README.md`'s Getting Started section restores language describing
       the editable install as the resolution mechanism (correcting the
       prior round's rewrite), matching whatever was verified necessary for
       `PYTHONPATH` above — do not describe a mechanism that wasn't actually
       verified as required. Its Tests section names `freecad.Shelving.core`.
-- [ ] `docs/manual-qa.md`'s "link the whole repo, not just
+- [x] `docs/manual-qa.md`'s "link the whole repo, not just
       `freecad/Shelving/`" note keeps the reason the prior round gave it
       (`package.xml` lives at the repo root; its `<subdirectory>` field is
       what tells FreeCAD where inside the linked directory the importable
       package sits), retargeted to the new path.
-- [ ] Every other file with a `shelving.`-prefixed (no `freecad.`) import
+- [x] Every other file with a `shelving.`-prefixed (no `freecad.`) import
       reference from the prior round — `.claude/docs/pipeline.md`,
       `docs/roadmap.md`, any `tasks/active/*.md` forward-looking task file —
       is updated to `freecad.Shelving.`/`freecad/Shelving/`.
-- [ ] `docs/architecture.md` and `docs/parametric-model-evaluation.md` are
+- [x] `docs/architecture.md` and `docs/parametric-model-evaluation.md` are
       NOT touched by this task: both are frozen historical records.
-- [ ] A new `.claude/docs/friction-log.md` entry (next id after whatever the
+- [x] A new `.claude/docs/friction-log.md` entry (next id after whatever the
       prior round's `friction-014` left `next_id` at) documents the pytest
       rootdir-insertion finding: pytest's prepend-mode import walks up
       through `__init__.py`-bearing ancestors and inserts the first one
@@ -148,8 +153,18 @@ session), the `PYTHONPATH` activation-env setting.
       `tools/run-tests.sh` uses. Log it whether or not `PYTHONPATH` ended up
       being restored to fix it, since the mechanism is non-obvious either
       way.
-- [ ] `mypy --strict` clean over every changed file.
-- [ ] `pixi run tests`, `python3 tools/layout_demo.py`, and `freecadcmd
+
+      Logged as `friction-015`. Two further findings surfaced while getting
+      `pixi run tests` fully green under this layout are logged alongside it
+      as `friction-016` (mypy's default file-to-module mapping collides on
+      the same namespace-portion shape pytest did, fixed with
+      `explicit_package_bases = true` / `mypy_path = "."`) and `friction-017`
+      (importing anything under `freecad.` unconditionally imports the
+      installed FreeCAD distribution's real `FreeCAD` App module as a side
+      effect, which broke `test_no_freecad.py`'s dynamic `sys.modules` check
+      and printed a diagnostic line ahead of `pixi run demo`'s own output).
+- [x] `mypy --strict` clean over every changed file.
+- [x] `pixi run tests`, `python3 tools/layout_demo.py`, and `freecadcmd
       tools/freecad_scan_smoke.py` are each run directly and confirmed
       green/exit-0, not only inferred from `pixi run tests` passing.
 
@@ -227,32 +242,47 @@ assume" checks in Must Have (the `PYTHONPATH` necessity and the hatchling
 wheel build), which are themselves verification steps this task performs
 along the way, not deferred to the end.
 
-- [ ] **Step 1** (`shelving/` -> `freecad/Shelving/`): `git mv shelving
+- [x] **Step 1** (`shelving/` -> `freecad/Shelving/`): `git mv shelving
       freecad/Shelving`, no `__init__.py` created directly under `freecad/`.
       Rewrite every `shelving.X` / `from shelving...` import, inside the
       moved package and in every consumer, to the `freecad.Shelving.` form.
-- [ ] **Step 2** (`pyproject.toml`): Restore `[build-system]`, `[project]`
+- [x] **Step 2** (`pyproject.toml`): Restore `[build-system]`, `[project]`
       (matching what existed before the prior round's deletion — check an
       earlier commit rather than re-typing it), `[tool.hatch.build.targets.
       wheel] packages = ["freecad"]`, and the `[tool.ruff.lint.isort]
       known-third-party` pin with its comment. Retarget `[tool.mypy]`'s
       `files` to `freecad/`. Build the wheel and inspect its contents to
       confirm the namespace-portion `freecad/` packages correctly.
-- [ ] **Step 3** (`pixi.toml`): Restore the `shelving-workbench = { path =
+
+      `explicit_package_bases = true` / `mypy_path = "."` also added to
+      `[tool.mypy]`: without it, mypy raised "Source file found twice under
+      different module names" for the same reason pytest's rootdir walk did
+      (friction-016).
+- [x] **Step 3** (`pixi.toml`): Restore the `shelving-workbench = { path =
       ".", editable = true }` entry under `[pypi-dependencies]`. Run the
       "verify, don't assume" `PYTHONPATH` check from Must Have; restore
       `[activation.env] PYTHONPATH = "$PIXI_PROJECT_ROOT"` only if that
       check shows it's still needed, with a comment stating the actually
       observed reason.
-- [ ] **Step 4** (`tools/freecad_scan_smoke.py`, `tools/layout_demo.py`):
+- [x] **Step 4** (`tools/freecad_scan_smoke.py`, `tools/layout_demo.py`):
       Retarget imports to `freecad.Shelving.core...`. Drop
       `freecad_scan_smoke.py`'s `extend_path`/`import freecad` dance. Keep
       both scripts' defensive `sys.path.insert`, with docstrings/comments
       describing them as defensive rather than load-bearing, consistent
       with whatever Step 3 found about `PYTHONPATH`.
-- [ ] **Step 5** (`package.xml`): Update `<subdirectory>` and `<icon>` to
+
+      `tools/layout_demo.py` also sets `PATH_TO_FREECAD_LIBDIR` before its
+      imports: without it, the installed FreeCAD distribution's own
+      `freecad/__init__.py` printed a diagnostic line ahead of the demo's
+      own output the first time a plain-Python process imported anything
+      under `freecad.` (friction-017). `freecad/Shelving/core/tests/
+      test_no_freecad.py`'s dynamic check was narrowed to `FreeCADGui` only
+      for the same reason: `FreeCAD` itself is unconditionally in
+      `sys.modules` by the time that test runs, as a structural consequence
+      of the namespace-portion layout, not of anything `core` imports.
+- [x] **Step 5** (`package.xml`): Update `<subdirectory>` and `<icon>` to
       the `freecad/Shelving/` paths.
-- [ ] **Step 6** (`docs/freecadcmd-notes.md`, `README.md`,
+- [x] **Step 6** (`docs/freecadcmd-notes.md`, `README.md`,
       `docs/manual-qa.md`, `.claude/docs/pipeline.md`, `docs/roadmap.md`,
       remaining `tasks/active/*.md` forward references,
       `.claude/docs/friction-log.md`): Restore and rewrite

@@ -1,5 +1,5 @@
 ---
-next_id: friction-015
+next_id: friction-018
 ---
 
 # Friction log
@@ -219,3 +219,80 @@ Sweeping the log is a human-triggered act, like task sign-off: the user asks for
   in weight from a content change, easy to skim past among many files), or
   this repo's own pre-commit tooling flagged a mode change on a shell script
   under `tools/`.
+
+- `friction-015` - **pytest's rootdir-insertion walk stops at a deliberate
+  namespace-package portion, inserting the wrong directory**: sh-027's move
+  to `freecad/Shelving/` (`freecad/` carrying no `__init__.py` on purpose, a
+  PEP 420 namespace-package portion) broke plain `pytest freecad/Shelving/core
+  tests` (the console-script invocation `tools/run-tests.sh` uses, not `python
+  -m pytest`): collecting a test file under `freecad/Shelving/core/tests/`
+  that does `from freecad.Shelving.core.X import Y` raised `ModuleNotFoundError:
+  No module named 'freecad'`. Pytest's prepend-mode import walks up from the
+  test file through `__init__.py`-bearing ancestors and inserts the first
+  ancestor that lacks one; with `freecad/` lacking one by design, that walk
+  stops one level too shallow and inserts `freecad/` itself, not the repo root
+  above it, so `import freecad` (needed to resolve the dotted name) has
+  nothing to resolve against. Reproduced with the exact invocation shape this
+  repo uses, including collecting an unrelated top-level `tests/` directory in
+  the same run (no help: pytest processes paths in argument order, so the
+  failing import happens before any later argument's insertion). Worked
+  around by restoring the project's editable install (`pixi.toml`'s
+  `[pypi-dependencies]`): its `.pth` file is processed by `site.py` at
+  interpreter startup, before pytest's own collection logic runs, so the repo
+  root is already on `sys.path` by the time the rootdir walk's (wrong)
+  insertion would otherwise matter — confirmed directly, no `PYTHONPATH`
+  needed on top of it. Simpler if: pytest's rootdir walk fell back to the
+  nearest `pyproject.toml`/`setup.cfg` directory (which it does compute
+  separately as `rootdir`, just not for import-mode insertion) when it hits a
+  deliberate namespace-package portion, rather than treating "the first
+  `__init__.py`-less ancestor" as always the right insertion point.
+
+- `friction-016` - **mypy's default file-to-module mapping collides on a
+  namespace-package portion mixed with a `files` list under it**: with
+  `freecad/` carrying no `__init__.py` (again, sh-027's namespace-package
+  portion) and `[tool.mypy] files = ["freecad/", ...]`, `mypy` (strict) failed
+  every file under `freecad/Shelving/` with `Source file found twice under
+  different module names: "Shelving.core.scan" and
+  "freecad.Shelving.core.scan"`: mypy's default walk-up-through-`__init__.py`
+  mapping named the file `Shelving.core.scan` when reached directly from the
+  `files` list (stopping at `freecad/`, the first ancestor without one, the
+  same shape as friction-015's pytest problem), while also naming it
+  `freecad.Shelving.core.scan` when reached through an absolute import
+  elsewhere (resolved via the editable install on the module search path).
+  Two names for one file is a hard mypy error, not a warning. Worked around
+  by adding `explicit_package_bases = true` and `mypy_path = "."` to
+  `[tool.mypy]`, which mypy's own error message named as a resolution
+  ("adjusting `MYPYPATH`") but did not explain further; had to consult mypy's
+  own docs on file-to-module mapping to understand why. Simpler if: the error
+  message linked directly to the namespace-packages section of that doc
+  rather than a generic "running mypy" page, or `--strict` implied
+  `explicit_package_bases` automatically once a `files` entry resolves to a
+  directory with no `__init__.py`.
+
+- `friction-017` - **importing anything under a `freecad.` namespace
+  unconditionally imports the real `FreeCAD` App module as a side effect,
+  breaking an existing "core never imports FreeCAD" test and polluting
+  `stdout`**: sh-027 restored a `freecad/Shelving/` namespace-package portion
+  layout. The *installed* FreeCAD distribution's own `freecad/__init__.py` (a
+  regular package, which always wins `import freecad` resolution over this
+  checkout's namespace-portion directory of the same name) unconditionally
+  imports the real `FreeCAD` App module and, when `PATH_TO_FREECAD_LIBDIR` is
+  unset, prints a diagnostic line to `stdout` the first time this happens in
+  a plain Python process. Two concrete symptoms, both reproduced directly:
+  `freecad/Shelving/core/tests/test_no_freecad.py`'s dynamic check (asserting
+  `"FreeCAD" not in sys.modules` after importing every `core` submodule) now
+  fails unconditionally, since `sys.modules` already carries `FreeCAD` by the
+  time the test body runs, purely from collecting any test module that
+  imports `freecad.Shelving.*` at all, independent of anything `core` itself
+  imports; and `pixi run demo` (`tools/layout_demo.py`) printed
+  `PATH_TO_FREECAD_LIBDIR not specified, using default FreeCAD version in
+  ...` as its literal first line of output, ahead of the demo's own printed
+  catalog. Worked around by narrowing the dynamic test to check `FreeCADGui`
+  only (the GUI-heavy module that has no structural reason to load, unlike
+  `FreeCAD`), with a comment explaining why `FreeCAD` itself is no longer a
+  meaningful thing to assert about there, and by having `tools/layout_demo.py`
+  set `PATH_TO_FREECAD_LIBDIR` to `sys.prefix + "/lib"` before its own
+  imports. Simpler if: FreeCAD's Addon-Academy "modern addon layout" guide
+  (the source for this layout) documented this consequence of nesting under
+  `freecad.` up front, since it applies to every addon adopting the same
+  recommended structure, not just this repo.
