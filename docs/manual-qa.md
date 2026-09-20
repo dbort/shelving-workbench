@@ -55,13 +55,40 @@ Notes:
 
 ## M6 — Read a container
 
-Prerequisite: a FreeCAD 1.0 install with this workbench on its addon path, and
-a new document (`Ctrl+N`) with an `App::Part` grouping `Part::Box` objects
-that form a closed unit, for example four boxes as a shell plus a shelf.
+Prerequisite: a FreeCAD 1.0 install with this workbench on its addon path,
+and a document built to a known state so every run of these cases starts
+from the same geometry. `Ctrl+N` for a new document, open the Python
+console (**View → Panels → Python console**), and paste:
+
+```python
+doc = App.ActiveDocument
+part = doc.addObject("App::Part", "TestUnit")
+
+
+def add_box(name, size_mm, corner_mm, angle_deg=0.0):
+    box = doc.addObject("Part::Box", name)
+    box.Length, box.Width, box.Height = size_mm
+    box.Placement = App.Placement(
+        App.Vector(*corner_mm), App.Rotation(App.Vector(0, 0, 1), angle_deg)
+    )
+    part.addObject(box)
+
+
+# A closed 600 x 600 x 300 mm shell with one shelf, the same geometry
+# tools/freecad_scan_smoke.py's _build_shell builds and asserts against.
+add_box("Bottom", (600.0, 300.0, 18.0), (0.0, 0.0, 0.0))
+add_box("Top", (600.0, 300.0, 18.0), (0.0, 0.0, 582.0))
+add_box("LeftSide", (18.0, 300.0, 564.0), (0.0, 0.0, 18.0))
+add_box("RightSide", (18.0, 300.0, 564.0), (582.0, 0.0, 18.0))
+add_box("Shelf", (564.0, 300.0, 18.0), (18.0, 0.0, 291.0))
+doc.recompute()
+```
+
+This is the "TestUnit" `App::Part` the cases below refer to.
 
 ### 1. Scan reports the tree in the report view
 
-1. Select the `App::Part` in the tree.
+1. Select **TestUnit** in the tree.
 2. Run **Scan Unit** from the **Shelving** toolbar or menu.
 
 Expected: the report view prints a plane line naming the depth axis and
@@ -71,21 +98,25 @@ property is written, no object created, no placement moved.
 
 ### 2. A refusal names the offending part and selects it in the 3D view
 
-1. Add a part the walk cannot read as a board inside the same `App::Part`:
-   for example a `PartDesign::Body` whose pad has a notch cut into it, or a
-   box rotated off-axis.
-2. Select the `App::Part` and run **Scan Unit** again.
+1. With **TestUnit** still selected in the tree, paste into the Python
+   console (the same "Skewed" part `tools/freecad_scan_smoke.py` asserts a
+   refusal against, so its expected reason is known ahead of time):
+   ```python
+   add_box("Skewed", (100.0, 50.0, 20.0), (0.0, 400.0, 0.0), angle_deg=30.0)
+   doc.recompute()
+   ```
+2. Select **TestUnit** and run **Scan Unit** again.
 
-Expected: the report view prints a refusal naming the part and the reason
-(for instance "a box minus 1 rectangular cutout(s)" for the notched body).
-The 3D view's selection clears and re-selects only that part, visibly
-highlighted, rather than leaving the whole container selected.
+Expected: the report view prints a refusal naming **Skewed** with the reason
+"not axis-aligned". The 3D view's selection clears and re-selects only
+**Skewed**, visibly highlighted, rather than leaving the whole container
+selected.
 
 ### 3. Export Boxes writes JSON beside the document
 
 1. Save the document if it has not been saved yet (the export path sits next
    to the saved file).
-2. Select the `App::Part` and run **Export Boxes** from the toolbar or menu.
+2. Select **TestUnit** and run **Export Boxes** from the toolbar or menu.
 
 Expected: the report view prints how many boxes and skipped parts were
 written and a path ending in `<label>.boxes.json`; that file exists next to
