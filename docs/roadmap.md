@@ -143,9 +143,10 @@ command, the object smoke, and the renderer are all built on the carcass
 and none of them survive, so porting them would be work done twice. M5
 rebuilds the renderer on the region model.
 
-`spikes/plain_planks/general_model.py` is the worked design; copy from it
-rather than moving it, so the spike keeps running as the fallback for the
-two milestones during which the workbench has no commands.
+`spikes/plain_planks/general_model.py` was the worked design, copied from
+rather than moved, so the spike kept running as the fallback for the two
+milestones during which the workbench had no commands. `spikes/` was
+deleted in M6, once the workbench could do what it had stood in for.
 
 *Verify:* the core suite, including a check that a closed box built from
 ordinary items expands to the geometry the carcass model produced, board
@@ -168,8 +169,9 @@ from space open to the outside. Carries what it cannot read rather than
 dropping it: a missing panel does not fail the scan, it makes enclosed
 bays read as open instead.
 
-`spikes/plain_planks/scan.py` and its fixtures are the worked design; copy
-from them, again leaving the spike intact.
+`spikes/plain_planks/scan.py` and its fixtures were the worked design,
+copied from rather than moved, again leaving the spike intact until M6
+deleted it.
 
 Then the elevation renderer that M4 removed, rebuilt on the region model
 and drawing bays, boards and voids. It lands here rather than with the

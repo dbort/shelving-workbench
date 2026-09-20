@@ -39,16 +39,6 @@ _MIN_EXTENT_MM = 1e-6
 _NORMAL_TOL = 1e-6
 
 
-class _PartObject(Protocol):
-    """The property surface ``read_container`` reads from a leaf part: its
-    own placement and solid. ``freecad-stubs`` types only the generic
-    ``DocumentObject``, which carries neither."""
-
-    Name: str
-    Placement: FreeCAD.Placement
-    Shape: Part.Shape
-
-
 class _ContainerObject(Protocol):
     """The property surface ``_children`` reads to find a container's
     members: ``Group`` (``App::Part``, ``App::DocumentObjectGroup``) or
@@ -116,7 +106,11 @@ def read_container(obj: FreeCAD.DocumentObject) -> tuple[list[Box], list[Skipped
     seen: set[str] = set()
     for child in _children(obj):
         for leaf, placement in _walk(child, FreeCAD.Placement(), seen):
-            reason = _skip_reason(leaf)
+            shape = _shape(leaf)
+            placed_shape = (
+                _placed_shape(shape, placement) if shape is not None else None
+            )
+            reason = _skip_reason(leaf, placed_shape)
             if reason is not None:
                 skipped.append(
                     Skipped(
@@ -127,15 +121,14 @@ def read_container(obj: FreeCAD.DocumentObject) -> tuple[list[Box], list[Skipped
                     )
                 )
                 continue
-            part = cast("_PartObject", leaf)
-            bound = part.Shape.BoundBox
-            corner_mm = placement.multVec(
-                FreeCAD.Vector(bound.XMin, bound.YMin, bound.ZMin)
-            )
+            # A None reason only comes out of _skip_reason when placed_shape
+            # is present and axis-aligned.
+            assert placed_shape is not None
+            bound = placed_shape.BoundBox
             boxes.append(
                 Box(
-                    name=part.Name,
-                    corner_mm=Vec3(corner_mm.x, corner_mm.y, corner_mm.z),
+                    name=leaf.Name,
+                    corner_mm=Vec3(bound.XMin, bound.YMin, bound.ZMin),
                     size_mm=Vec3(bound.XLength, bound.YLength, bound.ZLength),
                 )
             )
@@ -145,6 +138,21 @@ def read_container(obj: FreeCAD.DocumentObject) -> tuple[list[Box], list[Skipped
 def _shape(obj: FreeCAD.DocumentObject) -> Part.Shape | None:
     shape = getattr(obj, "Shape", None)
     return shape if isinstance(shape, Part.Shape) else None
+
+
+def _placed_shape(shape: Part.Shape, placement: FreeCAD.Placement) -> Part.Shape:
+    """``shape`` (already carrying the leaf's own placement, which FreeCAD
+    bakes into ``obj.Shape``) with the ancestor containers' composed
+    ``placement`` applied on top, so its ``BoundBox`` is tight in the
+    selected container's frame rather than the leaf's immediate parent's.
+
+    A corner-only transform is not equivalent: a nested container's rotation
+    swaps which axis an extent belongs to, which only a transform of the
+    whole shape gets right.
+    """
+    placed = shape.copy()
+    placed.Placement = placement.multiply(placed.Placement)
+    return placed
 
 
 def _axis_aligned(shape: Part.Shape) -> bool:
@@ -176,7 +184,7 @@ def _is_box_piece(piece: Part.Shape) -> bool:
     )
 
 
-def _piece_size_mm(piece: Part.Shape) -> str:
+def _piece_size_label(piece: Part.Shape) -> str:
     bound = piece.BoundBox
     return f"{bound.XLength:g} x {bound.YLength:g} x {bound.ZLength:g} mm"
 
@@ -190,18 +198,23 @@ def _bbox_solid(bound: FreeCAD.BoundBox) -> Part.Shape:
     )
 
 
-def _skip_reason(obj: FreeCAD.DocumentObject) -> str | None:
+def _skip_reason(obj: FreeCAD.DocumentObject, shape: Part.Shape | None) -> str | None:
     """``None`` for a plain axis-aligned box; otherwise why ``read_container``
     cannot adopt ``obj`` as a board, in the terms the spike's inspector used:
     a box minus N rectangular cutouts, not axis-aligned, carries no solid, or
     holds N solids.
+
+    ``shape`` is ``obj``'s solid already placed in the selected container's
+    frame (the leaf's own placement composed with any nested containers'), so
+    the axis-alignment check below catches a leaf whose own geometry is a
+    plain box but which a nested container's non-90-degree rotation carries
+    out of alignment, not only a leaf that is skewed on its own.
 
     Subtracts the solid from its own bounding box with a ``Part`` boolean to
     tell a plank-plus-cutouts part from an irregular one; that boolean is
     guarded, so a pathological solid falls back to a plain type-name reason
     rather than breaking the scan.
     """
-    shape = _shape(obj)
     if shape is None or shape.isNull() or shape.Volume <= _VOLUME_TOL_MM3:
         return "carries no solid"
     solids = shape.Solids
@@ -226,6 +239,6 @@ def _skip_reason(obj: FreeCAD.DocumentObject) -> str | None:
         return f"a {obj.TypeId}, not a plain box"
     pieces = leftover.Solids
     if pieces and all(_is_box_piece(piece) for piece in pieces):
-        sizes = ", ".join(_piece_size_mm(piece) for piece in pieces)
+        sizes = ", ".join(_piece_size_label(piece) for piece in pieces)
         return f"a box minus {len(pieces)} rectangular cutout(s): {sizes}"
     return f"a {obj.TypeId}, not a plain box or a box with rectangular cutouts"

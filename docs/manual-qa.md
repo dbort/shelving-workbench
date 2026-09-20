@@ -71,7 +71,7 @@ property is written, no object created, no placement moved.
 
 ### 2. A refusal names the offending part and selects it in the 3D view
 
-1. Add a part the walk cannot read as a board inside the same `App::Part` --
+1. Add a part the walk cannot read as a board inside the same `App::Part`:
    for example a `PartDesign::Body` whose pad has a notch cut into it, or a
    box rotated off-axis.
 2. Select the `App::Part` and run **Scan Unit** again.

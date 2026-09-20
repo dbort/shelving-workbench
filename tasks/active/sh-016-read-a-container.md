@@ -1,8 +1,8 @@
 ---
 id: sh-016
 title: "Read a container"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 1
 blocked_by: [sh-013, sh-014]
 ---

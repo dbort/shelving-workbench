@@ -51,7 +51,10 @@ def _facing_line(result: ScanResult) -> str:
             "right below are a coin flip: the tree is correct either way."
         )
     end = "minimum" if front_at_min else "maximum"
-    why = _FACING_WHY[result.facing_evidence]
+    # scan() only ever pairs NONE with front_at_min is None, but report() is
+    # public over any ScanResult, so an unrecognised pairing gets a neutral
+    # fallback rather than a KeyError.
+    why = _FACING_WHY.get(result.facing_evidence, "unspecified evidence")
     return f"front at the {end} end of the depth axis ({why})"
 
 

@@ -234,11 +234,23 @@ def main() -> None:
     # Move and rotate the container: the records must not change, since
     # read_container excludes the selected container's own placement.
     before = sorted((b.name, b.corner_mm, b.size_mm) for b in boxes)
-    cast("_Placeable", part).Placement = FreeCAD.Placement(
+    shelf = cast("FreeCAD.GeoFeature", doc.getObject("Shelf"))
+    shelf_global_before = shelf.getGlobalPlacement().Base
+    new_placement = FreeCAD.Placement(
         FreeCAD.Vector(1000.0, -500.0, 250.0),
         FreeCAD.Rotation(FreeCAD.Vector(0.0, 0.0, 1.0), 90.0),
     )
+    cast("_Placeable", part).Placement = new_placement
     doc.recompute()
+    # Prove the write actually moved the shelf before trusting "records
+    # unchanged" below as evidence of the exclusion rule, rather than of a
+    # placement write that silently had no effect.
+    assert cast("_Placeable", part).Placement.Base.isEqual(new_placement.Base, _TOL_MM)
+    shelf_global_after = shelf.getGlobalPlacement().Base
+    assert not shelf_global_after.isEqual(shelf_global_before, _TOL_MM), (
+        shelf_global_before,
+        shelf_global_after,
+    )
     moved_boxes, moved_skipped = read_container(part)
     after = sorted((b.name, b.corner_mm, b.size_mm) for b in moved_boxes)
     assert before == after, (before, after)
@@ -286,6 +298,52 @@ def main() -> None:
         _assert_close(got, want)
     assert math.isclose(rotated.corner_mm.x_mm, 660.0, abs_tol=_TOL_MM)
     assert math.isclose(rotated.corner_mm.y_mm, 5.0, abs_tol=_TOL_MM)
+
+    # A box inside a nested App::Part carrying a quarter-turn rotation: the
+    # walk composes the nested container's placement on top of the leaf's
+    # own (only the selected top-level container's placement is excluded),
+    # so the composed rotation must swap the extents the same way a
+    # rotation on the leaf itself does, not just move the minimum corner.
+    raw_nested = doc.addObject("App::Part", "NestedUnit")
+    nested_obj = cast("FreeCAD.DocumentObject", raw_nested)
+    cast("FreeCAD.DocumentObjectGroup", part).addObject(nested_obj)
+    cast("_Placeable", raw_nested).Placement = FreeCAD.Placement(
+        FreeCAD.Vector(500.0, 0.0, 0.0),
+        FreeCAD.Rotation(FreeCAD.Vector(0.0, 0.0, 1.0), 90.0),
+    )
+    _add_box(doc, nested_obj, "NestedBox", (100.0, 50.0, 20.0), (0.0, 0.0, 0.0))
+    doc.recompute()
+    boxes, skipped = read_container(part)
+    assert len(boxes) == 7, len(boxes)
+    assert len(skipped) == 1, skipped
+    nested_box = _box_by_name(boxes, "NestedBox")
+    for got, want in zip(
+        (nested_box.size_mm.x_mm, nested_box.size_mm.y_mm, nested_box.size_mm.z_mm),
+        (50.0, 100.0, 20.0),
+        strict=True,
+    ):
+        _assert_close(got, want)
+    assert math.isclose(nested_box.corner_mm.x_mm, 450.0, abs_tol=_TOL_MM)
+    assert math.isclose(nested_box.corner_mm.y_mm, 0.0, abs_tol=_TOL_MM)
+    assert math.isclose(nested_box.corner_mm.z_mm, 0.0, abs_tol=_TOL_MM)
+
+    # A box skewed off-axis, directly in the selected container: no multiple
+    # of 90 degrees rescues it, so _axis_aligned refuses it by name rather
+    # than adopting a bounding box that does not describe the solid.
+    _add_box(
+        doc,
+        part,
+        "Skewed",
+        (100.0, 50.0, 20.0),
+        (0.0, 400.0, 0.0),
+        rotation=FreeCAD.Rotation(FreeCAD.Vector(0.0, 0.0, 1.0), 30.0),
+    )
+    doc.recompute()
+    boxes, skipped = read_container(part)
+    assert len(boxes) == 7, len(boxes)
+    assert len(skipped) == 2, skipped
+    skewed = next(s for s in skipped if s.name == "Skewed")
+    assert skewed.reason == "not axis-aligned", skewed.reason
 
     print("shelving scan OK")
 
