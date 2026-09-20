@@ -83,6 +83,13 @@ steps was in progress has to rely on naming those steps in its own output
 trying to align them against the progress bar's own position in the
 combined output.
 
+Its last write ends in a bare `\r` with no trailing `\n` (confirmed
+byte-for-byte), so the cursor sits at column 0 of that same line rather
+than moving to a new one. Whatever prints next, a shell prompt included,
+lands on top of it. This looks like output arriving after the process has
+already exited; it has not, it is a cursor-position artifact from a
+missing final newline.
+
 ## FreeCAD freezes the `freecad` namespace package's `__path__`
 
 FreeCAD imports its own `freecad` namespace package during startup and
