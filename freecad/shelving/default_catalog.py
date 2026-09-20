@@ -1,9 +1,9 @@
 """In-code default material catalog for the FreeCAD object layer.
 
 Stopgap: M4 replaces the source of this catalog with a document-level catalog
-object and a "manage catalog" command. Standard library plus vendored core
-only; no `FreeCAD` import, so it loads under a bare `python` as well as inside
-FreeCAD.
+object and a "manage catalog" command. Standard library plus the sibling
+`freecad.shelving.core` package only; no `FreeCAD` import, so it loads under
+a bare `python` as well as inside FreeCAD.
 """
 
 from freecad.shelving.core.materials import (

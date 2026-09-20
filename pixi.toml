@@ -4,6 +4,17 @@ channels = ["conda-forge"]
 # CI runners are x86_64; the dev VM is aarch64. The lock must resolve for both.
 platforms = ["linux-64", "linux-aarch64"]
 
+[activation.env]
+# The conda environment's own `freecad` package (FreeCAD's Python bindings)
+# and this checkout's `freecad/__init__.py` collide by name; whichever is
+# earlier on sys.path wins. The editable install's .pth file only appends
+# the repo root to sys.path, well after site-packages, so without this the
+# conda package wins the race. Prepending PYTHONPATH puts the repo root at
+# sys.path[1] (right after the empty cwd entry), ahead of site-packages, for
+# every interpreter invocation inside this environment (see friction-013,
+# now resolved).
+PYTHONPATH = "$PIXI_PROJECT_ROOT"
+
 [dependencies]
 freecad = "1.0.*"
 python = "3.12.*"

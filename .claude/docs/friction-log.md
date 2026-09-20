@@ -198,30 +198,3 @@ Sweeping the log is a human-triggered act, like task sign-off: the user asks for
   `docs/freecadcmd-notes.md` carried a short "building a PartDesign feature
   headlessly" recipe, since this task is unlikely to be the last one needing
   more than a bare `Part::Box`.
-
-- `friction-013` - **`sys.path.insert` guarded by `if path not in sys.path`
-  silently no-ops when an editable install already appended that same path
-  further back**: sh-027 moved `tools/layout_demo.py`'s imports to
-  `freecad.shelving.core.X` and needed the repo root at the *front* of
-  `sys.path` so this checkout's `freecad/__init__.py` (a thin
-  `pkgutil.extend_path` shim) wins the module-identity race against the
-  conda environment's own `freecad` package (FreeCAD's Python bindings,
-  whose `__init__.py` prints `PATH_TO_FREECAD_LIBDIR not specified...` as a
-  side effect of importing `FreeCAD`). Copying `tools/freecad_scan_smoke.py`'s
-  existing `if _REPO_ROOT not in sys.path: sys.path.insert(0, _REPO_ROOT)`
-  guard looked safe but silently did nothing under `pixi run`/`pixi run
-  python3`: the project's editable install already appends the repo root to
-  the *end* of `sys.path` via a `.pth` file, so the membership check was
-  already true and the insert never ran, leaving the conda package's
-  `freecad` first in line. `tools/freecad_scan_smoke.py`'s copy of the same
-  guard never hit this because `freecadcmd` uses a separate interpreter
-  without that `.pth` entry. Diagnosed with `python3 -X importtime` and
-  `-v`, which showed `FreeCAD` and the site-packages `freecad/__init__.py`
-  loading before this checkout's copy. Worked around by dropping the
-  membership guard and inserting unconditionally. Simpler if: the editable
-  install's `.pth` prepended the repo root instead of appending it (so
-  `sys.path[0]` already carried a checkout's own packages ahead of any
-  same-named installed package), or `docs/freecadcmd-notes.md` /
-  a script-invocation doc called out that "not already in sys.path" is not
-  the same question as "not already ahead of the package it needs to
-  shadow."

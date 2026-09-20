@@ -1,8 +1,8 @@
 ---
 id: sh-027
 title: "Collapse shelving_core to a single copy under freecad/shelving/core/"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 1
 ---
 
