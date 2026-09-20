@@ -56,9 +56,12 @@ Notes:
 ## M6 — Read a container
 
 Prerequisite: a FreeCAD 1.0 install with this workbench on its addon path,
-and a document built to a known state so every run of these cases starts
-from the same geometry. `Ctrl+N` for a new document, open the Python
-console (**View → Panels → Python console**), and paste:
+**View → Panels → Report view** open (`Shelving_Scan` and
+`Shelving_ExportBoxes` print their results there, with `print()`, not to
+the Python console — easy to miss if you only have the console open), and
+a document built to a known state so every run of these cases starts from
+the same geometry. `Ctrl+N` for a new document, open the Python console
+(**View → Panels → Python console**), and paste:
 
 ```python
 doc = App.ActiveDocument
@@ -94,25 +97,58 @@ This is the "TestUnit" `App::Part` the cases below refer to.
 Expected: the report view prints a plane line naming the depth axis and
 overall size, a facing line, and an indented tree of divisions, bays, voids,
 and boards matching the unit's shape. Nothing in the document changes: no
-property is written, no object created, no placement moved.
+property is written, no object created, no placement moved. Exactly (the
+timestamp FreeCAD prepends varies):
 
-### 2. A refusal names the offending part and selects it in the 3D view
+```
+depth axis y, size 600 x 300 x 600 mm
+WARNING: nothing says which side this unit faces, so left and right below are a coin flip: the tree is correct either way.
+
+division along z
+  board Bottom (default material)
+  division along x, 564 mm (clear)
+    board LeftSide (default material)
+    division along z, 564 mm (clear)
+      bay
+      board Shelf (default material)
+      bay
+    board RightSide (default material)
+  board Top (default material)
+```
+
+### 2. A scan can succeed while reporting a skipped part
+
+An unreadable part inside an otherwise-valid container does not by itself
+make the scan fail: `read_container` sets it aside as `Skipped` and
+`scan` still builds a tree from the rest, as long as the rest is still a
+complete, enclosed unit on its own. This case exercises that path, not a
+refusal — case 3 below is the refusal.
 
 1. With **TestUnit** still selected in the tree, paste into the Python
-   console (the same "Skewed" part `tools/freecad_scan_smoke.py` asserts a
-   refusal against, so its expected reason is known ahead of time):
+   console (the same "Skewed" part `tools/freecad_scan_smoke.py` asserts
+   is skipped, so its expected reason is known ahead of time):
    ```python
    add_box("Skewed", (100.0, 50.0, 20.0), (0.0, 400.0, 0.0), angle_deg=30.0)
    doc.recompute()
    ```
 2. Select **TestUnit** and run **Scan Unit** again.
 
-Expected: the report view prints a refusal naming **Skewed** with the reason
-"not axis-aligned". The 3D view's selection clears and re-selects only
-**Skewed**, visibly highlighted, rather than leaving the whole container
-selected.
+Expected: the report view prints the same tree as case 1, with a skipped
+block appended:
+
+```
+skipped (1):
+  Skewed [Part::Box]: not axis-aligned
+```
+
+The document does not change, and the 3D selection is untouched: this is a
+successful scan, not a refusal.
 
 ### 3. Export Boxes writes JSON beside the document
+
+Run this against the document as case 2 left it, before case 4 adds
+anything further — case 4 comes last because nothing needs the document
+afterward.
 
 1. Save the document if it has not been saved yet (the export path sits next
    to the saved file).
@@ -120,5 +156,49 @@ selected.
 
 Expected: the report view prints how many boxes and skipped parts were
 written and a path ending in `<label>.boxes.json`; that file exists next to
-the saved document and contains a `boxes` array and a `skipped` array. This
-works even for the container from case 2, which Scan Unit refuses.
+the saved document. It reads:
+
+```json
+{
+  "boxes": [
+    {"name": "Bottom", "corner_mm": [0.0, 0.0, 0.0], "size_mm": [600.0, 300.0, 18.0]},
+    {"name": "Top", "corner_mm": [0.0, 0.0, 582.0], "size_mm": [600.0, 300.0, 18.0]},
+    {"name": "LeftSide", "corner_mm": [0.0, 0.0, 18.0], "size_mm": [18.0, 300.0, 564.0]},
+    {"name": "RightSide", "corner_mm": [582.0, 0.0, 18.0], "size_mm": [18.0, 300.0, 564.0]},
+    {"name": "Shelf", "corner_mm": [18.0, 0.0, 291.0], "size_mm": [564.0, 300.0, 18.0]}
+  ],
+  "skipped": [
+    {"name": "Skewed", "label": "Skewed", "type": "Part::Box", "reason": "not axis-aligned"}
+  ]
+}
+```
+
+### 4. A refusal names the offending parts and selects them in the 3D view
+
+Unlike case 2, this makes the readable geometry itself invalid, so `scan`
+raises rather than returning a tree with a skipped part.
+
+1. With **TestUnit** still selected, paste into the Python console to add a
+   box occupying the exact same space as `LeftSide` (any solid overlap
+   triggers the same refusal; an exact duplicate is the simplest to get
+   right by hand):
+   ```python
+   add_box("Overlap", (18.0, 300.0, 564.0), (0.0, 0.0, 18.0))
+   doc.recompute()
+   ```
+2. Select **TestUnit** and run **Scan Unit** again.
+
+Expected, based on reading `freecad/shelving/commands/scan.py` and
+`shelving_core/scan.py`'s overlap check — not yet confirmed against a real
+run, unlike cases 1 through 3 above; update this once it has been:
+
+```
+REFUSED: Overlap overlaps LeftSide
+objects: Overlap, LeftSide
+```
+
+The 3D view's selection clears and re-selects **Overlap** and **LeftSide**,
+visibly highlighted, rather than leaving the whole container selected. If
+what you actually see differs from this, that is more informative than the
+prediction; report the discrepancy rather than assuming the prediction was
+right.
