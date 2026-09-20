@@ -35,7 +35,7 @@ ruff check .
 ruff format --check .
 mypy
 shellcheck tools/*.sh
-pytest freecad/shelving/core tests
+pytest shelving/core tests
 bash tools/lint-workflows.sh
 
 # freecad_scan_smoke.py is a real pytest module that calls sys.exit on its

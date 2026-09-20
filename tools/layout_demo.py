@@ -1,8 +1,8 @@
 """Build a sample stepped ``Unit``, solve it, expand it, and print the result.
 
-Run through the pixi environment, which puts ``freecad`` (this checkout's
-namespace package, not FreeCAD's own) on the import path via the editable
-install:
+Run through the pixi environment, or directly with ``python3``; either way
+this script's own ``sys.path`` insert below resolves ``shelving`` from the
+checkout, no packaging step involved:
 
     pixi run demo
     pixi run demo -- --svg out.svg
@@ -24,24 +24,20 @@ import os
 import pathlib
 import sys
 
-# Run as a script (not via pytest), sys.path[0] is this file's own directory,
-# ahead of the checkout root the editable install's `.pth` file appends to
-# the end of sys.path, so without moving the checkout root to the front here
-# the conda environment's own `freecad` package (FreeCAD's Python bindings
-# shim) would be found first and shadow this checkout's `freecad.shelving`
-# subpackage. An unconditional insert, not "if not already in sys.path": the
-# editable install already put it in at the back, so that guard would never
-# fire.
+# Run as a script (not via pytest), sys.path[0] is this file's own directory
+# (`tools/`), not the repo root, so this insert is the sole mechanism that
+# resolves `shelving` from the checkout; nothing else puts the repo root on
+# the path.
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _REPO_ROOT)
 
-from freecad.shelving.core.expand import (  # noqa: E402
+from shelving.core.expand import (  # noqa: E402
     BoardSpec,
     expand,
     total_volume_mm3,
 )
-from freecad.shelving.core.geometry import Space, Vec3  # noqa: E402
-from freecad.shelving.core.layout import (  # noqa: E402
+from shelving.core.geometry import Space, Vec3  # noqa: E402
+from shelving.core.layout import (  # noqa: E402
     Axis,
     Bay,
     Board,
@@ -54,13 +50,13 @@ from freecad.shelving.core.layout import (  # noqa: E402
     Unit,
     Void,
 )
-from freecad.shelving.core.materials import (  # noqa: E402
+from shelving.core.materials import (  # noqa: E402
     Catalog,
     MaterialEntry,
     MaterialId,
 )
-from freecad.shelving.core.solver import solve  # noqa: E402
-from freecad.shelving.core.svg import to_svg  # noqa: E402
+from shelving.core.solver import solve  # noqa: E402
+from shelving.core.svg import to_svg  # noqa: E402
 
 PLY18 = MaterialId("ply18")
 MDF12 = MaterialId("mdf12")

@@ -4,24 +4,13 @@ channels = ["conda-forge"]
 # CI runners are x86_64; the dev VM is aarch64. The lock must resolve for both.
 platforms = ["linux-64", "linux-aarch64"]
 
-[activation.env]
-# The conda environment's own `freecad` package (FreeCAD's Python bindings)
-# and this checkout's `freecad/__init__.py` collide by name; whichever is
-# earlier on sys.path wins. The editable install's .pth file only appends
-# the repo root to sys.path, well after site-packages, so without this the
-# conda package wins the race. Prepending PYTHONPATH puts the repo root at
-# sys.path[1] (right after the empty cwd entry), ahead of site-packages, for
-# every interpreter invocation inside this environment (see friction-013,
-# now resolved).
-PYTHONPATH = "$PIXI_PROJECT_ROOT"
-
 [dependencies]
 freecad = "1.0.*"
 python = "3.12.*"
 ruff = "*"
 mypy = "*"
 pytest = "*"
-# Imported by freecad/shelving/core/tests/test_materials_schema.py to
+# Imported by shelving/core/tests/test_materials_schema.py to
 # validate the layout JSON schema.
 jsonschema = "*"
 # Workflow-lint toolchain. shellcheck is here because actionlint shells out to
@@ -39,11 +28,10 @@ shellcheck = "*"
 tests = "tools/run-tests.sh"
 demo = "python tools/layout_demo.py"
 
-# The project installs itself editable so `import freecad.shelving.core`
-# resolves to the checkout under `pixi run` / `pixi shell` with no per-script
-# sys.path shim. This is the project, not a third-party dependency.
+# Nothing here is pip-installed: `import shelving.core` resolves via
+# pytest's own rootdir insertion for the test suite, and each `tools/*.py`
+# script carries its own explicit `sys.path` insert (see layout_demo.py and
+# freecad_scan_smoke.py). Type-check-only: PEP 561 type stubs for the
+# FreeCAD / App / Part / FreeCADGui modules.
 [pypi-dependencies]
-shelving-workbench = { path = ".", editable = true }
-# Type-check-only: PEP 561 type stubs for the FreeCAD / App / Part / FreeCADGui
-# modules.
 freecad-stubs = "*"

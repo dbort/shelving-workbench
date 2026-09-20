@@ -14,8 +14,8 @@
   <content>
     <workbench>
       <classname>ShelvingWorkbench</classname>
-      <subdirectory>freecad/shelving/</subdirectory>
-      <icon>freecad/shelving/resources/shelving.svg</icon>
+      <subdirectory>shelving/</subdirectory>
+      <icon>shelving/resources/shelving.svg</icon>
     </workbench>
   </content>
 

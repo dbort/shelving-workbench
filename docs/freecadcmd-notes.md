@@ -86,21 +86,6 @@ lands on top of it. This looks like output arriving after the process has
 already exited, but it is a cursor-position artifact from a missing final
 newline.
 
-## FreeCAD freezes the `freecad` namespace package's `__path__`
-
-FreeCAD imports its own `freecad` namespace package during startup and
-fixes its `__path__` at that point. A `freecad.shelving` that lives in a
-source checkout rather than on FreeCAD's addon path is not importable from
-a bare `sys.path` insert alone: the namespace package will not look in the
-new location. After inserting the repo root on `sys.path`, the script also
-has to refresh the namespace path with
-`freecad.__path__ = extend_path(freecad.__path__, "freecad")`.
-
-See `tools/freecad_scan_smoke.py`, which does the `sys.path` insert and the
-`extend_path` refresh together before importing `freecad.shelving`. An
-installed workbench never needs this, because FreeCAD's addon discovery
-puts it on the frozen path in the first place.
-
 ## `import FreeCADGui` returns a stub that lacks `Workbench`
 
 Under `freecadcmd` there is no GUI, but `import FreeCADGui` still succeeds.
@@ -111,7 +96,7 @@ not enough to protect GUI-only code: the import passes and the
 `Gui.Workbench` also has to check `hasattr(Gui, "Workbench")` (or
 `getattr(Gui, "Workbench", None)`) and fall back when it is absent.
 
-See `freecad/shelving/init_gui.py`, which catches `ImportError` and, on the
+See `shelving/init_gui.py`, which catches `ImportError` and, on the
 success path, drops `Gui` to `None` when `hasattr(Gui, "Workbench")` is
 false so the workbench base class and the `addWorkbench` call are skipped.
 `tools/freecad_scan_smoke.py`'s `test_init_gui_imports_cleanly` is what
