@@ -42,8 +42,8 @@ from running a second time: pytest's own collection re-imports the target
 file by path to find its `test_*` functions, and since that reimport
 executes the file's top level again, an unconditional `pytest.main(...)`
 call reached a second time inside that reimport starts a nested pytest
-session recursively (confirmed: it does, and the nested `sys.exit` corrupts
-the outer collection with an `INTERNALERROR`). An `if __name__ ==
+session recursively (confirmed). The nested `sys.exit` corrupts the outer
+collection with an `INTERNALERROR`. An `if __name__ ==
 "__main__":` guard cannot fix this either, per the previous section, and
 would not help even if it worked: pytest's reimport does not reliably set
 `__name__` to a different value than the original run did.
@@ -83,8 +83,8 @@ Its last write ends in a bare `\r` with no trailing `\n` (confirmed
 byte-for-byte), so the cursor sits at column 0 of that same line rather
 than moving to a new one. Whatever prints next, a shell prompt included,
 lands on top of it. This looks like output arriving after the process has
-already exited; it has not, it is a cursor-position artifact from a
-missing final newline.
+already exited, but it is a cursor-position artifact from a missing final
+newline.
 
 ## FreeCAD freezes the `freecad` namespace package's `__path__`
 

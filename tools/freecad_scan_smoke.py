@@ -230,7 +230,7 @@ def _add_notched_body(
 # ---------------------------------------------------------------------------
 # Tests. Every test after test_inactive_without_a_document shares one
 # document via the module-scoped `doc`/`part` fixtures and mutates it
-# further, so they depend on running in file order -- pytest's default,
+# further, so they depend on running in file order: pytest's default,
 # unless a random-order plugin is active. Each test re-derives whatever
 # prior state it needs via read_container(part) or doc.getObject(name)
 # rather than threading return values through fixtures, since the
@@ -434,15 +434,15 @@ def test_skewed_box_refusal(
 # its tests without ever running them, exiting 0 having checked nothing.
 # An unconditional call has a different problem: pytest.main() below has
 # to import this same file again to collect it, and that reimport also
-# reaches this line, recursing (confirmed: it does, and corrupts pytest's
-# own collection). The environment variable survives across that reimport
-# within the one process, so it is what actually breaks the recursion.
+# reaches this line, recursing (confirmed). That corrupts pytest's own
+# collection. The environment variable survives across that reimport
+# within the one process, so it is what breaks the recursion.
 if os.environ.get("_FREECAD_SCAN_SMOKE_RUNNING") != "1":
     os.environ["_FREECAD_SCAN_SMOKE_RUNNING"] = "1"
     # freecadcmd's process teardown does not flush Python's stdout the way
     # a normal interpreter shutdown does, so pytest's own report (in
     # particular the FAILURES section) is silently lost without an
-    # explicit flush before sys.exit -- confirmed by testing with and
+    # explicit flush before sys.exit: confirmed by testing with and
     # without it.
     _exit_code = pytest.main([__file__, "-v"])
     sys.stdout.flush()

@@ -6,10 +6,10 @@ tree presentation only exist once a real `FreeCADGui` is running.
 
 Every case here is a candidate for automation. When a headless path to a check
 becomes possible, move it into the relevant headless `freecadcmd` pytest
-module under `tools/` (run by `pixi run tests`; `tools/freecad_scan_smoke.py`
-for scanning, others as milestones add them) and delete it from this file.
-The commit history keeps the record; this file tracks only what still needs
-a human.
+module under `tools/` (run by `pixi run tests`) and delete it from this file.
+`tools/freecad_scan_smoke.py` is the module for scanning; other milestones
+add their own modules as they need them. The commit history keeps the
+record; this file tracks only what still needs a human.
 
 Each case is numbered steps followed by an explicit expected result, written so
 someone who did not build the feature can run it. Cases are grouped by
@@ -58,12 +58,12 @@ Notes:
 ## M6 — Read a container
 
 Prerequisite: a FreeCAD 1.0 install with this workbench on its addon path,
-**View → Panels → Report view** open (`Shelving_Scan` and
-`Shelving_ExportBoxes` print their results there, with `print()`, not to
-the Python console — easy to miss if you only have the console open), and
-a document built to a known state so every run of these cases starts from
-the same geometry. `Ctrl+N` for a new document, open the Python console
-(**View → Panels → Python console**), and paste:
+**View → Panels → Report view** open, and a document built to a known
+state so every run of these cases starts from the same geometry.
+`Shelving_Scan` and `Shelving_ExportBoxes` print their results to the
+Report view with `print()`, not to the Python console, so keep the Report
+view open: it's easy to miss otherwise. `Ctrl+N` for a new document, open
+the Python console (**View → Panels → Python console**), and paste:
 
 ```python
 doc = App.ActiveDocument
@@ -124,7 +124,7 @@ An unreadable part inside an otherwise-valid container does not by itself
 make the scan fail: `read_container` sets it aside as `Skipped` and
 `scan` still builds a tree from the rest, as long as the rest is still a
 complete, enclosed unit on its own. This case exercises that path, not a
-refusal — case 3 below is the refusal.
+refusal: case 4 below is the refusal.
 
 1. With **TestUnit** still selected in the tree, paste into the Python
    console (the same "Skewed" part `tools/freecad_scan_smoke.py` asserts
@@ -149,7 +149,7 @@ successful scan, not a refusal.
 ### 3. Export Boxes writes JSON beside the document
 
 Run this against the document as case 2 left it, before case 4 adds
-anything further — case 4 comes last because nothing needs the document
+anything further. Case 4 comes last because nothing needs the document
 afterward.
 
 1. Save the document if it has not been saved yet (the export path sits next
