@@ -2,7 +2,7 @@
 id: sh-027
 title: "Collapse shelving_core to a single copy under freecad/shelving/core/"
 current_agent: implementer
-current_phase: planning
+current_phase: implementation
 review_rejections: 0
 ---
 
@@ -20,7 +20,7 @@ one copy that lives inside the workbench itself, at
 `freecad/shelving/core/`, and deletes the vendoring machinery outright.
 
 ## Status
-- [ ] Planning
+- [x] Planning
 - [ ] Implementation
 - [ ] Review
 - [ ] User sign-off
