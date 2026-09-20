@@ -130,3 +130,13 @@ which follows [`docs/scope-and-design.md`](docs/scope-and-design.md).
   board spans, so two boards meeting face to face (an abutting seam, a
   framed wall's double top plate) cut just as cleanly as a single board
   would.
+- **the container's own frame**: how a scanned container's boards are
+  placed. Nested container placements between the selected container and
+  each part compose, but the selected container's own placement is
+  excluded, so a unit reads identically wherever it sits in the document.
+- **Shelving_Scan**: the command id that reads the selected container,
+  scans it, and prints the report, or refuses and selects the objects that
+  defeated it.
+- **Shelving_ExportBoxes**: the command id that writes a selected
+  container's boards and unreadable parts to JSON without scanning, so a
+  unit `Shelving_Scan` refuses can still be captured.

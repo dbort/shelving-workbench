@@ -39,15 +39,21 @@ bash tools/vendor-core.sh --check
 pytest shelving_core tests
 bash tools/lint-workflows.sh
 
-# freecadcmd does not propagate a script's exit status (see
-# docs/freecadcmd-notes.md), so the smoke script's printed OK line is the pass
-# signal, not its return code. Each block prints a `== <script>` header first:
-# freecadcmd's C++ banner and recompute progress interleave with the script's
-# own stdout, so without a header the captured blobs are hard to tell apart.
-printf '== %s\n' freecad_smoke.py
-smoke_output="$(freecadcmd tools/freecad_smoke.py 2>&1)" || true
-printf '%s\n' "$smoke_output"
-if ! printf '%s\n' "$smoke_output" | grep -q "shelving workbench import OK"; then
-	echo "ERROR: freecad_smoke.py did not report success (see output above)." >&2
+# freecad_scan_smoke.py is a real pytest module that calls sys.exit on its
+# own pass/fail status (docs/freecadcmd-notes.md), so its exit code is
+# trustworthy; no output-grepping needed. The header line separates it
+# from the checks above: freecadcmd's C++ banner and recompute progress
+# interleave with the script's own stdout, so without a header the
+# captured blobs are hard to tell apart.
+printf '== %s\n' freecad_scan_smoke.py
+scan_smoke_status=0
+freecadcmd tools/freecad_scan_smoke.py || scan_smoke_status=$?
+# The recompute progress bar's last write ends in a bare carriage return
+# with no newline (docs/freecadcmd-notes.md), so without this, whatever
+# prints next lands on the same line. Unconditional and before the status
+# check, so the failure message below never inherits it either.
+printf '\n'
+if [ "$scan_smoke_status" -ne 0 ]; then
+	echo "ERROR: freecad_scan_smoke.py failed (see output above)." >&2
 	exit 1
 fi

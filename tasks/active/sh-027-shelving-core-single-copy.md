@@ -49,7 +49,7 @@ one copy that lives inside the workbench itself, at
 - [ ] Every consumer outside the moved package imports from
       `freecad.shelving.core`, not `shelving_core`:
       `freecad/shelving/default_catalog.py`, `freecad/shelving/__init__.py`'s
-      docstring, `tools/freecad_smoke.py`, `tools/layout_demo.py`. If
+      docstring, `tools/freecad_scan_smoke.py`, `tools/layout_demo.py`. If
       `spikes/plain_planks/` still exists at implementation time (it should
       not — see Frontier Advice's sequencing note), update its imports too:
       `carcass_model.py`, `freecad_spike.py`, `general_model.py`, `scan.py`,
@@ -58,7 +58,7 @@ one copy that lives inside the workbench itself, at
       `freecad`, not `shelving_core`, so `import freecad.shelving.core...`
       resolves the same way `import shelving_core` did today for
       non-pytest script invocations (`tools/layout_demo.py`,
-      `tools/freecad_smoke.py`). `[tool.mypy]`'s `files` list and the
+      `tools/freecad_scan_smoke.py`). `[tool.mypy]`'s `files` list and the
       vendor-path `exclude`/override block are retargeted to the new
       location; the vendor-specific override is deleted outright, since
       there is no second copy left to skip.
@@ -118,15 +118,20 @@ now-meaningless constraint, so delete it along with the convention it
 enforced.
 
 PACKAGING MECHANICS, not a preference, a consequence of the location
-choice. `tools/layout_demo.py` and `tools/freecad_smoke.py` resolve their
-imports today via the editable pip install
+choice. `tools/layout_demo.py` and `tools/freecad_scan_smoke.py` resolve
+their imports today via the editable pip install
 (`pyproject.toml`'s `packages = ["shelving_core"]`), not via pytest's
-rootdir path insertion, which only covers pytest-collected files. Switch
-that to `packages = ["freecad"]` so `freecad.shelving.core...` resolves the
-same way for these non-pytest script invocations. Verify this by actually
-running both scripts directly (`python3 tools/layout_demo.py`,
-`freecadcmd tools/freecad_smoke.py`, not just `pytest`), since a
-pytest-only check would not catch this class of breakage.
+rootdir path insertion, which only covers pytest-collected files.
+`tools/freecad_scan_smoke.py` self-invokes pytest, but its own top-level
+imports run when `freecadcmd` first execs it, before `pytest.main()` is
+ever called, so pytest's own path handling is not yet in play at that
+point either; the same packaging concern applies to it as to any other
+`freecadcmd`-run script. Switch `packages` to `["freecad"]` so
+`freecad.shelving.core...` resolves the same way for these non-pytest
+script invocations. Verify this by actually running both scripts directly
+(`python3 tools/layout_demo.py`, `freecadcmd tools/freecad_scan_smoke.py`,
+not just `pytest`), since a pytest-only check would not catch this class
+of breakage.
 
 STANDING OBLIGATIONS (`CLAUDE.md`). Typed Python already governs this
 codebase throughout; no new bare `Any` or bare containers introduced by
@@ -151,7 +156,7 @@ required green once, after the last step, not after each one.
       `tools/run-tests.sh`): Delete the vendor tree and the sync script.
       Remove the `vendor-core.sh --check` step from `run-tests.sh`.
 - [ ] **Step 3** (`freecad/shelving/default_catalog.py`,
-      `freecad/shelving/__init__.py`, `tools/freecad_smoke.py`,
+      `freecad/shelving/__init__.py`, `tools/freecad_scan_smoke.py`,
       `tools/layout_demo.py`, and `spikes/plain_planks/`'s six files if
       still present): Update every remaining `shelving_core` import to
       `freecad.shelving.core`.
