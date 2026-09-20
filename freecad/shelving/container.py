@@ -56,7 +56,7 @@ def _children(obj: FreeCAD.DocumentObject) -> list[FreeCAD.DocumentObject]:
     container = cast("_ContainerObject", obj)
     # LinkGroup children live in ElementList, Part and plain groups use
     # Group; neither attribute exists on every container type, so this
-    # reads whichever one the concrete object actually carries.
+    # reads whichever one the concrete object carries.
     for attr in ("ElementList", "Group"):
         members = getattr(container, attr, None)
         if isinstance(members, list):
@@ -200,20 +200,14 @@ def _bbox_solid(bound: FreeCAD.BoundBox) -> Part.Shape:
 
 def _skip_reason(obj: FreeCAD.DocumentObject, shape: Part.Shape | None) -> str | None:
     """``None`` for a plain axis-aligned box; otherwise why ``read_container``
-    cannot adopt ``obj`` as a board, in the terms the spike's inspector used:
-    a box minus N rectangular cutouts, not axis-aligned, carries no solid, or
-    holds N solids.
+    cannot adopt ``obj`` as a board: a box minus N rectangular cutouts, not
+    axis-aligned, carries no solid, or holds N solids.
 
     ``shape`` is ``obj``'s solid already placed in the selected container's
     frame (the leaf's own placement composed with any nested containers'), so
     the axis-alignment check below catches a leaf whose own geometry is a
     plain box but which a nested container's non-90-degree rotation carries
     out of alignment, not only a leaf that is skewed on its own.
-
-    Subtracts the solid from its own bounding box with a ``Part`` boolean to
-    tell a plank-plus-cutouts part from an irregular one; that boolean is
-    guarded, so a pathological solid falls back to a plain type-name reason
-    rather than breaking the scan.
     """
     if shape is None or shape.isNull() or shape.Volume <= _VOLUME_TOL_MM3:
         return "carries no solid"
@@ -234,6 +228,8 @@ def _skip_reason(obj: FreeCAD.DocumentObject, shape: Part.Shape | None) -> str |
     ):
         return None
     try:
+        # Subtracting the solid from its own bounding box tells a
+        # plank-plus-cutouts part from an irregular one.
         leftover = _bbox_solid(bound).cut(shape)
     except Exception:  # noqa: BLE001 - a pathological solid must not break a scan
         return f"a {obj.TypeId}, not a plain box"

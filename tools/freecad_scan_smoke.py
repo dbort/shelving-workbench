@@ -242,7 +242,7 @@ def main() -> None:
     )
     cast("_Placeable", part).Placement = new_placement
     doc.recompute()
-    # Prove the write actually moved the shelf before trusting "records
+    # Prove the write moved the shelf before trusting "records
     # unchanged" below as evidence of the exclusion rule, rather than of a
     # placement write that silently had no effect.
     assert cast("_Placeable", part).Placement.Base.isEqual(new_placement.Base, _TOL_MM)
