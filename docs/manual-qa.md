@@ -188,17 +188,13 @@ raises rather than returning a tree with a skipped part.
    ```
 2. Select **TestUnit** and run **Scan Unit** again.
 
-Expected, based on reading `freecad/shelving/commands/scan.py` and
-`shelving_core/scan.py`'s overlap check — not yet confirmed against a real
-run, unlike cases 1 through 3 above; update this once it has been:
+Expected:
 
 ```
 REFUSED: Overlap overlaps LeftSide
 objects: Overlap, LeftSide
 ```
 
-The 3D view's selection clears and re-selects **Overlap** and **LeftSide**,
-visibly highlighted, rather than leaving the whole container selected. If
-what you actually see differs from this, that is more informative than the
-prediction; report the discrepancy rather than assuming the prediction was
-right.
+The 3D view's selection clears and re-selects both **Overlap** and
+**LeftSide**, visibly highlighted, rather than leaving the whole container
+selected.
