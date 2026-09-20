@@ -5,17 +5,83 @@
 behaviors differ from a plain `python script.py` run; most are handled in
 the code cited below.
 
-## The script's exit status is discarded
+## Only an uncaught exception discards the exit status
 
-`freecadcmd script.py` exits 0 regardless of what the script does.
-`sys.exit(N)`, an uncaught exception, and `os._exit(N)` all leave the
-shell with status 0. A headless script that needs to report pass or fail
-must print a marker line on success and have its caller grep stdout for
-that line, because the return code carries no signal.
+`freecadcmd script.py` exits 0 for an uncaught exception, printing an
+`Exception while processing file: ...` line instead of propagating a
+failure code. Both `sys.exit(N)` and `os._exit(N)` are unaffected and
+propagate `N` as the real process exit status (verified directly: both
+were tested against this repo's pinned FreeCAD 1.0.0 build).
 
-`tools/run-tests.sh` does this: it captures the smoke script's output and
-greps for `shelving workbench import OK`, treating a missing marker as
-failure. See the marker that `tools/freecad_smoke.py` prints.
+`tools/freecad_smoke.py` predates this finding and still reports success
+by printing a marker line for its caller to grep, since it never confirmed
+`sys.exit` would work: see `tools/run-tests.sh`, which captures its output
+and greps for `shelving workbench import OK`, treating a missing marker as
+failure. `tools/freecad_scan_smoke.py` uses the newer, more direct
+approach: it is a real pytest module (see the next two sections) whose
+trailing `sys.exit(pytest.main([...]))` makes the process exit status
+itself the pass/fail signal, so `tools/run-tests.sh` checks that directly
+instead of grepping.
+
+## A run script's `__name__` is its filename stem, not `"__main__"`
+
+`freecadcmd script.py` executes the script as a module named after its own
+filename (`script`, from `script.py`), not `"__main__"` the way a plain
+`python script.py` run does (verified directly). An
+`if __name__ == "__main__":` guard at the bottom of a `freecadcmd`-run
+script silently never fires: the guarded code never runs, and the script
+still exits 0, having done nothing past defining whatever came before the
+guard.
+
+Consequence for `tools/freecad_scan_smoke.py`, which self-invokes pytest
+(see the next section): its entry point runs unconditionally at module
+level, with no `__name__` guard of any kind, for exactly this reason.
+
+## A self-invoking pytest module must guard against collecting itself
+
+A `freecadcmd` script that turns around and calls
+`pytest.main([__file__, ...])` on itself, to get real pytest reporting
+instead of a hand-rolled assert-and-marker script, has to stop that call
+from running a second time: pytest's own collection re-imports the target
+file by path to find its `test_*` functions, and since that reimport
+executes the file's top level again, an unconditional `pytest.main(...)`
+call reached a second time inside that reimport starts a nested pytest
+session recursively (confirmed: it does, and the nested `sys.exit` corrupts
+the outer collection with an `INTERNALERROR`). An `if __name__ ==
+"__main__":` guard cannot fix this either, per the previous section, and
+would not help even if it worked: pytest's reimport does not reliably set
+`__name__` to a different value than the original run did.
+
+`tools/freecad_scan_smoke.py` breaks the cycle with an environment
+variable set just before the real `pytest.main()` call: the variable
+survives the reimport within the one process, so the second entry into
+that code path sees it already set and skips calling `pytest.main()`
+again.
+
+## `freecadcmd`'s own stdout buffering can hide a script's last output
+
+A `freecadcmd` script's process teardown does not flush Python's stdout
+buffer the way a normal interpreter shutdown does. Output written just
+before the script's final `sys.exit(N)` can be silently lost, including an
+entire pytest `FAILURES` section with the actual traceback (confirmed:
+reproduced with and without an explicit flush). Call `sys.stdout.flush()`
+immediately before any exit call that ends a `freecadcmd` script, not just
+on the success path.
+
+## The recompute progress bar cannot be suppressed or made to interleave
+
+`doc.recompute()` writes `Recompute......` progress text through a channel
+that bypasses both Python-level and OS-level output control: neither
+`contextlib.redirect_stdout`, nor `os.dup2` on file descriptors 1 and 2
+around the call, nor `sys.stdout.reconfigure(line_buffering=True)` changes
+when or whether it appears (all confirmed directly). It reliably shows up
+in one block after a script's own output, not interleaved with it,
+regardless of how many separate `recompute()` calls happened. A script
+that wants to correlate a failure with which of several recompute-heavy
+steps was in progress has to rely on naming those steps in its own output
+(a pytest test name, in `tools/freecad_scan_smoke.py`'s case) rather than
+trying to align them against the progress bar's own position in the
+combined output.
 
 ## FreeCAD freezes the `freecad` namespace package's `__path__`
 

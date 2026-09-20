@@ -39,11 +39,16 @@ bash tools/vendor-core.sh --check
 pytest shelving_core tests
 bash tools/lint-workflows.sh
 
-# freecadcmd does not propagate a script's exit status (see
-# docs/freecadcmd-notes.md), so the smoke script's printed OK line is the pass
-# signal, not its return code. Each block prints a `== <script>` header first:
-# freecadcmd's C++ banner and recompute progress interleave with the script's
-# own stdout, so without a header the captured blobs are hard to tell apart.
+# freecadcmd swallows an uncaught exception's failure rather than exiting
+# non-zero for it, but does propagate an explicit sys.exit(N) (see
+# docs/freecadcmd-notes.md). freecad_smoke.py predates that finding and
+# still signals success with a printed marker line instead, so it still
+# needs a captured-output grep; freecad_scan_smoke.py is a real pytest
+# module that calls sys.exit on its own pass/fail status, so its actual
+# exit code is trustworthy. Each block prints a `== <script>` header
+# first: freecadcmd's C++ banner and recompute progress interleave with
+# the script's own stdout, so without a header the captured blobs are
+# hard to tell apart.
 printf '== %s\n' freecad_smoke.py
 smoke_output="$(freecadcmd tools/freecad_smoke.py 2>&1)" || true
 printf '%s\n' "$smoke_output"
@@ -53,9 +58,7 @@ if ! printf '%s\n' "$smoke_output" | grep -q "shelving workbench import OK"; the
 fi
 
 printf '== %s\n' freecad_scan_smoke.py
-scan_smoke_output="$(freecadcmd tools/freecad_scan_smoke.py 2>&1)" || true
-printf '%s\n' "$scan_smoke_output"
-if ! printf '%s\n' "$scan_smoke_output" | grep -q "shelving scan OK"; then
-	echo "ERROR: freecad_scan_smoke.py did not report success (see output above)." >&2
+if ! freecadcmd tools/freecad_scan_smoke.py; then
+	echo "ERROR: freecad_scan_smoke.py failed (see output above)." >&2
 	exit 1
 fi

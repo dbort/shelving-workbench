@@ -1,24 +1,33 @@
 """Headless functional check for reading a container into the core scanner.
 
-Run via ``freecadcmd tools/freecad_scan_smoke.py``. It builds a closed unit
-in a real FreeCAD document, reads it with ``read_container``, scans it, and
+A real pytest module, not a hand-rolled assert-and-marker script: run via
+``freecadcmd tools/freecad_scan_smoke.py``, which (see the bottom of this
+file) turns around and invokes pytest against itself, so a failure gets a
+named test, a fixture-argument dump, and a full traceback instead of a bare
+``AssertionError`` somewhere in a linear script. It builds a closed unit in
+a real FreeCAD document, reads it with ``read_container``, scans it, and
 asserts the geometry, the region tree, and the container's-own-frame and
 solid-classification rules a unit test cannot exercise without a FreeCAD
-interpreter. ``freecadcmd`` discards a script's exit status, so the final
-``shelving scan OK`` line is the only success signal; ``tools/run-tests.sh``
-greps for it.
+interpreter.
+
+FreeCAD's own recompute progress bar ("Recompute......") writes through a
+channel that bypasses ordinary stdout/stderr redirection and Python-level
+buffering control alike (verified: neither ``os.dup2`` on fd 1/2 around
+``doc.recompute()``, nor ``sys.stdout.reconfigure(line_buffering=True)``,
+changes when it appears), so it cannot be made to interleave with this
+module's own output or be suppressed from here. It reliably appears after
+everything this module prints, in one block.
 
 The ``sys.path`` insert plus ``freecad.__path__`` refresh mirror
 ``tools/freecad_smoke.py``, which explains why they are needed.
 """
 
-import functools
 import math
 import os
 import sys
-from collections.abc import Callable
+from collections.abc import Iterator
 from pkgutil import extend_path
-from typing import ParamSpec, Protocol, TypeVar, cast
+from typing import Protocol, cast
 
 import freecad
 
@@ -29,6 +38,7 @@ freecad.__path__ = extend_path(freecad.__path__, "freecad")
 
 import FreeCAD  # noqa: E402
 import Part  # noqa: E402
+import pytest  # noqa: E402
 
 from freecad.shelving.commands.export_boxes import ExportBoxesCommand  # noqa: E402
 from freecad.shelving.commands.scan import ScanCommand  # noqa: E402
@@ -46,27 +56,6 @@ _TOL_MM = 1e-6
 _THICKNESS_MM = 18.0
 _SIZE_MM = 600.0
 _DEPTH_MM = 300.0
-
-_P = ParamSpec("_P")
-_T = TypeVar("_T")
-
-
-def _case(func: Callable[_P, _T]) -> Callable[_P, _T]:
-    """Print ``func``'s name before running it.
-
-    FreeCAD's recompute progress bar writes through a channel plain
-    stdout/stderr redirection does not reach (verified: ``os.dup2`` on both
-    fd 1 and fd 2 around ``doc.recompute()`` does not suppress it), so this
-    is what makes a failure's traceback legible against the interleaved
-    progress noise, rather than trying to hide the noise itself.
-    """
-
-    @functools.wraps(func)
-    def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _T:
-        print(f"-- case: {func.__name__.removeprefix('_case_').replace('_', ' ')}")
-        return func(*args, **kwargs)
-
-    return wrapper
 
 
 class _Placeable(Protocol):
@@ -102,17 +91,6 @@ class _PadFeature(Protocol):
 
     Profile: FreeCAD.DocumentObject
     Length: float
-
-
-@_case
-def _case_inactive_without_a_document() -> None:
-    """Both commands are inactive before any document exists, and active
-    once one does, regardless of whether the GUI ever registered them."""
-    assert FreeCAD.ActiveDocument is None, FreeCAD.ActiveDocument
-    scan_cmd = ScanCommand()
-    export_cmd = ExportBoxesCommand()
-    assert scan_cmd.IsActive() is False
-    assert export_cmd.IsActive() is False
 
 
 def _add_box(
@@ -239,10 +217,43 @@ def _add_notched_body(
     return body
 
 
-@_case
-def _case_closed_shell_with_a_shelf(
+# ---------------------------------------------------------------------------
+# Tests. Every test after test_inactive_without_a_document shares one
+# document via the module-scoped `doc`/`part` fixtures and mutates it
+# further, so they depend on running in file order -- pytest's default,
+# unless a random-order plugin is active. Each test re-derives whatever
+# prior state it needs via read_container(part) or doc.getObject(name)
+# rather than threading return values through fixtures, since the
+# document itself is already the shared, authoritative state.
+# ---------------------------------------------------------------------------
+
+
+def test_inactive_without_a_document() -> None:
+    """Both commands are inactive before any document exists, and active
+    once one does, regardless of whether the GUI ever registered them. Runs
+    before the `doc` fixture below creates one."""
+    assert FreeCAD.ActiveDocument is None, FreeCAD.ActiveDocument
+    scan_cmd = ScanCommand()
+    export_cmd = ExportBoxesCommand()
+    assert scan_cmd.IsActive() is False
+    assert export_cmd.IsActive() is False
+
+
+@pytest.fixture(scope="module")
+def doc() -> Iterator[FreeCAD.Document]:
+    document = FreeCAD.newDocument("shelving_scan_smoke")
+    yield document
+    FreeCAD.closeDocument(document.Name)
+
+
+@pytest.fixture(scope="module")
+def part(doc: FreeCAD.Document) -> FreeCAD.DocumentObject:
+    return cast("FreeCAD.DocumentObject", doc.addObject("App::Part", "Unit"))
+
+
+def test_closed_shell_with_a_shelf(
     doc: FreeCAD.Document, part: FreeCAD.DocumentObject
-) -> list[Box]:
+) -> None:
     _build_shell(doc, part)
     doc.recompute()
     boxes, skipped = read_container(part)
@@ -251,15 +262,14 @@ def _case_closed_shell_with_a_shelf(
     _assert_shelf_reads_correctly(boxes)
     result = scan(boxes, DEFAULT_CATALOG, skipped=skipped)
     _assert_shell_tree_shape(result.unit.root)
-    return boxes
 
 
-@_case
-def _case_move_and_rotate_the_container(
-    doc: FreeCAD.Document, part: FreeCAD.DocumentObject, boxes: list[Box]
+def test_move_and_rotate_the_container(
+    doc: FreeCAD.Document, part: FreeCAD.DocumentObject
 ) -> None:
     """The records must not change, since ``read_container`` excludes the
     selected container's own placement."""
+    boxes, _ = read_container(part)
     before = sorted((b.name, b.corner_mm, b.size_mm) for b in boxes)
     shelf = cast("FreeCAD.GeoFeature", doc.getObject("Shelf"))
     shelf_global_before = shelf.getGlobalPlacement().Base
@@ -284,10 +294,9 @@ def _case_move_and_rotate_the_container(
     assert len(moved_skipped) == 0, moved_skipped
 
 
-@_case
-def _case_notched_partdesign_body(
+def test_notched_partdesign_body(
     doc: FreeCAD.Document, part: FreeCAD.DocumentObject
-) -> FreeCAD.DocumentObject:
+) -> None:
     """One ``Skipped`` record naming the box-minus-cutouts reason, not two
     board records."""
     body = _add_notched_body(doc, part)
@@ -297,15 +306,14 @@ def _case_notched_partdesign_body(
     assert skipped[0].name == body.Name
     assert "box minus 1 rectangular cutout" in skipped[0].reason, skipped[0].reason
     assert "50 x 30 x 18 mm" in skipped[0].reason, skipped[0].reason
-    return body
 
 
-@_case
-def _case_notched_body_reached_through_a_second_group(
-    doc: FreeCAD.Document, part: FreeCAD.DocumentObject, body: FreeCAD.DocumentObject
+def test_notched_body_reached_through_a_second_group(
+    doc: FreeCAD.Document, part: FreeCAD.DocumentObject
 ) -> None:
     """The same body reachable through a second group still yields one
     record."""
+    body = cast("FreeCAD.DocumentObject", doc.getObject("NotchedBody"))
     raw_alias = doc.addObject("App::DocumentObjectGroup", "AliasGroup")
     alias_group = cast("FreeCAD.DocumentObject", raw_alias)
     cast("FreeCAD.DocumentObjectGroup", part).addObject(alias_group)
@@ -316,8 +324,7 @@ def _case_notched_body_reached_through_a_second_group(
     assert len(skipped) == 1, skipped
 
 
-@_case
-def _case_box_rotated_a_quarter_turn(
+def test_box_rotated_a_quarter_turn(
     doc: FreeCAD.Document, part: FreeCAD.DocumentObject
 ) -> None:
     """Length/Width swap in the bounding box, and ``read_container`` has to
@@ -331,7 +338,7 @@ def _case_box_rotated_a_quarter_turn(
         rotation=FreeCAD.Rotation(FreeCAD.Vector(0.0, 0.0, 1.0), 90.0),
     )
     doc.recompute()
-    boxes, skipped = read_container(part)
+    boxes, _ = read_container(part)
     assert len(boxes) == 6, len(boxes)
     rotated = _box_by_name(boxes, "Rotated")
     for got, want in zip(
@@ -344,8 +351,7 @@ def _case_box_rotated_a_quarter_turn(
     assert math.isclose(rotated.corner_mm.y_mm, 5.0, abs_tol=_TOL_MM)
 
 
-@_case
-def _case_box_inside_a_nested_rotated_container(
+def test_box_inside_a_nested_rotated_container(
     doc: FreeCAD.Document, part: FreeCAD.DocumentObject
 ) -> None:
     """A box inside a nested ``App::Part`` carrying a quarter-turn rotation:
@@ -377,8 +383,7 @@ def _case_box_inside_a_nested_rotated_container(
     assert math.isclose(nested_box.corner_mm.z_mm, 0.0, abs_tol=_TOL_MM)
 
 
-@_case
-def _case_skewed_box_refusal(
+def test_skewed_box_refusal(
     doc: FreeCAD.Document, part: FreeCAD.DocumentObject
 ) -> None:
     """A box skewed off-axis, directly in the selected container: no
@@ -401,21 +406,22 @@ def _case_skewed_box_refusal(
     assert skewed.reason == "not axis-aligned", skewed.reason
 
 
-def main() -> None:
-    _case_inactive_without_a_document()
-
-    doc = FreeCAD.newDocument("shelving_scan_smoke")
-    part = cast("FreeCAD.DocumentObject", doc.addObject("App::Part", "Unit"))
-
-    boxes = _case_closed_shell_with_a_shelf(doc, part)
-    _case_move_and_rotate_the_container(doc, part, boxes)
-    body = _case_notched_partdesign_body(doc, part)
-    _case_notched_body_reached_through_a_second_group(doc, part, body)
-    _case_box_rotated_a_quarter_turn(doc, part)
-    _case_box_inside_a_nested_rotated_container(doc, part)
-    _case_skewed_box_refusal(doc, part)
-
-    print("shelving scan OK")
-
-
-main()
+# Not an `if __name__ == "__main__":` guard: freecadcmd sets a run script's
+# __name__ to its filename stem, not "__main__" (verified directly), so
+# that guard would silently never fire here, and this file would define
+# its tests without ever running them, exiting 0 having checked nothing.
+# An unconditional call has a different problem: pytest.main() below has
+# to import this same file again to collect it, and that reimport also
+# reaches this line, recursing (confirmed: it does, and corrupts pytest's
+# own collection). The environment variable survives across that reimport
+# within the one process, so it is what actually breaks the recursion.
+if os.environ.get("_FREECAD_SCAN_SMOKE_RUNNING") != "1":
+    os.environ["_FREECAD_SCAN_SMOKE_RUNNING"] = "1"
+    # freecadcmd's process teardown does not flush Python's stdout the way
+    # a normal interpreter shutdown does, so pytest's own report (in
+    # particular the FAILURES section) is silently lost without an
+    # explicit flush before sys.exit -- confirmed by testing with and
+    # without it.
+    _exit_code = pytest.main([__file__, "-v"])
+    sys.stdout.flush()
+    sys.exit(_exit_code)
