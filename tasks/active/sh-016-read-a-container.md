@@ -1,8 +1,8 @@
 ---
 id: sh-016
 title: "Read a container"
-current_agent: reviewer
-current_phase: review
+current_agent: user
+current_phase: user_signoff
 review_rejections: 1
 blocked_by: [sh-013, sh-014]
 ---
@@ -20,7 +20,7 @@ which is how a unit that refuses gets captured for a bug report. Deletes
 ## Status
 - [x] Planning
 - [x] Implementation
-- [ ] Review
+- [x] Review
 - [ ] User sign-off
 
 ## Must Have
