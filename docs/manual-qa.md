@@ -244,16 +244,23 @@ you added other geometry first).
 
 ### 3. Move a board by hand, rescan, and confirm the layout takes the edit up
 
-1. Select one of the side boards and drag it (or edit its `Placement` in the
-   property editor) so it no longer lines up with **Bottom** and **Top**.
+1. Select **Side 1**. In the property editor, expand `Placement` →
+   `Position` and change `x` from `0` to `50`, moving it 50 mm toward the
+   unit's centre. Use this exact axis and direction: at the default size
+   **Side 1** and **Side 2** are captured flush against **Bottom** and
+   **Top** with no slack, so any move along `z` overlaps one of them, and
+   moving **Side 1** *away* from the unit along `x` opens a gap in the
+   shell wider than the scan's clearance tolerance; both refuse instead of
+   demonstrating the reflow this case is about.
 2. Select **ShelvingUnit** and run **Resize Unit** again, entering the exact
    same width, depth, and height as before (or run **Scan Unit** first to
    confirm the moved board is still read correctly, then resize).
 
-Expected: the hand-moved board snaps back into its correct position as part
-of the reapplied layout; the layout reflows around the edit rather than
-preserving the stray placement, since every resize rescans the container
-fresh rather than trusting a cached tree.
+Expected: the hand-moved board snaps back to `x = 0` as part of the
+reapplied layout; the layout reflows around the edit rather than preserving
+the stray placement, since every resize rescans the container fresh rather
+than trusting a cached tree. You do not need to move the board back by
+hand first: running Resize Unit (or Scan Unit) is what corrects it.
 
 ### 4. Put an unrelated box in the container and confirm apply leaves it and says so
 
