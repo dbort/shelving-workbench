@@ -46,9 +46,12 @@ delete the symlink (not its target).
 
 Notes:
 
-- Link the whole repo, not just `freecad/shelving/`. The workbench imports
-  `shelving_core`, and only the repo root has it; until the vendored-core
-  rework lands, `freecad/shelving/vendor/` is not self-contained.
+- Link the whole repo, not just `freecad/Shelving/`. `package.xml` lives at
+  the repo root, and its `<subdirectory>` field is what tells FreeCAD where
+  inside the linked directory the importable workbench package sits;
+  linking only `freecad/Shelving/` would drop `package.xml` (and the
+  Addon-Manager-facing metadata it carries: name, description, icon,
+  license, URLs) from the loaded tree.
 - If **Shelving** does not appear, open **View → Panels → Report view** and the
   Python console and look for an import error. Confirm the link points at the
   directory holding `package.xml`.

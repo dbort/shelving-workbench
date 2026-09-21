@@ -22,45 +22,42 @@ changes when it appears), so it cannot be made to interleave with this
 module's own output or be suppressed from here. It reliably appears after
 everything this module prints, in one block.
 
-The ``sys.path`` insert below adds the repo root so ``freecad.shelving``
-resolves from this checkout. FreeCAD imports its own ``freecad`` namespace
-package during start-up and freezes its ``__path__`` at that point, before
-this script runs, so the plain ``sys.path`` insert alone is not enough:
-the ``freecad.__path__ = extend_path(...)`` call after it refreshes the
-namespace package's own search path to include the checkout too. An
-installed workbench never needs either, because FreeCAD's addon discovery
-puts it on the frozen path in the first place.
+The project's editable install (`pixi.toml`'s `[pypi-dependencies]`) puts
+the repo root on `sys.path` before `freecadcmd`'s own internal `import
+freecad` runs, which is what resolves `freecad.Shelving.core` here
+(verified directly: the imports below work under `freecadcmd` with no
+`sys.path` insert of any kind). The insert below is defensive against
+someone running this file outside `pixi run`/`pixi shell` (where the
+editable install is skipped), not the load-bearing mechanism; an installed
+workbench never needs it either, because FreeCAD's addon discovery puts it
+on the path in the first place.
 """
 
 import math
 import os
 import sys
 from collections.abc import Iterator
-from pkgutil import extend_path
 from typing import Protocol, cast
-
-import freecad
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
-freecad.__path__ = extend_path(freecad.__path__, "freecad")
 
 import FreeCAD  # noqa: E402
 import Part  # noqa: E402
 import pytest  # noqa: E402
 
-from freecad.shelving.commands.export_boxes import ExportBoxesCommand  # noqa: E402
-from freecad.shelving.commands.scan import ScanCommand  # noqa: E402
-from freecad.shelving.container import read_container  # noqa: E402
-from freecad.shelving.default_catalog import DEFAULT_CATALOG  # noqa: E402
-from freecad.shelving.vendor.shelving_core.layout import (  # noqa: E402
+from freecad.Shelving.commands.export_boxes import ExportBoxesCommand  # noqa: E402
+from freecad.Shelving.commands.scan import ScanCommand  # noqa: E402
+from freecad.Shelving.container import read_container  # noqa: E402
+from freecad.Shelving.core.layout import (  # noqa: E402
     Bay,
     Board,
     Division,
     Region,
 )
-from freecad.shelving.vendor.shelving_core.scan import Box, scan  # noqa: E402
+from freecad.Shelving.core.scan import Box, scan  # noqa: E402
+from freecad.Shelving.default_catalog import DEFAULT_CATALOG  # noqa: E402
 
 _TOL_MM = 1e-6
 _THICKNESS_MM = 18.0
@@ -124,7 +121,7 @@ def _add_box(
 
 def _build_shell(doc: FreeCAD.Document, part: FreeCAD.DocumentObject) -> None:
     """A closed 600 x 600 x 300 mm shell with one shelf: four walls captured
-    the way ``shelving_core.tests.test_scan``'s ``_closed_box`` helper builds
+    the way ``freecad.Shelving.core.tests.test_scan``'s ``_closed_box`` helper builds
     one, plus a shelf between the sides."""
     t, size, depth = _THICKNESS_MM, _SIZE_MM, _DEPTH_MM
     _add_box(doc, part, "Bottom", (size, depth, t), (0.0, 0.0, 0.0))
@@ -247,7 +244,7 @@ def test_init_gui_imports_cleanly() -> None:
     `freecadcmd` returns a stub without `Workbench`
     (docs/freecadcmd-notes.md), so this also covers that the module's own
     guard drops to a plain-`object` base instead of raising."""
-    import freecad.shelving.init_gui  # noqa: F401
+    import freecad.Shelving.init_gui  # noqa: F401
 
 
 def test_inactive_without_a_document() -> None:

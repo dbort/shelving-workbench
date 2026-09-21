@@ -1,5 +1,5 @@
 ---
-next_id: friction-013
+next_id: friction-018
 ---
 
 # Friction log
@@ -19,6 +19,10 @@ From Benjamin André-Micolon's [linkedin post](https://lnkd.in/p/g4ARbEpH) on 20
 Oldest first, by id. One bullet per papercut:
 
 - `friction-NNN` - **<what was needed>**: what happened; the workaround used. Simpler if: <the missing tool/data/doc>.
+
+## What qualifies
+
+An entry's "simpler if" has to name something this repo could actually build or write: a tool, a doc, a data shape, a check, in code or docs under this repo's own control. A permanent behavior of an upstream dependency (pytest's import-mode rules, mypy's module-mapping algorithm, a compiled FreeCAD C++ loader, hatchling's wheel builder) is not a papercut this repo can fix by adding anything, no matter how real or non-obvious the behavior was to discover - logging it here just leaves a stale entry implying a fix that will never land, since nobody is going to patch pytest or FreeCAD to close it. The same goes for a workaround whose only "fix" would be new local tracking machinery disproportionate to the problem (a git hook watching file-mode bits, say, for a one-off `sed -i` mode flip). Document the discovery where it actually helps the next reader instead: a code comment at the call site it explains, or a `docs/*.md` note (see `docs/freecadcmd-notes.md` for the pattern) - and if it's a behavioral gotcha worth remembering across sessions rather than something this codebase's files can carry on their own, that's a Claude memory, not a friction-log entry.
 
 ## Assigning an id
 
@@ -167,25 +171,6 @@ Sweeping the log is a human-triggered act, like task sign-off: the user asks for
   balance. Possible product angle, not scoped or planned: the editing UI
   could surface a within-tolerance match instead of applying it silently,
   and let the user confirm snapping the board to the catalog dimension.
-
-- `friction-010` - **every `shelving_core` edit pays a vendored-copy tax**:
-  sh-013, sh-014, and sh-015 each touched `shelving_core/` (`geometry.py`,
-  `scan.py`, `layout.py`, `svg.py`) and each time paid the same tax twice
-  over: `tools/vendor-core.sh` had to re-run to keep
-  `freecad/shelving/vendor/shelving_core/` byte-identical, and the
-  post-approval `doc-hygiene` sweep had to deliberately group each file with
-  its vendored twin in the same pipeline group so both copies got edited in
-  step, rather than independently and possibly inconsistently. None of this
-  is new: the user already decided the fix at sh-012 sign-off (collapse to
-  one copy under `freecad/shelving/`, delete `vendor-core.sh` and its drift
-  gate, no relative-import workaround) but deferred it until after sh-012
-  landed, "before M4+ adds more consumers of the vendored path." M4 (sh-013)
-  and M5 (sh-014, sh-015) have both landed since, each adding more files to
-  keep in sync, and the task was never opened. Worked around, each time, by
-  re-running the sync script and hand-pairing files into doc-hygiene groups.
-  Simpler if: the already-decided consolidation task had been created and
-  dispatched before M4 started, since every milestone since has only grown
-  the set of files paying this tax.
 
 - `friction-011` - **`App::DocumentObjectGroup` carries no `Placement`
   property at all**: sh-016's container walk composed `obj.Placement` for

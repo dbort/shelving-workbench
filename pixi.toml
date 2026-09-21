@@ -10,11 +10,9 @@ python = "3.12.*"
 ruff = "*"
 mypy = "*"
 pytest = "*"
-# Imported by shelving_core/tests/test_schema.py to validate the layout JSON
-# schema.
+# Imported by freecad/Shelving/core/tests/test_materials_schema.py to
+# validate the layout JSON schema.
 jsonschema = "*"
-# tools/vendor-core.sh --check shells out to rsync for its dry-run diff.
-rsync = "*"
 # Workflow-lint toolchain. shellcheck is here because actionlint shells out to
 # it to lint `run:` script bodies.
 actionlint = "*"
@@ -23,16 +21,23 @@ check-jsonschema = "*"
 shellcheck = "*"
 
 # `pixi run tests` is the repo's single authoritative check command: it runs
-# tools/run-tests.sh, which chains static analysis, the shelving_core unit
+# tools/run-tests.sh, which chains static analysis, the layout core unit
 # suite, the repository-consistency checks, the workflow-hardening lint, and the
 # headless FreeCAD import smoke. `demo` renders a sample solved layout.
 [tasks]
 tests = "tools/run-tests.sh"
 demo = "python tools/layout_demo.py"
 
-# The project installs itself editable so `import shelving_core` resolves to the
-# checkout under `pixi run` / `pixi shell` with no per-script sys.path shim. This
-# is the project, not a third-party dependency.
+# The project installs itself editable so `import freecad.Shelving.core`
+# resolves to the checkout under `pixi run` / `pixi shell` with no per-script
+# sys.path shim. This is the project, not a third-party dependency.
+#
+# No `[activation.env] PYTHONPATH` setting is needed on top of this: the
+# editable install's `.pth` file is processed by `site.py` at interpreter
+# startup, before both `freecadcmd`'s internal `import freecad` and pytest's
+# own rootdir-insertion walk (which, for `freecad/`'s namespace-package
+# portion, would otherwise insert `freecad/` itself rather than the repo
+# root — see `friction-015`) — verified directly this session, not assumed.
 [pypi-dependencies]
 shelving-workbench = { path = ".", editable = true }
 # Type-check-only: PEP 561 type stubs for the FreeCAD / App / Part / FreeCADGui
