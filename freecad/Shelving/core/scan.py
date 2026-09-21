@@ -69,6 +69,16 @@ class Box:
     name: str
     corner_mm: Vec3
     size_mm: Vec3
+    # A part the workbench cannot regenerate, such as a notched panel's
+    # bounding box: scanned as a Board carrying its measured extent as
+    # Board.pinned_size_mm, for the solver to verify rather than derive.
+    pinned: bool = False
+    # The material this box is known to be, bypassing thickness matching
+    # entirely. Set when the exporter already knows the board's material
+    # (round-tripping a previously written container); None falls back to
+    # matching the catalog entry whose thickness is closest to the box's
+    # measured thin-axis extent.
+    material: MaterialId | None = None
 
 
 @dataclass(frozen=True)
@@ -349,6 +359,8 @@ class _Elevated:
     d1_mm: float
     thin_axis: Axis
     thickness_mm: float
+    pinned: bool = False
+    material: MaterialId | None = None
 
 
 def _elevate(box: Box, horizontal: Axis, vertical: Axis, depth_axis: Axis) -> _Elevated:
@@ -358,7 +370,17 @@ def _elevate(box: Box, horizontal: Axis, vertical: Axis, depth_axis: Axis) -> _E
     d0_mm, d1_mm = _span_mm(box, _axis_index(depth_axis))
     thickness_mm = _component_mm(box.size_mm, _axis_index(thin_axis))
     return _Elevated(
-        box.name, h0_mm, h1_mm, v0_mm, v1_mm, d0_mm, d1_mm, thin_axis, thickness_mm
+        box.name,
+        h0_mm,
+        h1_mm,
+        v0_mm,
+        v1_mm,
+        d0_mm,
+        d1_mm,
+        thin_axis,
+        thickness_mm,
+        pinned=box.pinned,
+        material=box.material,
     )
 
 
@@ -588,7 +610,20 @@ def _make_board(
         ctx.depth_hi_mm - plank.d1_mm,
     )
     material = ctx.materials_by_name[plank.name]
+    pinned_size_mm = (
+        _unit_size_mm(
+            ctx.horizontal,
+            ctx.vertical,
+            ctx.depth_axis,
+            plank.h1_mm - plank.h0_mm,
+            plank.v1_mm - plank.v0_mm,
+            plank.d1_mm - plank.d0_mm,
+        )
+        if plank.pinned
+        else None
+    )
     return Board(
+        pinned_size_mm=pinned_size_mm,
         material=None if material == ctx.default_material else material,
         insets=Insets(**insets_kwargs),
         role=plank.name,
@@ -782,13 +817,29 @@ def _material_for_thickness_mm(
     )
 
 
+def _resolve_material(catalog: Catalog, plank: _Elevated, snap_mm: float) -> MaterialId:
+    """The material ``plank`` resolves to: its stored material when set,
+    bypassing thickness matching entirely, otherwise the catalog entry whose
+    thickness is closest to its measured extent.
+
+    A stored material is what lets a catalog entry's thickness change
+    (M8) without stranding the boards already written against the old
+    thickness: they carry the id, not a thickness to re-match.
+    """
+    if plank.material is not None:
+        if plank.material not in catalog:
+            raise ScanError(
+                f"{plank.name}: material {plank.material!r} is not in the catalog",
+                (plank.name,),
+            )
+        return plank.material
+    return _material_for_thickness_mm(catalog, plank.thickness_mm, snap_mm, plank.name)
+
+
 def _resolve_materials(
     catalog: Catalog, elevated: Sequence[_Elevated], snap_mm: float
 ) -> dict[str, MaterialId]:
-    return {
-        p.name: _material_for_thickness_mm(catalog, p.thickness_mm, snap_mm, p.name)
-        for p in elevated
-    }
+    return {p.name: _resolve_material(catalog, p, snap_mm) for p in elevated}
 
 
 def _default_material(materials_by_name: Mapping[str, MaterialId]) -> MaterialId:

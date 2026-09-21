@@ -18,6 +18,7 @@ from freecad.Shelving.core.layout import (
     Fill,
     Fixed,
     Item,
+    Region,
     Unit,
     Void,
 )
@@ -385,6 +386,83 @@ def test_thickness_matching_no_catalog_entry_is_refused() -> None:
     boxes = _closed_box([])
     with pytest.raises(ScanError, match="no material has thickness") as info:
         scan(boxes, wrong_catalog)
+    assert info.value.objects == ("Bottom",)
+
+
+def _find_board(region: Region, role: str) -> Board | None:
+    """The first ``Board`` with ``role`` in the subtree rooted at ``region``,
+    or ``None``; a scanned board's role is set from the ``Box.name`` it read."""
+    if isinstance(region, Division):
+        for item in region.items:
+            if isinstance(item, Board):
+                if item.role == role:
+                    return item
+            else:
+                found = _find_board(item, role)
+                if found is not None:
+                    return found
+    return None
+
+
+def test_pinned_box_scans_with_pinned_size_mm_set() -> None:
+    """A pinned box places as a ``Board`` carrying its measured extent as
+    ``pinned_size_mm``, with the rest of the tree unaffected."""
+    boxes = _closed_box([])
+    plain = scan(boxes, CATALOG)
+    pinned_boxes = [
+        dataclasses.replace(b, pinned=True) if b.name == "Bottom" else b for b in boxes
+    ]
+    pinned_result = scan(pinned_boxes, CATALOG)
+
+    assert _shape(pinned_result.unit.root) == _shape(plain.unit.root)
+    bottom_box = next(b for b in boxes if b.name == "Bottom")
+    bottom_board = _find_board(pinned_result.unit.root, "Bottom")
+    assert bottom_board is not None
+    assert bottom_board.pinned_size_mm == bottom_box.size_mm
+    plain_bottom = _find_board(plain.unit.root, "Bottom")
+    assert plain_bottom is not None
+    assert plain_bottom.pinned_size_mm is None
+
+
+def test_stored_material_resolves_despite_thickness_mismatch() -> None:
+    """A board tagged with a stored material resolves to that entry even
+    though its measured extent (18 mm, the ``_closed_box`` default) does not
+    match the entry's thickness (MDF at 12 mm): the stored id bypasses
+    thickness matching entirely rather than refusing."""
+    boxes = _closed_box([])
+    tagged = [
+        dataclasses.replace(b, material=MDF) if b.name == "Bottom" else b for b in boxes
+    ]
+    result = scan(tagged, CATALOG)
+    bottom = _find_board(result.unit.root, "Bottom")
+    assert bottom is not None
+    # MDF is a minority (one board out of four), so PLY remains the default
+    # material and Bottom's explicit MDF id must survive rather than
+    # collapsing to None.
+    assert bottom.material == MDF
+
+
+def test_box_with_no_material_still_matches_by_thickness() -> None:
+    boxes = _closed_box([])
+    assert all(b.material is None for b in boxes)
+    result = scan(boxes, CATALOG)
+    bottom = _find_board(result.unit.root, "Bottom")
+    assert bottom is not None
+    # Resolved via thickness matching to PLY, which is also the default
+    # material every board here resolves to, so it collapses to None.
+    assert bottom.material is None
+
+
+def test_stored_material_absent_from_catalog_refuses_naming_the_board() -> None:
+    boxes = _closed_box([])
+    tagged = [
+        dataclasses.replace(b, material=MaterialId("unknown"))
+        if b.name == "Bottom"
+        else b
+        for b in boxes
+    ]
+    with pytest.raises(ScanError, match="not in the catalog") as info:
+        scan(tagged, CATALOG)
     assert info.value.objects == ("Bottom",)
 
 
