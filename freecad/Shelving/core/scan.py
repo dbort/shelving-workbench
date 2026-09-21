@@ -73,8 +73,8 @@ class Box:
     # bounding box: scanned as a Board carrying its measured extent as
     # Board.pinned_size_mm, for the solver to verify rather than derive.
     pinned: bool = False
-    # The material this box is known to be, bypassing thickness matching
-    # entirely. Set when the exporter already knows the board's material
+    # The material this box is known to be, bypassing thickness matching.
+    # Set when the exporter already knows the board's material
     # (round-tripping a previously written container); None falls back to
     # matching the catalog entry whose thickness is closest to the box's
     # measured thin-axis extent.
@@ -819,7 +819,7 @@ def _material_for_thickness_mm(
 
 def _resolve_material(catalog: Catalog, plank: _Elevated, snap_mm: float) -> MaterialId:
     """The material ``plank`` resolves to: its stored material when set,
-    bypassing thickness matching entirely, otherwise the catalog entry whose
+    bypassing thickness matching, otherwise the catalog entry whose
     thickness is closest to its measured extent.
 
     A stored material is what lets a catalog entry's thickness change

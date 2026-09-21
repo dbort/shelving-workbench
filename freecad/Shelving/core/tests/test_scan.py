@@ -428,7 +428,7 @@ def test_stored_material_resolves_despite_thickness_mismatch() -> None:
     """A board tagged with a stored material resolves to that entry even
     though its measured extent (18 mm, the ``_closed_box`` default) does not
     match the entry's thickness (MDF at 12 mm): the stored id bypasses
-    thickness matching entirely rather than refusing."""
+    thickness matching rather than refusing."""
     boxes = _closed_box([])
     tagged = [
         dataclasses.replace(b, material=MDF) if b.name == "Bottom" else b for b in boxes

@@ -199,8 +199,7 @@ def _rule_from_doc(raw: object) -> SizeRule:
 def rules_from_json(text: str) -> Mapping[str, SizeRule]:
     """The record :func:`rules_to_json` emitted, or ``ValueError`` naming the
     problem: a version other than :data:`RULE_RECORD_VERSION`, or a
-    malformed rule doc. Every value is narrowed with ``isinstance`` before
-    it reaches a rule constructor.
+    malformed rule doc.
     """
     parsed = json.loads(text)
     if not isinstance(parsed, dict):
@@ -262,6 +261,6 @@ def with_stored_rules(unit: Unit, rules: Mapping[str, SizeRule]) -> Unit:
 
     A key with no match, most often because a bounding board was renamed or
     deleted since the record was written, is not an error: that region keeps
-    whatever rule the scan it was just rebuilt from assigned it.
+    whatever rule the scan it was rebuilt from assigned it.
     """
     return dataclasses.replace(unit, root=_rebuild_with_stored_rules(unit.root, rules))
