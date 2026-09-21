@@ -101,20 +101,20 @@ internal `import freecad`, the repo root is already on `sys.path`: the
 project's editable install (`pixi.toml`'s `[pypi-dependencies]`) places a
 `.pth` file that `site.py` processes at interpreter startup, before either
 `freecadcmd`'s internal import or pytest's own collection logic runs.
-Verified directly this session: `import freecad.Shelving.core.X` resolves
+Verified directly: `import freecad.Shelving.core.X` resolves
 correctly under `freecadcmd` with no `sys.path` insert of any kind, and no
 `extend_path` refresh, present in the calling script at all.
 
 `freecad/` itself carries no `__init__.py` (a PEP 420 namespace-package
 portion, not a regular package), so importing anything under
 `freecad.Shelving` first resolves the *installed* FreeCAD distribution's
-own `freecad/__init__.py` (a regular package always wins resolution over a
-namespace-portion directory of the same name, verified this session) —
-which unconditionally imports the `FreeCAD` App module as part of its own
-`extend_path` bookkeeping, and, when `PATH_TO_FREECAD_LIBDIR` is unset,
-prints a diagnostic line to stdout the first time this happens in a plain
-Python process (not under `freecadcmd`, which has already imported `FreeCAD`
-by the time a script runs). `tools/layout_demo.py` sets
+own `freecad/__init__.py`: a regular package always wins resolution over a
+namespace-portion directory of the same name, confirmed directly. That
+`__init__.py` unconditionally imports the `FreeCAD` App module as part of
+its own `extend_path` bookkeeping and, when `PATH_TO_FREECAD_LIBDIR` is
+unset, prints a diagnostic line to stdout the first time this happens in a
+plain Python process (not under `freecadcmd`, which has already imported
+`FreeCAD` by the time a script runs). `tools/layout_demo.py` sets
 `PATH_TO_FREECAD_LIBDIR` defensively before its own imports to suppress
 that diagnostic; see its module docstring.
 

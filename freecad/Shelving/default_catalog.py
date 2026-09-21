@@ -1,9 +1,9 @@
 """In-code default material catalog for the FreeCAD object layer.
 
-Stopgap: M4 replaces the source of this catalog with a document-level catalog
-object and a "manage catalog" command. Standard library plus the sibling
-`freecad.Shelving.core` package only; no `FreeCAD` import, so it loads under
-a bare `python` as well as inside FreeCAD.
+Stopgap: M8 moves the catalog into the document as a group of `App::VarSet`
+entries, edited through the property editor rather than in code. Standard
+library plus the sibling `freecad.Shelving.core` package only; no `FreeCAD`
+import, so it loads under a bare `python` as well as inside FreeCAD.
 """
 
 from freecad.Shelving.core.materials import (
@@ -46,5 +46,4 @@ DEFAULT_CATALOG: Catalog = Catalog(entries={entry.id: entry for entry in _ENTRIE
 
 DEFAULT_MATERIAL_ID: MaterialId = MaterialId("ply18")
 
-# Catalog order, for sh-012's `DefaultMaterial` enumeration property.
 DEFAULT_CATALOG_IDS: list[str] = [str(entry.id) for entry in _ENTRIES]

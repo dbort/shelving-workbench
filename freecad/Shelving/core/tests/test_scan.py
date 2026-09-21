@@ -640,8 +640,7 @@ def test_thicknesses_mm_rounds_out_real_geometry_jitter() -> None:
 
 def _kinds_names(division: Division) -> tuple[str, list[str]]:
     """One character per item (``P`` board, ``o`` open bay, ``x`` void,
-    ``D`` nested division) plus the boards' roles in order, mirroring the
-    spike's own ``_kinds``/``_names`` test helpers."""
+    ``D`` nested division) plus the boards' roles in order."""
     kinds = ""
     names: list[str] = []
     for item in division.items:

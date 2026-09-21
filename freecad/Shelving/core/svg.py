@@ -465,9 +465,8 @@ def to_svg(
     ]
     parts.extend(_style_block(font_size_mm))
 
-    # The unit outline first, then every bay, then every void, then every
-    # board with its label: boards paint over the open regions beneath them,
-    # and every label sits above the fills it names.
+    # Boards paint over the open regions beneath them, so bays and voids are
+    # drawn before boards; every label sits above the fill it names.
     outline_space = Space(origin=Vec3(0.0, 0.0, 0.0), size=unit.size_mm)
     outline_rect = frame.rect(outline_space)
     parts.append(_rect_line("unit", *outline_rect))

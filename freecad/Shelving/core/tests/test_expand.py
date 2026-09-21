@@ -68,9 +68,8 @@ def _closed_box(width_mm: float, depth_mm: float, height_mm: float) -> Unit:
 
 
 def test_closed_box_matches_the_carcass_models_geometry() -> None:
-    """Expected values are hard-coded: with the carcass model gone, there is
-    nothing to compute an expected result from and compare against at
-    runtime."""
+    """Expected values are hard-coded: there is no independent model to
+    compute an expected result from and compare against at runtime."""
     unit = _closed_box(900.0, 300.0, 1800.0)
     specs = expand(unit, _catalog())
     assert len(specs) == 4

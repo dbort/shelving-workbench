@@ -28,7 +28,7 @@ import sys
 # Defensive against someone running this script outside `pixi run`/`pixi
 # shell` (e.g. a bare venv with the editable install skipped): the editable
 # install's `.pth` file is what resolves `freecad.Shelving.core` in the
-# normal case (verified this session), so this insert is redundant coverage,
+# normal case (verified directly), so this insert is redundant coverage,
 # not the primary mechanism.
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _REPO_ROOT)
@@ -38,7 +38,7 @@ sys.path.insert(0, _REPO_ROOT)
 # distribution's own `freecad/__init__.py` first (a regular package always
 # wins over a namespace-portion directory of the same name). That file
 # falls back to guessing its own lib directory and prints a diagnostic line
-# to stdout whenever `PATH_TO_FREECAD_LIBDIR` is unset — verified directly:
+# to stdout whenever `PATH_TO_FREECAD_LIBDIR` is unset. Verified directly:
 # without this, `pixi run demo`'s first line of output was that diagnostic,
 # not the catalog header below. Setting it to this interpreter's own lib
 # directory (what the fallback guesses anyway, for the pixi-provided

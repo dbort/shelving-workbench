@@ -25,7 +25,7 @@ everything this module prints, in one block.
 The project's editable install (`pixi.toml`'s `[pypi-dependencies]`) puts
 the repo root on `sys.path` before `freecadcmd`'s own internal `import
 freecad` runs, which is what resolves `freecad.Shelving.core` here
-(verified this session: the imports below work under `freecadcmd` with no
+(verified directly: the imports below work under `freecadcmd` with no
 `sys.path` insert of any kind). The insert below is defensive against
 someone running this file outside `pixi run`/`pixi shell` (where the
 editable install is skipped), not the load-bearing mechanism; an installed

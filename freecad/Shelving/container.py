@@ -141,8 +141,8 @@ def _shape(obj: FreeCAD.DocumentObject) -> Part.Shape | None:
 
 
 def _placed_shape(shape: Part.Shape, placement: FreeCAD.Placement) -> Part.Shape:
-    """``shape`` (already carrying the leaf's own placement, which FreeCAD
-    bakes into ``obj.Shape``) with the ancestor containers' composed
+    """``shape`` already carries the leaf's own placement, which FreeCAD
+    bakes into ``obj.Shape``, with the ancestor containers' composed
     ``placement`` applied on top, so its ``BoundBox`` is tight in the
     selected container's frame rather than the leaf's immediate parent's.
 
