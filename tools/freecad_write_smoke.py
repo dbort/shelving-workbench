@@ -388,9 +388,10 @@ def test_left_alone_objects_are_never_touched() -> None:
 
 def test_irregular_board_moves_without_rewriting_its_shape() -> None:
     """A hand-built notched board slotted into a real bay is read as an
-    irregular ``Box``, adopted (tagged, labelled) on the next rescan, then
-    moved, never resized or recreated, by a resize that shifts its region:
-    its solid volume is unchanged, and only its ``Placement`` differs."""
+    irregular ``Box``, adopted (tagged, not relabelled) on the next rescan,
+    then moved, never resized or recreated, by a resize that shifts its
+    region: its solid volume is unchanged, and only its ``Placement``
+    differs."""
     doc = _new_document("write_smoke_irregular")
     try:
         container = create_unit(doc)
@@ -400,6 +401,7 @@ def test_irregular_board_moves_without_rewriting_its_shape() -> None:
         shelf = _add_notched_shelf(
             doc, container, "NotchedShelf", (564.0, 300.0), (18.0, 0.0, 441.0)
         )
+        cast("_Placeable", shelf).Label = "My Notched Shelf"
         doc.recompute()
         boxes, skipped, _record = read_container(container)
         notched = next(b for b in boxes if b.name == "NotchedShelf")
@@ -411,6 +413,10 @@ def test_irregular_board_moves_without_rewriting_its_shape() -> None:
         assert "NotchedShelf" in adopt_result.created
         assert properties.has_board_properties(shelf)
         assert properties.read_board_irregular(shelf) is True
+        # First adoption tags provenance but must not overwrite a Label the
+        # user already set by hand: nothing asks for that, and it is the
+        # one Label most likely to have been deliberately authored.
+        assert cast("_Placeable", shelf).Label == "My Notched Shelf"
         volume_before = cast("_ShapeFeature", shelf).Shape.Volume
         placement_before = cast("_Placeable", shelf).Placement.Base
 

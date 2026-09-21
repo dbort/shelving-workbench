@@ -1,8 +1,8 @@
 ---
 id: sh-018
 title: "Write a container"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 1
 blocked_by: [sh-016, sh-017]
 ---
@@ -113,6 +113,15 @@ avoiding, and a scanned unit usually has no facing.
 A label is written only when the object is created and is NEVER rewritten on an
 update, so a user rename survives every resize. Taking the workbench's opinion
 back is an explicit command in M10, alongside the equivalent for colour.
+This also covers a matched object's first adoption: a hand-built board (a
+notched panel slotted into a bay, say) swept into the tree while still
+untagged gets its provenance stamped but keeps whatever `Label` its author
+gave it, the same as any other update. Only a genuine copy (`Name !=
+ShelvingBornAs`) gets a fresh generated `Label` on adoption, matching a
+newly-created board — round-1 review (`tasks/active/sh-018-REVIEW.md`)
+caught an earlier draft overwriting the hand-built board's `Label` too;
+flagged here for `user_signoff` since it is a deliberate behavior choice
+on data the user authored outside the workbench.
 
 DELETION RULE, decided in planning. An object is a deletion candidate ONLY if it
 carries the provenance properties AND is absent from the tree. Anything untagged

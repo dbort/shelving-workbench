@@ -111,23 +111,18 @@ def _walk(
 class ContainerRecord:
     """``obj``'s own stored properties, read back by :func:`read_container`.
 
-    Each of the first four fields is ``None`` when its property was never
-    written (an untouched container, or one from before this workbench wrote
-    it). A determined-but-unknown ``front_at_min`` reads back as ``None``
-    too: ``Unit.front_at_min`` itself does not distinguish "never
-    determined" from "determined to be undetermined"; see
-    ``freecad.Shelving.properties.read_container_facing``. ``copied`` names
-    every board whose own provenance marks it a copy of another
-    (``freecad.Shelving.properties.is_copy``); a caller drops a copy's stored
-    identity and treats it as new geometry rather than as a continuation of
-    the board it was copied from.
+    Each field is ``None`` when its property was never written (an
+    untouched container, or one from before this workbench wrote it). A
+    determined-but-unknown ``front_at_min`` reads back as ``None`` too:
+    ``Unit.front_at_min`` itself does not distinguish "never determined"
+    from "determined to be undetermined"; see
+    ``freecad.Shelving.properties.read_container_facing``.
     """
 
     unit_id: str | None
     depth_axis: Axis | None
     front_at_min: bool | None
     rules_json: str | None
-    copied: frozenset[str]
 
 
 def read_container(
@@ -142,9 +137,7 @@ def read_container(
     """
     boxes: list[Box] = []
     skipped: list[Skipped] = []
-    copied: set[str] = set()
     seen: set[str] = set()
-    doc = obj.Document
     for child in _children(obj):
         for leaf, placement in _walk(child, FreeCAD.Placement(), seen):
             shape = _shape(leaf)
@@ -175,14 +168,11 @@ def read_container(
                     material=properties.read_board_material(leaf),
                 )
             )
-            if properties.is_copy(leaf, doc):
-                copied.add(leaf.Name)
     record = ContainerRecord(
         unit_id=properties.read_container_unit_id(obj),
         depth_axis=properties.read_container_depth_axis(obj),
         front_at_min=properties.read_container_facing(obj),
         rules_json=properties.read_container_rules_json(obj),
-        copied=frozenset(copied),
     )
     return boxes, skipped, record
 
@@ -563,13 +553,18 @@ def write_container(
     geometry always, and, if this is the first time this call finds it
     carrying no provenance (a part a user built directly and positioned
     into a valid slot in the layout, such as a hand-modelled irregular
-    board) or its provenance marks it a copy, a fresh label and provenance
-    too, reported in ``WriteResult.created`` alongside a genuinely new
-    object since the workbench is adopting it for the first time either
-    way. A board with no match is created and tagged the same way. An
-    object that carries provenance and is NOT matched is deleted, its
-    layout entry gone; one that matches nothing and carries no provenance
-    either is left exactly alone, reported in ``WriteResult.left_alone``.
+    board) or its provenance marks it a copy, fresh provenance too,
+    reported in ``WriteResult.created`` alongside a genuinely new object
+    since the workbench is adopting it for the first time either way. Only
+    the copy half also gets a fresh generated ``Label``, matching a
+    newly-created board: a hand-built object adopted for the first time
+    keeps whatever ``Label`` its author gave it, since nothing asks for it
+    to be touched and the object needs no readable label it does not
+    already have. A board with no match is created and tagged the same
+    way, with a generated ``Label``. An object that carries provenance and
+    is NOT matched is deleted, its layout entry gone; one that matches
+    nothing and carries no provenance either is left exactly alone,
+    reported in ``WriteResult.left_alone``.
     The scanner routes an object away from ever matching anything at all
     (a panel set aside by ``freecad.Shelving.core.scan.scan``, or a part
     ``read_container`` could not read) when it has no defensible place in
@@ -610,9 +605,8 @@ def write_container(
         # the tree is exactly what makes an object part of the layout. Only
         # an object the tree does not name is untouchable, which is decided
         # below, once, for everything the loop above left unmatched.
-        adopting = not properties.has_board_properties(obj) or properties.is_copy(
-            obj, doc
-        )
+        copy = properties.is_copy(obj, doc)
+        adopting = not properties.has_board_properties(obj) or copy
         _write_geometry(obj, spec, board)
         tagged = properties.ensure_board_properties(obj)
         properties.write_board_material(tagged, board.material)
@@ -620,7 +614,14 @@ def write_container(
         if adopting:
             properties.write_board_born_as(tagged, obj.Name)
             properties.write_board_born_in(tagged, doc.Uid)
-            cast("_Placeable", obj).Label = labels[spec.node_id]
+            # A copy gets a fresh generated Label, matching a newly-created
+            # board (Frontier Advice, "a copy is adopted, not rejected"). A
+            # hand-built object swept in for the first time keeps whatever
+            # Label its author gave it; tagging alone is enough to make
+            # `has_board_properties` true, so this branch is never taken
+            # again for that object.
+            if copy:
+                cast("_Placeable", obj).Label = labels[spec.node_id]
             created.append(obj.Name)
         else:
             updated.append(obj.Name)
