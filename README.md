@@ -6,7 +6,7 @@
 [![FreeCAD 1.0](https://img.shields.io/badge/FreeCAD-1.0-blue.svg)](https://www.freecad.org)
 
 A FreeCAD 1.0 workbench for parametric shelving. A unit is designed as a flat
-front elevation and expands into individually editable 3D plank solids; editing
+front elevation and expands into individually editable 3D board solids; editing
 the elevation reflows the 3D. The layout math lives in a pure-Python core
 (`freecad.Shelving.core`) that never imports FreeCAD, so it is testable
 without a GUI.

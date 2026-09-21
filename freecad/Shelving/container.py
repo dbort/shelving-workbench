@@ -229,7 +229,7 @@ def _skip_reason(obj: FreeCAD.DocumentObject, shape: Part.Shape | None) -> str |
         return None
     try:
         # Subtracting the solid from its own bounding box tells a
-        # plank-plus-cutouts part from an irregular one.
+        # board-plus-cutouts part from an irregular one.
         leftover = _bbox_solid(bound).cut(shape)
     except Exception:  # noqa: BLE001 - a pathological solid must not break a scan
         return f"a {obj.TypeId}, not a plain box"

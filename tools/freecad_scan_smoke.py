@@ -184,7 +184,7 @@ def _add_notched_body(
 ) -> FreeCAD.DocumentObject:
     """A ``PartDesign::Body`` (child of ``part``) holding a
     ``Sketcher::SketchObject`` and a ``PartDesign::Pad`` whose solid is a
-    200 x 100 x 18 mm plank with a 50 x 30 mm notch cut from one corner: the
+    200 x 100 x 18 mm board with a 50 x 30 mm notch cut from one corner: the
     box-minus-cutouts skip case, and proof that a body's sketch and pad are
     not read as two boards. The walk never descends into a body, so it only
     ever sees the body itself, as one leaf.
