@@ -16,7 +16,7 @@ from freecad.Shelving.core.layout import (
     Weighted,
 )
 from freecad.Shelving.core.materials import Catalog, MaterialEntry, MaterialId
-from freecad.Shelving.core.solver import LayoutSolveError, distribute, solve
+from freecad.Shelving.core.solver import EPS_MM, LayoutSolveError, distribute, solve
 
 T10 = MaterialId("t10")
 T18 = MaterialId("t18")
@@ -305,3 +305,40 @@ def test_basis_with_next_holds_board_position_across_catalog_thickness_change() 
     clear_thin = solve(build(Basis.CLEAR), thin_catalog)
     assert clear_thick["upper_shelf"].origin.z_mm == pytest.approx(418.0)
     assert clear_thin["upper_shelf"].origin.z_mm == pytest.approx(410.0)
+
+
+# --- Pinned boards: the solver verifies rather than derives. ---
+
+
+def _pinned_shelf_unit(width_mm: float, pinned_size_mm: Vec3) -> Unit:
+    """A shelf pinned at ``pinned_size_mm``, between a fixed lower bay and a
+    fill bay that absorbs the rest of the height."""
+    board = Board(id="fixed_shelf", pinned_size_mm=pinned_size_mm)
+    root = Division(
+        axis=Axis.Z,
+        items=[Bay(rule=Fixed(400.0)), board, Bay(rule=Fill())],
+        id="root",
+    )
+    return Unit(size_mm=Vec3(width_mm, 300.0, 900.0), default_material=T18, root=root)
+
+
+def test_pinned_board_matching_layout_solves() -> None:
+    unit = _pinned_shelf_unit(200.0, Vec3(200.0, 300.0, 18.0))
+    spaces = solve(unit, CATALOG)
+    _assert_space(spaces["fixed_shelf"], origin=(0, 0, 400), size=(200, 300, 18))
+
+
+def test_pinned_board_mismatch_raises_naming_the_board() -> None:
+    """Widening the unit in the direction the pinned board spans changes the
+    derived extent; the solver refuses rather than stretching the board."""
+    unit = _pinned_shelf_unit(250.0, Vec3(200.0, 300.0, 18.0))
+    with pytest.raises(LayoutSolveError) as excinfo:
+        solve(unit, CATALOG)
+    assert excinfo.value.reason == "pinned_mismatch"
+    assert excinfo.value.node_id == "fixed_shelf"
+
+
+def test_pinned_board_agreeing_within_eps_mm_does_not_raise() -> None:
+    unit = _pinned_shelf_unit(200.0, Vec3(200.0 + EPS_MM / 2, 300.0, 18.0))
+    spaces = solve(unit, CATALOG)
+    _assert_space(spaces["fixed_shelf"], origin=(0, 0, 400), size=(200, 300, 18))

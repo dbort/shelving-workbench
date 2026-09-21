@@ -36,7 +36,11 @@ from freecad.Shelving.core.materials import Catalog
 EPS_MM: float = 1e-6
 
 SolveErrorReason = Literal[
-    "overflow", "no_slack_absorber", "nonpositive_opening", "unresolvable_basis"
+    "overflow",
+    "no_slack_absorber",
+    "nonpositive_opening",
+    "unresolvable_basis",
+    "pinned_mismatch",
 ]
 
 
@@ -45,8 +49,9 @@ class LayoutSolveError(Exception):
 
     ``node_id`` is the offending ``Division`` id for ``"overflow"`` and
     ``"no_slack_absorber"``, the region whose ``Basis.WITH_NEXT`` rule could
-    not be resolved for ``"unresolvable_basis"``, and the child item's id for
-    ``"nonpositive_opening"``. ``detail`` carries the numbers that explain the
+    not be resolved for ``"unresolvable_basis"``, the child item's id for
+    ``"nonpositive_opening"``, and the pinned board's id for
+    ``"pinned_mismatch"``. ``detail`` carries the numbers that explain the
     failure.
     """
 
@@ -207,6 +212,36 @@ def _rule_for_item(
     return rule
 
 
+def _check_pinned(board: Board, size: Vec3) -> None:
+    """Verify a pinned board's derived ``size`` against its ``pinned_size_mm``.
+
+    The solver never lets a pinned size drive the layout; it derives the
+    board's extent the same way as any other item, then checks it here.
+    Raises :class:`LayoutSolveError` with reason ``"pinned_mismatch"`` when
+    any axis differs by more than :data:`EPS_MM`.
+    """
+    pinned = board.pinned_size_mm
+    if pinned is None:
+        return
+    if (
+        abs(size.x_mm - pinned.x_mm) > EPS_MM
+        or abs(size.y_mm - pinned.y_mm) > EPS_MM
+        or abs(size.z_mm - pinned.z_mm) > EPS_MM
+    ):
+        raise LayoutSolveError(
+            board.id,
+            "pinned_mismatch",
+            {
+                "derived_x_mm": size.x_mm,
+                "derived_y_mm": size.y_mm,
+                "derived_z_mm": size.z_mm,
+                "pinned_x_mm": pinned.x_mm,
+                "pinned_y_mm": pinned.y_mm,
+                "pinned_z_mm": pinned.z_mm,
+            },
+        )
+
+
 def _place(
     region: Region,
     space: Space,
@@ -247,6 +282,7 @@ def _place(
         )
         cursor_mm += size_mm
         if isinstance(item, Board):
+            _check_pinned(item, child_space.size)
             out[item.id] = child_space
         else:
             _place(item, child_space, unit, catalog, out)
