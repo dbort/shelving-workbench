@@ -90,6 +90,15 @@ def test_new_id_calls_differ() -> None:
     assert new_id() != new_id()
 
 
+def test_board_pinned_size_mm_defaults_to_none() -> None:
+    assert Board().pinned_size_mm is None
+
+
+def test_board_pinned_size_mm_can_be_set() -> None:
+    size_mm = Vec3(400.0, 18.0, 250.0)
+    assert Board(pinned_size_mm=size_mm).pinned_size_mm == size_mm
+
+
 def test_unit_depth_axis_and_front_at_min_default_to_none() -> None:
     unit = Unit(
         size_mm=Vec3(900.0, 1800.0, 300.0),

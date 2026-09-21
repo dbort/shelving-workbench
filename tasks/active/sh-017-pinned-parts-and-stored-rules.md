@@ -138,7 +138,7 @@ Every length identifier carries `_mm`.
 
 ## Execution Plan
 
-- [ ] **Step 1** (`freecad/Shelving/core/layout.py`, `freecad/Shelving/core/tests/test_layout.py`): Add `pinned_size_mm: Vec3 | None = None` to `Board`, positioned before `id`. Document on the field that `None` means the board is regenerable, that a value means the workbench cannot reproduce this part and carries the shape it is pinned at, and that the solver verifies rather than derives it. Add construction tests for both the default and a set value. Change nothing else.
+- [x] **Step 1** (`freecad/Shelving/core/layout.py`, `freecad/Shelving/core/tests/test_layout.py`): Add `pinned_size_mm: Vec3 | None = None` to `Board`, positioned before `id`. Document on the field that `None` means the board is regenerable, that a value means the workbench cannot reproduce this part and carries the shape it is pinned at, and that the solver verifies rather than derives it. Add construction tests for both the default and a set value. Change nothing else.
 
 - [ ] **Step 2** (`freecad/Shelving/core/solver.py`, `freecad/Shelving/core/tests/test_solver.py`): Add `"pinned_mismatch"` to `SolveErrorReason`. In `solve`, after computing a board's `Space`, when that board carries `pinned_size_mm`, compare the derived extent against it on all three axes and raise `LayoutSolveError(board.id, "pinned_mismatch", detail)` when any differs by more than `EPS_MM`; `detail` carries the derived and the pinned extent. Tests: a unit whose layout matches its pinned board solves; the same unit widened raises with the board named; a pinned board agreeing within `EPS_MM` does not raise.
 

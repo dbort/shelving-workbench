@@ -100,6 +100,12 @@ class Insets:
 class Board:
     """One physical member, sized along its division's axis by its thickness."""
 
+    # ``None`` means the board is regenerable: the solver derives its extent
+    # from the layout, same as any other item. A value means the workbench
+    # cannot reproduce this part, a notched panel say, and carries the shape
+    # it is pinned at; the solver then verifies the derived extent against
+    # this rather than deriving it standalone.
+    pinned_size_mm: Vec3 | None = None
     # ``None`` inherits ``Unit.default_material``; the solver resolves the id
     # to a thickness, this model keeps the ``None`` verbatim.
     material: MaterialId | None = None
