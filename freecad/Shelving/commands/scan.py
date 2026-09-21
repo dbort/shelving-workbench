@@ -79,8 +79,14 @@ class ScanCommand:
     def Activated(self) -> None:
         try:
             container = _selected_container()
-            boxes, skipped, _record = read_container(container)
-            result = scan(boxes, DEFAULT_CATALOG, skipped=skipped)
+            boxes, skipped, record = read_container(container)
+            result = scan(
+                boxes,
+                DEFAULT_CATALOG,
+                skipped=skipped,
+                depth_axis=record.depth_axis,
+                front_at_min=record.front_at_min,
+            )
         except ScanError as err:
             print(f"REFUSED: {err}")
             if err.objects:

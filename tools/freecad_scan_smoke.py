@@ -50,14 +50,21 @@ import pytest  # noqa: E402
 from freecad.Shelving.commands.export_boxes import ExportBoxesCommand  # noqa: E402
 from freecad.Shelving.commands.scan import ScanCommand  # noqa: E402
 from freecad.Shelving.container import read_container  # noqa: E402
+from freecad.Shelving.core.geometry import Vec3  # noqa: E402
 from freecad.Shelving.core.layout import (  # noqa: E402
     Bay,
     Board,
     Division,
     Region,
 )
-from freecad.Shelving.core.scan import Box, scan  # noqa: E402
+from freecad.Shelving.core.scan import (  # noqa: E402
+    Box,
+    ScanError,
+    detect_depth_axis,
+    scan,
+)
 from freecad.Shelving.default_catalog import DEFAULT_CATALOG  # noqa: E402
+from freecad.Shelving.unit_ops import create_unit, resize_unit  # noqa: E402
 
 _TOL_MM = 1e-6
 _THICKNESS_MM = 18.0
@@ -424,6 +431,47 @@ def test_skewed_box_refusal(
     assert len(skipped) == 1, skipped
     skewed = next(s for s in skipped if s.name == "Skewed")
     assert skewed.reason == "not axis-aligned", skewed.reason
+
+
+def test_scan_uses_the_stored_depth_axis_on_a_deep_unit(doc: FreeCAD.Document) -> None:
+    """A unit resized deeper than it is tall still scans clean when the
+    container's stored ``ShelvingDepthAxis`` is passed through, the same way
+    ``ScanCommand.Activated`` and ``resize_unit`` both do it (mirrored here
+    directly: ``Gui.Selection``, which ``Activated`` reads the container
+    through, does not exist under ``freecadcmd``, so the command itself
+    cannot run in this suite).
+
+    Pins down a real discrepancy found in manual QA: on a unit resized to
+    1600 x 700 x 450 mm (700 mm deep, 450 mm tall), Scan Unit refused while
+    Resize Unit, reading the same geometry, did not, because only
+    ``resize_unit`` passed the stored axis through. Confirmed below that
+    this unit is genuinely the case :func:`~freecad.Shelving.core.scan.
+    detect_depth_axis`'s own docstring warns about (fooled by a unit deeper
+    than it is tall, guessing ``z`` for what is really ``y``), and that
+    guessing wrong is what breaks the scan, not something else about this
+    geometry: if either assumption stops holding, this test needs
+    re-deriving, not loosening."""
+    container = create_unit(doc)
+    doc.recompute()
+    resize_unit(container, Vec3(1600.0, 700.0, 450.0), DEFAULT_CATALOG)
+    doc.recompute()
+
+    boxes, skipped, record = read_container(container)
+    assert record.depth_axis is not None, record
+    assert detect_depth_axis(boxes) != record.depth_axis, (
+        detect_depth_axis(boxes),
+        record.depth_axis,
+    )
+    with pytest.raises(ScanError):
+        scan(boxes, DEFAULT_CATALOG, skipped=skipped)
+
+    scan(
+        boxes,
+        DEFAULT_CATALOG,
+        skipped=skipped,
+        depth_axis=record.depth_axis,
+        front_at_min=record.front_at_min,
+    )
 
 
 # Not an `if __name__ == "__main__":` guard: freecadcmd sets a run script's
