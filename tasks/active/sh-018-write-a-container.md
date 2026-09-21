@@ -36,7 +36,7 @@ part 2 of 2.
       skipped non-box part in the container and asserts apply leaves both, and
       that the result names them as left alone.
 - [ ] Each board carries `ShelvingMaterial`, `ShelvingBornAs`, `ShelvingBornIn`,
-      and `ShelvingPinned`, in a `Shelving` property group.
+      and `ShelvingIrregular`, in a `Shelving` property group.
 - [ ] A newly created board gets a readable `Label` derived from its position in
       the tree, never containing left or right while the unit's facing is
       unknown. A label is set at creation only and never rewritten, so a user
@@ -45,8 +45,8 @@ part 2 of 2.
       `ShelvingFacing`, and `ShelvingRules`, the last holding
       `freecad.Shelving.core.record.rules_to_json`.
 - [ ] `read_container` reads the stored properties back, so `scan` receives each
-      board's stored material and pinned flag, and the caller can apply stored
-      rules. A round-trip test asserts a `Fixed` rule that the equal-siblings
+      board's stored material and irregular flag, and the caller can apply
+      stored rules. A round-trip test asserts a `Fixed` rule that the equal-siblings
       heuristic would recover as `Fill` survives apply, rescan, and re-apply
       unchanged. A second asserts a board resolves through its stored material
       even when that entry's thickness no longer matches its measured extent.
@@ -141,9 +141,9 @@ view provider of our own. That is what lets a document open correctly without
 this workbench installed, and the smoke asserts it by reading the saved
 `Document.xml`.
 
-PINNED BOARDS ARE MOVED, NEVER REWRITTEN. `read_container` sets `Box.pinned` for
-a part that is not a plain axis-aligned box, so `scan` places it as a pinned
-board. On apply, set that object's `Placement` and leave its shape untouched; do
+PINNED BOARDS ARE MOVED, NEVER REWRITTEN. `read_container` sets `Box.irregular`
+for a part that is not a plain axis-aligned box, so `scan` places it as a
+pinned board. On apply, set that object's `Placement` and leave its shape untouched; do
 not set `Length`, `Width`, or `Height`, and do not recreate it. sh-017's solver
 already raises `pinned_mismatch` when the layout would require a different size,
 so apply can trust the tree it is given.
@@ -170,9 +170,9 @@ Every length identifier carries `_mm`.
 
 ## Execution Plan
 
-- [ ] **Step 1** (`freecad/Shelving/properties.py`): Create the module owning every property this workbench writes, so no other module spells a property name. Constants for the group name and for each property: `ShelvingMaterial`, `ShelvingBornAs`, `ShelvingBornIn`, `ShelvingPinned` on a board; `ShelvingUnitId`, `ShelvingDepthAxis`, `ShelvingFacing`, `ShelvingRules` on a container. `ensure_board_properties(obj)` and `ensure_container_properties(obj)` adding any that are missing, idempotent so a second call is a no-op. Typed readers and writers for each, with the facing stored as a string enumeration of `min`, `max`, `unknown` rather than a nullable boolean, because a FreeCAD string property has no null. A `Protocol` for the tagged-object surface.
+- [ ] **Step 1** (`freecad/Shelving/properties.py`): Create the module owning every property this workbench writes, so no other module spells a property name. Constants for the group name and for each property: `ShelvingMaterial`, `ShelvingBornAs`, `ShelvingBornIn`, `ShelvingIrregular` on a board; `ShelvingUnitId`, `ShelvingDepthAxis`, `ShelvingFacing`, `ShelvingRules` on a container. `ensure_board_properties(obj)` and `ensure_container_properties(obj)` adding any that are missing, idempotent so a second call is a no-op. Typed readers and writers for each, with the facing stored as a string enumeration of `min`, `max`, `unknown` rather than a nullable boolean, because a FreeCAD string property has no null. A `Protocol` for the tagged-object surface.
 
-- [ ] **Step 2** (`freecad/Shelving/container.py`): Extend `read_container` to read the stored properties back. Set each `Box.name` to the object's `Name` as before, set `Box.pinned` for any part the classifier reports as not a plain axis-aligned box, and set `Box.material` from `ShelvingMaterial` when present. Return, alongside the boxes and the skipped list, the container's stored record: unit id, depth axis, facing, and the raw rules string, each absent when its property is missing. Detect a copy: when a board carries `ShelvingBornAs` differing from its `Name`, or `ShelvingBornIn` differing from the document `Uid`, report it so the caller knows its stored record must be dropped. Do not change the walk itself.
+- [ ] **Step 2** (`freecad/Shelving/container.py`): Extend `read_container` to read the stored properties back. Set each `Box.name` to the object's `Name` as before, set `Box.irregular` for any part the classifier reports as not a plain axis-aligned box, and set `Box.material` from `ShelvingMaterial` when present. Return, alongside the boxes and the skipped list, the container's stored record: unit id, depth axis, facing, and the raw rules string, each absent when its property is missing. Detect a copy: when a board carries `ShelvingBornAs` differing from its `Name`, or `ShelvingBornIn` differing from the document `Uid`, report it so the caller knows its stored record must be dropped. Do not change the walk itself.
 
 - [ ] **Step 3** (`freecad/Shelving/container.py`): Add `write_container(container, unit, catalog)`. Expand the unit, then reconcile by `Board.id` against `Name`: update a matching object's `Length`, `Width`, `Height` and `Placement` in place, create a `Part::Box` for a board with no match, stamp its provenance from its new `Name` and the document `Uid`, and set its `Label` from its derived role per Frontier Advice, and delete an object that carries provenance and is absent from the tree. Never touch an object without provenance; collect those into a left-alone list. For a pinned board set only `Placement`. Write the container's four properties, with the rules from `freecad.Shelving.core.record.rules_to_json`. Return a frozen result carrying the four name lists. Do NOT open a transaction here; the commands own that.
 
