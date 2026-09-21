@@ -1,8 +1,8 @@
 ---
 id: sh-027
 title: "Move to freecad/Shelving/ (PEP 420 portion) with pip/uv installability restored"
-current_agent: reviewer
-current_phase: review
+current_agent: user
+current_phase: user_signoff
 review_rejections: 2
 ---
 
@@ -32,7 +32,7 @@ session), the `PYTHONPATH` activation-env setting.
 ## Status
 - [x] Planning
 - [x] Implementation
-- [ ] Review
+- [x] Review
 - [ ] User sign-off
 
 ## Must Have
