@@ -1,8 +1,8 @@
 ---
 id: sh-018
 title: "Write a container"
-current_agent: reviewer
-current_phase: review
+current_agent: user
+current_phase: user_signoff
 review_rejections: 1
 blocked_by: [sh-016, sh-017]
 ---
@@ -21,7 +21,7 @@ part 2 of 2.
 ## Status
 - [x] Planning
 - [x] Implementation
-- [ ] Review
+- [x] Review
 - [ ] User sign-off
 
 ## Must Have
