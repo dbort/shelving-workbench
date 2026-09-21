@@ -203,3 +203,89 @@ objects: Overlap, LeftSide
 The 3D view's selection clears and re-selects both **Overlap** and
 **LeftSide**, visibly highlighted, rather than leaving the whole container
 selected.
+
+## M7 — Write a container
+
+Prerequisite: a FreeCAD 1.0 install with this workbench on its addon path,
+**View → Panels → Report view** open, a new document (`Ctrl+N`).
+`Shelving_CreateUnit` and `Shelving_ResizeUnit` print their results to the
+Report view with `print()`, not to the Python console, so keep the Report
+view open.
+
+### 1. Create a unit and confirm the tree holds plain boxes with a Shelving property group
+
+1. With nothing selected, run **Create Unit** from the **Shelving** toolbar
+   or menu.
+
+Expected: a new `ShelvingUnit` `App::Part` appears in the tree, holding four
+`Part::Box` objects labelled **Bottom**, **Top**, **Side 1**, **Side 2** (a
+fresh unit has no evidence of which way it faces, so the sides are numbered
+rather than called left/right). Select **Bottom** and open the property
+editor: a **Shelving** group holds `ShelvingMaterial`, `ShelvingBornAs`,
+`ShelvingBornIn`, and `ShelvingIrregular`. Select **ShelvingUnit** itself: its
+own **Shelving** group holds `ShelvingUnitId`, `ShelvingDepthAxis`,
+`ShelvingFacing` (`unknown`), and `ShelvingRules`. The Report view prints how
+many boards were created.
+
+### 2. Resize it and confirm boards move while labels and colours hold
+
+1. Select **Bottom**, rename its label to `MyBottom` (F2, or the property
+   editor's `Label` field), and give it a colour (right-click → **Appearance…**
+   or the toolbar's colour swatch).
+2. Select **ShelvingUnit** and run **Resize Unit**. Enter a width, depth, and
+   height each noticeably different from the current ones (the dialog is
+   seeded from the unit's current measured size).
+
+Expected: the same four objects move and resize to the new outer dimensions;
+no new objects appear and none are deleted. **Bottom**'s label stays
+`MyBottom` and its colour is unchanged. The Report view prints an
+`updated 4, created 0, deleted 0, left alone 0` line (counts may differ if
+you added other geometry first).
+
+### 3. Move a board by hand, rescan, and confirm the layout takes the edit up
+
+1. Select one of the side boards and drag it (or edit its `Placement` in the
+   property editor) so it no longer lines up with **Bottom** and **Top**.
+2. Select **ShelvingUnit** and run **Resize Unit** again, entering the exact
+   same width, depth, and height as before (or run **Scan Unit** first to
+   confirm the moved board is still read correctly, then resize).
+
+Expected: the hand-moved board snaps back into its correct position as part
+of the reapplied layout; the layout reflows around the edit rather than
+preserving the stray placement, since every resize rescans the container
+fresh rather than trusting a cached tree.
+
+### 4. Put an unrelated box in the container and confirm apply leaves it and says so
+
+1. Select **ShelvingUnit**, add a plain `Part::Box` directly into it via the
+   Python console:
+   ```python
+   doc = App.ActiveDocument
+   part = doc.getObject("ShelvingUnit")
+   extra = doc.addObject("Part::Box", "HandAdded")
+   extra.Length, extra.Width, extra.Height = 50.0, 50.0, 50.0
+   extra.Placement = App.Placement(App.Vector(2000.0, 2000.0, 2000.0), App.Rotation())
+   part.addObject(extra)
+   doc.recompute()
+   ```
+2. Select **ShelvingUnit** and run **Resize Unit**, entering any new size.
+
+Expected: **HandAdded** is untouched (same position, still in the tree, not
+deleted), because it carries none of this workbench's properties. The Report
+view's line includes `left alone 1` and names `HandAdded` on the line below
+it.
+
+### 5. Save, quit, move the workbench off the path, reopen, and confirm the document is intact
+
+1. Save the document.
+2. Quit FreeCAD.
+3. Rename or move the `shelving-workbench` symlink (or copy) out of your
+   `Mod/` directory (see "Loading the workbench from this checkout" above),
+   so FreeCAD cannot find the workbench.
+4. Restart FreeCAD and open the saved document.
+
+Expected: the document opens without an error dialog or a report-view
+warning about a missing module, and the unit's boxes are present, correctly
+sized, and at their saved positions: plain `Part::Box` geometry needs no
+scripted type to regenerate. Restore the symlink afterward to keep using the
+workbench.

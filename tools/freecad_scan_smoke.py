@@ -275,7 +275,7 @@ def test_closed_shell_with_a_shelf(
 ) -> None:
     _build_shell(doc, part)
     doc.recompute()
-    boxes, skipped = read_container(part)
+    boxes, skipped, _record = read_container(part)
     assert len(boxes) == 5, len(boxes)
     assert len(skipped) == 0, skipped
     _assert_shelf_reads_correctly(boxes)
@@ -288,7 +288,7 @@ def test_move_and_rotate_the_container(
 ) -> None:
     """The records must not change, since ``read_container`` excludes the
     selected container's own placement."""
-    boxes, _ = read_container(part)
+    boxes, _skipped, _record = read_container(part)
     before = sorted((b.name, b.corner_mm, b.size_mm) for b in boxes)
     shelf = cast("FreeCAD.GeoFeature", doc.getObject("Shelf"))
     shelf_global_before = shelf.getGlobalPlacement().Base
@@ -307,7 +307,7 @@ def test_move_and_rotate_the_container(
         shelf_global_before,
         shelf_global_after,
     )
-    moved_boxes, moved_skipped = read_container(part)
+    moved_boxes, moved_skipped, _record = read_container(part)
     after = sorted((b.name, b.corner_mm, b.size_mm) for b in moved_boxes)
     assert before == after, (before, after)
     assert len(moved_skipped) == 0, moved_skipped
@@ -316,15 +316,16 @@ def test_move_and_rotate_the_container(
 def test_notched_partdesign_body(
     doc: FreeCAD.Document, part: FreeCAD.DocumentObject
 ) -> None:
-    """One ``Skipped`` record naming the box-minus-cutouts reason, not two
-    board records."""
+    """A single-solid, axis-aligned, non-box part is adopted as one
+    irregular ``Box`` rather than skipped: sh-018's write path pins such a
+    board's size and moves it rather than regenerating its shape, so it
+    needs to reach ``scan`` as a board, not a ``Skipped`` record."""
     body = _add_notched_body(doc, part)
-    boxes, skipped = read_container(part)
-    assert len(boxes) == 5, len(boxes)
-    assert len(skipped) == 1, skipped
-    assert skipped[0].name == body.Name
-    assert "box minus 1 rectangular cutout" in skipped[0].reason, skipped[0].reason
-    assert "50 x 30 x 18 mm" in skipped[0].reason, skipped[0].reason
+    boxes, skipped, _record = read_container(part)
+    assert len(boxes) == 6, len(boxes)
+    assert len(skipped) == 0, skipped
+    notched = _box_by_name(boxes, body.Name)
+    assert notched.irregular is True
 
 
 def test_notched_body_reached_through_a_second_group(
@@ -338,9 +339,9 @@ def test_notched_body_reached_through_a_second_group(
     cast("FreeCAD.DocumentObjectGroup", part).addObject(alias_group)
     cast("FreeCAD.DocumentObjectGroup", raw_alias).addObject(body)
     doc.recompute()
-    boxes, skipped = read_container(part)
-    assert len(boxes) == 5, len(boxes)
-    assert len(skipped) == 1, skipped
+    boxes, skipped, _record = read_container(part)
+    assert len(boxes) == 6, len(boxes)
+    assert len(skipped) == 0, skipped
 
 
 def test_box_rotated_a_quarter_turn(
@@ -357,8 +358,8 @@ def test_box_rotated_a_quarter_turn(
         rotation=FreeCAD.Rotation(FreeCAD.Vector(0.0, 0.0, 1.0), 90.0),
     )
     doc.recompute()
-    boxes, _ = read_container(part)
-    assert len(boxes) == 6, len(boxes)
+    boxes, _skipped, _record = read_container(part)
+    assert len(boxes) == 7, len(boxes)
     rotated = _box_by_name(boxes, "Rotated")
     for got, want in zip(
         (rotated.size_mm.x_mm, rotated.size_mm.y_mm, rotated.size_mm.z_mm),
@@ -387,9 +388,9 @@ def test_box_inside_a_nested_rotated_container(
     )
     _add_box(doc, nested_obj, "NestedBox", (100.0, 50.0, 20.0), (0.0, 0.0, 0.0))
     doc.recompute()
-    boxes, skipped = read_container(part)
-    assert len(boxes) == 7, len(boxes)
-    assert len(skipped) == 1, skipped
+    boxes, skipped, _record = read_container(part)
+    assert len(boxes) == 8, len(boxes)
+    assert len(skipped) == 0, skipped
     nested_box = _box_by_name(boxes, "NestedBox")
     for got, want in zip(
         (nested_box.size_mm.x_mm, nested_box.size_mm.y_mm, nested_box.size_mm.z_mm),
@@ -418,9 +419,9 @@ def test_skewed_box_refusal(
         rotation=FreeCAD.Rotation(FreeCAD.Vector(0.0, 0.0, 1.0), 30.0),
     )
     doc.recompute()
-    boxes, skipped = read_container(part)
-    assert len(boxes) == 7, len(boxes)
-    assert len(skipped) == 2, skipped
+    boxes, skipped, _record = read_container(part)
+    assert len(boxes) == 8, len(boxes)
+    assert len(skipped) == 1, skipped
     skewed = next(s for s in skipped if s.name == "Skewed")
     assert skewed.reason == "not axis-aligned", skewed.reason
 

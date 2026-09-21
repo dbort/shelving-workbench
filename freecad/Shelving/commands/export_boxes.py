@@ -95,7 +95,7 @@ class ExportBoxesCommand:
         except ScanError as err:
             print(f"REFUSED: {err}")
             return
-        boxes, skipped = read_container(container)
+        boxes, skipped, _record = read_container(container)
         export: _Export = {
             "boxes": [
                 {

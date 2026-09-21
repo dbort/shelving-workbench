@@ -1,5 +1,5 @@
 ---
-next_id: friction-018
+next_id: friction-019
 ---
 
 # Friction log
@@ -202,3 +202,27 @@ Sweeping the log is a human-triggered act, like task sign-off: the user asks for
   `docs/freecadcmd-notes.md` carried a short "building a PartDesign feature
   headlessly" recipe, since this task is unlikely to be the last one needing
   more than a bare `Part::Box`.
+
+- `friction-018` - **"never touch an untagged object" read as absolute
+  contradicted the one worked example that needed it not to be**: sh-018's
+  Frontier Advice states the deletion rule as "Anything untagged is left
+  exactly where it is" with no qualifier, and a first, literal
+  implementation of `write_container` applied that to every untagged
+  object, matched by the current layout or not. That made the task's own
+  worked example — a hand-built notched panel slotted into a real bay,
+  which the same Frontier Advice says apply must move — permanently
+  unreachable: the panel starts untagged, so "never touch" left it in
+  place forever, and "apply moves it" never got a chance to run. Caught by
+  writing a small headless script exercising that exact scenario before
+  committing to the smoke test, not by any check catching the
+  contradiction directly. Resolved by re-reading "anything untagged is
+  left exactly where it is" as scoped to the deletion decision the
+  paragraph is titled after (never delete an untagged object) rather than
+  a blanket rule, so a match now adopts an untagged object (tags it,
+  writes its geometry, gives it a fresh label) the same way a copy is
+  adopted, and only an object matching nothing stays untouched. Simpler
+  if: the Frontier Advice's deletion-rule paragraph and its
+  pinned-board paragraph had been reconciled against each other before the
+  task file was approved, or the deletion rule had said outright that a
+  match overrides "untagged" and only non-matching objects are ever left
+  alone.
