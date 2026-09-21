@@ -404,13 +404,14 @@ def _find_board(region: Region, role: str) -> Board | None:
     return None
 
 
-def test_pinned_box_scans_with_pinned_size_mm_set() -> None:
-    """A pinned box places as a ``Board`` carrying its measured extent as
+def test_irregular_box_scans_with_pinned_size_mm_set() -> None:
+    """An irregular box places as a ``Board`` carrying its measured extent as
     ``pinned_size_mm``, with the rest of the tree unaffected."""
     boxes = _closed_box([])
     plain = scan(boxes, CATALOG)
     pinned_boxes = [
-        dataclasses.replace(b, pinned=True) if b.name == "Bottom" else b for b in boxes
+        dataclasses.replace(b, irregular=True) if b.name == "Bottom" else b
+        for b in boxes
     ]
     pinned_result = scan(pinned_boxes, CATALOG)
 

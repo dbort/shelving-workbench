@@ -64,9 +64,10 @@ from freecad.Shelving.core.layout import (
 RULE_RECORD_VERSION: int = 1
 
 # A FreeCAD object's internal Name is identifier-only (letters, digits,
-# underscore), so neither of these can ever collide with a real board id.
-KEY_SEPARATOR: str = "\x1f"
-NO_NEIGHBOR_SENTINEL: str = "\x1e"
+# underscore), so any punctuation is safe here; printable characters are
+# chosen over control characters so a key is legible when inspected directly.
+KEY_SEPARATOR: str = "|"
+NO_NEIGHBOR_SENTINEL: str = "~"
 
 
 def rule_key(before: str | None, after: str | None) -> str:
