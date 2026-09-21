@@ -1,8 +1,8 @@
 ---
 id: sh-017
 title: "Pinned parts and the stored rule record"
-current_agent: reviewer
-current_phase: review
+current_agent: user
+current_phase: user_signoff
 review_rejections: 0
 blocked_by: [sh-013, sh-014]
 ---
@@ -20,7 +20,7 @@ Milestone M7, part 1 of 2.
 ## Status
 - [x] Planning
 - [x] Implementation
-- [ ] Review
+- [x] Review
 - [ ] User sign-off
 
 ## Must Have
