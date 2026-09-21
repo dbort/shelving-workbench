@@ -2,7 +2,7 @@
 id: sh-018
 title: "Write a container"
 current_agent: implementer
-current_phase: planning
+current_phase: implementation
 review_rejections: 0
 blocked_by: [sh-016, sh-017]
 ---
@@ -19,7 +19,7 @@ Unit** and **Resize Unit**, both going through the same path. Milestone M7,
 part 2 of 2.
 
 ## Status
-- [ ] Planning
+- [x] Planning
 - [ ] Implementation
 - [ ] Review
 - [ ] User sign-off
