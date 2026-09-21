@@ -26,7 +26,7 @@ Milestone M9, part 1 of 2.
 
 ## Must Have
 - [ ] `pixi run tests` green.
-- [ ] `shelving_core/edit.py` exports `split_region`, `merge_at`, and
+- [ ] `freecad/Shelving/core/edit.py` exports `split_region`, `merge_at`, and
       `EditError`. Every function takes a `Unit` and returns a `Unit`, never
       mutating its argument, and imports no Qt and no FreeCAD.
 - [ ] `split_region(unit, region_id, axis, material)` divides a `Bay` into two
@@ -63,7 +63,7 @@ Milestone M9, part 1 of 2.
 ## Frontier Advice
 
 THREE LAYERS, and the split is the point of this task. Do not collapse them.
-1. `shelving_core/edit.py`: tree operations. `Unit` in, `Unit` out. No Qt, no
+1. `freecad/Shelving/core/edit.py`: tree operations. `Unit` in, `Unit` out. No Qt, no
    FreeCAD, tested in the fast suite. Every editing decision that has a right
    answer lives here.
 2. `freecad/Shelving/editor/scene.py`: Qt rendering and hit testing. Builds
@@ -85,7 +85,7 @@ PySide6, and must reuse `QtWidgets.QApplication.instance()` when one exists; a
 second `QApplication` in one process aborts. PySide6 is 6.7.3 in this
 environment.
 
-EDITS RETURN A RESULT, NEVER RAISE THROUGH THE PANEL. `shelving_core.edit`
+EDITS RETURN A RESULT, NEVER RAISE THROUGH THE PANEL. `freecad.Shelving.core.edit`
 raises `EditError` for a structurally impossible request, such as splitting a
 `Void`. The session catches both that and `LayoutSolveError`, returns the
 message and the offending id to the panel, and leaves the document untouched.
@@ -117,19 +117,14 @@ a surprising tree.
 
 IMPORT CORE TYPES FROM ONE PLACE ONLY. `freecad/Shelving/editor/session.py`
 does `isinstance` / structural matching on `Region`, `Bay`, `Void`, `Division`,
-`Board` to decide what a selection permits. `shelving_core/` and
-`freecad/Shelving/vendor/shelving_core/` are byte-identical but distinct Python
-packages; a `Board` imported from one is not the same class as one imported
-from the other, so `isinstance` silently returns false across them with no
-error. `shelving_core`'s own modules import each other relatively, so the
-vendored copy is internally self-consistent no matter what else is on
-`sys.path` (enforced by a test in `shelving_core/tests/`, named for this
-invariant), but that guarantee is about `shelving_core`'s own internals, not
-about this file: import every core type `session.py` matches against from
-`shelving_core.*` (never `freecad.Shelving.vendor.shelving_core.*`),
+`Board` to decide what a selection permits. Import every core type
+`session.py` matches against from `freecad.Shelving.core.*`, fully qualified,
 consistently through the module, the same way every other FreeCAD-layer
-module in this codebase does. A prior version of this workbench lost every
-divider by breaking that rule.
+module in this codebase does. `freecad.Shelving.core` exists as a single copy
+in this codebase (`freecad/Shelving/core/`); a prior version of this
+workbench, before that consolidation, lost every divider because two
+importable copies of the same classes produced two distinct `Board` classes
+that `isinstance` silently failed to match across.
 
 SELECTION IS A REGION ID OR A BOARD ID, held by the session, not the scene. The
 scene reports what a point hit; the session decides what that means and what the
@@ -150,9 +145,9 @@ Every length identifier carries `_mm`.
 
 ## Execution Plan
 
-- [ ] **Step 1** (`shelving_core/edit.py`, `shelving_core/tests/test_edit.py`): Create the module. `EditError(ValueError)` carrying the offending id. `split_region(unit, region_id, axis, material=None) -> Unit` rebuilding the tree with the named `Bay` replaced by a `Division` along `axis` holding bay, board, bay, both bays `Fill`; refuse a `Void`, a `Division`, and an unknown id. `merge_at(unit, board_id) -> Unit` replacing a board and its two neighbouring regions with one region carrying the first's rule; refuse a board whose neighbours are not both regions and an unknown id. Both must return a new tree and leave the argument untouched, asserted. Tests: each refusal; split then merge round-trips the tree shape for a single bay, a nested division, and a stepped unit; the argument unit is unchanged after each call.
+- [ ] **Step 1** (`freecad/Shelving/core/edit.py`, `freecad/Shelving/core/tests/test_edit.py`): Create the module. `EditError(ValueError)` carrying the offending id. `split_region(unit, region_id, axis, material=None) -> Unit` rebuilding the tree with the named `Bay` replaced by a `Division` along `axis` holding bay, board, bay, both bays `Fill`; refuse a `Void`, a `Division`, and an unknown id. `merge_at(unit, board_id) -> Unit` replacing a board and its two neighbouring regions with one region carrying the first's rule; refuse a board whose neighbours are not both regions and an unknown id. Both must return a new tree and leave the argument untouched, asserted. Tests: each refusal; split then merge round-trips the tree shape for a single bay, a nested division, and a stepped unit; the argument unit is unchanged after each call.
 
-- [ ] **Step 2** (`freecad/Shelving/editor/scene.py`): Create the scene builder, importing Qt but no FreeCAD. `build_scene(unit, spaces, selected_id=None) -> QGraphicsScene` adding one rect per region and per board, projected along the unit's depth axis, each carrying its id via `setData`. A `Void` gets a distinct brush from a `Bay`, and the selected item gets a distinct pen. `hit_test(scene, point) -> str | None` returning the id of the topmost item at a scene point. Keep the drawing primitives shared with `shelving_core/svg.py` in spirit but do not import it: an SVG string cannot become Qt items.
+- [ ] **Step 2** (`freecad/Shelving/editor/scene.py`): Create the scene builder, importing Qt but no FreeCAD. `build_scene(unit, spaces, selected_id=None) -> QGraphicsScene` adding one rect per region and per board, projected along the unit's depth axis, each carrying its id via `setData`. A `Void` gets a distinct brush from a `Bay`, and the selected item gets a distinct pen. `hit_test(scene, point) -> str | None` returning the id of the topmost item at a scene point. Keep the drawing primitives shared with `freecad/Shelving/core/svg.py` in spirit but do not import it: an SVG string cannot become Qt items.
 
 - [ ] **Step 3** (`freecad/Shelving/editor/tests/test_scene.py` or the repo's test location for FreeCAD-side code): Create the offscreen suite. Set `QT_QPA_PLATFORM=offscreen` before importing PySide6 and reuse an existing `QApplication`. Assert: item count matches regions plus boards; the scene bounding rect matches the unit's projected extent; hit tests at points inside a known bay, a known board, and a known void return those ids; a point outside returns `None`; the selected item's pen differs from the others'; a `Void`'s brush differs from a `Bay`'s; and a `QtTest.QTest.mouseClick` on a view over the scene reaches the scene and reports the expected id.
 

@@ -32,7 +32,7 @@ makes a changed thickness reach the boards using it. Milestone M8.
       entry, asserted in the smoke.
 - [ ] Each entry carries `MaterialId`, `Description`, `Thickness`,
       `MaterialType`, and `NominalThickness`, and `read_catalog` builds a
-      `shelving_core.materials.Catalog` from them.
+      `freecad.Shelving.core.materials.Catalog` from them.
 - [ ] `find_catalog` returns the one catalog in a document, `None` when there is
       none, and raises naming both objects when there are two.
 - [ ] `read_catalog` raises naming both entries when two share a `MaterialId`,
@@ -131,7 +131,7 @@ Every length identifier carries `_mm`.
 
 - [ ] **Step 1** (`freecad/Shelving/properties.py`): Extend the property module with the catalog's names and accessors, so no other module spells one. The group's marker property, and the five entry properties `MaterialId`, `Description`, `Thickness`, `MaterialType`, `NominalThickness`. `ensure_entry_properties(obj)` adding any that are missing, idempotent. Typed readers and writers, with the thickness reader returning a plain `float` in millimetres from the `Quantity` a `PropertyLength` yields. A `Protocol` for the entry surface.
 
-- [ ] **Step 2** (`freecad/Shelving/catalog.py`): Create the module. `find_catalog(doc)` scanning the document for a group carrying the marker, returning `None` for none and raising a `ValueError` naming both for two. `seed_catalog(doc)` creating the group and one `App::VarSet` per entry of `freecad.Shelving.default_catalog.DEFAULT_CATALOG`, labelling each from its description. `ensure_catalog(doc)` returning the existing catalog or seeding one. `read_catalog(group)` building a `shelving_core.materials.Catalog`, raising a `ValueError` naming both entries on a duplicate `MaterialId` and naming the entry on a non-positive `Thickness`. `add_entry(group, ...)` appending one blank entry with a placeholder id that does not collide with an existing one.
+- [ ] **Step 2** (`freecad/Shelving/catalog.py`): Create the module. `find_catalog(doc)` scanning the document for a group carrying the marker, returning `None` for none and raising a `ValueError` naming both for two. `seed_catalog(doc)` creating the group and one `App::VarSet` per entry of `freecad.Shelving.default_catalog.DEFAULT_CATALOG`, labelling each from its description. `ensure_catalog(doc)` returning the existing catalog or seeding one. `read_catalog(group)` building a `freecad.Shelving.core.materials.Catalog`, raising a `ValueError` naming both entries on a duplicate `MaterialId` and naming the entry on a non-positive `Thickness`. `add_entry(group, ...)` appending one blank entry with a placeholder id that does not collide with an existing one.
 
 - [ ] **Step 3** (`freecad/Shelving/unit_ops.py`): Route every catalog use through the document. Change `create_unit`, `resize_unit`, and `rescan_unit` to take the catalog from `ensure_catalog(doc)` rather than the in-code default. Add `reflow_all(doc, catalog)` finding every container carrying `ShelvingUnitId`, calling `rescan_unit` on each, collecting per-unit results and per-unit errors without stopping, and returning both. Do NOT open a transaction here; the command owns it.
 

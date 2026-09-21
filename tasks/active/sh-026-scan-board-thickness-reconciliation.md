@@ -42,15 +42,15 @@ consistent with it.
 - [ ] A `Fill`/`Weighted` sibling present in the division absorbs the delta
       exactly as it already absorbs ordinary slack today; no behavior change
       when one exists.
-- [ ] Two new tests in `shelving_core/tests/test_scan.py`, independent of
+- [ ] Two new tests in `freecad/Shelving/core/tests/test_scan.py`, independent of
       any real fixture: (1) a hand-built division with one board whose
       catalog-resolved thickness differs from its raw measured width and
       exactly one `Fixed` sibling, asserting the sibling's solved size
       absorbs the delta and `solve` succeeds with exact numbers; (2) the
       same setup with two `Fixed` siblings and no absorber, asserting
       `ScanError` is raised naming the board and both ambiguous siblings.
-- [ ] `shelving_core/tests/test_scan.py`'s `test_real_stair_step_whole_tree`
-      and `shelving_core/tests/test_svg.py`'s
+- [ ] `freecad/Shelving/core/tests/test_scan.py`'s `test_real_stair_step_whole_tree`
+      and `freecad/Shelving/core/tests/test_svg.py`'s
       `test_real_stair_step_renders_end_to_end_with_a_void` no longer pass
       `snap_mm=0.1` to `scan` for this fixture — remove the argument (fall
       back to `DEFAULT_SNAP_MM`) and confirm both still pass. If either
@@ -65,7 +65,7 @@ consistent with it.
 ## Frontier Advice
 
 SEQUENCING, not a hard blocker. `sh-025` (fixing scan's divider-height
-stretching) also touches `shelving_core/scan.py` and
+stretching) also touches `freecad/Shelving/core/scan.py` and
 `test_real_stair_step_whole_tree`, the same fixture and test function this
 task touches, though a different function within `scan.py` (`_slab`/`_gap`
 there vs `_finalize_items`/`_recover_rules` here) and a mechanically
@@ -142,11 +142,10 @@ clean. Shell stays simple does not apply; this task adds no shell.
 
 ## Execution Plan
 
-- [ ] **Step 1** (`shelving_core/scan.py`): Thread catalog/material
+- [ ] **Step 1** (`freecad/Shelving/core/scan.py`): Thread catalog/material
       resolution into `_finalize_items` and implement the single-absorber
-      and ambiguous-error cases per Frontier Advice. Re-sync the vendored
-      copy.
-- [ ] **Step 2** (`shelving_core/tests/test_scan.py`): Add the two new
+      and ambiguous-error cases per Frontier Advice.
+- [ ] **Step 2** (`freecad/Shelving/core/tests/test_scan.py`): Add the two new
       hand-built tests (single absorber succeeds; ambiguous case raises
       `ScanError`), and remove `snap_mm=0.1` from
       `test_real_stair_step_whole_tree`'s `scan` call, confirming it still
@@ -154,7 +153,7 @@ clean. Shell stays simple does not apply; this task adds no shell.
       unit (`pipeline.md` § Deferred verification): step 1 alone does not
       make step 2's still-`snap_mm=0.1`-pinned assertions meaningful, so
       `pixi run tests` is only required green once, after step 2.
-- [ ] **Step 3** (`shelving_core/tests/test_svg.py`): Remove `snap_mm=0.1`
+- [ ] **Step 3** (`freecad/Shelving/core/tests/test_svg.py`): Remove `snap_mm=0.1`
       from `test_real_stair_step_renders_end_to_end_with_a_void`'s `scan`
       call, confirming it still passes at the true default. Independent of
       steps 1-2's own file changes but depends on step 1's fix landing

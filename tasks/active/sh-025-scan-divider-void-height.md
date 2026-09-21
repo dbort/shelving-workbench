@@ -27,14 +27,14 @@ and 1480 mm tall all currently solve to the same 1480 mm.
 
 ## Must Have
 - [ ] `pixi run tests` green.
-- [ ] In `shelving_core/scan.py`, a single board's "reaches across its slab"
+- [ ] In `freecad/Shelving/core/scan.py`, a single board's "reaches across its slab"
       check in `_slab`/`_gap` treats a gap beyond `clearance_mm` the same
       way regardless of whether the space past the board is classified
       `outside` or enclosed: both fall through to `_region`'s existing
       recursive cut-finder rather than being silently absorbed as a
       near-zero inset. A gap within `clearance_mm` keeps behaving exactly as
       it does today, `outside` or not.
-- [ ] `shelving_core/tests/test_scan.py`'s `test_real_stair_step_whole_tree`
+- [ ] `freecad/Shelving/core/tests/test_scan.py`'s `test_real_stair_step_whole_tree`
       is updated to assert the corrected tree shape: solving
       `real_stair_step.boxes.json` produces three distinct Z-extents for the
       `panelZX012`/`panelZX007`/`panelZX008` divider boards (approximately
@@ -42,7 +42,7 @@ and 1480 mm tall all currently solve to the same 1480 mm.
       ~1480.337 mm), each wrapped in its own nested `Division`+`Void` where
       its real height falls short of its neighbors', matching the pattern
       already used for column bodies (`Bay`, `top`, `Void`).
-- [ ] A new test in `shelving_core/tests/test_scan.py`, independent of the
+- [ ] A new test in `freecad/Shelving/core/tests/test_scan.py`, independent of the
       real fixture, hand-builds two adjacent bays of different heights
       separated by a divider shorter than the taller one, and asserts the
       divider solves to its own true height with an explicit `Void` sibling
@@ -64,8 +64,8 @@ and 1480 mm tall all currently solve to the same 1480 mm.
       before writing the new assertion values; do not guess a count.
 - [ ] This task does NOT touch `snap_mm` handling, `_material_for_thickness_mm`,
       or the `snap_mm=0.1` argument already passed to `scan` for
-      `real_stair_step` in `shelving_core/tests/test_scan.py` or
-      `shelving_core/tests/test_svg.py`. That is a separate, already-logged,
+      `real_stair_step` in `freecad/Shelving/core/tests/test_scan.py` or
+      `freecad/Shelving/core/tests/test_svg.py`. That is a separate, already-logged,
       deliberately deferred issue (`friction-009` in
       `.claude/docs/friction-log.md`); leave those call sites exactly as
       they are.
@@ -74,7 +74,7 @@ and 1480 mm tall all currently solve to the same 1480 mm.
 ## Frontier Advice
 
 ROOT CAUSE, verified by direct inspection, not guessed. `_gap` in
-`shelving_core/scan.py` (~line 612) walks from a board's edge toward its
+`freecad/Shelving/core/scan.py` (~line 612) walks from a board's edge toward its
 slab's boundary and returns the width of any ENCLOSED empty space it
 crosses; its docstring states the existing, deliberate rule: "Outside cells
 cost nothing." `_slab` (~line 525) calls `_gap` to decide whether a single
@@ -110,7 +110,7 @@ today.
 
 VERIFY AGAINST REAL NUMBERS, not just the updated test's own pass/fail.
 Reproduce first: `boxes_from_json` +
-`shelving_core/tests/fixtures/real_stair_step.boxes.json`, a catalog built
+`freecad/Shelving/core/tests/fixtures/real_stair_step.boxes.json`, a catalog built
 from the fixture's own thicknesses (`generic{t}` entries per distinct
 thickness, see `_catalog_from_thicknesses` in `test_svg.py` for the exact
 pattern), `scan(boxes, catalog, snap_mm=0.1)` (keep `snap_mm=0.1`; see the
@@ -139,12 +139,11 @@ clean. Shell stays simple does not apply; this task adds no shell.
 
 ## Execution Plan
 
-- [ ] **Step 1** (`shelving_core/scan.py`): Change `_slab`'s single-board
+- [ ] **Step 1** (`freecad/Shelving/core/scan.py`): Change `_slab`'s single-board
       "reaches across" check so a gap beyond `clearance_mm` falls through to
       `_region`'s recursive fallback whether `_gap` classifies the excess
-      space as `outside` or enclosed, per Frontier Advice. Re-sync the
-      vendored copy.
-- [ ] **Step 2** (`shelving_core/tests/test_scan.py`): Update
+      space as `outside` or enclosed, per Frontier Advice.
+- [ ] **Step 2** (`freecad/Shelving/core/tests/test_scan.py`): Update
       `test_real_stair_step_whole_tree`'s assertions to the corrected tree
       shape, and add the new hand-built regression test for a short divider
       between two differently-sized bays, per Must Have. Steps 1-2 are one

@@ -27,7 +27,7 @@ Milestone M9, part 2 of 2.
 
 ## Must Have
 - [ ] `pixi run tests` green.
-- [ ] `shelving_core/edit.py` gains `set_size(unit, region_id, size_mm, basis)`
+- [ ] `freecad/Shelving/core/edit.py` gains `set_size(unit, region_id, size_mm, basis)`
       returning a `Unit` with that region's rule replaced by a `Fixed` at that
       size and basis, leaving every sibling's rule untouched.
 - [ ] `set_basis(unit, region_id, basis)` changes only what a size measures,
@@ -122,7 +122,7 @@ the workbench, so it will not touch them unless told. Any removal happens inside
 the session's transaction so Cancel reverses it.
 
 LAYERING IS UNCHANGED FROM sh-020. Every decision with a right answer goes in
-`shelving_core/edit.py` and is tested in the fast suite. The scene renders and hit-tests, tested offscreen. The session owns the
+`freecad/Shelving/core/edit.py` and is tested in the fast suite. The scene renders and hit-tests, tested offscreen. The session owns the
 document. The panel holds no logic worth testing. A drag in particular: the
 scene reports which board moved and to what scene position, the session converts
 that to a size and calls the core.
@@ -142,7 +142,7 @@ Every length identifier carries `_mm`.
 
 - [ ] **Step 1** (spike, no committed code): Before writing the panel, open a real FreeCAD GUI session and confirm `FreeCADGui.UiLoader().createWidget("Gui::QuantitySpinBox")` returns a usable widget, that it accepts `1 + 1/2"` and an expression naming a `VarSet`, and that it exposes the resolved quantity to Python. Record the answer in `docs/freecadcmd-notes.md` under a heading for GUI-only widget access, including the exact widget name that worked. If none works, record that and use a plain field with `FreeCAD.Units.parseQuantity` for the rest of this task.
 
-- [ ] **Step 2** (`shelving_core/edit.py`, `shelving_core/tests/test_edit.py`): Add `set_size(unit, region_id, size_mm, basis)` replacing that region's rule with a `Fixed` carrying both, refusing an unknown id and a non-positive size. Add `set_basis(unit, region_id, basis)` changing only the basis and recomputing the stored number from the region's currently solved extent so the geometry is unchanged; refuse a `Basis.WITH_NEXT` on a region whose next item is not a board, since sh-013's solver cannot resolve it. Tests: `set_size` leaves siblings' rules untouched; `set_basis` in both directions leaves the solved layout identical, asserted space by space; the refusals; and the behaviour that gives basis its purpose, a layout solved against two catalogs of different thickness holding board positions under `WITH_NEXT` and moving them under `CLEAR`.
+- [ ] **Step 2** (`freecad/Shelving/core/edit.py`, `freecad/Shelving/core/tests/test_edit.py`): Add `set_size(unit, region_id, size_mm, basis)` replacing that region's rule with a `Fixed` carrying both, refusing an unknown id and a non-positive size. Add `set_basis(unit, region_id, basis)` changing only the basis and recomputing the stored number from the region's currently solved extent so the geometry is unchanged; refuse a `Basis.WITH_NEXT` on a region whose next item is not a board, since sh-013's solver cannot resolve it. Tests: `set_size` leaves siblings' rules untouched; `set_basis` in both directions leaves the solved layout identical, asserted space by space; the refusals; and the behaviour that gives basis its purpose, a layout solved against two catalogs of different thickness holding board positions under `WITH_NEXT` and moving them under `CLEAR`.
 
 - [ ] **Step 3** (`freecad/Shelving/editor/scene.py`): Add dimension items. For each region draw a dimension whose witness lines touch the faces its basis measures: a clear dimension spanning the void, a spacing dimension spanning from one board's face to the next and crossing that board. Tag each dimension item with its region id so it can be hit-tested and selected. Add a readout of the other basis's value beside it. Extend the offscreen suite: assert the two bases produce dimension items of different span for the same region, that a dimension item's endpoints lie on the faces expected, and that hit-testing a dimension returns its region id.
 
