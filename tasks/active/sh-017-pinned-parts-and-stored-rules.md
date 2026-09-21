@@ -2,7 +2,7 @@
 id: sh-017
 title: "Pinned parts and the stored rule record"
 current_agent: implementer
-current_phase: planning
+current_phase: implementation
 review_rejections: 0
 blocked_by: [sh-013, sh-014]
 ---
@@ -18,7 +18,7 @@ boards that bound each region so it survives a rescan that assigns fresh ids.
 Milestone M7, part 1 of 2.
 
 ## Status
-- [ ] Planning
+- [x] Planning
 - [ ] Implementation
 - [ ] Review
 - [ ] User sign-off
