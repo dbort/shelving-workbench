@@ -222,7 +222,7 @@ references it.
 
 **Status:** Tasks sh-017, sh-018
 
-- [ ] sh-017 — pinned parts and the stored rule record
+- [x] sh-017 — pinned parts and the stored rule record
 - [ ] sh-018 — writing a container, and the create and resize commands
   (blocked on sh-016 and sh-017)
 

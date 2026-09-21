@@ -69,6 +69,17 @@ class Box:
     name: str
     corner_mm: Vec3
     size_mm: Vec3
+    # A geometrically irregular part, such as a notched panel, whose true
+    # shape the workbench cannot regenerate: scanned as a Board carrying its
+    # measured extent as Board.pinned_size_mm, for the solver to verify
+    # rather than derive.
+    irregular: bool = False
+    # The material this box is known to be, bypassing thickness matching.
+    # Set when the exporter already knows the board's material
+    # (round-tripping a previously written container); None falls back to
+    # matching the catalog entry whose thickness is closest to the box's
+    # measured thin-axis extent.
+    material: MaterialId | None = None
 
 
 @dataclass(frozen=True)
@@ -349,6 +360,8 @@ class _Elevated:
     d1_mm: float
     thin_axis: Axis
     thickness_mm: float
+    irregular: bool = False
+    material: MaterialId | None = None
 
 
 def _elevate(box: Box, horizontal: Axis, vertical: Axis, depth_axis: Axis) -> _Elevated:
@@ -358,7 +371,17 @@ def _elevate(box: Box, horizontal: Axis, vertical: Axis, depth_axis: Axis) -> _E
     d0_mm, d1_mm = _span_mm(box, _axis_index(depth_axis))
     thickness_mm = _component_mm(box.size_mm, _axis_index(thin_axis))
     return _Elevated(
-        box.name, h0_mm, h1_mm, v0_mm, v1_mm, d0_mm, d1_mm, thin_axis, thickness_mm
+        box.name,
+        h0_mm,
+        h1_mm,
+        v0_mm,
+        v1_mm,
+        d0_mm,
+        d1_mm,
+        thin_axis,
+        thickness_mm,
+        irregular=box.irregular,
+        material=box.material,
     )
 
 
@@ -390,37 +413,37 @@ class _Grid:
         v_values_mm = [value_mm for p in members for value_mm in (p.v0_mm, p.v1_mm)]
         self.hs_mm = _snap_lines(h_values_mm, snap_mm)
         self.vs_mm = _snap_lines(v_values_mm, snap_mm)
-        self.planks: list[_Elevated] = []
+        self.boards: list[_Elevated] = []
         self.cols: list[tuple[int, int]] = []
         self.rows: list[tuple[int, int]] = []
         nh = len(self.hs_mm) - 1
         nv = len(self.vs_mm) - 1
         self.cover: list[list[int]] = [[_EMPTY] * nh for _ in range(nv)]
-        for index, plank in enumerate(members):
-            i0 = _index_of(self.hs_mm, plank.h0_mm, snap_mm)
-            i1 = _index_of(self.hs_mm, plank.h1_mm, snap_mm)
-            j0 = _index_of(self.vs_mm, plank.v0_mm, snap_mm)
-            j1 = _index_of(self.vs_mm, plank.v1_mm, snap_mm)
+        for index, board in enumerate(members):
+            i0 = _index_of(self.hs_mm, board.h0_mm, snap_mm)
+            i1 = _index_of(self.hs_mm, board.h1_mm, snap_mm)
+            j0 = _index_of(self.vs_mm, board.v0_mm, snap_mm)
+            j1 = _index_of(self.vs_mm, board.v1_mm, snap_mm)
             if i0 == i1 or j0 == j1:
                 raise ScanError(
-                    f"{plank.name}: an extent collapses at the {snap_mm:g} mm snap "
+                    f"{board.name}: an extent collapses at the {snap_mm:g} mm snap "
                     "tolerance",
-                    (plank.name,),
+                    (board.name,),
                 )
             for j in range(j0, j1):
                 for i in range(i0, i1):
                     other = self.cover[j][i]
                     if other != _EMPTY:
                         raise ScanError(
-                            f"{plank.name} overlaps {self.planks[other].name}",
-                            (plank.name, self.planks[other].name),
+                            f"{board.name} overlaps {self.boards[other].name}",
+                            (board.name, self.boards[other].name),
                         )
                     self.cover[j][i] = index
-            # Keep the plank's measured extents. Snapping moves an edge by up
+            # Keep the board's measured extents. Snapping moves an edge by up
             # to half the tolerance, which would corrupt the thickness that
-            # identifies the plank's material; the grid owns the topology and
+            # identifies the board's material; the grid owns the topology and
             # `cols` / `rows` carry it.
-            self.planks.append(plank)
+            self.boards.append(board)
             self.cols.append((i0, i1))
             self.rows.append((j0, j1))
         self.outside = self._flood_outside(nh, nv)
@@ -489,7 +512,7 @@ def _region(
             f"no line crosses the region ({grid.hs_mm[i0]:g}, {grid.vs_mm[j0]:g})-"
             f"({grid.hs_mm[i1]:g}, {grid.vs_mm[j1]:g}) without cutting through a "
             "board; the layout is not a tree",
-            (grid.planks[index].name for index in inside),
+            (grid.boards[index].name for index in inside),
         )
     return Division(
         axis=axis, items=_finalize_items(raw, bounds, coords_mm, ctx.snap_mm)
@@ -535,7 +558,7 @@ def _slab(
     if len(inside) != 1:
         return _region(grid, ctx, i0, i1, j0, j1)
     index = inside[0]
-    plank = grid.planks[index]
+    board = grid.boards[index]
     pi0, pi1 = grid.cols[index]
     pj0, pj1 = grid.rows[index]
     if across:
@@ -573,25 +596,38 @@ def _slab(
         # left. Refusing here would reject a shelf that fills its own column
         # but not the full height of the region the column was cut from.
         return _region(grid, ctx, i0, i1, j0, j1)
-    return _make_board(plank, cross_axis, low_mm, high_mm, ctx)
+    return _make_board(board, cross_axis, low_mm, high_mm, ctx)
 
 
 def _make_board(
-    plank: _Elevated, cross_axis: Axis, low_mm: float, high_mm: float, ctx: _ScanContext
+    board: _Elevated, cross_axis: Axis, low_mm: float, high_mm: float, ctx: _ScanContext
 ) -> Board:
     insets_kwargs: dict[str, float] = {}
     _set_axis_pair(insets_kwargs, cross_axis, low_mm, high_mm)
     _set_axis_pair(
         insets_kwargs,
         ctx.depth_axis,
-        plank.d0_mm - ctx.depth_lo_mm,
-        ctx.depth_hi_mm - plank.d1_mm,
+        board.d0_mm - ctx.depth_lo_mm,
+        ctx.depth_hi_mm - board.d1_mm,
     )
-    material = ctx.materials_by_name[plank.name]
+    material = ctx.materials_by_name[board.name]
+    pinned_size_mm = (
+        _unit_size_mm(
+            ctx.horizontal,
+            ctx.vertical,
+            ctx.depth_axis,
+            board.h1_mm - board.h0_mm,
+            board.v1_mm - board.v0_mm,
+            board.d1_mm - board.d0_mm,
+        )
+        if board.irregular
+        else None
+    )
     return Board(
+        pinned_size_mm=pinned_size_mm,
         material=None if material == ctx.default_material else material,
         insets=Insets(**insets_kwargs),
-        role=plank.name,
+        role=board.name,
     )
 
 
@@ -676,7 +712,7 @@ def _clean_lines(
     preferred = {
         edge
         for index in inside
-        if grid.planks[index].thin_axis is preferred_thin_axis
+        if grid.boards[index].thin_axis is preferred_thin_axis
         for edge in (grid.cols[index] if across else grid.rows[index])
     }
     coords_mm = grid.hs_mm if across else grid.vs_mm
@@ -706,8 +742,8 @@ def _contained(grid: _Grid, i0: int, i1: int, j0: int, j1: int) -> list[int]:
             continue
         if not (pi0 >= i0 and pi1 <= i1 and pj0 >= j0 and pj1 <= j1):
             raise ScanError(
-                f"{grid.planks[index].name} crosses the boundary of the bay it lies in",
-                (grid.planks[index].name,),
+                f"{grid.boards[index].name} crosses the boundary of the bay it lies in",
+                (grid.boards[index].name,),
             )
         found.append(index)
     return found
@@ -782,13 +818,29 @@ def _material_for_thickness_mm(
     )
 
 
+def _resolve_material(catalog: Catalog, board: _Elevated, snap_mm: float) -> MaterialId:
+    """The material ``board`` resolves to: its stored material when set,
+    bypassing thickness matching, otherwise the catalog entry whose
+    thickness is closest to its measured extent.
+
+    A stored material is what lets a catalog entry's thickness change
+    (M8) without stranding the boards already written against the old
+    thickness: they carry the id, not a thickness to re-match.
+    """
+    if board.material is not None:
+        if board.material not in catalog:
+            raise ScanError(
+                f"{board.name}: material {board.material!r} is not in the catalog",
+                (board.name,),
+            )
+        return board.material
+    return _material_for_thickness_mm(catalog, board.thickness_mm, snap_mm, board.name)
+
+
 def _resolve_materials(
     catalog: Catalog, elevated: Sequence[_Elevated], snap_mm: float
 ) -> dict[str, MaterialId]:
-    return {
-        p.name: _material_for_thickness_mm(catalog, p.thickness_mm, snap_mm, p.name)
-        for p in elevated
-    }
+    return {p.name: _resolve_material(catalog, p, snap_mm) for p in elevated}
 
 
 def _default_material(materials_by_name: Mapping[str, MaterialId]) -> MaterialId:

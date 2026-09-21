@@ -1,8 +1,8 @@
 ---
 id: sh-017
 title: "Pinned parts and the stored rule record"
-current_agent: implementer
-current_phase: implementation
+current_agent: user
+current_phase: done
 review_rejections: 0
 blocked_by: [sh-013, sh-014]
 ---
@@ -19,44 +19,44 @@ Milestone M7, part 1 of 2.
 
 ## Status
 - [x] Planning
-- [ ] Implementation
-- [ ] Review
-- [ ] User sign-off
+- [x] Implementation
+- [x] Review
+- [x] User sign-off
 
 ## Must Have
-- [ ] `pixi run tests` green.
-- [ ] `Board` carries `pinned_size_mm: Vec3 | None = None`. `None` means the
+- [x] `pixi run tests` green.
+- [x] `Board` carries `pinned_size_mm: Vec3 | None = None`. `None` means the
       board is regenerable; a value means it is not, and carries the shape it
       is pinned at.
-- [ ] `solve` verifies a pinned board rather than deriving it: it computes the
+- [x] `solve` verifies a pinned board rather than deriving it: it computes the
       extent the layout implies and raises `LayoutSolveError` with reason
       `pinned_mismatch`, naming the board, when that differs from
       `pinned_size_mm` by more than `EPS_MM` on any axis.
-- [ ] `Box` carries `pinned: bool = False`. `scan` places a pinned box as a
-      `Board` with `pinned_size_mm` set from its measured extent, rather than
-      listing it in `skipped`.
-- [ ] `Box` carries `material: MaterialId | None = None`. When set, `scan` uses
+- [x] `Box` carries `irregular: bool = False`. `scan` places an irregular box
+      as a `Board` with `pinned_size_mm` set from its measured extent, rather
+      than listing it in `skipped`.
+- [x] `Box` carries `material: MaterialId | None = None`. When set, `scan` uses
       it and does NOT match by thickness; an id absent from the catalog raises
       `ScanError` naming the board. Thickness matching applies only to a box
       with no material. Two tests: a board whose stored material names an entry
       whose thickness differs from its measured extent still resolves to that
       entry; a board with no material still matches by thickness.
-- [ ] `freecad/Shelving/core/record.py` exports `rule_key`, `rules_to_json`,
+- [x] `freecad/Shelving/core/record.py` exports `rule_key`, `rules_to_json`,
       `rules_from_json`, and `with_stored_rules`.
-- [ ] A region's rule key is the names of the boards bounding it along its
+- [x] A region's rule key is the names of the boards bounding it along its
       division's axis, with an explicit sentinel for an end of the run, so the
       key survives a rescan that assigns fresh region ids.
-- [ ] `with_stored_rules(unit, rules)` returns a `Unit` with every matching
+- [x] `with_stored_rules(unit, rules)` returns a `Unit` with every matching
       region's rule replaced and every unmatched region left as scanned. A test
       proves a rule whose key no longer matches, because a bounding board was
       renamed, falls back to the scanned rule rather than raising.
-- [ ] Round trip: for at least three units, `rules_from_json(rules_to_json(u))`
+- [x] Round trip: for at least three units, `rules_from_json(rules_to_json(u))`
       applied through `with_stored_rules` to a rescan of `expand(u)` reproduces
       every rule, including a `Fixed` that the equal-siblings heuristic would
       have recovered as `Fill`.
-- [ ] The record carries a schema version and `rules_from_json` raises
+- [x] The record carries a schema version and `rules_from_json` raises
       `ValueError` on any other version.
-- [ ] `mypy --strict` clean; `freecad.Shelving.core` imports no FreeCAD.
+- [x] `mypy --strict` clean; `freecad.Shelving.core` imports no FreeCAD.
 
 ## Frontier Advice
 
@@ -122,12 +122,13 @@ boards. So a `Box` with a material set MUST bypass thickness matching entirely.
 Thickness matching survives only for untagged geometry this workbench never
 wrote.
 
-SCAN CHANGES ARE SMALL. `Box` gains `pinned: bool = False` and
+SCAN CHANGES ARE SMALL. `Box` gains `irregular: bool = False` and
 `material: MaterialId | None = None`. In `scan`, a box
-with `pinned` set is placed as a `Board` carrying `pinned_size_mm` from its
+with `irregular` set is placed as a `Board` carrying `pinned_size_mm` from its
 measured extent, and is NOT added to `skipped`. Everything else about the
-classification is unchanged: a pinned box still has to be axis-aligned and
-still has to fit the partition, and it refuses the same way if it does not.
+classification is unchanged: an irregular box still has to be axis-aligned
+and still has to fit the partition, and it refuses the same way if it does
+not.
 
 STANDING OBLIGATIONS (`CLAUDE.md`). Typed Python in full: no bare `Any`, no
 bare containers in signatures or public attributes, `Mapping` rather than
@@ -138,14 +139,14 @@ Every length identifier carries `_mm`.
 
 ## Execution Plan
 
-- [ ] **Step 1** (`freecad/Shelving/core/layout.py`, `freecad/Shelving/core/tests/test_layout.py`): Add `pinned_size_mm: Vec3 | None = None` to `Board`, positioned before `id`. Document on the field that `None` means the board is regenerable, that a value means the workbench cannot reproduce this part and carries the shape it is pinned at, and that the solver verifies rather than derives it. Add construction tests for both the default and a set value. Change nothing else.
+- [x] **Step 1** (`freecad/Shelving/core/layout.py`, `freecad/Shelving/core/tests/test_layout.py`): Add `pinned_size_mm: Vec3 | None = None` to `Board`, positioned before `id`. Document on the field that `None` means the board is regenerable, that a value means the workbench cannot reproduce this part and carries the shape it is pinned at, and that the solver verifies rather than derives it. Add construction tests for both the default and a set value. Change nothing else.
 
-- [ ] **Step 2** (`freecad/Shelving/core/solver.py`, `freecad/Shelving/core/tests/test_solver.py`): Add `"pinned_mismatch"` to `SolveErrorReason`. In `solve`, after computing a board's `Space`, when that board carries `pinned_size_mm`, compare the derived extent against it on all three axes and raise `LayoutSolveError(board.id, "pinned_mismatch", detail)` when any differs by more than `EPS_MM`; `detail` carries the derived and the pinned extent. Tests: a unit whose layout matches its pinned board solves; the same unit widened raises with the board named; a pinned board agreeing within `EPS_MM` does not raise.
+- [x] **Step 2** (`freecad/Shelving/core/solver.py`, `freecad/Shelving/core/tests/test_solver.py`): Add `"pinned_mismatch"` to `SolveErrorReason`. In `solve`, after computing a board's `Space`, when that board carries `pinned_size_mm`, compare the derived extent against it on all three axes and raise `LayoutSolveError(board.id, "pinned_mismatch", detail)` when any differs by more than `EPS_MM`; `detail` carries the derived and the pinned extent. Tests: a unit whose layout matches its pinned board solves; the same unit widened raises with the board named; a pinned board agreeing within `EPS_MM` does not raise.
 
-- [ ] **Step 3** (`freecad/Shelving/core/scan.py`, `freecad/Shelving/core/tests/test_scan.py`): Add `pinned: bool = False` and `material: MaterialId | None = None` to `Box`. In `scan`, place a box with `pinned` set as a `Board` whose `pinned_size_mm` is its measured extent, and do not add it to `skipped`. Route material resolution through the stored value when present: use it directly, raise `ScanError` naming the board when it is absent from the catalog, and fall back to thickness matching only for a box with no material. The unit's `default_material` becomes the most common resolved material rather than the most common thickness. Tests: a pinned box scans with `pinned_size_mm` set and an otherwise identical tree; a box whose stored material names an entry whose thickness differs from its measured extent resolves to that entry rather than refusing; a box with no material still matches by thickness; a stored material absent from the catalog refuses naming the board.
+- [x] **Step 3** (`freecad/Shelving/core/scan.py`, `freecad/Shelving/core/tests/test_scan.py`): Add `irregular: bool = False` and `material: MaterialId | None = None` to `Box`. In `scan`, place a box with `irregular` set as a `Board` whose `pinned_size_mm` is its measured extent, and do not add it to `skipped`. Route material resolution through the stored value when present: use it directly, raise `ScanError` naming the board when it is absent from the catalog, and fall back to thickness matching only for a box with no material. The unit's `default_material` becomes the most common resolved material rather than the most common thickness. Tests: an irregular box scans with `pinned_size_mm` set and an otherwise identical tree; a box whose stored material names an entry whose thickness differs from its measured extent resolves to that entry rather than refusing; a box with no material still matches by thickness; a stored material absent from the catalog refuses naming the board.
 
-- [ ] **Step 4** (`freecad/Shelving/core/record.py`): Create the module. `RULE_RECORD_VERSION: int`. A module-level sentinel constant for "no neighbour on this side" and a separator constant that cannot occur in a FreeCAD object name. `rule_key(before: str | None, after: str | None) -> str` building the key from the two bounding board ids. A private walk yielding `(key, rule)` for every region in a unit, pairing each region with the items either side of it in its division's run; the root region has no division and therefore no key, so skip it. `rules_to_json(unit) -> str` emitting `{"schema_version": ..., "rules": {key: rule_doc}}` with a rule doc per `SizeRule` variant, carrying `basis` for a `Fixed`. `rules_from_json(text) -> Mapping[str, SizeRule]` narrowing every value with isinstance checks before construction and raising `ValueError` on a version mismatch or a malformed rule. `with_stored_rules(unit, rules) -> Unit` rebuilding the tree with a matching region's rule replaced and an unmatched region left alone. Document the key's stability consequences per Frontier Advice.
+- [x] **Step 4** (`freecad/Shelving/core/record.py`): Create the module. `RULE_RECORD_VERSION: int`. A module-level sentinel constant for "no neighbour on this side" and a separator constant that cannot occur in a FreeCAD object name. `rule_key(before: str | None, after: str | None) -> str` building the key from the two bounding board ids. A private walk yielding `(key, rule)` for every region in a unit, pairing each region with the items either side of it in its division's run; the root region has no division and therefore no key, so skip it. `rules_to_json(unit) -> str` emitting `{"schema_version": ..., "rules": {key: rule_doc}}` with a rule doc per `SizeRule` variant, carrying `basis` for a `Fixed`. `rules_from_json(text) -> Mapping[str, SizeRule]` narrowing every value with isinstance checks before construction and raising `ValueError` on a version mismatch or a malformed rule. `with_stored_rules(unit, rules) -> Unit` rebuilding the tree with a matching region's rule replaced and an unmatched region left alone. Document the key's stability consequences per Frontier Advice.
 
-- [ ] **Step 5** (`freecad/Shelving/core/tests/test_record.py`): Create the suite. `rule_key` builds distinct keys for distinct neighbour pairs and the same key for the same pair. `rules_to_json` emits one entry per non-root region, with a `Fixed`'s basis preserved for both `Basis` members. `rules_from_json` round-trips each rule variant and raises on a wrong version, a missing key, a malformed rule type, and a non-numeric size. `with_stored_rules` replaces a matching rule, leaves an unmatched region's rule as it was, and returns a unit whose tree is otherwise identical.
+- [x] **Step 5** (`freecad/Shelving/core/tests/test_record.py`): Create the suite. `rule_key` builds distinct keys for distinct neighbour pairs and the same key for the same pair. `rules_to_json` emits one entry per non-root region, with a `Fixed`'s basis preserved for both `Basis` members. `rules_from_json` round-trips each rule variant and raises on a wrong version, a missing key, a malformed rule type, and a non-numeric size. `with_stored_rules` replaces a matching rule, leaves an unmatched region's rule as it was, and returns a unit whose tree is otherwise identical.
 
-- [ ] **Step 6** (`freecad/Shelving/core/tests/test_record.py`): Add the intent-survival suite, which is the point of the module. For at least three units, one with all-equal bays, one with a deliberately `Fixed` bay that happens to equal its siblings, and one using `Basis.WITH_NEXT`: serialise the rules, `expand` the unit, convert to `Box` records, `scan` them back, confirm the scanned rules differ from the originals where the heuristic cannot tell, then apply the stored rules with `with_stored_rules` and confirm every rule matches the original. Add the renamed-board case: alter one board's id before rescanning and assert the affected region keeps its scanned rule rather than raising, while every other region is restored.
+- [x] **Step 6** (`freecad/Shelving/core/tests/test_record.py`): Add the intent-survival suite, which is the point of the module. For at least three units, one with all-equal bays, one with a deliberately `Fixed` bay that happens to equal its siblings, and one using `Basis.WITH_NEXT`: serialise the rules, `expand` the unit, convert to `Box` records, `scan` them back, confirm the scanned rules differ from the originals where the heuristic cannot tell, then apply the stored rules with `with_stored_rules` and confirm every rule matches the original. Add the renamed-board case: alter one board's id before rescanning and assert the affected region keeps its scanned rule rather than raising, while every other region is restored.
