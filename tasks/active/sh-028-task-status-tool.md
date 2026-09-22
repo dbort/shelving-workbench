@@ -1,9 +1,9 @@
 ---
 id: sh-028
 title: "A deterministic task-status reporting tool"
-current_agent: reviewer
-current_phase: review
-review_rejections: 0
+current_agent: implementer
+current_phase: implementation
+review_rejections: 1
 ---
 
 # sh-028: A deterministic task-status reporting tool
