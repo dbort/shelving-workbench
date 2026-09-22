@@ -203,3 +203,112 @@ objects: Overlap, LeftSide
 The 3D view's selection clears and re-selects both **Overlap** and
 **LeftSide**, visibly highlighted, rather than leaving the whole container
 selected.
+
+## M7 — Write a container
+
+Prerequisite: a FreeCAD 1.0 install with this workbench on its addon path,
+**View → Panels → Report view** open, a new document (`Ctrl+N`).
+`Shelving_CreateUnit` and `Shelving_ResizeUnit` print their results to the
+Report view with `print()`, not to the Python console, so keep the Report
+view open.
+
+### 1. Create a unit and confirm the tree holds plain boxes with a Shelving property group
+
+1. With nothing selected, run **Create Unit** from the **Shelving** toolbar
+   or menu.
+
+Expected: a new `ShelvingUnit` `App::Part` appears in the tree, holding four
+`Part::Box` objects labelled **Bottom**, **Top**, **Side 1**, **Side 2** (a
+fresh unit has no evidence of which way it faces, so the sides are numbered
+rather than called left/right). Select **Bottom** and open the property
+editor: a **Shelving** group holds `ShelvingMaterial`, `ShelvingBornAs`,
+`ShelvingBornIn`, and `ShelvingIrregular`. Select **ShelvingUnit** itself: its
+own **Shelving** group holds `ShelvingUnitId`, `ShelvingDepthAxis`,
+`ShelvingFacing` (`unknown`), and `ShelvingRules`. The Report view prints how
+many boards were created.
+
+### 2. Resize it and confirm boards move while labels and colours hold
+
+1. Select **Bottom**, rename its label to `MyBottom` (F2, or the property
+   editor's `Label` field), and give it a colour (right-click → **Appearance…**
+   or the toolbar's colour swatch).
+2. Select **ShelvingUnit** and run **Resize Unit**. Enter width `800`, depth
+   `350`, height `1000` (the dialog is seeded from the unit's current
+   measured size; overwrite all three).
+
+Expected: the same four objects move and resize to 800 × 350 × 1000 mm; no
+new objects appear and none are deleted. **Bottom**'s label stays
+`MyBottom` and its colour is unchanged. The Report view prints an
+`updated 4, created 0, deleted 0, left alone 0` line (counts may differ if
+you added other geometry first).
+
+### 3. Move a board by hand, rescan, and confirm the layout takes the edit up
+
+1. Select **Side 1**. In the property editor, expand `Placement` →
+   `Position` and change `x` from `0` to `2`, moving it 2 mm toward the
+   unit's centre. Use exactly this axis, direction, and distance:
+   - Any move along `z` overlaps **Bottom** or **Top**: at this size
+     **Side 1** and **Side 2** are captured flush against both with no
+     slack.
+   - Moving **Side 1** *away* from the unit along `x` opens a gap in the
+     shell wider than the scan's 3 mm clearance tolerance, and both of
+     those refuse instead of demonstrating the reflow this case is about.
+   - Moving it *toward the centre* by more than 3 mm scans and resizes
+     successfully, but does not demonstrate reflow either: past 3 mm the
+     scanner reads the gap as a real void rather than clearance-tolerant
+     measurement noise, correctly, since nothing tells it an edit that size
+     was accidental rather than a deliberate design change. The board then
+     stays exactly where you put it, because that reading is now a
+     different, equally valid layout, not a stray edit to correct. 2 mm
+     keeps this comfortably inside the tolerant range.
+2. Select **ShelvingUnit** and run **Resize Unit** again, entering `800`,
+   `350`, `1000`, the same dimensions as case 2 (or run **Scan Unit** first
+   to confirm the moved board is still read correctly, then resize).
+
+Expected: the hand-moved board snaps back to `x = 0` as part of the
+reapplied layout; the layout reflows around the edit rather than preserving
+the stray placement, since every resize rescans the container fresh rather
+than trusting a cached tree. You do not need to move the board back by
+hand first: running Resize Unit (or Scan Unit) is what corrects it.
+
+### 4. Put an unrelated box in the container and confirm apply leaves it and says so
+
+1. Select **ShelvingUnit**, add a plain `Part::Box` directly into it via the
+   Python console. Use exactly these dimensions, not a cube: scanning
+   requires a board to have one uniquely thinnest axis to read its
+   thickness from, and a cube has three tied extents, so it refuses the
+   whole scan rather than reading this one object as unrelated. Thinnest
+   along `y` (this unit's depth axis) also keeps it out of thickness/material
+   matching, the same way this case's automated counterpart
+   (`tools/freecad_write_smoke.py`'s `BackPanel`) does it:
+   ```python
+   doc = App.ActiveDocument
+   part = doc.getObject("ShelvingUnit")
+   extra = doc.addObject("Part::Box", "HandAdded")
+   extra.Length, extra.Width, extra.Height = 50.0, 5.0, 50.0
+   extra.Placement = App.Placement(App.Vector(2000.0, 2000.0, 2000.0), App.Rotation())
+   part.addObject(extra)
+   doc.recompute()
+   ```
+2. Select **ShelvingUnit** and run **Resize Unit**. Enter width `900`,
+   depth `400`, height `1100`.
+
+Expected: **HandAdded** stays exactly where it was, still in the tree and
+not deleted, because it carries none of this workbench's properties. The Report
+view's line includes `left alone 1` and names `HandAdded` on the line below
+it.
+
+### 5. Save, quit, move the workbench off the path, reopen, and confirm the document is intact
+
+1. Save the document.
+2. Quit FreeCAD.
+3. Rename or move the `shelving-workbench` symlink (or copy) out of your
+   `Mod/` directory (see "Loading the workbench from this checkout" above),
+   so FreeCAD cannot find the workbench.
+4. Restart FreeCAD and open the saved document.
+
+Expected: the document opens without an error dialog or a report-view
+warning about a missing module, and the unit's boxes are present, correctly
+sized, and at their saved positions: plain `Part::Box` geometry needs no
+scripted type to regenerate. Restore the symlink afterward to keep using the
+workbench.

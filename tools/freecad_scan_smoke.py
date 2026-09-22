@@ -50,14 +50,21 @@ import pytest  # noqa: E402
 from freecad.Shelving.commands.export_boxes import ExportBoxesCommand  # noqa: E402
 from freecad.Shelving.commands.scan import ScanCommand  # noqa: E402
 from freecad.Shelving.container import read_container  # noqa: E402
+from freecad.Shelving.core.geometry import Vec3  # noqa: E402
 from freecad.Shelving.core.layout import (  # noqa: E402
     Bay,
     Board,
     Division,
     Region,
 )
-from freecad.Shelving.core.scan import Box, scan  # noqa: E402
+from freecad.Shelving.core.scan import (  # noqa: E402
+    Box,
+    ScanError,
+    detect_depth_axis,
+    scan,
+)
 from freecad.Shelving.default_catalog import DEFAULT_CATALOG  # noqa: E402
+from freecad.Shelving.unit_ops import create_unit, resize_unit  # noqa: E402
 
 _TOL_MM = 1e-6
 _THICKNESS_MM = 18.0
@@ -275,7 +282,7 @@ def test_closed_shell_with_a_shelf(
 ) -> None:
     _build_shell(doc, part)
     doc.recompute()
-    boxes, skipped = read_container(part)
+    boxes, skipped, _record = read_container(part)
     assert len(boxes) == 5, len(boxes)
     assert len(skipped) == 0, skipped
     _assert_shelf_reads_correctly(boxes)
@@ -288,7 +295,7 @@ def test_move_and_rotate_the_container(
 ) -> None:
     """The records must not change, since ``read_container`` excludes the
     selected container's own placement."""
-    boxes, _ = read_container(part)
+    boxes, _skipped, _record = read_container(part)
     before = sorted((b.name, b.corner_mm, b.size_mm) for b in boxes)
     shelf = cast("FreeCAD.GeoFeature", doc.getObject("Shelf"))
     shelf_global_before = shelf.getGlobalPlacement().Base
@@ -307,7 +314,7 @@ def test_move_and_rotate_the_container(
         shelf_global_before,
         shelf_global_after,
     )
-    moved_boxes, moved_skipped = read_container(part)
+    moved_boxes, moved_skipped, _record = read_container(part)
     after = sorted((b.name, b.corner_mm, b.size_mm) for b in moved_boxes)
     assert before == after, (before, after)
     assert len(moved_skipped) == 0, moved_skipped
@@ -316,15 +323,16 @@ def test_move_and_rotate_the_container(
 def test_notched_partdesign_body(
     doc: FreeCAD.Document, part: FreeCAD.DocumentObject
 ) -> None:
-    """One ``Skipped`` record naming the box-minus-cutouts reason, not two
-    board records."""
+    """A single-solid, axis-aligned, non-box part is adopted as one
+    irregular ``Box`` rather than skipped: sh-018's write path pins such a
+    board's size and moves it rather than regenerating its shape, so it
+    needs to reach ``scan`` as a board, not a ``Skipped`` record."""
     body = _add_notched_body(doc, part)
-    boxes, skipped = read_container(part)
-    assert len(boxes) == 5, len(boxes)
-    assert len(skipped) == 1, skipped
-    assert skipped[0].name == body.Name
-    assert "box minus 1 rectangular cutout" in skipped[0].reason, skipped[0].reason
-    assert "50 x 30 x 18 mm" in skipped[0].reason, skipped[0].reason
+    boxes, skipped, _record = read_container(part)
+    assert len(boxes) == 6, len(boxes)
+    assert len(skipped) == 0, skipped
+    notched = _box_by_name(boxes, body.Name)
+    assert notched.irregular is True
 
 
 def test_notched_body_reached_through_a_second_group(
@@ -338,9 +346,9 @@ def test_notched_body_reached_through_a_second_group(
     cast("FreeCAD.DocumentObjectGroup", part).addObject(alias_group)
     cast("FreeCAD.DocumentObjectGroup", raw_alias).addObject(body)
     doc.recompute()
-    boxes, skipped = read_container(part)
-    assert len(boxes) == 5, len(boxes)
-    assert len(skipped) == 1, skipped
+    boxes, skipped, _record = read_container(part)
+    assert len(boxes) == 6, len(boxes)
+    assert len(skipped) == 0, skipped
 
 
 def test_box_rotated_a_quarter_turn(
@@ -357,8 +365,8 @@ def test_box_rotated_a_quarter_turn(
         rotation=FreeCAD.Rotation(FreeCAD.Vector(0.0, 0.0, 1.0), 90.0),
     )
     doc.recompute()
-    boxes, _ = read_container(part)
-    assert len(boxes) == 6, len(boxes)
+    boxes, _skipped, _record = read_container(part)
+    assert len(boxes) == 7, len(boxes)
     rotated = _box_by_name(boxes, "Rotated")
     for got, want in zip(
         (rotated.size_mm.x_mm, rotated.size_mm.y_mm, rotated.size_mm.z_mm),
@@ -387,9 +395,9 @@ def test_box_inside_a_nested_rotated_container(
     )
     _add_box(doc, nested_obj, "NestedBox", (100.0, 50.0, 20.0), (0.0, 0.0, 0.0))
     doc.recompute()
-    boxes, skipped = read_container(part)
-    assert len(boxes) == 7, len(boxes)
-    assert len(skipped) == 1, skipped
+    boxes, skipped, _record = read_container(part)
+    assert len(boxes) == 8, len(boxes)
+    assert len(skipped) == 0, skipped
     nested_box = _box_by_name(boxes, "NestedBox")
     for got, want in zip(
         (nested_box.size_mm.x_mm, nested_box.size_mm.y_mm, nested_box.size_mm.z_mm),
@@ -418,11 +426,52 @@ def test_skewed_box_refusal(
         rotation=FreeCAD.Rotation(FreeCAD.Vector(0.0, 0.0, 1.0), 30.0),
     )
     doc.recompute()
-    boxes, skipped = read_container(part)
-    assert len(boxes) == 7, len(boxes)
-    assert len(skipped) == 2, skipped
+    boxes, skipped, _record = read_container(part)
+    assert len(boxes) == 8, len(boxes)
+    assert len(skipped) == 1, skipped
     skewed = next(s for s in skipped if s.name == "Skewed")
     assert skewed.reason == "not axis-aligned", skewed.reason
+
+
+def test_scan_uses_the_stored_depth_axis_on_a_deep_unit(doc: FreeCAD.Document) -> None:
+    """A unit resized deeper than it is tall still scans clean when the
+    container's stored ``ShelvingDepthAxis`` is passed through, the same way
+    ``ScanCommand.Activated`` and ``resize_unit`` both do it (mirrored here
+    directly: ``Gui.Selection``, which ``Activated`` reads the container
+    through, does not exist under ``freecadcmd``, so the command itself
+    cannot run in this suite).
+
+    Pins down a real discrepancy found in manual QA: on a unit resized to
+    1600 x 700 x 450 mm (700 mm deep, 450 mm tall), Scan Unit refused while
+    Resize Unit, reading the same geometry, did not, because only
+    ``resize_unit`` passed the stored axis through. Confirmed below that
+    this unit is the case :func:`~freecad.Shelving.core.scan.
+    detect_depth_axis`'s own docstring warns about (fooled by a unit deeper
+    than it is tall, guessing ``z`` instead of ``y``), and that
+    guessing wrong is what breaks the scan, not something else about this
+    geometry: if either assumption stops holding, this test needs
+    re-deriving, not loosening."""
+    container = create_unit(doc)
+    doc.recompute()
+    resize_unit(container, Vec3(1600.0, 700.0, 450.0), DEFAULT_CATALOG)
+    doc.recompute()
+
+    boxes, skipped, record = read_container(container)
+    assert record.depth_axis is not None, record
+    assert detect_depth_axis(boxes) != record.depth_axis, (
+        detect_depth_axis(boxes),
+        record.depth_axis,
+    )
+    with pytest.raises(ScanError):
+        scan(boxes, DEFAULT_CATALOG, skipped=skipped)
+
+    scan(
+        boxes,
+        DEFAULT_CATALOG,
+        skipped=skipped,
+        depth_axis=record.depth_axis,
+        front_at_min=record.front_at_min,
+    )
 
 
 # Not an `if __name__ == "__main__":` guard: freecadcmd sets a run script's

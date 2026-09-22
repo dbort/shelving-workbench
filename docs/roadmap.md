@@ -220,10 +220,10 @@ references it.
 
 ## M7 — Write a container
 
-**Status:** Tasks sh-017, sh-018
+**Status:** Done sh-017, sh-018
 
 - [x] sh-017 — pinned parts and the stored rule record
-- [ ] sh-018 — writing a container, and the create and resize commands
+- [x] sh-018 — writing a container, and the create and resize commands
   (blocked on sh-016 and sh-017)
 
 Apply a layout back to a container as plain `Part::Box` objects, matched

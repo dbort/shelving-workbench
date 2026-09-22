@@ -335,12 +335,14 @@ def _median(sorted_values_mm: Sequence[float]) -> float:
     return (sorted_values_mm[mid - 1] + sorted_values_mm[mid]) / 2.0
 
 
-def _elevation_axes(depth_axis: Axis) -> tuple[Axis, Axis]:
+def elevation_axes(depth_axis: Axis) -> tuple[Axis, Axis]:
     """The two axes the elevation is drawn on: horizontal across, vertical up.
 
     Vertical is Z unless Z is the depth axis, in which case Y stands in;
     horizontal is whichever axis is left. An arbitrary choice made only to
     keep a deterministic grid order; it has no effect on the scanned tree.
+    Public because ``freecad.Shelving.container.write_container`` needs the
+    same split to derive a created board's role-based label.
     """
     vertical = Axis.Z if depth_axis is not Axis.Z else Axis.Y
     horizontal = next(axis for axis in _AXES if axis not in (depth_axis, vertical))
@@ -628,6 +630,12 @@ def _make_board(
         material=None if material == ctx.default_material else material,
         insets=Insets(**insets_kwargs),
         role=board.name,
+        # A scanned Box's name is the source object's stable FreeCAD Name
+        # (freecad.Shelving.container.read_container sets it), so keying a
+        # board's id to it, rather than a fresh uuid, is what lets
+        # freecad.Shelving.container.write_container match a rescanned board
+        # back to the document object it came from.
+        id=board.name,
     )
 
 
@@ -907,7 +915,7 @@ def scan(
     else:
         facing_evidence = FacingEvidence.GIVEN
 
-    horizontal, vertical = _elevation_axes(depth_axis)
+    horizontal, vertical = elevation_axes(depth_axis)
     panels: list[Box] = []
     members: list[Box] = []
     for box in boxes:

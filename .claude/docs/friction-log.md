@@ -1,5 +1,5 @@
 ---
-next_id: friction-018
+next_id: friction-019
 ---
 
 # Friction log

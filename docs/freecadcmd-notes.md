@@ -172,3 +172,16 @@ Consequence for headless checks: assert the error path on `"Invalid" in
 obj.State` or `obj.isValid() is False`. Do not assert on `"Touched" in obj.State`
 alone: an object the recompute never visited also carries `"Touched"`, so that
 predicate passes even when `execute` never ran.
+
+## A `DocumentObject`'s `ViewObject` is `None`
+
+FreeCAD 1.0.0 under `freecadcmd` gives every `DocumentObject` a `ViewObject`
+attribute of `None` rather than omitting it or raising (verified directly on
+a freshly created `Part::Box`). There is no 3D view for a `ViewObjectPy` to
+represent, so nothing headless can read or write view-only state such as
+`ShapeColor`.
+
+Consequence: a headless `freecadcmd` pytest module cannot assert that a
+colour survives an operation; that case has to stay in `docs/manual-qa.md`
+instead (`tools/freecad_write_smoke.py`'s resize test does the same check
+for `Label`, which is ordinary `DocumentObject` state and unaffected).
