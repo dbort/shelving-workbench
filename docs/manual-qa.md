@@ -274,12 +274,18 @@ hand first: running Resize Unit (or Scan Unit) is what corrects it.
 ### 4. Put an unrelated box in the container and confirm apply leaves it and says so
 
 1. Select **ShelvingUnit**, add a plain `Part::Box` directly into it via the
-   Python console:
+   Python console. Use exactly these dimensions, not a cube: scanning
+   requires a board to have one uniquely thinnest axis to read its
+   thickness from, and a cube has three tied extents, so it refuses the
+   whole scan rather than reading this one object as unrelated. Thinnest
+   along `y` (this unit's depth axis) also keeps it out of thickness/material
+   matching entirely, the same way this case's automated counterpart
+   (`tools/freecad_write_smoke.py`'s `BackPanel`) does it:
    ```python
    doc = App.ActiveDocument
    part = doc.getObject("ShelvingUnit")
    extra = doc.addObject("Part::Box", "HandAdded")
-   extra.Length, extra.Width, extra.Height = 50.0, 50.0, 50.0
+   extra.Length, extra.Width, extra.Height = 50.0, 5.0, 50.0
    extra.Placement = App.Placement(App.Vector(2000.0, 2000.0, 2000.0), App.Rotation())
    part.addObject(extra)
    doc.recompute()
