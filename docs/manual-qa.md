@@ -232,12 +232,12 @@ many boards were created.
 1. Select **Bottom**, rename its label to `MyBottom` (F2, or the property
    editor's `Label` field), and give it a colour (right-click → **Appearance…**
    or the toolbar's colour swatch).
-2. Select **ShelvingUnit** and run **Resize Unit**. Enter a width, depth, and
-   height each noticeably different from the current ones (the dialog is
-   seeded from the unit's current measured size).
+2. Select **ShelvingUnit** and run **Resize Unit**. Enter width `800`, depth
+   `350`, height `1000` (the dialog is seeded from the unit's current
+   measured size; overwrite all three).
 
-Expected: the same four objects move and resize to the new outer dimensions;
-no new objects appear and none are deleted. **Bottom**'s label stays
+Expected: the same four objects move and resize to 800 × 350 × 1000 mm; no
+new objects appear and none are deleted. **Bottom**'s label stays
 `MyBottom` and its colour is unchanged. The Report view prints an
 `updated 4, created 0, deleted 0, left alone 0` line (counts may differ if
 you added other geometry first).
@@ -245,16 +245,25 @@ you added other geometry first).
 ### 3. Move a board by hand, rescan, and confirm the layout takes the edit up
 
 1. Select **Side 1**. In the property editor, expand `Placement` →
-   `Position` and change `x` from `0` to `50`, moving it 50 mm toward the
-   unit's centre. Use this exact axis and direction: at the default size
-   **Side 1** and **Side 2** are captured flush against **Bottom** and
-   **Top** with no slack, so any move along `z` overlaps one of them, and
-   moving **Side 1** *away* from the unit along `x` opens a gap in the
-   shell wider than the scan's clearance tolerance; both refuse instead of
-   demonstrating the reflow this case is about.
-2. Select **ShelvingUnit** and run **Resize Unit** again, entering the exact
-   same width, depth, and height as before (or run **Scan Unit** first to
-   confirm the moved board is still read correctly, then resize).
+   `Position` and change `x` from `0` to `2`, moving it 2 mm toward the
+   unit's centre. Use exactly this axis, direction, and distance:
+   - Any move along `z` overlaps **Bottom** or **Top**: at this size
+     **Side 1** and **Side 2** are captured flush against both with no
+     slack.
+   - Moving **Side 1** *away* from the unit along `x` opens a gap in the
+     shell wider than the scan's 3 mm clearance tolerance, and both of
+     those refuse instead of demonstrating the reflow this case is about.
+   - Moving it *toward the centre* by more than 3 mm scans and resizes
+     successfully, but does not demonstrate reflow either: past 3 mm the
+     gap stops reading as clearance-tolerant measurement noise and starts
+     reading as a real void, correctly, since nothing tells the scanner an
+     edit that size was accidental rather than a deliberate design change.
+     The board then stays exactly where you put it, because that reading
+     is now a genuinely different, equally valid layout, not a stray edit
+     to correct. 2 mm keeps this comfortably inside the tolerant range.
+2. Select **ShelvingUnit** and run **Resize Unit** again, entering `800`,
+   `350`, `1000`, the same dimensions as case 2 (or run **Scan Unit** first
+   to confirm the moved board is still read correctly, then resize).
 
 Expected: the hand-moved board snaps back to `x = 0` as part of the
 reapplied layout; the layout reflows around the edit rather than preserving
@@ -275,7 +284,8 @@ hand first: running Resize Unit (or Scan Unit) is what corrects it.
    part.addObject(extra)
    doc.recompute()
    ```
-2. Select **ShelvingUnit** and run **Resize Unit**, entering any new size.
+2. Select **ShelvingUnit** and run **Resize Unit**. Enter width `900`,
+   depth `400`, height `1100`.
 
 Expected: **HandAdded** is untouched (same position, still in the tree, not
 deleted), because it carries none of this workbench's properties. The Report
