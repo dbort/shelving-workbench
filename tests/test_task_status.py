@@ -562,11 +562,12 @@ def test_render_human_report_ordering_and_fields(tmp_path: Path) -> None:
     report = build_report(repo)
     rendered = render_human_report(report)
 
-    # Layer 1 (sh-003, the only task with zero unresolved *active* blockers -
-    # sh-001 is completed and contributes no edge even though it's in sh-002's
-    # raw blocked_by); layer 2 (sh-002, sh-004, both freed once sh-003
-    # resolves, sorted by id); the sh-006/sh-007 cycle appended last, sorted
-    # by id, since neither ever reaches zero remaining blockers.
+    # Layer 1 is sh-003, the only task with zero unresolved *active* blockers:
+    # sh-001 is completed and contributes no edge, even though it appears in
+    # sh-002's raw blocked_by. Layer 2 is sh-002 and sh-004, both freed once
+    # sh-003 resolves, sorted by id. The sh-006/sh-007 cycle is appended
+    # last, sorted by id, since neither task ever reaches zero remaining
+    # blockers.
     assert rendered == (
         "Next id: sh-008\n"
         "\n"

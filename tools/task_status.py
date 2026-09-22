@@ -37,8 +37,8 @@ class TaskStatusError(Exception):
     """The tool itself could not produce a report (not a single task's error).
 
     Reserved for `tasks/active/` not existing or `git` not being on `PATH`;
-    a malformed or anomalous individual task never raises this (Frontier
-    Advice: anomalies and errors are data, not failures).
+    a malformed or anomalous individual task never raises this, since
+    anomalies and errors are data in the report rather than failures.
     """
 
 
@@ -78,10 +78,9 @@ def _extract_frontmatter_block(text: str) -> str:
 def _as_mapping(loaded: object) -> dict[str, object]:
     """Narrow a `yaml.safe_load` result into a flat `str`-keyed mapping.
 
-    Every real task file's frontmatter is exactly a flat mapping (see
-    `tools/task_status.py` module docstring context in the task's Frontier
-    Advice); anything else (a list, a scalar, a non-string key) is a parse
-    error rather than something later code tries to interpret.
+    Every real task file's frontmatter is exactly a flat mapping; anything
+    else (a list, a scalar, a non-string key) is a parse error rather than
+    something later code tries to interpret.
     """
     if not isinstance(loaded, dict):
         raise TaskParseError("frontmatter is not a flat mapping")
@@ -200,7 +199,7 @@ def layered_topological_order(
 
     Returns `(layers, cyclic_ids)`. Each layer is every id whose remaining
     unresolved blockers (restricted to ids that are themselves keys of
-    `blocked_by_by_id` — a blocker outside that set contributes no edge) are
+    `blocked_by_by_id`; a blocker outside that set contributes no edge) are
     all in a prior layer, sorted by id; completing the layers in order
     resolves every blocker before the id it blocks is reached. `cyclic_ids`
     (sorted by id) lists every id that never reaches zero remaining
@@ -334,8 +333,7 @@ def working_tree_task_ids(
     """Every task id present under the given `tasks/*/` subdirectories on disk.
 
     Globs the working directory directly rather than `git ls-files`, so an
-    uncommitted new task file is still counted (Frontier Advice: multi-branch
-    `next_id` scanning).
+    uncommitted new task file is still counted.
     """
     ids: list[str] = []
     for subdir in subdirs:
@@ -351,7 +349,7 @@ def gather_next_id_input(repo_root: Path) -> list[str]:
 
     Unions the working directory's own `tasks/*/` listing (including
     anything uncommitted) with, for every local branch, that same listing as
-    it exists at that branch's own tip — so a task created on one branch, or
+    it exists at that branch's own tip, so a task created on one branch, or
     accumulated on `main` while another branch was checked out, can't
     collide with an id this tool hands out from a different, stale-relative-
     to-it branch.
