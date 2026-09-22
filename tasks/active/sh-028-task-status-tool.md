@@ -270,7 +270,7 @@ script in this task at all; the `pixi run task-status` entry is a one-line
 
 ## Execution Plan
 
-- [ ] **Step 1** (`tools/task_status.py`, `tests/test_task_status.py`):
+- [x] **Step 1** (`tools/task_status.py`, `tests/test_task_status.py`):
       Create the module's pure, git-free core: a `TaskFrontmatter`
       typed structure (dataclass or `TypedDict`); `parse_frontmatter(text:
       str) -> TaskFrontmatter` using `yaml.safe_load` on the `---`-delimited
