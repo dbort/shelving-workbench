@@ -585,6 +585,47 @@ def report_to_json(report: Report) -> JsonReport:
     }
 
 
+def _render_task_bullet(entry: TaskReportEntry) -> list[str]:
+    if isinstance(entry, ErrorTaskReportEntry):
+        return [f"- {entry.id}: ERROR: {entry.error}"]
+    lines = [f"- {entry.id}: {entry.title}", f"  - path: {entry.path}"]
+    if entry.branch_exists:
+        lines.append(f"  - branch: {entry.id}")
+    lines.append(f"  - phase: {entry.current_phase}")
+    blocked_by_text = (
+        ", ".join(entry.unmet_blockers) if entry.unmet_blockers else "(none)"
+    )
+    lines.append(f"  - blocked by: {blocked_by_text}")
+    return lines
+
+
+def render_human_report(report: Report) -> str:
+    """A Markdown summary of `report`: next id, then one nested bullet per task.
+
+    Tasks are ordered by a layered topological sort over the `blocked_by`
+    DAG restricted to edges between two tasks both in `report.tasks`
+    (`layered_topological_order`); a task caught in a `circular_blocked_by`
+    cycle is appended last, sorted by id. An `ErrorTaskReportEntry` is
+    treated as having no blockers for ordering purposes (its real
+    `blocked_by` failed to parse) and renders as a single error line instead
+    of the normal nested-bullet fields.
+    """
+    entry_by_id = {entry.id: entry for entry in report.tasks}
+    blocked_by_by_id = {
+        entry.id: list(entry.blocked_by)
+        if isinstance(entry, NormalTaskReportEntry)
+        else []
+        for entry in report.tasks
+    }
+    layers, cyclic_ids = layered_topological_order(blocked_by_by_id)
+    ordered_ids = [task_id for layer in layers for task_id in layer] + cyclic_ids
+
+    lines = [f"Next id: {report.next_id}", ""]
+    for task_id in ordered_ids:
+        lines.extend(_render_task_bullet(entry_by_id[task_id]))
+    return "\n".join(lines)
+
+
 def _repo_root() -> Path:
     # tools/task_status.py -> repo root, same convention as
     # tests/test_check_lock_paths.py's REPO_ROOT.
@@ -596,7 +637,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         prog="task_status",
         description="Deterministic report of tasks/active/'s pipeline state.",
     )
-    parser.parse_args(argv)
+    # -h/--help is argparse's own; -H is this tool's short form for --human.
+    parser.add_argument(
+        "-H",
+        "--human",
+        action="store_true",
+        help="print a Markdown summary instead of JSON",
+    )
+    args = parser.parse_args(argv)
 
     try:
         report = build_report(_repo_root())
@@ -604,7 +652,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"task_status: {exc}", file=sys.stderr)
         return 1
 
-    print(json.dumps(report_to_json(report), indent=2))
+    if args.human:
+        print(render_human_report(report))
+    else:
+        print(json.dumps(report_to_json(report), indent=2))
     return 0
 
 

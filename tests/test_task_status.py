@@ -27,6 +27,7 @@ from tools.task_status import (
     layered_topological_order,
     parse_frontmatter,
     read_authoritative_task_text,
+    render_human_report,
     resolve_blocking,
 )
 
@@ -476,3 +477,85 @@ def test_build_report_raises_task_status_error_when_active_dir_missing(
     repo.mkdir()
     with pytest.raises(TaskStatusError):
         build_report(repo)
+
+
+# ---------------------------------------------------------------------------
+# render_human_report, end to end against a small synthetic repo.
+# ---------------------------------------------------------------------------
+
+
+def test_render_human_report_ordering_and_fields(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    _write_task(repo, "completed", "sh-001", "already-done", current_phase="done")
+    _write_task(
+        repo,
+        "active",
+        "sh-002",
+        "mixed-blockers",
+        title="Blocked on one done one active",
+        blocked_by=["sh-001", "sh-003"],
+    )
+    _write_task(repo, "active", "sh-003", "no-blockers", title="No blockers")
+    _write_task(
+        repo,
+        "active",
+        "sh-004",
+        "blocked-on-three",
+        title="Blocked on sh-003",
+        blocked_by=["sh-003"],
+    )
+    _write_task(
+        repo, "active", "sh-006", "cycle-a", title="Cycle A", blocked_by=["sh-007"]
+    )
+    _write_task(
+        repo, "active", "sh-007", "cycle-b", title="Cycle B", blocked_by=["sh-006"]
+    )
+    _commit_all(repo, "add synthetic repo for --human rendering")
+    _git(repo, "branch", "sh-003")
+
+    report = build_report(repo)
+    rendered = render_human_report(report)
+
+    # Layer 1 (sh-003, the only task with zero unresolved *active* blockers -
+    # sh-001 is completed and contributes no edge even though it's in sh-002's
+    # raw blocked_by); layer 2 (sh-002, sh-004, both freed once sh-003
+    # resolves, sorted by id); the sh-006/sh-007 cycle appended last, sorted
+    # by id, since neither ever reaches zero remaining blockers.
+    assert rendered == (
+        "Next id: sh-008\n"
+        "\n"
+        "- sh-003: No blockers\n"
+        "  - path: tasks/active/sh-003-no-blockers.md\n"
+        "  - branch: sh-003\n"
+        "  - phase: implementation\n"
+        "  - blocked by: (none)\n"
+        "- sh-002: Blocked on one done one active\n"
+        "  - path: tasks/active/sh-002-mixed-blockers.md\n"
+        "  - phase: implementation\n"
+        "  - blocked by: sh-003\n"
+        "- sh-004: Blocked on sh-003\n"
+        "  - path: tasks/active/sh-004-blocked-on-three.md\n"
+        "  - phase: implementation\n"
+        "  - blocked by: sh-003\n"
+        "- sh-006: Cycle A\n"
+        "  - path: tasks/active/sh-006-cycle-a.md\n"
+        "  - phase: implementation\n"
+        "  - blocked by: sh-007\n"
+        "- sh-007: Cycle B\n"
+        "  - path: tasks/active/sh-007-cycle-b.md\n"
+        "  - phase: implementation\n"
+        "  - blocked by: sh-006"
+    )
+
+
+def test_render_human_report_includes_error_entries_without_crashing(
+    tmp_path: Path,
+) -> None:
+    repo = _init_repo(tmp_path)
+    _write_task(repo, "active", "sh-001", "good")
+    (repo / "tasks" / "active" / "sh-002-bad.md").write_text("---\nid: sh-002\n---\n")
+    _commit_all(repo, "add one good, one malformed task")
+    report = build_report(repo)
+    rendered = render_human_report(report)
+    assert "- sh-002: ERROR:" in rendered
+    assert "- sh-001: A title" in rendered
