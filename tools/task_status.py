@@ -15,13 +15,16 @@ Phase transitions reserves that to `new-task`/`dispatch-tasks`/
 
 from __future__ import annotations
 
+import argparse
+import json
 import re
 import subprocess
+import sys
 from collections.abc import Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import Literal, TypedDict
 
 import yaml
 
@@ -511,3 +514,99 @@ def build_report(repo_root: Path) -> Report:
         anomalies.append(Anomaly(id=cyclic_id, reason="circular_blocked_by"))
 
     return Report(next_id=next_id, tasks=entries, errors=errors, anomalies=anomalies)
+
+
+# ---------------------------------------------------------------------------
+# JSON output shape and the CLI entry point.
+# ---------------------------------------------------------------------------
+
+
+class JsonNormalTaskEntry(TypedDict):
+    id: str
+    title: str
+    path: str
+    current_phase: str
+    current_agent: str
+    review_rejections: int
+    blocked_by: list[str]
+    unmet_blockers: list[str]
+    blocked: bool
+    in_progress: bool
+    branch_exists: bool
+    source: str
+
+
+class JsonErrorTaskEntry(TypedDict):
+    id: str
+    error: str
+
+
+JsonTaskEntry = JsonNormalTaskEntry | JsonErrorTaskEntry
+
+
+class JsonAnomaly(TypedDict):
+    id: str
+    reason: AnomalyReason
+
+
+class JsonReport(TypedDict):
+    next_id: str
+    tasks: list[JsonTaskEntry]
+    errors: list[str]
+    anomalies: list[JsonAnomaly]
+
+
+def _entry_to_json(entry: TaskReportEntry) -> JsonTaskEntry:
+    if isinstance(entry, ErrorTaskReportEntry):
+        return {"id": entry.id, "error": entry.error}
+    return {
+        "id": entry.id,
+        "title": entry.title,
+        "path": entry.path,
+        "current_phase": entry.current_phase,
+        "current_agent": entry.current_agent,
+        "review_rejections": entry.review_rejections,
+        "blocked_by": list(entry.blocked_by),
+        "unmet_blockers": list(entry.unmet_blockers),
+        "blocked": entry.blocked,
+        "in_progress": entry.in_progress,
+        "branch_exists": entry.branch_exists,
+        "source": entry.source,
+    }
+
+
+def report_to_json(report: Report) -> JsonReport:
+    """The exact on-the-wire shape `main()` serializes with `json.dumps`."""
+    return {
+        "next_id": report.next_id,
+        "tasks": [_entry_to_json(entry) for entry in report.tasks],
+        "errors": list(report.errors),
+        "anomalies": [{"id": a.id, "reason": a.reason} for a in report.anomalies],
+    }
+
+
+def _repo_root() -> Path:
+    # tools/task_status.py -> repo root, same convention as
+    # tests/test_check_lock_paths.py's REPO_ROOT.
+    return Path(__file__).resolve().parent.parent
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="task_status",
+        description="Deterministic report of tasks/active/'s pipeline state.",
+    )
+    parser.parse_args(argv)
+
+    try:
+        report = build_report(_repo_root())
+    except TaskStatusError as exc:
+        print(f"task_status: {exc}", file=sys.stderr)
+        return 1
+
+    print(json.dumps(report_to_json(report), indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

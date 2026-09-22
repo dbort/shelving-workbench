@@ -304,7 +304,7 @@ script in this task at all; the `pixi run task-status` entry is a one-line
       creates and tears down (branches, task files, and commits built with
       real `git` subprocess calls), covering every case the Must Haves
       list, including a task that exists only on a non-checked-out branch.
-- [ ] **Step 3** (`tools/task_status.py`, `pixi.toml`): Add the CLI entry
+- [x] **Step 3** (`tools/task_status.py`, `pixi.toml`): Add the CLI entry
       point (`argparse`, since Step 4 adds a real flag next) that calls
       the Step 2 assembly function against the real repo root and prints
       the JSON to stdout by default, exiting 0. Add `pyyaml` (and its type
