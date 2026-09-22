@@ -236,12 +236,33 @@ def layered_topological_order(
 # ---------------------------------------------------------------------------
 
 _PATH_ID_RE = re.compile(r"(?:^|/)(sh-\d+)-[^/]+\.md$")
+_REVIEW_FILENAME_RE = re.compile(r"^sh-\d+-REVIEW\.md$")
 
 _TASK_SUBDIRS = ("active", "completed", "abandoned")
 
 
+def _is_review_filename(name: str) -> bool:
+    """Whether `name` is a `sh-XXX-REVIEW.md` rejection-round review file.
+
+    The rejection loop (`.claude/docs/pipeline.md` § The rejection loop)
+    writes this file alongside the real `sh-XXX-<slug>.md` task file in
+    `tasks/active/` on every rejected round. Its name matches the same
+    `sh-NNN-<slug>.md` shape as a real task file, so every id/path lookup
+    below must reject it explicitly rather than treating it as a second
+    task entry sharing that id.
+    """
+    return bool(_REVIEW_FILENAME_RE.match(name))
+
+
 def _task_id_from_path(path: str) -> str | None:
-    """The `sh-NNN` id a `tasks/*/sh-NNN-slug.md`-shaped path names, if any."""
+    """The `sh-NNN` id a `tasks/*/sh-NNN-slug.md`-shaped path names, if any.
+
+    A `sh-XXX-REVIEW.md` path yields `None`; it is never a task file even
+    though its name matches the same pattern (`_is_review_filename`).
+    """
+    name = path.rsplit("/", 1)[-1]
+    if _is_review_filename(name):
+        return None
     match = _PATH_ID_RE.search(path)
     return match.group(1) if match is not None else None
 
@@ -362,8 +383,11 @@ def _find_branch_path(
         return None
     prefix = f"tasks/{subdir}/{task_id}-"
     for line in result.stdout.splitlines():
-        if line.startswith(prefix) and line.endswith(".md"):
-            return line
+        if not line.startswith(prefix) or not line.endswith(".md"):
+            continue
+        if _is_review_filename(line.rsplit("/", 1)[-1]):
+            continue
+        return line
     return None
 
 
@@ -448,9 +472,11 @@ def build_report(repo_root: Path) -> Report:
 
     Iterates `tasks/active/`'s working-directory listing in `ls` order
     (never `tasks/completed/`/`tasks/abandoned/` themselves, which are
-    consulted only to resolve `unmet_blockers` and `next_id`); a task whose
-    frontmatter fails to parse or whose id disagrees with its filename
-    becomes an `ErrorTaskReportEntry` instead of aborting the whole report.
+    consulted only to resolve `unmet_blockers` and `next_id`), skipping any
+    `sh-XXX-REVIEW.md` rejection-round review file (`_is_review_filename`);
+    a task whose frontmatter fails to parse or whose id disagrees with its
+    filename becomes an `ErrorTaskReportEntry` instead of aborting the whole
+    report.
     Raises `TaskStatusError` only when the report itself cannot be produced
     (`tasks/active/` missing, `git` unavailable), never for a single
     anomalous or malformed task.
@@ -468,6 +494,10 @@ def build_report(repo_root: Path) -> Report:
     blocked_by_by_id: dict[str, list[str]] = {}
 
     for task_path in sorted(active_dir.glob("*.md")):
+        if _is_review_filename(task_path.name):
+            # A rejection-round review file, not a second task entry sharing
+            # this id (`.claude/docs/pipeline.md` § The rejection loop).
+            continue
         expected_id = _task_id_from_path(task_path.name) or task_path.stem
         try:
             if _task_id_from_path(task_path.name) is None:

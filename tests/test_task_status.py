@@ -9,7 +9,9 @@ git repository this module's own fixtures create.
 
 from __future__ import annotations
 
+import json
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -18,6 +20,7 @@ from tools.task_status import (
     Anomaly,
     ErrorTaskReportEntry,
     NormalTaskReportEntry,
+    Report,
     TaskFrontmatter,
     TaskParseError,
     TaskStatusError,
@@ -25,11 +28,16 @@ from tools.task_status import (
     compute_next_id,
     gather_next_id_input,
     layered_topological_order,
+    main,
     parse_frontmatter,
     read_authoritative_task_text,
     render_human_report,
+    report_to_json,
     resolve_blocking,
 )
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+HELPER = REPO_ROOT / "tools" / "task_status.py"
 
 # ---------------------------------------------------------------------------
 # parse_frontmatter
@@ -444,12 +452,50 @@ def test_build_report_malformed_task_becomes_an_error_entry(tmp_path: Path) -> N
     assert report.errors == ["sh-002"]
 
 
+def test_build_report_skips_review_file_alongside_its_task(tmp_path: Path) -> None:
+    # The rejection loop (`.claude/docs/pipeline.md` § The rejection loop)
+    # leaves both `sh-XXX-<slug>.md` and `sh-XXX-REVIEW.md` in `tasks/active/`
+    # on the task's own `sh-XXX` branch; `REVIEW` sorts before every real
+    # slug in `git ls-tree` order, so this also pins that the authoritative
+    # branch read finds the real task file rather than the review file.
+    repo = _init_repo(tmp_path)
+    _write_task(repo, "active", "sh-005", "five", current_phase="implementation")
+    _commit_all(repo, "add sh-005")
+    _git(repo, "checkout", "-q", "-b", "sh-005")
+    (repo / "tasks" / "active" / "sh-005-REVIEW.md").write_text(
+        "# sh-005 Review — Round 1\n\n**Verdict:** REJECTED\n"
+    )
+    _commit_all(repo, "reject sh-005, round 1")
+
+    report = build_report(repo)
+
+    matches = [entry for entry in report.tasks if entry.id == "sh-005"]
+    assert len(matches) == 1
+    entry = matches[0]
+    assert isinstance(entry, NormalTaskReportEntry)
+    assert entry.path == "tasks/active/sh-005-five.md"
+    assert entry.source == "branch:sh-005"
+    assert report.errors == []
+
+
 def test_build_report_done_in_active_is_flagged_as_an_anomaly(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
     _write_task(repo, "active", "sh-001", "stranded", current_phase="done")
     _commit_all(repo, "add a done task stranded in active")
     report = build_report(repo)
     assert Anomaly(id="sh-001", reason="done_in_active") in report.anomalies
+
+
+def test_build_report_circular_blocked_by_is_flagged_as_an_anomaly(
+    tmp_path: Path,
+) -> None:
+    repo = _init_repo(tmp_path)
+    _write_task(repo, "active", "sh-006", "cycle-a", blocked_by=["sh-007"])
+    _write_task(repo, "active", "sh-007", "cycle-b", blocked_by=["sh-006"])
+    _commit_all(repo, "add a sh-006/sh-007 blocked_by cycle")
+    report = build_report(repo)
+    assert Anomaly(id="sh-006", reason="circular_blocked_by") in report.anomalies
+    assert Anomaly(id="sh-007", reason="circular_blocked_by") in report.anomalies
 
 
 def test_build_report_populates_blocked_and_branch_fields(tmp_path: Path) -> None:
@@ -559,3 +605,104 @@ def test_render_human_report_includes_error_entries_without_crashing(
     rendered = render_human_report(report)
     assert "- sh-002: ERROR:" in rendered
     assert "- sh-001: A title" in rendered
+
+
+# ---------------------------------------------------------------------------
+# report_to_json
+# ---------------------------------------------------------------------------
+
+
+def test_report_to_json_top_level_keys() -> None:
+    report = Report(next_id="sh-001", tasks=[], errors=[], anomalies=[])
+    assert set(report_to_json(report)) == {"next_id", "tasks", "errors", "anomalies"}
+
+
+def test_report_to_json_normal_entry_full_key_set() -> None:
+    entry = NormalTaskReportEntry(
+        id="sh-002",
+        title="A title",
+        path="tasks/active/sh-002-a-title.md",
+        current_phase="implementation",
+        current_agent="implementer",
+        review_rejections=1,
+        blocked_by=["sh-001"],
+        unmet_blockers=["sh-001"],
+        blocked=True,
+        in_progress=True,
+        branch_exists=True,
+        source="branch:sh-002",
+    )
+    report = Report(
+        next_id="sh-003",
+        tasks=[entry],
+        errors=[],
+        anomalies=[Anomaly(id="sh-002", reason="done_in_active")],
+    )
+    json_report = report_to_json(report)
+    assert json_report["next_id"] == "sh-003"
+    assert json_report["tasks"] == [
+        {
+            "id": "sh-002",
+            "title": "A title",
+            "path": "tasks/active/sh-002-a-title.md",
+            "current_phase": "implementation",
+            "current_agent": "implementer",
+            "review_rejections": 1,
+            "blocked_by": ["sh-001"],
+            "unmet_blockers": ["sh-001"],
+            "blocked": True,
+            "in_progress": True,
+            "branch_exists": True,
+            "source": "branch:sh-002",
+        }
+    ]
+    assert json_report["errors"] == []
+    assert json_report["anomalies"] == [{"id": "sh-002", "reason": "done_in_active"}]
+
+
+def test_report_to_json_error_entry_is_id_and_error_only() -> None:
+    entry = ErrorTaskReportEntry(id="sh-004", error="malformed frontmatter YAML")
+    report = Report(next_id="sh-005", tasks=[entry], errors=["sh-004"], anomalies=[])
+    json_report = report_to_json(report)
+    assert json_report["tasks"] == [
+        {"id": "sh-004", "error": "malformed frontmatter YAML"}
+    ]
+    assert set(json_report["tasks"][0]) == {"id", "error"}
+    assert json_report["errors"] == ["sh-004"]
+
+
+# ---------------------------------------------------------------------------
+# main
+# ---------------------------------------------------------------------------
+
+
+def test_main_default_prints_parseable_json_and_returns_0(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    exit_code = main([])
+    assert exit_code == 0
+    parsed = json.loads(capsys.readouterr().out)
+    assert set(parsed) == {"next_id", "tasks", "errors", "anomalies"}
+
+
+def test_main_human_prints_markdown_and_returns_0(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    exit_code = main(["--human"])
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert out.startswith("Next id: sh-")
+    with pytest.raises(json.JSONDecodeError):
+        json.loads(out)
+
+
+def test_cli_entrypoint_prints_json_and_exits_0() -> None:
+    result = subprocess.run(
+        [sys.executable, str(HELPER)],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    parsed = json.loads(result.stdout)
+    assert set(parsed) == {"next_id", "tasks", "errors", "anomalies"}
