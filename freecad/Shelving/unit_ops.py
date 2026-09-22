@@ -1,6 +1,6 @@
 """Plain functions behind the create/resize/rescan commands.
 
-Kept out of the command classes entirely, not merely called by them, so
+Kept out of the command classes, not merely called by them, so
 ``tools/freecad_write_smoke.py`` can call each operation directly without
 going through ``Gui``: command modules are guarded from import under
 ``freecadcmd`` (see ``freecad/Shelving/init_gui.py``), and testing the
@@ -42,7 +42,7 @@ def _default_unit() -> Unit:
     """A closed single-bay unit at :func:`create_unit`'s fixed defaults: a
     bottom and top running the full width, two sides captured between them,
     one open bay. The carcass shell is not a distinguished rule in the core
-    model, so this is just an ordinary four-board ``Division`` tree, the
+    model, so this is an ordinary four-board ``Division`` tree, the
     same shape ``freecad.Shelving.core.tests.test_expand``'s ``_closed_box``
     fixture builds."""
     return Unit(

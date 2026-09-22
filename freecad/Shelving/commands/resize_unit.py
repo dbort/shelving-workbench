@@ -25,9 +25,9 @@ _ICON = os.path.join(_RESOURCE_DIR, "shelving.svg")
 
 _CONTAINERS = ("App::Part", "App::LinkGroup", "App::DocumentObjectGroup")
 
-# Loose bounds on the resize dialog's fields: not a design constraint, just
-# guarding against a stray zero or negative entry reaching the solver as an
-# opaque LayoutSolveError instead of an obvious dialog-level rejection.
+# Loose bounds on the resize dialog's fields, guarding against a stray zero
+# or negative entry reaching the solver as an opaque LayoutSolveError
+# instead of an obvious dialog-level rejection.
 _MIN_DIMENSION_MM = 1.0
 _MAX_DIMENSION_MM = 100_000.0
 _DIALOG_DECIMALS = 1

@@ -474,7 +474,7 @@ def test_stored_material_survives_a_thickness_mismatch() -> None:
     """A board tagged ``ShelvingMaterial="mdf19"`` still resolves to
     ``mdf19`` even after its measured thickness is hand-edited away from
     19mm to a value no catalog entry matches within the snap tolerance: the
-    stored id bypasses thickness matching entirely, which is what lets a
+    stored id bypasses thickness matching, which is what lets a
     catalog entry's thickness change later (M8) without stranding every
     board already written against the old one."""
     doc = _new_document("write_smoke_material")

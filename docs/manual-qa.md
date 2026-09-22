@@ -255,12 +255,12 @@ you added other geometry first).
      those refuse instead of demonstrating the reflow this case is about.
    - Moving it *toward the centre* by more than 3 mm scans and resizes
      successfully, but does not demonstrate reflow either: past 3 mm the
-     gap stops reading as clearance-tolerant measurement noise and starts
-     reading as a real void, correctly, since nothing tells the scanner an
-     edit that size was accidental rather than a deliberate design change.
-     The board then stays exactly where you put it, because that reading
-     is now a genuinely different, equally valid layout, not a stray edit
-     to correct. 2 mm keeps this comfortably inside the tolerant range.
+     scanner reads the gap as a real void rather than clearance-tolerant
+     measurement noise, correctly, since nothing tells it an edit that size
+     was accidental rather than a deliberate design change. The board then
+     stays exactly where you put it, because that reading is now a
+     different, equally valid layout, not a stray edit to correct. 2 mm
+     keeps this comfortably inside the tolerant range.
 2. Select **ShelvingUnit** and run **Resize Unit** again, entering `800`,
    `350`, `1000`, the same dimensions as case 2 (or run **Scan Unit** first
    to confirm the moved board is still read correctly, then resize).
@@ -279,7 +279,7 @@ hand first: running Resize Unit (or Scan Unit) is what corrects it.
    thickness from, and a cube has three tied extents, so it refuses the
    whole scan rather than reading this one object as unrelated. Thinnest
    along `y` (this unit's depth axis) also keeps it out of thickness/material
-   matching entirely, the same way this case's automated counterpart
+   matching, the same way this case's automated counterpart
    (`tools/freecad_write_smoke.py`'s `BackPanel`) does it:
    ```python
    doc = App.ActiveDocument
@@ -293,8 +293,8 @@ hand first: running Resize Unit (or Scan Unit) is what corrects it.
 2. Select **ShelvingUnit** and run **Resize Unit**. Enter width `900`,
    depth `400`, height `1100`.
 
-Expected: **HandAdded** is untouched (same position, still in the tree, not
-deleted), because it carries none of this workbench's properties. The Report
+Expected: **HandAdded** stays exactly where it was, still in the tree and
+not deleted, because it carries none of this workbench's properties. The Report
 view's line includes `left alone 1` and names `HandAdded` on the line below
 it.
 

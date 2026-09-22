@@ -445,9 +445,9 @@ def test_scan_uses_the_stored_depth_axis_on_a_deep_unit(doc: FreeCAD.Document) -
     1600 x 700 x 450 mm (700 mm deep, 450 mm tall), Scan Unit refused while
     Resize Unit, reading the same geometry, did not, because only
     ``resize_unit`` passed the stored axis through. Confirmed below that
-    this unit is genuinely the case :func:`~freecad.Shelving.core.scan.
+    this unit is the case :func:`~freecad.Shelving.core.scan.
     detect_depth_axis`'s own docstring warns about (fooled by a unit deeper
-    than it is tall, guessing ``z`` for what is really ``y``), and that
+    than it is tall, guessing ``z`` instead of ``y``), and that
     guessing wrong is what breaks the scan, not something else about this
     geometry: if either assumption stops holding, this test needs
     re-deriving, not loosening."""

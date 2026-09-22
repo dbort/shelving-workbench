@@ -18,7 +18,7 @@ reads correctly. A single-solid, axis-aligned part that is not a plain box
 (a notched panel) becomes a ``Box`` with ``irregular=True``, its bounding
 box standing in for the shape scanning cannot regenerate. Only a part with
 no solid, several solids, or a solid that is not axis-aligned (its bounding
-box would not describe the space it actually occupies) is reported in
+box would not describe the space it occupies) is reported in
 ``Skipped`` with the reason instead.
 
 ``write_container`` is the inverse: given a solved ``Unit``, it reconciles a
@@ -389,7 +389,7 @@ def _label_for_board(
     counters: dict[str, int],
 ) -> str:
     """The generated ``Label`` for a ``Board`` at ``index`` of ``last_index``
-    in a division cut along ``division_axis``. See this task's Frontier
+    in a division cut along ``division_axis``. See ``sh-018``'s Frontier
     Advice for the naming rule; ``counters`` is shared and mutated across
     one call to :func:`_derive_labels`, so "Shelf N" / "Divider N" number
     sequentially across the whole tree rather than per division.
@@ -454,7 +454,7 @@ def _derive_labels(unit: Unit) -> dict[str, str]:
 
     ``write_container`` applies this only to a board it creates or adopts
     from a copy; every other board keeps whatever ``Label`` it already
-    carries, per this task's "labels are generated at creation only" rule.
+    carries, per ``sh-018``'s "labels are generated at creation only" rule.
     """
     depth_axis = unit.depth_axis if unit.depth_axis is not None else Axis.Y
     horizontal_axis, vertical_axis = elevation_axes(depth_axis)
@@ -568,7 +568,7 @@ def write_container(
     The scanner routes an object away from ever matching anything at all
     (a panel set aside by ``freecad.Shelving.core.scan.scan``, or a part
     ``read_container`` could not read) when it has no defensible place in
-    the tree, which is what actually keeps stray geometry untouched;
+    the tree, which is what keeps stray geometry untouched;
     "carries no provenance" alone does not. Writes ``container``'s own
     four properties, including the rule record from
     ``freecad.Shelving.core.record.rules_to_json``. Opens no transaction;
@@ -641,7 +641,7 @@ def write_container(
     left_alone: list[str] = []
     for name, obj in existing.items():
         if name in matched_names:
-            # Every matched object was just tagged above, adopted or not, so
+            # Every matched object was tagged above, adopted or not, so
             # there is nothing left to classify here.
             continue
         if properties.has_board_properties(obj):

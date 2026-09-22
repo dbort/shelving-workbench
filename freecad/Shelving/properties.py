@@ -17,7 +17,7 @@ and the ``ensure_*`` functions are what a caller casts through to get one.
 
 Facing is stored as a string enumeration (``"min"`` / ``"max"`` /
 ``"unknown"``) rather than a nullable boolean: a FreeCAD property has no null,
-and ``Unit.front_at_min`` genuinely has three states (front at the depth
+and ``Unit.front_at_min`` has three states (front at the depth
 axis's minimum end, its maximum end, or undetermined), so collapsing to two
 string values plus "property absent" would conflate "never written" with
 "determined to be undetermined".
