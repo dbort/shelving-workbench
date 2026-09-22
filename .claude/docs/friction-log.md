@@ -4,7 +4,9 @@ next_id: friction-019
 
 # Friction log
 
-Friction log for working in this repo: moments where completing a task forced an unnecessary workaround. An entry qualifies when there is a clear "this would have been simpler if X existed or Y returned this data" - missing tools, missing data, poor return shapes, absent markers, docs that had to be reverse-engineered.
+Friction log for *developing and testing* this repo: moments where completing a task forced an unnecessary workaround, in the tools, docs, or process used to build the workbench, not in the workbench itself. An entry qualifies when there is a clear "this would have been simpler if X existed or Y returned this data" - missing tools, missing data, poor return shapes, absent markers, docs that had to be reverse-engineered.
+
+This file is not for defects in the shipped workbench's own behavior: wrong output, a refusal that should succeed, a crash, anything a real user would experience. Those go in `.claude/docs/bug-log.md` instead - the two are companions, one for friction building the thing, one for the thing being wrong.
 
 Logging is part of the work itself: same session, never deferred. A workaround that succeeded smoothly still gets logged: success is what hides the papercut. Entries are raw material for tooling/docs/API improvements.
 

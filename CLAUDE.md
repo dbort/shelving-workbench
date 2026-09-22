@@ -93,13 +93,22 @@ wrong.
   work must add the repo's standard instrumentation for it.
 -->
 
-## Friction log
+## Friction log and bug log
 
-When work here forces a workaround — a missing tool or script, data in the
-wrong shape, a doc you had to reverse-engineer — log it in
-`.claude/docs/friction-log.md` in the same session, even (especially) when
-the workaround succeeded. That file is canonical for the entry format and
-the fix-and-delete protocol; this section is only the pointer.
+When *developing or testing* this repo forces a workaround — a missing
+tool or script, data in the wrong shape, a doc you had to reverse-engineer
+— log it in `.claude/docs/friction-log.md` in the same session, even
+(especially) when the workaround succeeded. That file is canonical for the
+entry format and the fix-and-delete protocol; this section is only the
+pointer.
+
+When the *workbench itself* behaves incorrectly for a real user — wrong
+output, a refusal that should succeed, a crash, anything that contradicts
+the design docs or a task's own Must Haves — log it in
+`.claude/docs/bug-log.md` instead, same session, whether or not it gets
+fixed immediately. That file is canonical for its entry format (which
+includes an explicit ad-hoc-vs-task call) and its own fix-and-delete
+protocol.
 
 ## Writing style by destination
 
