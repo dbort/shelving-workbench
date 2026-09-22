@@ -287,7 +287,7 @@ script in this task at all; the `pixi run task-status` entry is a one-line
       separately, the ids caught in a cycle). Unit tests for all four
       against synthetic strings/lists/mappings only, no filesystem or git;
       the topological-sort tests cover a chain, a diamond, and a cycle.
-- [ ] **Step 2** (`tools/task_status.py`, `tests/test_task_status.py`):
+- [x] **Step 2** (`tools/task_status.py`, `tests/test_task_status.py`):
       Add the git/filesystem layer: a function that lists `tasks/active/`,
       `tasks/completed/`, `tasks/abandoned/` filenames in the working
       directory; a function implementing the multi-branch `next_id` input

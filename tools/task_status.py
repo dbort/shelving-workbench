@@ -16,15 +16,27 @@ Phase transitions reserves that to `new-task`/`dispatch-tasks`/
 from __future__ import annotations
 
 import re
+import subprocess
 from collections.abc import Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Literal
 
 import yaml
 
 
 class TaskParseError(Exception):
     """A task file's frontmatter failed to parse or validate."""
+
+
+class TaskStatusError(Exception):
+    """The tool itself could not produce a report (not a single task's error).
+
+    Reserved for `tasks/active/` not existing or `git` not being on `PATH`;
+    a malformed or anomalous individual task never raises this (Frontier
+    Advice: anomalies and errors are data, not failures).
+    """
 
 
 @dataclass(frozen=True)
@@ -214,3 +226,288 @@ def layered_topological_order(
                     in_degree[dependent] -= 1
 
     return layers, sorted(remaining)
+
+
+# ---------------------------------------------------------------------------
+# The git/filesystem layer.
+# ---------------------------------------------------------------------------
+
+_PATH_ID_RE = re.compile(r"(?:^|/)(sh-\d+)-[^/]+\.md$")
+
+_TASK_SUBDIRS = ("active", "completed", "abandoned")
+
+
+def _task_id_from_path(path: str) -> str | None:
+    """The `sh-NNN` id a `tasks/*/sh-NNN-slug.md`-shaped path names, if any."""
+    match = _PATH_ID_RE.search(path)
+    return match.group(1) if match is not None else None
+
+
+def _run_git(repo_root: Path, args: Sequence[str]) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(
+            ["git", *args],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+    except FileNotFoundError as exc:
+        raise TaskStatusError("git is not available on PATH") from exc
+
+
+def local_branch_exists(repo_root: Path, branch: str) -> bool:
+    """Whether a local branch named exactly `branch` exists."""
+    result = _run_git(
+        repo_root, ["rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"]
+    )
+    return result.returncode == 0
+
+
+def list_local_branches(repo_root: Path) -> list[str]:
+    """Every local branch name, in `git for-each-ref`'s own order."""
+    result = _run_git(
+        repo_root, ["for-each-ref", "--format=%(refname:short)", "refs/heads/"]
+    )
+    if result.returncode != 0:
+        raise TaskStatusError(f"git for-each-ref failed: {result.stderr.strip()}")
+    return [line for line in result.stdout.splitlines() if line]
+
+
+def branch_task_ids(repo_root: Path, branch: str) -> list[str]:
+    """Every task id present under `tasks/*/` at `branch`'s own tip.
+
+    Reads the tree at the branch's tip directly (`git ls-tree`), never
+    checking it out, so this is safe to call for a branch other than the
+    one currently checked out.
+    """
+    result = _run_git(
+        repo_root,
+        [
+            "ls-tree",
+            "-r",
+            "--name-only",
+            branch,
+            "--",
+            *(f"tasks/{subdir}/" for subdir in _TASK_SUBDIRS),
+        ],
+    )
+    if result.returncode != 0:
+        raise TaskStatusError(
+            f"git ls-tree failed for branch {branch!r}: {result.stderr.strip()}"
+        )
+    ids: list[str] = []
+    for line in result.stdout.splitlines():
+        task_id = _task_id_from_path(line)
+        if task_id is not None:
+            ids.append(task_id)
+    return ids
+
+
+def working_tree_task_ids(
+    repo_root: Path, subdirs: Sequence[str] = _TASK_SUBDIRS
+) -> list[str]:
+    """Every task id present under the given `tasks/*/` subdirectories on disk.
+
+    Globs the working directory directly rather than `git ls-files`, so an
+    uncommitted new task file is still counted (Frontier Advice: multi-branch
+    `next_id` scanning).
+    """
+    ids: list[str] = []
+    for subdir in subdirs:
+        for entry in sorted((repo_root / "tasks" / subdir).glob("*.md")):
+            task_id = _task_id_from_path(entry.name)
+            if task_id is not None:
+                ids.append(task_id)
+    return ids
+
+
+def gather_next_id_input(repo_root: Path) -> list[str]:
+    """The union of every task id `compute_next_id` must consider.
+
+    Unions the working directory's own `tasks/*/` listing (including
+    anything uncommitted) with, for every local branch, that same listing as
+    it exists at that branch's own tip — so a task created on one branch, or
+    accumulated on `main` while another branch was checked out, can't
+    collide with an id this tool hands out from a different, stale-relative-
+    to-it branch.
+    """
+    ids = set(working_tree_task_ids(repo_root))
+    for branch in list_local_branches(repo_root):
+        ids.update(branch_task_ids(repo_root, branch))
+    return sorted(ids)
+
+
+def working_tree_completed_ids(repo_root: Path) -> set[str]:
+    """Task ids present in the working directory's own `tasks/completed/`.
+
+    This, not the multi-branch union `gather_next_id_input` computes, is
+    what `blocked_by` resolution is checked against (`dispatch-tasks`'s own
+    Step 1 logic).
+    """
+    return set(working_tree_task_ids(repo_root, subdirs=("completed",)))
+
+
+def _find_branch_path(
+    repo_root: Path, branch: str, subdir: str, task_id: str
+) -> str | None:
+    """The exact `tasks/<subdir>/<task_id>-*.md` path at `branch`'s tip, if any."""
+    result = _run_git(
+        repo_root, ["ls-tree", "-r", "--name-only", branch, "--", f"tasks/{subdir}/"]
+    )
+    if result.returncode != 0:
+        return None
+    prefix = f"tasks/{subdir}/{task_id}-"
+    for line in result.stdout.splitlines():
+        if line.startswith(prefix) and line.endswith(".md"):
+            return line
+    return None
+
+
+def read_authoritative_task_text(
+    repo_root: Path, task_id: str, working_tree_path: Path
+) -> tuple[str, str]:
+    """`(text, source)` for `task_id`'s authoritative frontmatter/body text.
+
+    `source` is `"working_tree"` when no local branch named exactly
+    `task_id` exists (the task hasn't reached `implementation` yet, so
+    nothing has branched off `main`), or `"branch:<task_id>"` when the
+    text was read from that branch's own tip instead, since a branch's
+    phase-transition commits never land on the working tree's checked-out
+    branch (`.claude/docs/pipeline.md` § Git branching). On a branch, tries
+    `tasks/active/` first, then `tasks/completed/` (a task whose
+    `approve-task` run finished finalizing but hasn't merged yet). Raises
+    `TaskParseError` if the branch exists but neither location has the file
+    at its tip.
+    """
+    if not local_branch_exists(repo_root, task_id):
+        return working_tree_path.read_text(encoding="utf-8"), "working_tree"
+    for subdir in ("active", "completed"):
+        path = _find_branch_path(repo_root, task_id, subdir, task_id)
+        if path is None:
+            continue
+        result = _run_git(repo_root, ["show", f"{task_id}:{path}"])
+        if result.returncode == 0:
+            return result.stdout, f"branch:{task_id}"
+    raise TaskParseError(
+        f"branch {task_id} exists but neither tasks/active/ nor tasks/completed/ "
+        f"has a {task_id}-*.md file at its tip"
+    )
+
+
+@dataclass(frozen=True)
+class NormalTaskReportEntry:
+    """One `tasks/active/` entry whose frontmatter parsed and validated cleanly."""
+
+    id: str
+    title: str
+    path: str
+    current_phase: str
+    current_agent: str
+    review_rejections: int
+    blocked_by: list[str]
+    unmet_blockers: list[str]
+    blocked: bool
+    in_progress: bool
+    branch_exists: bool
+    source: str
+
+
+@dataclass(frozen=True)
+class ErrorTaskReportEntry:
+    """One `tasks/active/` entry whose frontmatter failed to parse or validate."""
+
+    id: str
+    error: str
+
+
+TaskReportEntry = NormalTaskReportEntry | ErrorTaskReportEntry
+
+AnomalyReason = Literal["done_in_active", "circular_blocked_by"]
+
+
+@dataclass(frozen=True)
+class Anomaly:
+    id: str
+    reason: AnomalyReason
+
+
+@dataclass(frozen=True)
+class Report:
+    next_id: str
+    tasks: list[TaskReportEntry]
+    errors: list[str]
+    anomalies: list[Anomaly]
+
+
+def build_report(repo_root: Path) -> Report:
+    """Assemble the full `tasks/active/` status report for `repo_root`.
+
+    Iterates `tasks/active/`'s working-directory listing in `ls` order
+    (never `tasks/completed/`/`tasks/abandoned/` themselves, which are
+    consulted only to resolve `unmet_blockers` and `next_id`); a task whose
+    frontmatter fails to parse or whose id disagrees with its filename
+    becomes an `ErrorTaskReportEntry` instead of aborting the whole report.
+    Raises `TaskStatusError` only when the report itself cannot be produced
+    (`tasks/active/` missing, `git` unavailable), never for a single
+    anomalous or malformed task.
+    """
+    active_dir = repo_root / "tasks" / "active"
+    if not active_dir.is_dir():
+        raise TaskStatusError(f"{active_dir} does not exist")
+
+    next_id = compute_next_id(gather_next_id_input(repo_root))
+    completed_ids = working_tree_completed_ids(repo_root)
+
+    entries: list[TaskReportEntry] = []
+    errors: list[str] = []
+    anomalies: list[Anomaly] = []
+    blocked_by_by_id: dict[str, list[str]] = {}
+
+    for task_path in sorted(active_dir.glob("*.md")):
+        expected_id = _task_id_from_path(task_path.name) or task_path.stem
+        try:
+            if _task_id_from_path(task_path.name) is None:
+                raise TaskParseError(
+                    f"{task_path.name!r} is not a sh-NNN-slug.md task filename"
+                )
+            text, source = read_authoritative_task_text(
+                repo_root, expected_id, task_path
+            )
+            parsed = parse_frontmatter(text)
+            if parsed.id != expected_id:
+                raise TaskParseError(
+                    f"frontmatter id {parsed.id!r} does not match "
+                    f"filename-derived id {expected_id!r}"
+                )
+        except TaskParseError as exc:
+            entries.append(ErrorTaskReportEntry(id=expected_id, error=str(exc)))
+            errors.append(expected_id)
+            blocked_by_by_id[expected_id] = []
+            continue
+
+        unmet_blockers, blocked = resolve_blocking(parsed.blocked_by, completed_ids)
+        entry = NormalTaskReportEntry(
+            id=expected_id,
+            title=parsed.title,
+            path=task_path.relative_to(repo_root).as_posix(),
+            current_phase=parsed.current_phase,
+            current_agent=parsed.current_agent,
+            review_rejections=parsed.review_rejections,
+            blocked_by=list(parsed.blocked_by),
+            unmet_blockers=unmet_blockers,
+            blocked=blocked,
+            in_progress=parsed.current_phase != "planning",
+            branch_exists=local_branch_exists(repo_root, expected_id),
+            source=source,
+        )
+        entries.append(entry)
+        blocked_by_by_id[expected_id] = list(parsed.blocked_by)
+        if parsed.current_phase == "done":
+            anomalies.append(Anomaly(id=expected_id, reason="done_in_active"))
+
+    _, cyclic_ids = layered_topological_order(blocked_by_by_id)
+    for cyclic_id in cyclic_ids:
+        anomalies.append(Anomaly(id=cyclic_id, reason="circular_blocked_by"))
+
+    return Report(next_id=next_id, tasks=entries, errors=errors, anomalies=anomalies)
