@@ -562,36 +562,149 @@ def test_render_human_report_ordering_and_fields(tmp_path: Path) -> None:
     report = build_report(repo)
     rendered = render_human_report(report)
 
-    # Layer 1 is sh-003, the only task with zero unresolved *active* blockers:
-    # sh-001 is completed and contributes no edge, even though it appears in
-    # sh-002's raw blocked_by. Layer 2 is sh-002 and sh-004, both freed once
-    # sh-003 resolves, sorted by id. The sh-006/sh-007 cycle is appended
-    # last, sorted by id, since neither task ever reaches zero remaining
+    # All six tasks share one phase (the fixture default, "implementation"),
+    # so this pins ordering within a single section: layer 1 is sh-003, the
+    # only task with zero unresolved *active* blockers (sh-001 is completed
+    # and contributes no edge, even though it appears in sh-002's raw
+    # blocked_by). Layer 2 is sh-002 and sh-004, both freed once sh-003
+    # resolves, sorted by id. The sh-006/sh-007 cycle is appended last,
+    # sorted by id, since neither task ever reaches zero remaining blockers.
+    # "blocked by" itself is a Planning-only field (see the grouping test
+    # below), so it never appears here even though these tasks do have
     # blockers.
     assert rendered == (
         "Next id: sh-008\n"
         "\n"
+        "## Implementation\n"
+        "\n"
         "- sh-003: No blockers\n"
         "  - path: tasks/active/sh-003-no-blockers.md\n"
         "  - branch: sh-003\n"
-        "  - phase: implementation\n"
-        "  - blocked by: (none)\n"
         "- sh-002: Blocked on one done one active\n"
         "  - path: tasks/active/sh-002-mixed-blockers.md\n"
-        "  - phase: implementation\n"
-        "  - blocked by: sh-003\n"
         "- sh-004: Blocked on sh-003\n"
         "  - path: tasks/active/sh-004-blocked-on-three.md\n"
-        "  - phase: implementation\n"
-        "  - blocked by: sh-003\n"
         "- sh-006: Cycle A\n"
         "  - path: tasks/active/sh-006-cycle-a.md\n"
-        "  - phase: implementation\n"
-        "  - blocked by: sh-007\n"
         "- sh-007: Cycle B\n"
-        "  - path: tasks/active/sh-007-cycle-b.md\n"
-        "  - phase: implementation\n"
-        "  - blocked by: sh-006"
+        "  - path: tasks/active/sh-007-cycle-b.md"
+    )
+
+
+def test_render_human_report_groups_by_phase_with_planning_subsections(
+    tmp_path: Path,
+) -> None:
+    repo = _init_repo(tmp_path)
+    _write_task(
+        repo,
+        "active",
+        "sh-001",
+        "needs-human",
+        title="Rejection cap hit",
+        current_agent="user",
+        current_phase="blocked_needs_human",
+        review_rejections=3,
+    )
+    _write_task(
+        repo,
+        "active",
+        "sh-002",
+        "awaiting-signoff",
+        title="Awaiting sign-off",
+        current_agent="user",
+        current_phase="user_signoff",
+    )
+    _write_task(
+        repo,
+        "active",
+        "sh-003",
+        "in-review",
+        title="In review",
+        current_agent="reviewer",
+        current_phase="review",
+    )
+    _write_task(
+        repo,
+        "active",
+        "sh-004",
+        "being-built",
+        title="Being built",
+        current_agent="implementer",
+        current_phase="implementation",
+    )
+    _write_task(
+        repo,
+        "active",
+        "sh-005",
+        "no-blockers",
+        title="Ready to start",
+        current_agent="implementer",
+        current_phase="planning",
+    )
+    _write_task(
+        repo,
+        "active",
+        "sh-006",
+        "waits-on-five",
+        title="Waits on sh-005",
+        current_agent="implementer",
+        current_phase="planning",
+        blocked_by=["sh-005"],
+    )
+    _write_task(
+        repo,
+        "active",
+        "sh-007",
+        "stray-done",
+        title="Done but still active",
+        current_agent="user",
+        current_phase="done",
+    )
+    _commit_all(repo, "add one task per phase, plus a planning pair")
+
+    report = build_report(repo)
+    rendered = render_human_report(report)
+
+    assert rendered == (
+        "Next id: sh-008\n"
+        "\n"
+        "## Blocked, needs human\n"
+        "\n"
+        "- sh-001: Rejection cap hit\n"
+        "  - path: tasks/active/sh-001-needs-human.md\n"
+        "\n"
+        "## User sign-off\n"
+        "\n"
+        "- sh-002: Awaiting sign-off\n"
+        "  - path: tasks/active/sh-002-awaiting-signoff.md\n"
+        "\n"
+        "## Review\n"
+        "\n"
+        "- sh-003: In review\n"
+        "  - path: tasks/active/sh-003-in-review.md\n"
+        "\n"
+        "## Implementation\n"
+        "\n"
+        "- sh-004: Being built\n"
+        "  - path: tasks/active/sh-004-being-built.md\n"
+        "\n"
+        "## Planning\n"
+        "\n"
+        "### Unblocked\n"
+        "\n"
+        "- sh-005: Ready to start\n"
+        "  - path: tasks/active/sh-005-no-blockers.md\n"
+        "\n"
+        "### Blocked\n"
+        "\n"
+        "- sh-006: Waits on sh-005\n"
+        "  - path: tasks/active/sh-006-waits-on-five.md\n"
+        "  - blocked by: sh-005\n"
+        "\n"
+        "## Done\n"
+        "\n"
+        "- sh-007: Done but still active\n"
+        "  - path: tasks/active/sh-007-stray-done.md"
     )
 
 
@@ -604,8 +717,9 @@ def test_render_human_report_includes_error_entries_without_crashing(
     _commit_all(repo, "add one good, one malformed task")
     report = build_report(repo)
     rendered = render_human_report(report)
-    assert "- sh-002: ERROR:" in rendered
+    assert "## Errors\n\n- sh-002: ERROR:" in rendered
     assert "- sh-001: A title" in rendered
+    assert rendered.index("## Implementation") < rendered.index("## Errors")
 
 
 # ---------------------------------------------------------------------------

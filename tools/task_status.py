@@ -613,30 +613,59 @@ def report_to_json(report: Report) -> JsonReport:
     }
 
 
-def _render_task_bullet(entry: TaskReportEntry) -> list[str]:
+def _render_task_bullet(
+    entry: TaskReportEntry, *, show_blocked_by: bool = True, show_phase: bool = False
+) -> list[str]:
     if isinstance(entry, ErrorTaskReportEntry):
         return [f"- {entry.id}: ERROR: {entry.error}"]
     lines = [f"- {entry.id}: {entry.title}", f"  - path: {entry.path}"]
     if entry.branch_exists:
         lines.append(f"  - branch: {entry.id}")
-    lines.append(f"  - phase: {entry.current_phase}")
-    blocked_by_text = (
-        ", ".join(entry.unmet_blockers) if entry.unmet_blockers else "(none)"
-    )
-    lines.append(f"  - blocked by: {blocked_by_text}")
+    if show_phase:
+        lines.append(f"  - phase: {entry.current_phase}")
+    if show_blocked_by:
+        blocked_by_text = (
+            ", ".join(entry.unmet_blockers) if entry.unmet_blockers else "(none)"
+        )
+        lines.append(f"  - blocked by: {blocked_by_text}")
     return lines
 
 
-def render_human_report(report: Report) -> str:
-    """A Markdown summary of `report`: next id, then one nested bullet per task.
+# Section order puts the phases needing the most immediate human or pipeline
+# attention first: a rejection-capped task or one awaiting sign-off is more
+# interesting than one still in planning. `done` is last among known phases
+# since a `done` task sitting in `tasks/active/` is a cleanup anomaly, not
+# live work (`.claude/docs/pipeline.md` § Phases).
+_PHASE_SECTIONS: tuple[tuple[str, str], ...] = (
+    ("blocked_needs_human", "Blocked, needs human"),
+    ("user_signoff", "User sign-off"),
+    ("review", "Review"),
+    ("implementation", "Implementation"),
+    ("planning", "Planning"),
+    ("done", "Done"),
+)
 
-    Tasks are ordered by a layered topological sort over the `blocked_by`
-    DAG restricted to edges between two tasks both in `report.tasks`
-    (`layered_topological_order`); a task caught in a `circular_blocked_by`
-    cycle is appended last, sorted by id. An `ErrorTaskReportEntry` is
+
+def render_human_report(report: Report) -> str:
+    """A Markdown summary of `report`: next id, then one section per phase.
+
+    Sections appear in `_PHASE_SECTIONS` order and are omitted when empty.
+    Within a section, tasks are ordered by a layered topological sort over
+    the `blocked_by` DAG restricted to edges between two tasks both in
+    `report.tasks` (`layered_topological_order`), computed once across all
+    of `report.tasks` and then partitioned by section so a task's position
+    still reflects the same dependency-completion order; a task caught in a
+    `circular_blocked_by` cycle sorts last within its section, by id. The
+    `planning` section splits into an `Unblocked` and a `Blocked`
+    subsection so an unblocked task's bullet can omit the always-`(none)`
+    "blocked by" line. A `current_phase` value outside `_PHASE_SECTIONS`
+    (a malformed task file the frontmatter parse didn't reject) falls into
+    an `Other` section, whose bullets keep the "phase" line since the
+    heading itself doesn't disambiguate it. An `ErrorTaskReportEntry` is
     treated as having no blockers for ordering purposes (its real
-    `blocked_by` failed to parse) and renders as a single error line instead
-    of the normal nested-bullet fields.
+    `blocked_by` failed to parse) and renders as a single error line under
+    its own `Errors` section, last, since a task that can't even be parsed
+    isn't actionable the way any phase-classified task is.
     """
     entry_by_id = {entry.id: entry for entry in report.tasks}
     blocked_by_by_id = {
@@ -648,10 +677,79 @@ def render_human_report(report: Report) -> str:
     layers, cyclic_ids = layered_topological_order(blocked_by_by_id)
     ordered_ids = [task_id for layer in layers for task_id in layer] + cyclic_ids
 
-    lines = [f"Next id: {report.next_id}", ""]
+    known_phases = {phase for phase, _ in _PHASE_SECTIONS}
+    ids_by_phase: dict[str, list[str]] = {phase: [] for phase, _ in _PHASE_SECTIONS}
+    other_ids: list[str] = []
+    error_ids: list[str] = []
     for task_id in ordered_ids:
-        lines.extend(_render_task_bullet(entry_by_id[task_id]))
-    return "\n".join(lines)
+        entry = entry_by_id[task_id]
+        if isinstance(entry, ErrorTaskReportEntry):
+            error_ids.append(task_id)
+        elif entry.current_phase in known_phases:
+            ids_by_phase[entry.current_phase].append(task_id)
+        else:
+            other_ids.append(task_id)
+
+    sections = [f"Next id: {report.next_id}"]
+
+    for phase, title in _PHASE_SECTIONS:
+        ids = ids_by_phase[phase]
+        if not ids:
+            continue
+        block = [f"## {title}"]
+        if phase == "planning":
+            unblocked_ids: list[str] = []
+            blocked_ids: list[str] = []
+            for task_id in ids:
+                planning_entry = entry_by_id[task_id]
+                # ids_by_phase["planning"] only ever holds NormalTaskReportEntry
+                # ids: an ErrorTaskReportEntry has no current_phase attribute at
+                # all, so it can never satisfy the `elif entry.current_phase in
+                # known_phases` branch that populates ids_by_phase above.
+                assert isinstance(planning_entry, NormalTaskReportEntry)
+                if planning_entry.unmet_blockers:
+                    blocked_ids.append(task_id)
+                else:
+                    unblocked_ids.append(task_id)
+            if unblocked_ids:
+                block.extend(["", "### Unblocked", ""])
+                for task_id in unblocked_ids:
+                    block.extend(
+                        _render_task_bullet(entry_by_id[task_id], show_blocked_by=False)
+                    )
+            if blocked_ids:
+                block.extend(["", "### Blocked", ""])
+                for task_id in blocked_ids:
+                    block.extend(_render_task_bullet(entry_by_id[task_id]))
+        else:
+            # Only the Planning section's own split into Unblocked/Blocked
+            # subsections makes "blocked by" worth a line: everywhere else,
+            # the phase already implies the task cleared any dispatch-time
+            # blocker check (`.claude/docs/pipeline.md` § Task dependencies).
+            block.append("")
+            for task_id in ids:
+                block.extend(
+                    _render_task_bullet(entry_by_id[task_id], show_blocked_by=False)
+                )
+        sections.append("\n".join(block))
+
+    if other_ids:
+        block = ["## Other", ""]
+        for task_id in other_ids:
+            block.extend(
+                _render_task_bullet(
+                    entry_by_id[task_id], show_blocked_by=False, show_phase=True
+                )
+            )
+        sections.append("\n".join(block))
+
+    if error_ids:
+        block = ["## Errors", ""]
+        for task_id in error_ids:
+            block.extend(_render_task_bullet(entry_by_id[task_id]))
+        sections.append("\n".join(block))
+
+    return "\n\n".join(sections)
 
 
 def _repo_root() -> Path:
