@@ -1,5 +1,5 @@
 ---
-next_id: friction-019
+next_id: friction-020
 ---
 
 # Friction log
@@ -204,3 +204,36 @@ Sweeping the log is a human-triggered act, like task sign-off: the user asks for
   `docs/freecadcmd-notes.md` carried a short "building a PartDesign feature
   headlessly" recipe, since this task is unlikely to be the last one needing
   more than a bare `Part::Box`.
+
+- `friction-019` - **diff-scoped `doc-hygiene` never re-examines a
+  pre-existing content violation on a line its own diff extends**: found
+  during `sh-019` manual sign-off review, on `freecad/Shelving/init_gui.py`'s
+  `ShelvingWorkbench` docstring: `"Initialize registers the Shelving toolbar
+  and menu, wired to the Shelving_Scan, ... commands."` names every command
+  id, and `Initialize`'s own `command_ids` list four lines later names the
+  same ids verbatim, a textbook case of this skill's own content-audit rule
+  1 ("a file-level or function-level preamble that lists the... functions...
+  that follow: it is 'what' content even when it is not line-adjacent").
+  This branch's diff added three more command ids to both the docstring and
+  the list (`Shelving_SeedCatalog`, `Shelving_AddMaterial`,
+  `Shelving_ReflowAll`), so the diff touched, and worsened, the exact line
+  carrying the violation. Two separate `doc-hygiene --diff=main` runs on
+  this branch (after the round-1 review approval, and again after round 3)
+  both left it: the content-audit agent's own report said the docstring
+  "matches pre-existing listing style... not something this diff
+  introduced." The skill's diff-scope instruction is why: it tells an agent
+  to constrain edits to "changed lines, plus any pre-existing comment nearby
+  that the diff has made stale," and explicitly "do not perform a general
+  hygiene sweep of unrelated, unchanged content elsewhere in the file, even
+  if you notice something else worth fixing there." A three-name append to
+  an already-duplicating list is a changed line, but the violation itself
+  predates the diff, so "made stale by this diff" reads as false even
+  though the diff makes the existing violation larger. Fixed ad hoc on
+  `sh-019`'s own branch by trimming the docstring to `"FreeCAD workbench
+  entry point for parametric shelving."` and removing the id list, since
+  that one instance was small and localized. Simpler if: `doc-hygiene`'s
+  content-audit and diff-scope prompts treated "this diff added a line to
+  an already-violating block" as in-scope, distinct from "this diff made a
+  previously-fine comment inaccurate," so a growing duplication does not
+  keep surviving sweep after sweep just because no single sweep introduced
+  it.
