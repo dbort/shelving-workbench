@@ -1,9 +1,9 @@
 ---
 id: sh-028
 title: "A deterministic task-status reporting tool"
-current_agent: implementer
-current_phase: implementation
-review_rejections: 0
+current_agent: user
+current_phase: done
+review_rejections: 1
 ---
 
 # sh-028: A deterministic task-status reporting tool
@@ -22,20 +22,20 @@ call it yet.
 
 ## Status
 - [x] Planning
-- [ ] Implementation
-- [ ] Review
-- [ ] User sign-off
+- [x] Implementation
+- [x] Review
+- [x] User sign-off
 
 ## Must Have
-- [ ] `pixi run tests` green.
-- [ ] `tools/task_status.py` is a real script, runnable as
+- [x] `pixi run tests` green.
+- [x] `tools/task_status.py` is a real script, runnable as
       `python3 tools/task_status.py` and as `pixi run task-status`
       (a new `pixi.toml` `[tasks]` entry). Running it with no arguments
       prints one JSON object to stdout and exits 0.
-- [ ] The JSON object has exactly two top-level keys: `next_id` (a string,
+- [x] The JSON object has exactly two top-level keys: `next_id` (a string,
       e.g. `"sh-029"`) and `tasks` (an array, one entry per file in
       `tasks/active/`, in the same order `ls tasks/active/` would give).
-- [ ] `next_id` is computed from the highest existing `sh-NNN` found across
+- [x] `next_id` is computed from the highest existing `sh-NNN` found across
       ALL of: the working directory's own `tasks/active/`,
       `tasks/completed/`, `tasks/abandoned/` listing (including anything
       uncommitted); AND, for every local branch (`git for-each-ref
@@ -48,7 +48,7 @@ call it yet.
       existing numeral width — the padding-width rule is `new-task`'s own
       Task ID Allocation algorithm (`.claude/skills/new-task/SKILL.md`),
       now applied to a wider id set than a single branch's tree.
-- [ ] Each `tasks` entry is an object with: `id`, `title`, `path` (the
+- [x] Each `tasks` entry is an object with: `id`, `title`, `path` (the
       task file's path relative to the repo root, e.g.
       `"tasks/active/sh-025-scan-divider-void-height.md"`, so a caller
       never has to guess or re-derive the slug), `current_phase`,
@@ -60,7 +60,7 @@ call it yet.
       task's id exists), and `source` (`"working_tree"`, or
       `"branch:sh-XXX"` naming the branch the frontmatter was actually
       read from).
-- [ ] Per-task frontmatter is read from the authoritative location, not
+- [x] Per-task frontmatter is read from the authoritative location, not
       assumed from the working tree: if a branch named exactly the task's
       `id` exists, read `git show sh-XXX:tasks/active/sh-XXX-*.md` (falling
       back to `git show sh-XXX:tasks/completed/sh-XXX-*.md` if the first
@@ -70,27 +70,27 @@ call it yet.
       `dispatch-tasks`' own Step 1 logic (`.claude/docs/pipeline.md` §
       Git branching, and `dispatch-tasks/SKILL.md` Step 1), now centralized
       here instead of re-derived per skill invocation.
-- [ ] A task file that fails to parse (missing a required frontmatter key,
+- [x] A task file that fails to parse (missing a required frontmatter key,
       malformed YAML, `id` in the frontmatter not matching the `sh-XXX` in
       its filename) does not crash the whole report: that task's entry
       carries an `"error"` string field instead of the normal fields, and
       every other task still reports normally. A top-level `"errors"`
       array lists every task id that hit this path, empty when none did.
-- [ ] A task file whose `current_phase` is `"done"` while still sitting in
+- [x] A task file whose `current_phase` is `"done"` while still sitting in
       `tasks/active/` (the anomaly `.claude/docs/pipeline.md` § Phases
       already names) is still reported normally (all its real fields
       populated) but also added to a top-level `"anomalies"` array of
       `{"id": ..., "reason": "done_in_active"}` objects, empty when there
       are none.
-- [ ] `tasks/completed/` and `tasks/abandoned/` entries themselves are never
+- [x] `tasks/completed/` and `tasks/abandoned/` entries themselves are never
       listed in the `tasks` array; they're consulted only to resolve
       `unmet_blockers` and `next_id`.
-- [ ] A `blocked_by` cycle among two or more `tasks/active/` entries (a
+- [x] A `blocked_by` cycle among two or more `tasks/active/` entries (a
       genuine authoring error, but the tool must not hang or crash on one)
       is detected, not silently mis-ordered: every task caught in the
       cycle is added to the top-level `"anomalies"` array as
       `{"id": ..., "reason": "circular_blocked_by"}`.
-- [ ] `--human` (see Frontier Advice for the short-flag naming — do not
+- [x] `--human` (see Frontier Advice for the short-flag naming — do not
       collide with argparse's own `-h`/`--help`) prints a Markdown summary
       to stdout instead of JSON, exit 0, in this exact shape — one
       top-level bullet per task, its own fields as an indented, nested
@@ -130,7 +130,7 @@ call it yet.
       `circular_blocked_by` cycle is appended after every orderable layer,
       sorted by `id` among the other cyclic tasks, since it cannot be
       placed correctly.
-- [ ] The frontmatter-parsing, `blocked_by`-resolution, `next_id`-from-a-
+- [x] The frontmatter-parsing, `blocked_by`-resolution, `next_id`-from-a-
       given-id-set, and layered-topological-sort logic are plain functions
       taking already-loaded data (parsed frontmatter dicts, a set of
       completed ids, a list of existing numeric ids, a mapping of active
@@ -140,7 +140,7 @@ call it yet.
       the working tree and across every local branch), invokes `git`, and
       assembles the final report needs a real (temporary, throwaway) git
       repo fixture in its own tests.
-- [ ] `tests/test_task_status.py` covers: `next_id` computation (including
+- [x] `tests/test_task_status.py` covers: `next_id` computation (including
       the zero-padding-width case); `blocked`/`unmet_blockers` for an
       unblocked task, a task blocked on one id, and one blocked on
       multiple; the `working_tree` vs `branch:sh-XXX` `source` distinction
@@ -158,11 +158,11 @@ call it yet.
       that an already-completed blocker is excluded from its `blocked by`
       line, unlike the JSON's raw `blocked_by`), and ordering, end to end
       against a small synthetic repo.
-- [ ] `mypy --strict` clean. No bare `Any`; the frontmatter dict `yaml.safe_load`
+- [x] `mypy --strict` clean. No bare `Any`; the frontmatter dict `yaml.safe_load`
       returns is narrowed into a typed structure (a `TypedDict` or a small
       dataclass) before anything else touches it, not passed around as
       `dict[str, Any]`.
-- [ ] `pyyaml` is added to `pixi.toml`'s `[dependencies]` (conda-forge). If
+- [x] `pyyaml` is added to `pixi.toml`'s `[dependencies]` (conda-forge). If
       a conda-forge `types-pyyaml` (or equivalent stub) package exists, add
       it too so `mypy --strict` type-checks the `yaml.safe_load` call
       without a bare `Any`; if none exists, a narrow, commented
@@ -170,7 +170,7 @@ call it yet.
       documented exception (`CLAUDE.md` § Standing task-planning
       obligations: `Any` allowed only at a boundary that genuinely erases
       the type, with a comment saying why).
-- [ ] No skill (`new-task`, `dispatch-tasks`, `approve-task`) is edited to
+- [x] No skill (`new-task`, `dispatch-tasks`, `approve-task`) is edited to
       call this tool. That migration is explicitly out of scope for this
       task.
 
@@ -270,7 +270,7 @@ script in this task at all; the `pixi run task-status` entry is a one-line
 
 ## Execution Plan
 
-- [ ] **Step 1** (`tools/task_status.py`, `tests/test_task_status.py`):
+- [x] **Step 1** (`tools/task_status.py`, `tests/test_task_status.py`):
       Create the module's pure, git-free core: a `TaskFrontmatter`
       typed structure (dataclass or `TypedDict`); `parse_frontmatter(text:
       str) -> TaskFrontmatter` using `yaml.safe_load` on the `---`-delimited
@@ -287,7 +287,7 @@ script in this task at all; the `pixi run task-status` entry is a one-line
       separately, the ids caught in a cycle). Unit tests for all four
       against synthetic strings/lists/mappings only, no filesystem or git;
       the topological-sort tests cover a chain, a diamond, and a cycle.
-- [ ] **Step 2** (`tools/task_status.py`, `tests/test_task_status.py`):
+- [x] **Step 2** (`tools/task_status.py`, `tests/test_task_status.py`):
       Add the git/filesystem layer: a function that lists `tasks/active/`,
       `tasks/completed/`, `tasks/abandoned/` filenames in the working
       directory; a function implementing the multi-branch `next_id` input
@@ -304,7 +304,7 @@ script in this task at all; the `pixi run task-status` entry is a one-line
       creates and tears down (branches, task files, and commits built with
       real `git` subprocess calls), covering every case the Must Haves
       list, including a task that exists only on a non-checked-out branch.
-- [ ] **Step 3** (`tools/task_status.py`, `pixi.toml`): Add the CLI entry
+- [x] **Step 3** (`tools/task_status.py`, `pixi.toml`): Add the CLI entry
       point (`argparse`, since Step 4 adds a real flag next) that calls
       the Step 2 assembly function against the real repo root and prints
       the JSON to stdout by default, exiting 0. Add `pyyaml` (and its type
@@ -313,7 +313,7 @@ script in this task at all; the `pixi run task-status` entry is a one-line
       Run `pixi run task-status` against this actual repo by hand and
       confirm the printed JSON's `next_id` and `tasks` entries look
       correct for the real current state of `tasks/active/`.
-- [ ] **Step 4** (`tools/task_status.py`, `tests/test_task_status.py`):
+- [x] **Step 4** (`tools/task_status.py`, `tests/test_task_status.py`):
       Add the `--human`/`-H` argparse flag (see Frontier Advice on `-h`
       already being taken) and the Markdown renderer it calls: given the
       assembled report and `layered_topological_order`'s output, print the

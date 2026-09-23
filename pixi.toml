@@ -19,14 +19,21 @@ actionlint = "*"
 zizmor = "*"
 check-jsonschema = "*"
 shellcheck = "*"
+# Parses tasks/*/*.md frontmatter in tools/task_status.py.
+pyyaml = ">=6.0.3,<7"
+types-pyyaml = ">=6.0.12.20260906,<7"
 
 # `pixi run tests` is the repo's single authoritative check command: it runs
 # tools/run-tests.sh, which chains static analysis, the layout core unit
 # suite, the repository-consistency checks, the workflow-hardening lint, and the
 # headless FreeCAD import smoke. `demo` renders a sample solved layout.
+# `task-status` reports tasks/active/'s pipeline state deterministically
+# (`tools/task_status.py`); it is not part of the `tests` gate itself
+# (`.claude/docs/pipeline.md` § Verification commands).
 [tasks]
 tests = "tools/run-tests.sh"
 demo = "python tools/layout_demo.py"
+task-status = "python tools/task_status.py"
 
 # The project installs itself editable so `import freecad.Shelving.core`
 # resolves to the checkout under `pixi run` / `pixi shell` with no per-script
