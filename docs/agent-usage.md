@@ -45,6 +45,19 @@ You don't need to babysit the loop. It skips the task entirely if it has an
 unmet `blocked_by`, and reports whatever human-gated phase it's sitting
 in; it keeps waking up until you act.
 
+## Checking status
+
+Run `pixi run task-status -- --human` for a Markdown snapshot of every task
+in `tasks/active/`, grouped by phase (most-actionable first: a
+rejection-capped task, then one awaiting your sign-off, review,
+implementation, and planning last, split into unblocked and blocked
+sub-groups), plus the next free `sh-XXX` id. Plain `pixi run task-status`
+prints the same data as JSON, for scripting. Prefer this over grepping
+task files or checking branches by hand: a task file's `current_phase` in
+the working tree is stale whenever its own branch isn't currently checked
+out (`.claude/docs/pipeline.md` § Git branching), and the tool always
+reads each task's authoritative state instead.
+
 ## Your gates in the pipeline
 
 These are the phases nothing will auto-advance past. The loop will keep
