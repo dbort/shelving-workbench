@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, TypedDict, cast
 
 import FreeCAD
 
-from freecad.Shelving.catalog import ensure_catalog, read_catalog
+from freecad.Shelving.catalog import ensure_catalog, read_usable_catalog
 from freecad.Shelving.container import read_container
 from freecad.Shelving.core.report import report
 from freecad.Shelving.core.scan import ScanError, scan
@@ -91,7 +91,7 @@ class ScanCommand:
         try:
             container = _selected_container()
             boxes, skipped, record = read_container(container)
-            catalog = read_catalog(ensure_catalog(doc))
+            catalog, skipped_entries = read_usable_catalog(ensure_catalog(doc))
             result = scan(
                 boxes,
                 catalog,
@@ -111,6 +111,8 @@ class ScanCommand:
             print(f"REFUSED: {err}")
             return
         doc.commitTransaction()  # type: ignore[no-untyped-call]
+        for message in skipped_entries:
+            print(f"catalog entry skipped: {message}")
         print(report(result))
 
 

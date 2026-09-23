@@ -348,7 +348,7 @@ prints. **Bottom**, **Top**, and both sides are now 25 mm thick (check
 size (600 × 300 × 900, or whatever you last resized it to) is unchanged:
 the interior bay absorbed the extra 7 mm on each of the two Z-axis boards.
 
-### 3. Add a material, assign it to one board, and reflow
+### 3. Add a material, leave it unedited, then assign it to one board and reflow
 
 1. Run **Add Material** from the **Shelving** toolbar or menu.
 
@@ -356,14 +356,30 @@ Expected: a new entry named **New material** appears in the **Material
 Catalog** group and is selected, so the property editor already shows its
 properties: `MaterialId` reads `new_material`, `Thickness` reads `0 mm`.
 
-2. With the new entry still selected, change `MaterialId` to something
+2. Leaving the new entry exactly as it is (`Thickness` still `0 mm`), select
+   nothing and run **Reflow All**, exercising the existing unit while an
+   incomplete entry sits unused in the catalog.
+
+Expected: the Report view prints a `catalog entry skipped: <New material's
+object name>: Thickness must be greater than zero, got 0 mm` line, followed
+by the normal `ShelvingUnit` line reporting the reflow as usual (`updated
+0` if nothing changed since case 2, or otherwise consistent with whatever
+state the unit was left in). Nothing about the unit is refused: the
+unfinished entry sits in the catalog unusable, but no board references it,
+so it never blocks a unit that doesn't need it (sh-019 review round 2, F1;
+compare to case 4 of the M6 section, where a genuinely invalid *board*
+refuses the whole scan and names the offenders — an unreferenced, merely
+incomplete catalog entry must not do the same).
+
+3. Select the new entry again and change `MaterialId` to something
    memorable (`oak6`, say), `Thickness` to `6 mm`, and `MaterialType` to
    `hardwood`.
-3. Select **Bottom** (or any other board) and change its `ShelvingMaterial`
+4. Select **Bottom** (or any other board) and change its `ShelvingMaterial`
    property from `ply18` to `oak6`.
-4. Run **Reflow All**.
+5. Run **Reflow All**.
 
-Expected: **Bottom** is now 6 mm thick; every other board is unaffected.
+Expected: no `catalog entry skipped` line this time, since every entry now
+validates. **Bottom** is now 6 mm thick; every other board is unaffected.
 The Report view's `ShelvingUnit` line shows `updated 4`. Running **Reflow
 All** again with `ShelvingMaterial` left at `oak6` reproduces the same
 result rather than drifting, since the stored id, not thickness matching,

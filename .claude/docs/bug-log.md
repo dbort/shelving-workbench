@@ -126,35 +126,3 @@ asks for a sweep; no agent schedules one on its own.
   redirect to `skipped` unconditionally? something else?) is a real design
   question, not a mechanical patch, worth a `new-task` interview rather
   than an ad hoc commit into shared scanning logic.
-
-- `bug-002` - **one incomplete catalog entry blocks every catalog-touching
-  command in the document, not just uses of that entry**: `Shelving_AddMaterial`
-  leaves a new entry at `Thickness` `0 mm` until the user edits it
-  (`freecad/Shelving/catalog.py`'s `add_entry`, by design: sh-019's own
-  Must Have requires `read_catalog` to raise naming an entry with a
-  non-positive `Thickness`). But `read_catalog` builds the whole document's
-  `Catalog` in one call with no way to build a partial one, and
-  `Shelving_ReflowAll`, `Shelving_Scan`, `Shelving_ResizeUnit`, and
-  `Shelving_CreateUnit` each call
-  `read_catalog(ensure_catalog(doc))` once up front before touching any
-  unit (`freecad/Shelving/commands/reflow_all.py:57`, `scan.py:94`,
-  `resize_unit.py:146`, `freecad/Shelving/unit_ops.py:84`). So one
-  unfinished entry anywhere in the catalog refuses all four commands for
-  every unit in the document, not only units that would need the bad
-  entry, and the only signal is a `REFUSED: <ValueError>` line in the
-  Report view, easy to miss since it names the catalog entry rather than
-  the unit or command the user just ran. Found via manual sign-off
-  testing on `sh-019`: change a board to a valid material and reflow
-  (works), run Add Material and leave it unedited, change a different
-  board back to an already-valid material and reflow (silently refused,
-  board unchanged), delete the unfinished entry, reflow again (now
-  succeeds). Reproduced headlessly against `unit_ops.create_unit` +
-  `catalog.add_entry` + `unit_ops.reflow_all`, confirming the exact
-  `ValueError` and that removing the unfinished entry is what unblocks
-  the next reflow. Fix: `sh-XXX task`. `read_catalog` is shared by every
-  catalog-touching command, and the right shape (validate lazily per
-  referenced id instead of eagerly for the whole catalog? surface the
-  refusal against the command the user actually ran instead of only the
-  Report view? let an entry stay incomplete without blocking commands
-  that never reference it?) is a product decision about what "the
-  catalog is invalid" should mean, not a mechanical patch.

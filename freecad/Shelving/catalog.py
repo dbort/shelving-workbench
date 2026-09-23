@@ -13,6 +13,20 @@ command uses, and :func:`read_catalog` turns a catalog group into the
 ``MaterialId`` is the stable key a board stores, not an entry's ``Name`` or
 ``Label``: either is renameable from the tree, and a rename must not orphan
 a board that already references the id.
+
+:func:`read_catalog` builds the whole document's catalog at once and raises
+the moment any one entry cannot stand: a caller that genuinely needs every
+entry validated together (an isolated check, or a case in this module's own
+smoke) wants that. A command touching one unit does not: an unrelated
+entry an editor left half-filled in (an :func:`add_entry` result nobody has
+edited yet, say) has nothing to do with whether that unit's own boards
+resolve, so :func:`read_usable_catalog` builds a catalog from only the
+entries that individually validate and reports the rest as skipped rather
+than refusing the whole document. A board that needed a skipped entry fails
+the same way it already fails on any id absent from the catalog (see
+``freecad.Shelving.core.scan``'s "not in the catalog" refusal, naming the
+board), so the attribution a user sees is the board or unit actually
+touched, not a bare entry name.
 """
 
 from __future__ import annotations
@@ -181,6 +195,56 @@ def read_catalog(group: FreeCAD.DocumentObject) -> Catalog:
         )
         object_by_id[material_id] = obj
     return Catalog(entries=entries)
+
+
+def read_usable_catalog(
+    group: FreeCAD.DocumentObject,
+) -> tuple[Catalog, tuple[str, ...]]:
+    """The :class:`~freecad.Shelving.core.materials.Catalog` built from every
+    entry in ``group`` that individually validates, paired with one message
+    per entry left out: a blank ``MaterialId``, a non-positive ``Thickness``,
+    or a ``MaterialId`` shared with another entry (both sharers are left out,
+    since neither can be preferred over the other).
+
+    Unlike :func:`read_catalog`, an invalid entry does not stop the build: it
+    is simply absent from the returned ``Catalog``, the same as an id nobody
+    ever wrote a catalog entry for. This is what every catalog-touching
+    command builds against, so one entry an editor has not finished yet
+    never blocks a unit whose boards never reference it.
+    """
+    grouped: dict[MaterialId, list[tuple[FreeCAD.DocumentObject, float]]] = {}
+    skipped: list[str] = []
+    for obj in _entry_objects(group):
+        material_id = properties.read_entry_material_id(obj)
+        if material_id is None:
+            skipped.append(f"{obj.Name}: MaterialId must not be blank")
+            continue
+        thickness_mm = properties.read_entry_thickness_mm(obj)
+        if thickness_mm <= 0:
+            skipped.append(
+                f"{obj.Name}: Thickness must be greater than zero, got "
+                f"{thickness_mm:g} mm"
+            )
+            continue
+        grouped.setdefault(material_id, []).append((obj, thickness_mm))
+
+    entries: dict[MaterialId, MaterialEntry] = {}
+    for material_id, objs in grouped.items():
+        if len(objs) > 1:
+            names = ", ".join(sorted(obj.Name for obj, _thickness_mm in objs))
+            skipped.append(
+                f"two catalog entries share MaterialId {material_id!r}: {names}"
+            )
+            continue
+        obj, thickness_mm = objs[0]
+        entries[material_id] = MaterialEntry(
+            id=material_id,
+            name=properties.read_entry_description(obj),
+            thickness_mm=thickness_mm,
+            material_type=properties.read_entry_material_type(obj),
+            nominal_thickness=properties.read_entry_nominal_thickness(obj),
+        )
+    return Catalog(entries=entries), tuple(skipped)
 
 
 def _unique_placeholder_id(existing_ids: set[str]) -> str:

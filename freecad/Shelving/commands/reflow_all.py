@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, TypedDict
 
 import FreeCAD
 
-from freecad.Shelving.catalog import ensure_catalog, read_catalog
+from freecad.Shelving.catalog import ensure_catalog, read_usable_catalog
 from freecad.Shelving.unit_ops import reflow_all
 
 _RESOURCE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources")
@@ -54,7 +54,7 @@ class ReflowAllCommand:
             return
         doc.openTransaction("Reflow All Shelving Units")  # type: ignore[no-untyped-call]
         try:
-            catalog = read_catalog(ensure_catalog(doc))
+            catalog, skipped_entries = read_usable_catalog(ensure_catalog(doc))
             result = reflow_all(doc, catalog)
             doc.recompute()
         except Exception as err:  # noqa: BLE001 - report, don't crash the GUI
@@ -62,6 +62,12 @@ class ReflowAllCommand:
             print(f"REFUSED: {err}")
             return
         doc.commitTransaction()  # type: ignore[no-untyped-call]
+        # read_usable_catalog leaves an invalid entry out of the catalog
+        # rather than refusing the whole run; these lines are the only
+        # visible trace of that, since a unit that never references the
+        # entry otherwise reflows with no sign anything was skipped.
+        for message in skipped_entries:
+            print(f"catalog entry skipped: {message}")
         for name, write_result in result.succeeded:
             print(
                 f"{name}: updated {len(write_result.updated)}, "

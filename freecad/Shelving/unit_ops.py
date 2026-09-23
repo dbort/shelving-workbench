@@ -24,7 +24,7 @@ from typing import cast
 import FreeCAD
 
 from freecad.Shelving import properties
-from freecad.Shelving.catalog import ensure_catalog, read_catalog
+from freecad.Shelving.catalog import ensure_catalog, read_usable_catalog
 from freecad.Shelving.container import WriteResult, read_container, write_container
 from freecad.Shelving.core.geometry import Vec3
 from freecad.Shelving.core.layout import Axis, Bay, Board, Division, Unit
@@ -81,7 +81,10 @@ def create_unit(doc: FreeCAD.Document) -> FreeCAD.DocumentObject:
     container = cast(
         "FreeCAD.DocumentObject", doc.addObject("App::Part", "ShelvingUnit")
     )
-    catalog = read_catalog(ensure_catalog(doc))
+    # read_usable_catalog, not read_catalog: an unrelated incomplete entry
+    # elsewhere in the document must not stop a brand-new unit that never
+    # references it (see catalog.py's docstring).
+    catalog, _skipped_catalog_entries = read_usable_catalog(ensure_catalog(doc))
     write_container(container, _default_unit(), catalog)
     return container
 

@@ -35,6 +35,7 @@ from freecad.Shelving.catalog import (  # noqa: E402
     ensure_catalog,
     find_catalog,
     read_catalog,
+    read_usable_catalog,
     seed_catalog,
 )
 from freecad.Shelving.container import read_container, write_container  # noqa: E402
@@ -43,7 +44,11 @@ from freecad.Shelving.core.layout import Axis, Bay, Board, Division, Unit  # noq
 from freecad.Shelving.core.materials import MaterialId  # noqa: E402
 from freecad.Shelving.core.scan import Box, ScanError, scan  # noqa: E402
 from freecad.Shelving.default_catalog import DEFAULT_CATALOG  # noqa: E402
-from freecad.Shelving.unit_ops import create_unit, reflow_all  # noqa: E402
+from freecad.Shelving.unit_ops import (  # noqa: E402
+    create_unit,
+    reflow_all,
+    resize_unit,
+)
 
 _TOL_MM = 1e-6
 
@@ -221,7 +226,20 @@ def _case_blank_material_id_raises() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
-def _case_add_entry_is_blank_and_blocks_read_catalog_until_edited() -> None:
+def _case_add_entry_is_blank_and_excluded_until_edited() -> None:
+    """``add_entry`` leaves a new entry at ``Thickness`` ``0 mm`` until
+    edited. ``read_catalog``, asked to build every entry in the group at
+    once, still refuses on it: that narrow, in-isolation contract is what
+    this case exercises first. But that is not what a command actually
+    builds against: ``read_usable_catalog`` excludes the incomplete entry
+    instead of refusing the whole group, which is why the same document can
+    still stand in for "one incomplete entry among otherwise-valid ones"
+    rather than "a document with no usable catalog at all". See
+    ``_case_incomplete_entry_does_not_block_a_valid_unit`` for the
+    consequence that actually matters: a unit that never references the
+    incomplete entry keeps working while it sits there unedited (bug-002 /
+    sh-019 review round 2, F1).
+    """
     doc = _new_document("catalog_smoke_add_entry")
     try:
         group = ensure_catalog(doc)
@@ -229,24 +247,79 @@ def _case_add_entry_is_blank_and_blocks_read_catalog_until_edited() -> None:
         new_entry = add_entry(group)
         after = len(cast("FreeCAD.DocumentObjectGroup", group).Group)
         assert after == before + 1
-        assert properties.read_entry_material_id(new_entry) is not None
+        new_id = properties.read_entry_material_id(new_entry)
+        assert new_id is not None
         assert properties.read_entry_thickness_mm(new_entry) == 0.0
+
         try:
             read_catalog(group)
         except ValueError as err:
             assert new_entry.Name in str(err), err
         else:
-            raise AssertionError("expected read_catalog to raise on a zero Thickness")
+            raise AssertionError(
+                "expected read_catalog's whole-group build to raise on a zero Thickness"
+            )
+
+        catalog, skipped = read_usable_catalog(group)
+        assert new_id not in dict(catalog.entries)
+        assert any(new_entry.Name in message for message in skipped), skipped
+        # The default entries are untouched by the one incomplete one.
+        assert dict(catalog.entries) == dict(DEFAULT_CATALOG.entries)
 
         # Editing it the way a user would, through the property editor,
-        # clears the refusal.
+        # clears the refusal for both read_catalog and read_usable_catalog.
         properties.write_entry_thickness_mm(
             cast("properties.CatalogEntryObject", new_entry), 6.0
         )
-        catalog = read_catalog(group)
-        new_id = properties.read_entry_material_id(new_entry)
-        assert new_id is not None
-        assert catalog[new_id].thickness_mm == 6.0
+        strict_catalog = read_catalog(group)
+        assert strict_catalog[new_id].thickness_mm == 6.0
+        usable_catalog, skipped_after = read_usable_catalog(group)
+        assert usable_catalog[new_id].thickness_mm == 6.0
+        assert skipped_after == ()
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def _case_incomplete_entry_does_not_block_a_valid_unit() -> None:
+    """bug-002 / sh-019 review round 2, F1: an unedited ``add_entry`` result
+    sitting in the catalog must not refuse reflow, scan, or resize of a unit
+    that never references it. ``read_usable_catalog`` leaves the incomplete
+    entry out of the ``Catalog`` a command builds instead of refusing the
+    whole document, so a board resolves it the same way it already resolves
+    any id absent from the catalog (see
+    ``_case_unknown_material_refuses_at_scan``), which this unit's boards
+    never trigger because none of them reference the incomplete entry.
+    """
+    doc = _new_document("catalog_smoke_incomplete_entry_ok")
+    try:
+        container = create_unit(doc)
+        doc.recompute()
+        group = ensure_catalog(doc)
+        incomplete = add_entry(group)
+
+        catalog, skipped = read_usable_catalog(group)
+        assert any(incomplete.Name in message for message in skipped), skipped
+        incomplete_id = properties.read_entry_material_id(incomplete)
+        assert incomplete_id is not None
+        assert incomplete_id not in dict(catalog.entries)
+
+        result = reflow_all(doc, catalog)
+        doc.recompute()
+        assert container.Name in {name for name, _wr in result.succeeded}, result.failed
+
+        boxes, skipped_boxes, record = read_container(container)
+        assert len(skipped_boxes) == 0, skipped_boxes
+        scan(
+            boxes,
+            catalog,
+            skipped=skipped_boxes,
+            depth_axis=record.depth_axis,
+            front_at_min=record.front_at_min,
+        )
+
+        resize_result = resize_unit(container, Vec3(700.0, 300.0, 900.0), catalog)
+        doc.recompute()
+        assert resize_result.updated, resize_result
     finally:
         FreeCAD.closeDocument(doc.Name)
 
@@ -463,7 +536,8 @@ _CASES = (
     _case_two_marked_groups_make_find_catalog_raise,
     _case_duplicate_material_id_raises,
     _case_blank_material_id_raises,
-    _case_add_entry_is_blank_and_blocks_read_catalog_until_edited,
+    _case_add_entry_is_blank_and_excluded_until_edited,
+    _case_incomplete_entry_does_not_block_a_valid_unit,
     _case_create_unit_seeds_catalog_and_uses_it,
     _case_unknown_material_refuses_at_scan,
     _case_create_unit_reflow_rewrites_the_boards_it_wrote,

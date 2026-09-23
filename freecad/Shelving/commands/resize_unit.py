@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, TypedDict, cast
 
 import FreeCAD
 
-from freecad.Shelving.catalog import ensure_catalog, read_catalog
+from freecad.Shelving.catalog import ensure_catalog, read_usable_catalog
 from freecad.Shelving.container import WriteResult, read_container
 from freecad.Shelving.core.geometry import Vec3
 from freecad.Shelving.core.scan import Box
@@ -143,7 +143,7 @@ class ResizeUnitCommand:
         doc = container.Document
         doc.openTransaction("Resize Shelving Unit")  # type: ignore[no-untyped-call]
         try:
-            catalog = read_catalog(ensure_catalog(doc))
+            catalog, skipped_entries = read_usable_catalog(ensure_catalog(doc))
             result = resize_unit(container, size_mm, catalog)
             doc.recompute()
         except Exception as err:  # noqa: BLE001 - report, don't crash the GUI
@@ -151,6 +151,8 @@ class ResizeUnitCommand:
             print(f"REFUSED: {err}")
             return
         doc.commitTransaction()  # type: ignore[no-untyped-call]
+        for message in skipped_entries:
+            print(f"catalog entry skipped: {message}")
         _report(result)
 
 
