@@ -1,8 +1,8 @@
 ---
 id: sh-025
 title: "Fix scan stretching a short divider over its void instead of splitting it off"
-current_agent: reviewer
-current_phase: review
+current_agent: user
+current_phase: user_signoff
 review_rejections: 2
 ---
 
@@ -29,7 +29,7 @@ thickness axis. This revision adds that model support (`layout.py`,
 ## Status
 - [x] Planning
 - [x] Implementation
-- [ ] Review
+- [x] Review
 - [ ] User sign-off
 
 ## Must Have
