@@ -2,17 +2,16 @@
 layer in ``freecad.Shelving.catalog`` and the reflow that makes a changed
 entry reach the boards using it.
 
-Run via ``freecadcmd tools/freecad_catalog_smoke.py``. Not a self-invoking
-pytest module like ``tools/freecad_scan_smoke.py`` and
-``tools/freecad_write_smoke.py``: a straight-line script of assertions that
-prints ``shelving catalog OK`` on success. ``freecadcmd`` does not
-propagate an uncaught exception's exit status
-(``docs/freecadcmd-notes.md``), so the printed marker line, which
-``tools/run-tests.sh`` greps for, is the success signal, not the process
-exit code.
+A real pytest module, not a hand-rolled assert-and-marker script, for the
+same reasons ``tools/freecad_scan_smoke.py`` is one; see that module's
+docstring for the ``freecadcmd`` mechanics (self-invoking ``pytest.main``,
+the recursion guard, the ``sys.stdout.flush()`` before ``sys.exit``, why
+``if __name__ == "__main__":`` does not work here) rather than repeating
+them, and ``docs/freecadcmd-notes.md`` for the underlying findings both
+modules rely on.
 
-Each case builds its own document, closed before the next one starts,
-except the milestone case (``_case_reflow_all_rewrites_the_changed_material``),
+Each test builds its own document, closed before the next one starts,
+except the milestone test (``test_reflow_all_rewrites_the_changed_material``),
 which needs two containers in one document, matching the Must Have's own
 wording ("a document holding two units").
 """
@@ -28,6 +27,7 @@ if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
 import FreeCAD  # noqa: E402
+import pytest  # noqa: E402
 
 from freecad.Shelving import properties  # noqa: E402
 from freecad.Shelving.catalog import (  # noqa: E402
@@ -125,7 +125,7 @@ def _entry_by_material_id(
 # ---------------------------------------------------------------------------
 
 
-def _case_ensure_catalog_seeds_and_is_idempotent() -> None:
+def test_ensure_catalog_seeds_and_is_idempotent() -> None:
     doc = _new_document("catalog_smoke_seed")
     try:
         assert find_catalog(doc) is None
@@ -146,7 +146,7 @@ def _case_ensure_catalog_seeds_and_is_idempotent() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
-def _case_seed_catalog_is_found_by_find_catalog() -> None:
+def test_seed_catalog_is_found_by_find_catalog() -> None:
     doc = _new_document("catalog_smoke_seed_direct")
     try:
         group = seed_catalog(doc)
@@ -155,7 +155,7 @@ def _case_seed_catalog_is_found_by_find_catalog() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
-def _case_read_catalog_reproduces_the_default() -> None:
+def test_read_catalog_reproduces_the_default() -> None:
     doc = _new_document("catalog_smoke_read")
     try:
         catalog = read_catalog(ensure_catalog(doc))
@@ -164,7 +164,7 @@ def _case_read_catalog_reproduces_the_default() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
-def _case_two_marked_groups_make_find_catalog_raise() -> None:
+def test_two_marked_groups_make_find_catalog_raise() -> None:
     doc = _new_document("catalog_smoke_two_groups")
     try:
         first = ensure_catalog(doc)
@@ -184,7 +184,7 @@ def _case_two_marked_groups_make_find_catalog_raise() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
-def _case_duplicate_material_id_raises() -> None:
+def test_duplicate_material_id_raises() -> None:
     """A copied entry, the realistic way a duplicate arises (the mirror of
     the board copy problem sh-018 handles): ``doc.copyObject`` duplicates
     the entry's ``MaterialId`` verbatim along with everything else."""
@@ -205,7 +205,7 @@ def _case_duplicate_material_id_raises() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
-def _case_blank_material_id_raises() -> None:
+def test_blank_material_id_raises() -> None:
     """Clearing ``MaterialId`` in the property editor must refuse rather
     than silently keying the entry on its object ``Name``, which
     ``MaterialId`` is deliberately not (see ``catalog.py``'s docstring)."""
@@ -226,7 +226,7 @@ def _case_blank_material_id_raises() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
-def _case_add_entry_is_blank_and_excluded_until_edited() -> None:
+def test_add_entry_is_blank_and_excluded_until_edited() -> None:
     """``add_entry`` leaves a new entry at ``Thickness`` ``0 mm`` until
     edited. ``read_catalog``, asked to build every entry in the group at
     once, still refuses on it: that narrow, in-isolation contract is what
@@ -235,7 +235,7 @@ def _case_add_entry_is_blank_and_excluded_until_edited() -> None:
     rather than refusing the whole group, which is why the same document can
     still stand in for "one incomplete entry among otherwise-valid ones"
     rather than "a document with no usable catalog at all". See
-    ``_case_incomplete_entry_does_not_block_a_valid_unit`` for the
+    ``test_incomplete_entry_does_not_block_a_valid_unit`` for the
     consequence that matters: a unit that never references the
     incomplete entry keeps working while it sits there unedited (bug-002 /
     sh-019 review round 2, F1).
@@ -280,14 +280,14 @@ def _case_add_entry_is_blank_and_excluded_until_edited() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
-def _case_incomplete_entry_does_not_block_a_valid_unit() -> None:
+def test_incomplete_entry_does_not_block_a_valid_unit() -> None:
     """bug-002 / sh-019 review round 2, F1: an unedited ``add_entry`` result
     sitting in the catalog must not refuse reflow, scan, or resize of a unit
     that never references it. ``read_usable_catalog`` leaves the incomplete
     entry out of the ``Catalog`` a command builds instead of refusing the
     whole document, so a board resolves it the same way it already resolves
     any id absent from the catalog (see
-    ``_case_unknown_material_refuses_at_scan``), which this unit's boards
+    ``test_unknown_material_refuses_at_scan``), which this unit's boards
     never trigger because none of them reference the incomplete entry.
     """
     doc = _new_document("catalog_smoke_incomplete_entry_ok")
@@ -324,7 +324,7 @@ def _case_incomplete_entry_does_not_block_a_valid_unit() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
-def _case_create_unit_seeds_catalog_and_uses_it() -> None:
+def test_create_unit_seeds_catalog_and_uses_it() -> None:
     doc = _new_document("catalog_smoke_create_unit")
     try:
         assert find_catalog(doc) is None
@@ -345,7 +345,7 @@ def _case_create_unit_seeds_catalog_and_uses_it() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
-def _case_unknown_material_refuses_at_scan() -> None:
+def test_unknown_material_refuses_at_scan() -> None:
     doc = _new_document("catalog_smoke_unknown_material")
     try:
         container = create_unit(doc)
@@ -376,7 +376,7 @@ def _case_unknown_material_refuses_at_scan() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
-def _case_create_unit_reflow_rewrites_the_boards_it_wrote() -> None:
+def test_create_unit_reflow_rewrites_the_boards_it_wrote() -> None:
     """The path ``_closed_box_unit`` sidesteps: a unit built by
     ``Shelving_CreateUnit`` itself, where every board's material equals
     ``Unit.default_material`` rather than being set per board. Proves that
@@ -425,7 +425,7 @@ def _case_create_unit_reflow_rewrites_the_boards_it_wrote() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
-def _case_reflow_all_rewrites_the_changed_material() -> None:
+def test_reflow_all_rewrites_the_changed_material() -> None:
     """The milestone's point: a document with two units, one of which
     cannot absorb the growth, checked against catalog.py's ``PLY18`` entry
     growing from 18 mm to 25 mm."""
@@ -499,7 +499,7 @@ def _case_reflow_all_rewrites_the_changed_material() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
-def _case_saved_document_has_no_proxy_and_reopens() -> None:
+def test_saved_document_has_no_proxy_and_reopens() -> None:
     doc = _new_document("catalog_smoke_reopen")
     tmp_dir = tempfile.mkdtemp(prefix="shelving_catalog_smoke_")
     path = os.path.join(tmp_dir, "catalog_smoke_reopen.FCStd")
@@ -529,29 +529,10 @@ def _case_saved_document_has_no_proxy_and_reopens() -> None:
         FreeCAD.closeDocument(reopened.Name)
 
 
-_CASES = (
-    _case_ensure_catalog_seeds_and_is_idempotent,
-    _case_seed_catalog_is_found_by_find_catalog,
-    _case_read_catalog_reproduces_the_default,
-    _case_two_marked_groups_make_find_catalog_raise,
-    _case_duplicate_material_id_raises,
-    _case_blank_material_id_raises,
-    _case_add_entry_is_blank_and_excluded_until_edited,
-    _case_incomplete_entry_does_not_block_a_valid_unit,
-    _case_create_unit_seeds_catalog_and_uses_it,
-    _case_unknown_material_refuses_at_scan,
-    _case_create_unit_reflow_rewrites_the_boards_it_wrote,
-    _case_reflow_all_rewrites_the_changed_material,
-    _case_saved_document_has_no_proxy_and_reopens,
-)
-
-
-def main() -> None:
-    for case in _CASES:
-        print(f"-- {case.__name__}")
-        case()
-    print("shelving catalog OK")
+# See tools/freecad_scan_smoke.py's matching block for why this is neither
+# an `if __name__ == "__main__":` guard nor an unconditional call.
+if os.environ.get("_FREECAD_CATALOG_SMOKE_RUNNING") != "1":
+    os.environ["_FREECAD_CATALOG_SMOKE_RUNNING"] = "1"
+    _exit_code = pytest.main([__file__, "-v"])
     sys.stdout.flush()
-
-
-main()
+    sys.exit(_exit_code)

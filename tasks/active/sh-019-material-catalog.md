@@ -51,8 +51,8 @@ makes a changed thickness reach the boards using it. Milestone M8.
       in the headless smoke against a document holding two units.
 - [x] A board whose `ShelvingMaterial` names no catalog entry refuses at scan,
       naming the board.
-- [x] `tools/freecad_catalog_smoke.py` prints `shelving catalog OK` and
-      `tools/run-tests.sh` greps for it.
+- [x] `tools/freecad_catalog_smoke.py` is a pytest module like the other two
+      smokes, and `tools/run-tests.sh` trusts its `sys.exit` status.
 - [x] `docs/manual-qa.md` has an M8 section; `freecad/Shelving/default_catalog.py`
       no longer claims M4 will replace it.
 - [x] `mypy --strict` clean.

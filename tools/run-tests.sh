@@ -66,15 +66,11 @@ if [ "$write_smoke_status" -ne 0 ]; then
 	exit 1
 fi
 
-# freecad_catalog_smoke.py is a straight-line script, not a pytest module
-# like the two smokes above, so it signals success with a printed marker
-# line rather than a trustworthy sys.exit status (docs/freecadcmd-notes.md
-# explains why freecadcmd itself cannot be trusted for that on an
-# assert-and-marker script).
 printf '== %s\n' freecad_catalog_smoke.py
-catalog_smoke_output="$(freecadcmd tools/freecad_catalog_smoke.py 2>&1)" || true
-printf '%s\n' "$catalog_smoke_output"
-if ! printf '%s\n' "$catalog_smoke_output" | grep -q "shelving catalog OK"; then
-	echo "ERROR: freecad_catalog_smoke.py did not report success (see output above)." >&2
+catalog_smoke_status=0
+freecadcmd tools/freecad_catalog_smoke.py || catalog_smoke_status=$?
+printf '\n'
+if [ "$catalog_smoke_status" -ne 0 ]; then
+	echo "ERROR: freecad_catalog_smoke.py failed (see output above)." >&2
 	exit 1
 fi
