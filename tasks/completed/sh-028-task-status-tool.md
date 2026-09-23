@@ -2,7 +2,7 @@
 id: sh-028
 title: "A deterministic task-status reporting tool"
 current_agent: user
-current_phase: user_signoff
+current_phase: done
 review_rejections: 1
 ---
 
@@ -24,7 +24,7 @@ call it yet.
 - [x] Planning
 - [x] Implementation
 - [x] Review
-- [ ] User sign-off
+- [x] User sign-off
 
 ## Must Have
 - [x] `pixi run tests` green.
