@@ -121,7 +121,7 @@ class Board:
     insets: Insets = Insets()
     # The board's ``Fixed`` size along its containing ``Division``'s own
     # axis, when that is not the board's catalog thickness. ``None`` means
-    # "use catalog thickness", the only behavior before this field existed.
+    # "use catalog thickness".
     axis_size_mm: float | None = None
     # Free-form, set by the caller: the tree has no closed set of positions,
     # and a stepped outline has several tops, none of them *the* top.

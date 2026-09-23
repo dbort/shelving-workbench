@@ -837,11 +837,11 @@ def _catalog_from_thicknesses(boxes: Sequence[Box]) -> Catalog:
 
     Mirrors :func:`freecad.Shelving.core.tests.test_svg._catalog_from_thicknesses`;
     kept as its own copy since each test module keeps its own fixtures
-    rather than importing across test modules. The round to four decimal
-    places only merges the sub-thousandth jitter real exported geometry has
-    between nominally identical boards; it must not round away real
-    precision the way a whole-millimetre bucket would.
+    rather than importing across test modules.
     """
+    # Round to four decimal places to merge the sub-thousandth jitter real
+    # exported geometry has between nominally identical boards, without
+    # rounding away real precision the way a whole-millimetre bucket would.
     thicknesses_mm = sorted(
         {round(min(b.size_mm.x_mm, b.size_mm.y_mm, b.size_mm.z_mm), 4) for b in boxes}
     )
@@ -867,9 +867,9 @@ def test_real_stair_step_solves_to_three_distinct_divider_heights() -> None:
     ``test_real_stair_step_whole_tree`` above uses the coarse whole-mm
     ``CATALOG``, which only checks the tree shape and never calls
     :func:`solve`; that catalog's ``ply18`` (18.0 mm) is ~0.26 mm off this
-    fixture's real panel thickness, which overflows ``solve`` (a known,
-    deliberately deferred issue, ``friction-009`` in
-    ``.claude/docs/friction-log.md``). This test instead builds its catalog
+    fixture's real panel thickness, which overflows ``solve``. This is a
+    known, deliberately deferred issue, tracked as ``friction-009`` in
+    ``.claude/docs/friction-log.md``. This test instead builds its catalog
     from the fixture's own measured thicknesses with a tight ``snap_mm``,
     exactly as ``test_svg.py``'s end-to-end stair-step test does, so it can
     solve the corrected tree shape and assert the three heights it produces.
@@ -894,8 +894,8 @@ def test_real_stair_step_solves_to_three_distinct_divider_heights() -> None:
 
 
 def test_real_two_units_whole_tree() -> None:
-    """Both seams present (one an adjacent ``Board``, the other now wrapped
-    in its own ``Division``+``Void`` for its shortfall), the units' two top
+    """Both seams present (one an adjacent ``Board``, the other wrapped in
+    its own ``Division``+``Void`` for its shortfall), the units' two top
     boards side by side, and the notched panel appearing in ``skipped``
     rather than as a board."""
     boxes, skipped = export_from_json(REAL_TWO_UNITS.read_text(encoding="utf-8"))
@@ -905,7 +905,7 @@ def test_real_two_units_whole_tree() -> None:
 
     root = _division(result.unit.root)
     assert root.axis is Axis.Z
-    # panelFaceYX no longer reaches across on its own: it is short of its
+    # panelFaceYX does not reach across on its own: it is short of its
     # sibling by a real 1828.7975 mm void, not a near-zero inset.
     assert _kinds_names(root) == ("DDD", [])
 
@@ -937,11 +937,11 @@ def test_real_two_units_whole_tree() -> None:
 
     body = _division(root.items[1])
     assert body.axis is Axis.Y
-    # panelZX008 is now wrapped too: short of its sibling by a real
-    # 921.5374 mm void, not a near-zero inset.
+    # panelZX008 is wrapped too: short of its sibling by a real 921.5374 mm
+    # void, not a near-zero inset.
     assert _kinds_names(body) == ("xDDPDP", ["panelZX001", "panelZX"])
-    # The seam: one unit's side (now wrapped for its own shortfall) and the
-    # next unit's side (still bare, reaching across on its own), touching.
+    # The seam: one unit's side (wrapped for its own shortfall) and the next
+    # unit's side (bare, reaching across on its own), touching.
     left_wrap, right_side = body.items[2], body.items[3]
     assert isinstance(left_wrap, Division) and left_wrap.axis is Axis.Z
     assert _kinds_names(left_wrap) == ("xP", ["panelZX008"])
@@ -962,8 +962,8 @@ def _stepped_columns_boxes() -> list[Box]:
 
     ``LeftSide`` runs the shell's full height (982 mm above ``Bottom``);
     ``Divider`` and ``RightSide`` both stop 400 mm short of it, at 582 mm.
-    ``Shelf`` splits the left bay only, giving the shell one genuinely
-    enclosed ``Bay`` so ``scan`` accepts it as a tree.
+    ``Shelf`` splits the left bay only, giving the shell one enclosed
+    ``Bay`` so ``scan`` accepts it as a tree.
     """
     return [
         _box("Bottom", (0.0, 0.0, 0.0), (814.0, 300.0, 18.0)),
@@ -999,7 +999,7 @@ def test_short_divider_between_differently_sized_bays_keeps_its_own_height() -> 
     assert divider_void.rule.size_mm == pytest.approx(400.0)
 
     spaces = solve(result.unit, CATALOG)
-    # Not stretched to LeftSide's 982 mm: the divider keeps its own 582 mm.
+    # The divider keeps its own 582 mm, not LeftSide's 982 mm.
     assert spaces[divider.id].size.z_mm == pytest.approx(582.0)
     left_side = body.items[0]
     assert isinstance(left_side, Board) and left_side.role == "LeftSide"

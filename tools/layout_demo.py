@@ -128,19 +128,13 @@ def _column(void_mm: float, prefix: str, *, with_shelf: bool = False) -> Divisio
 
 
 def _divider(axis_size_mm: float | None, void_mm: float, prefix: str) -> Item:
-    """A vertical divider between two columns, its own true height.
+    """A vertical divider between two columns, sized to its own true height.
 
-    ``divider0`` (between ``left_side`` and ``col0``, both full height)
-    needs no wrapping: a bare ``Board`` already reaches the middle
-    division's full height on its own, so its caller passes ``void_mm=0``
-    and ``axis_size_mm=None`` together, making "no shortfall, no override"
-    explicit rather than passing a height this branch would ignore. A
-    divider between two columns of different heights, ``divider1`` here, is
-    only as tall as the taller of its two immediate neighbors, so it is
-    wrapped in the same ``Division``+``Void`` pattern ``_column`` uses for a
-    stepped column, with ``axis_size_mm`` set explicitly since this tree is
-    hand-built rather than produced by ``scan``, which is the only thing
-    that computes it automatically.
+    A bare ``Board`` when ``void_mm`` is zero; otherwise wrapped in the same
+    ``Division``+``Void`` pattern ``_column`` uses for a stepped column,
+    with ``axis_size_mm`` set explicitly since this tree is hand-built
+    rather than produced by ``scan``, which is the only thing that computes
+    it automatically.
     """
     if void_mm <= 0:
         return Board(role="divider", id=prefix)
@@ -182,6 +176,11 @@ def _sample_unit() -> Unit:
                     items=[
                         Board(role="left_side", id="left_side"),
                         _column(0.0, "col0", with_shelf=True),
+                        # divider0 sits between left_side and col0, both full
+                        # height, so it needs no wrapping: void_mm=0 and
+                        # axis_size_mm=None together make "no shortfall, no
+                        # override" explicit, rather than passing a height
+                        # this branch would ignore.
                         _divider(None, 0.0, "divider0"),
                         _column(300.0, "col1"),
                         # divider1 sits between col1 (882 mm) and col2 (582

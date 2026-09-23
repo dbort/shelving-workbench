@@ -48,8 +48,8 @@ def test_demo_runs_and_prints_the_solved_sample() -> None:
     for line in region_lines:
         assert any(f" {kind} " in line for kind in ("bay", "void", "division"))
         assert "origin=(" in line and "size=(" in line
-    # The sample's three Voids (the two shorter columns' steps, plus
-    # divider1's own shortfall against its taller neighbor col1) are
+    # The sample's three Voids, the two shorter columns' steps and
+    # divider1's own shortfall against its taller neighbor col1, are
     # regions, printed here, but contribute no board below.
     assert sum(1 for line in region_lines if " void " in line) == 3
 
