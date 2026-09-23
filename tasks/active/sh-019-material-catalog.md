@@ -1,9 +1,9 @@
 ---
 id: sh-019
 title: "The material catalog as a document object"
-current_agent: user
-current_phase: user_signoff
-review_rejections: 1
+current_agent: implementer
+current_phase: implementation
+review_rejections: 2
 blocked_by: [sh-018]
 ---
 
@@ -19,7 +19,7 @@ makes a changed thickness reach the boards using it. Milestone M8.
 ## Status
 - [x] Planning
 - [x] Implementation
-- [x] Review
+- [ ] Review
 - [ ] User sign-off
 
 ## Must Have
