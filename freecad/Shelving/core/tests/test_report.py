@@ -37,9 +37,13 @@ def test_stair_step_report_shows_plane_facing_and_tree() -> None:
     assert "  division along y, 1480.34 mm (clear)" in lines
     # panelZX012 (330.2 mm) is shorter than its tallest neighbor panelZX008
     # (1480.3374 mm), so it is nested a level deeper, under its own void, as
-    # the wrapping division directly above its own board line.
+    # the wrapping division directly above its own board line. The wrap
+    # division is excluded from the sibling-uniformity comparison and
+    # carries its own raw grid width directly (`_finalize_items`, see sh-025
+    # Frontier Advice "ROOT CAUSE, PART 3"), so it prints its own clear size
+    # rather than the bare, size-less line a `Fill` division would print.
     divider_index = lines.index("      board panelZX012 (default material)")
-    assert lines[divider_index - 2] == "    division along z"
+    assert lines[divider_index - 2] == "    division along z, 18.2411 mm (clear)"
     assert "skipped" not in text
 
 

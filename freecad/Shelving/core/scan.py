@@ -521,21 +521,49 @@ def _region(
     )
 
 
+def _is_axis_wrap(item: Item) -> bool:
+    """Whether ``item`` is the ``Division{Board(axis_size_mm=...), Void}``
+    shape ``_slab``'s fallback wraps a short board in.
+
+    Nothing else in this codebase produces exactly this shape: one ``Board``
+    whose ``axis_size_mm`` is set (its division-axis extent is fixed by
+    construction from its own measured span) alongside one ``Void`` for the
+    shortfall.
+    """
+    if not isinstance(item, Division) or len(item.items) != 2:
+        return False
+    boards = [child for child in item.items if isinstance(child, Board)]
+    voids = [child for child in item.items if isinstance(child, Void)]
+    return len(boards) == 1 and len(voids) == 1 and boards[0].axis_size_mm is not None
+
+
 def _finalize_items(
     raw: Sequence[Item],
     bounds: Sequence[int],
     coords_mm: Sequence[float],
     snap_mm: float,
 ) -> list[Item]:
-    """``raw`` with each non-``Board`` item's ``rule`` set by the
+    """``raw`` with each non-``Board``, non-wrap item's ``rule`` set by the
     equal-siblings heuristic, sized from its span in ``bounds``/``coords_mm``.
 
     A ``Board``'s size along its division's axis is fixed (its own thickness,
     or its ``axis_size_mm`` override), never a rule, so it is excluded from
     the sibling comparison: two boards happening to be the same size as some
-    region must not make that region ``Fill``.
+    region must not make that region ``Fill``. An axis-wrap ``Division``
+    (see ``_is_axis_wrap``) is excluded the same way and for the same
+    reason: its own axis extent is fixed by its wrapped ``Board``'s
+    ``axis_size_mm``, so it was never a genuine region the sibling
+    heuristic could speak about, and gets ``Fixed`` at its own raw grid
+    width directly instead of being compared against its siblings. Do not
+    widen this filter back to a bare ``isinstance(item, Board)`` check;
+    that would let an axis-wrap ``Division`` back into the comparison and
+    reintroduce the bug this exclusion closes.
     """
-    region_positions = [i for i, item in enumerate(raw) if not isinstance(item, Board)]
+    region_positions = [
+        i
+        for i, item in enumerate(raw)
+        if not isinstance(item, Board) and not _is_axis_wrap(item)
+    ]
     region_sizes_mm = [
         coords_mm[bounds[i + 1]] - coords_mm[bounds[i]] for i in region_positions
     ]
@@ -545,6 +573,13 @@ def _finalize_items(
         region_item = items[position]
         assert isinstance(region_item, Bay | Void | Division)
         region_item.rule = rule
+    for i, item in enumerate(raw):
+        if _is_axis_wrap(item):
+            assert isinstance(item, Division)
+            item.rule = Fixed(
+                size_mm=coords_mm[bounds[i + 1]] - coords_mm[bounds[i]],
+                basis=Basis.CLEAR,
+            )
     return items
 
 
