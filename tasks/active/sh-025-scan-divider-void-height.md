@@ -1,9 +1,9 @@
 ---
 id: sh-025
 title: "Fix scan stretching a short divider over its void instead of splitting it off"
-current_agent: user
-current_phase: user_signoff
-review_rejections: 1
+current_agent: implementer
+current_phase: implementation
+review_rejections: 2
 ---
 
 # sh-025: Fix scan stretching a short divider over its void instead of splitting it off
@@ -29,7 +29,7 @@ thickness axis. This revision adds that model support (`layout.py`,
 ## Status
 - [x] Planning
 - [x] Implementation
-- [x] Review
+- [ ] Review
 - [ ] User sign-off
 
 ## Must Have
