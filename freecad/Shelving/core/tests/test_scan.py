@@ -39,6 +39,7 @@ from freecad.Shelving.core.scan import (
     infer_facing,
     scan,
 )
+from freecad.Shelving.core.solver import solve
 
 PLY = MaterialId("ply18")
 MDF = MaterialId("mdf12")
@@ -772,8 +773,10 @@ def test_real_magicstart_f1_whole_tree() -> None:
 
 
 def test_real_stair_step_whole_tree() -> None:
-    """A top board over everything, three uprights under it, ``Void`` below
-    each step, and the two inner shelves under their own divider."""
+    """A top board over everything, three uprights under it (the two shorter
+    than the tallest each wrapped in their own ``Division``+``Void`` for
+    their shortfall), ``Void`` below each step, and the two inner shelves
+    under their own divider."""
     boxes = boxes_from_json(REAL_STAIR_STEP.read_text(encoding="utf-8"))
     result = scan(boxes, CATALOG)
 
@@ -783,20 +786,40 @@ def test_real_stair_step_whole_tree() -> None:
 
     columns = _division(root.items[0])
     assert columns.axis is Axis.Y
-    assert _kinds_names(columns) == (
-        "PDPDP",
-        ["panelZX012", "panelZX007", "panelZX008"],
-    )
+    # Only panelZX008, the tallest, reaches the top on its own; the other
+    # two uprights are each wrapped in a nested Division+Void for their own
+    # shortfall below it.
+    assert _kinds_names(columns) == ("DDDDP", ["panelZX008"])
+
+    short_divider = _division(columns.items[0])
+    assert short_divider.axis is Axis.Z
+    assert _kinds_names(short_divider) == ("xP", ["panelZX012"])
+    assert isinstance(short_divider.items[0], Void)
+    panel_zx012 = short_divider.items[1]
+    assert isinstance(panel_zx012, Board)
+    assert panel_zx012.axis_size_mm == pytest.approx(330.2, abs=0.01)
 
     left = _division(columns.items[1])
     assert left.axis is Axis.Z
     assert _kinds_names(left) == ("xPo", ["Shelf015"])
     assert isinstance(left.items[0], Void)
 
+    mid_divider = _division(columns.items[2])
+    assert mid_divider.axis is Axis.Z
+    assert _kinds_names(mid_divider) == ("xP", ["panelZX007"])
+    assert isinstance(mid_divider.items[0], Void)
+    panel_zx007 = mid_divider.items[1]
+    assert isinstance(panel_zx007, Board)
+    assert panel_zx007.axis_size_mm == pytest.approx(940.5874, abs=0.01)
+
     right = _division(columns.items[3])
     assert right.axis is Axis.Z
     assert _kinds_names(right) == ("xPDPo", ["panelYX003", "Shelf013"])
     assert isinstance(right.items[0], Void)
+
+    panel_zx008 = columns.items[4]
+    assert isinstance(panel_zx008, Board)
+    assert panel_zx008.axis_size_mm is None
 
     middle = _division(right.items[2])
     assert middle.axis is Axis.Y
@@ -809,7 +832,8 @@ def test_real_stair_step_whole_tree() -> None:
 
 
 def test_real_two_units_whole_tree() -> None:
-    """Both seams present as adjacent ``Board`` items, the units' two top
+    """Both seams present (one an adjacent ``Board``, the other now wrapped
+    in its own ``Division``+``Void`` for its shortfall), the units' two top
     boards side by side, and the notched panel appearing in ``skipped``
     rather than as a board."""
     boxes, skipped = export_from_json(REAL_TWO_UNITS.read_text(encoding="utf-8"))
@@ -819,21 +843,105 @@ def test_real_two_units_whole_tree() -> None:
 
     root = _division(result.unit.root)
     assert root.axis is Axis.Z
-    assert _kinds_names(root) == ("PDD", ["panelFaceYX"])
+    # panelFaceYX no longer reaches across on its own: it is short of its
+    # sibling by a real 1828.7975 mm void, not a near-zero inset.
+    assert _kinds_names(root) == ("DDD", [])
+
+    face = _division(root.items[0])
+    assert face.axis is Axis.Y
+    assert _kinds_names(face) == ("xP", ["panelFaceYX"])
+    face_void = face.items[0]
+    assert isinstance(face_void, Void)
+    assert isinstance(face_void.rule, Fixed)
+    assert face_void.rule.size_mm == pytest.approx(1828.7975, abs=0.001)
+    face_board = face.items[1]
+    assert isinstance(face_board, Board)
+    assert face_board.axis_size_mm == pytest.approx(1625.6, abs=0.01)
 
     tops = _division(root.items[2])
     assert tops.axis is Axis.Y
     # Together the two units' top boards span the width; neither spans it
-    # alone, so they show up as two adjacent Board items, not one.
+    # alone, so they show up as two adjacent Board items, not one. Each is
+    # thin along Z, not Y, so each carries its own real Y-span as
+    # axis_size_mm rather than a catalog thickness.
     assert _kinds_names(tops) == ("PP", ["panelYX", "panelYX004"])
+    top_a, top_b = tops.items
+    assert isinstance(top_a, Board) and top_a.axis_size_mm == pytest.approx(
+        1828.8, abs=0.01
+    )
+    assert isinstance(top_b, Board) and top_b.axis_size_mm == pytest.approx(
+        1625.6, abs=0.01
+    )
 
     body = _division(root.items[1])
     assert body.axis is Axis.Y
-    assert _kinds_names(body) == ("xDPPDP", ["panelZX008", "panelZX001", "panelZX"])
-    # The seam: one unit's side and the next unit's side, touching.
-    left_side, right_side = body.items[2], body.items[3]
+    # panelZX008 is now wrapped too: short of its sibling by a real
+    # 921.5374 mm void, not a near-zero inset.
+    assert _kinds_names(body) == ("xDDPDP", ["panelZX001", "panelZX"])
+    # The seam: one unit's side (now wrapped for its own shortfall) and the
+    # next unit's side (still bare, reaching across on its own), touching.
+    left_wrap, right_side = body.items[2], body.items[3]
+    assert isinstance(left_wrap, Division) and left_wrap.axis is Axis.Z
+    assert _kinds_names(left_wrap) == ("xP", ["panelZX008"])
+    left_void = left_wrap.items[0]
+    assert isinstance(left_void, Void)
+    assert isinstance(left_void.rule, Fixed)
+    assert left_void.rule.size_mm == pytest.approx(921.5374, abs=0.001)
+    left_side = left_wrap.items[1]
     assert isinstance(left_side, Board) and left_side.role == "panelZX008"
+    assert left_side.axis_size_mm == pytest.approx(1480.3374, abs=0.001)
     assert isinstance(right_side, Board) and right_side.role == "panelZX001"
+    assert right_side.axis_size_mm is None
+
+
+def _stepped_columns_boxes() -> list[Box]:
+    """Two adjacent bays under one shell, separated by a divider that only
+    reaches the shorter (right) bay's height, not the taller (left) one's.
+
+    ``LeftSide`` runs the shell's full height (982 mm above ``Bottom``);
+    ``Divider`` and ``RightSide`` both stop 400 mm short of it, at 582 mm.
+    ``Shelf`` splits the left bay only, giving the shell one genuinely
+    enclosed ``Bay`` so ``scan`` accepts it as a tree.
+    """
+    return [
+        _box("Bottom", (0.0, 0.0, 0.0), (814.0, 300.0, 18.0)),
+        _box("LeftSide", (0.0, 0.0, 18.0), (18.0, 300.0, 982.0)),
+        _box("Divider", (399.0, 0.0, 18.0), (18.0, 300.0, 582.0)),
+        _box("RightSide", (796.0, 0.0, 18.0), (18.0, 300.0, 582.0)),
+        _box("Shelf", (18.0, 0.0, 500.0), (381.0, 300.0, 18.0)),
+    ]
+
+
+def test_short_divider_between_differently_sized_bays_keeps_its_own_height() -> None:
+    """A divider shorter than its taller neighbor solves to its own true
+    height, wrapped in a nested ``Division``+``Void`` for the shortfall,
+    rather than being stretched to the taller bay's height."""
+    boxes = _stepped_columns_boxes()
+    result = scan(boxes, CATALOG)
+
+    columns = result.unit.root
+    assert isinstance(columns, Division)
+    body = columns.items[1]
+    assert isinstance(body, Division) and body.axis is Axis.X
+
+    divider_wrap = body.items[2]
+    assert isinstance(divider_wrap, Division)
+    assert divider_wrap.axis is Axis.Z
+    assert _kinds_names(divider_wrap) == ("Px", ["Divider"])
+    divider = divider_wrap.items[0]
+    assert isinstance(divider, Board) and divider.role == "Divider"
+    assert divider.axis_size_mm == pytest.approx(582.0)
+    divider_void = divider_wrap.items[1]
+    assert isinstance(divider_void, Void)
+    assert isinstance(divider_void.rule, Fixed)
+    assert divider_void.rule.size_mm == pytest.approx(400.0)
+
+    spaces = solve(result.unit, CATALOG)
+    # Not stretched to LeftSide's 982 mm: the divider keeps its own 582 mm.
+    assert spaces[divider.id].size.z_mm == pytest.approx(582.0)
+    left_side = body.items[0]
+    assert isinstance(left_side, Board) and left_side.role == "LeftSide"
+    assert spaces[left_side.id].size.z_mm == pytest.approx(982.0)
 
 
 def _find_pad(nodes: list[dict[str, object]]) -> dict[str, object] | None:

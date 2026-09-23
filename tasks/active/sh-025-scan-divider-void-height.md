@@ -1,8 +1,8 @@
 ---
 id: sh-025
 title: "Fix scan stretching a short divider over its void instead of splitting it off"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 0
 ---
 
@@ -28,20 +28,20 @@ thickness axis. This revision adds that model support (`layout.py`,
 
 ## Status
 - [x] Planning
-- [ ] Implementation
+- [x] Implementation
 - [ ] Review
 - [ ] User sign-off
 
 ## Must Have
-- [ ] `pixi run tests` green.
-- [ ] In `freecad/Shelving/core/scan.py`, a single board's "reaches across its slab"
+- [x] `pixi run tests` green.
+- [x] In `freecad/Shelving/core/scan.py`, a single board's "reaches across its slab"
       check in `_slab`/`_gap` treats a gap beyond `clearance_mm` the same
       way regardless of whether the space past the board is classified
       `outside` or enclosed: both fall through to `_region`'s existing
       recursive cut-finder rather than being silently absorbed as a
       near-zero inset. A gap within `clearance_mm` keeps behaving exactly as
       it does today, `outside` or not.
-- [ ] `freecad/Shelving/core/layout.py`'s `Board` carries a new
+- [x] `freecad/Shelving/core/layout.py`'s `Board` carries a new
       `axis_size_mm: float | None = None` field: the board's `Fixed` size
       along its containing `Division`'s own axis when it is NOT the board's
       catalog thickness; `None` means "use catalog thickness", the only
@@ -49,16 +49,16 @@ thickness axis. This revision adds that model support (`layout.py`,
       updated to state this as the actual invariant (a board's division-axis
       size is its thickness ONLY when `axis_size_mm` is `None`) rather than
       the current unconditional "always".
-- [ ] `freecad/Shelving/core/solver.py`'s `_rule_for_item` returns
+- [x] `freecad/Shelving/core/solver.py`'s `_rule_for_item` returns
       `Fixed(size_mm=item.axis_size_mm)` when a `Board`'s `axis_size_mm` is
       set, `Fixed(size_mm=_thickness_mm(...))` exactly as today otherwise.
-- [ ] `freecad/Shelving/core/scan.py`'s `_make_board` sets `axis_size_mm`
+- [x] `freecad/Shelving/core/scan.py`'s `_make_board` sets `axis_size_mm`
       whenever the board is being placed under a `Division` axis that is not
       the board's own `thin_axis` (computed from the board's real measured
       span along that axis, the same `_Elevated` fields `_unit_size_mm`
       already reads for `pinned_size_mm`); leaves it `None` otherwise (the
       unchanged, thin-axis-matches-division-axis case).
-- [ ] `freecad/Shelving/core/tests/test_scan.py`'s `test_real_stair_step_whole_tree`
+- [x] `freecad/Shelving/core/tests/test_scan.py`'s `test_real_stair_step_whole_tree`
       is updated to assert the corrected tree shape: solving
       `real_stair_step.boxes.json` produces three distinct Z-extents for the
       `panelZX012`/`panelZX007`/`panelZX008` divider boards (approximately
@@ -67,12 +67,12 @@ thickness axis. This revision adds that model support (`layout.py`,
       its real height falls short of its neighbors', matching the pattern
       already used for column bodies (`Bay`, `top`, `Void`), and each
       wrapped board's `axis_size_mm` matches its solved Z-extent.
-- [ ] A new test in `freecad/Shelving/core/tests/test_scan.py`, independent of the
+- [x] A new test in `freecad/Shelving/core/tests/test_scan.py`, independent of the
       real fixture, hand-builds two adjacent bays of different heights
       separated by a divider shorter than the taller one, and asserts the
       divider solves to its own true height with an explicit `Void` sibling
       for the shortfall, not stretched to the taller bay's height.
-- [ ] `freecad/Shelving/core/tests/test_scan.py`'s `test_real_two_units_whole_tree`
+- [x] `freecad/Shelving/core/tests/test_scan.py`'s `test_real_two_units_whole_tree`
       is updated to assert the CORRECTED tree shape for `panelFaceYX` (a
       1828.7975 mm void) and `panelZX008` (a 921.5374 mm void): this task's
       own round-1 implementation attempt, applied exactly as originally
@@ -83,25 +83,25 @@ thickness axis. This revision adds that model support (`layout.py`,
       stay green, unmodified in intent: a small gap (within `clearance_mm`)
       continues to be absorbed as a board inset exactly as today, whether
       the space beyond it is `outside` or enclosed.
-- [ ] `tools/layout_demo.py`'s `_sample_unit`/`_column` are updated so
+- [x] `tools/layout_demo.py`'s `_sample_unit`/`_column` are updated so
       `divider0`/`divider1` (or whichever of the two actually needs it once
       the fix lands) reflect their true, correctly stepped heights via the
       same `Division`+`Void` pattern with `axis_size_mm` set explicitly
       (this demo hand-builds its `Unit` directly, not through `scan`, so
       nothing computes `axis_size_mm` for it automatically), instead of
       being stretched to the unit's full height as bare `Board` siblings.
-- [ ] `tests/test_layout_demo.py`'s printed-output assertions (board count,
+- [x] `tests/test_layout_demo.py`'s printed-output assertions (board count,
       void count, per-row content) are updated to match the corrected
       demo's actual output — read the corrected demo's real printed output
       before writing the new assertion values; do not guess a count.
-- [ ] This task does NOT touch `snap_mm` handling, `_material_for_thickness_mm`,
+- [x] This task does NOT touch `snap_mm` handling, `_material_for_thickness_mm`,
       or the `snap_mm=0.1` argument already passed to `scan` for
       `real_stair_step` in `freecad/Shelving/core/tests/test_scan.py` or
       `freecad/Shelving/core/tests/test_svg.py`. That is a separate, already-logged,
       deliberately deferred issue (`friction-009` in
       `.claude/docs/friction-log.md`); leave those call sites exactly as
       they are.
-- [ ] `mypy --strict` clean over every changed file.
+- [x] `mypy --strict` clean over every changed file.
 
 ## Frontier Advice
 
@@ -253,20 +253,20 @@ clean. Shell stays simple does not apply; this task adds no shell.
 
 ## Execution Plan
 
-- [ ] **Step 1** (`freecad/Shelving/core/layout.py`): Add `Board.axis_size_mm:
+- [x] **Step 1** (`freecad/Shelving/core/layout.py`): Add `Board.axis_size_mm:
       float | None = None`. Update `Board`'s and `Insets`' docstrings to
       state the corrected, conditional invariant per Frontier Advice's
       "THE FIX, PART 2".
-- [ ] **Step 2** (`freecad/Shelving/core/solver.py`): `_rule_for_item` returns
+- [x] **Step 2** (`freecad/Shelving/core/solver.py`): `_rule_for_item` returns
       `Fixed(size_mm=item.axis_size_mm)` when a `Board`'s `axis_size_mm` is
       set, unchanged (`Fixed(size_mm=_thickness_mm(...))`) otherwise.
-- [ ] **Step 3** (`freecad/Shelving/core/scan.py`): Change `_slab`'s single-board
+- [x] **Step 3** (`freecad/Shelving/core/scan.py`): Change `_slab`'s single-board
       "reaches across" check so a gap beyond `clearance_mm` falls through to
       `_region`'s recursive fallback whether `_gap` classifies the excess
       space as `outside` or enclosed (Frontier Advice "ROOT CAUSE, PART 1").
       In `_make_board`, set `axis_size_mm` whenever the enclosing division
       axis is not `board.thin_axis`, per Frontier Advice "THE FIX, PART 2".
-- [ ] **Step 4** (`freecad/Shelving/core/tests/test_scan.py`): Update
+- [x] **Step 4** (`freecad/Shelving/core/tests/test_scan.py`): Update
       `test_real_stair_step_whole_tree`'s assertions to the corrected tree
       shape (including each wrapped divider's `axis_size_mm`), update
       `test_real_two_units_whole_tree`'s assertions for `panelFaceYX` and
@@ -276,11 +276,11 @@ clean. Shell stays simple does not apply; this task adds no shell.
       Deferred verification): steps 1-3 alone break pre-existing assertions
       in this file by design, so `pixi run tests` is only required green
       once, after step 4, not after any step alone.
-- [ ] **Step 5** (`tools/layout_demo.py`): Wrap whichever of
+- [x] **Step 5** (`tools/layout_demo.py`): Wrap whichever of
       `divider0`/`divider1` actually needs it in the `Division`+`Void`
       pattern, setting `axis_size_mm` explicitly on that `Board`, per
       Frontier Advice's sequencing note.
-- [ ] **Step 6** (`tests/test_layout_demo.py`): Update the printed-output
+- [x] **Step 6** (`tests/test_layout_demo.py`): Update the printed-output
       assertions (board count, void count, per-row content) to match the
       corrected demo's actual real output. Steps 5-6 are one
       deferred-verification unit for the same reason as steps 1-4: run

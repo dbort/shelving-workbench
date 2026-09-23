@@ -564,40 +564,41 @@ def _slab(
     pi0, pi1 = grid.cols[index]
     pj0, pj1 = grid.rows[index]
     if across:
-        low_mm = _gap(
+        low = _gap(
             grid,
             range(pj0 - 1, j0 - 1, -1),
             range(pi0, pi1),
             grid.vs_mm,
             horizontal=False,
         )
-        high_mm = _gap(
-            grid, range(pj1, j1), range(pi0, pi1), grid.vs_mm, horizontal=False
-        )
+        high = _gap(grid, range(pj1, j1), range(pi0, pi1), grid.vs_mm, horizontal=False)
         cross_axis = ctx.vertical
     else:
-        low_mm = _gap(
+        low = _gap(
             grid,
             range(pi0 - 1, i0 - 1, -1),
             range(pj0, pj1),
             grid.hs_mm,
             horizontal=True,
         )
-        high_mm = _gap(
-            grid, range(pi1, i1), range(pj0, pj1), grid.hs_mm, horizontal=True
-        )
+        high = _gap(grid, range(pi1, i1), range(pj0, pj1), grid.hs_mm, horizontal=True)
         cross_axis = ctx.horizontal
     if (
-        low_mm is None
-        or high_mm is None
-        or low_mm > ctx.clearance_mm
-        or high_mm > ctx.clearance_mm
+        low is None
+        or high is None
+        or low[1] > ctx.clearance_mm
+        or high[1] > ctx.clearance_mm
     ):
         # It sits alone in the slab but does not reach across it, so the slab
         # divides again along the other axis and the board spans whatever is
         # left. Refusing here would reject a shelf that fills its own column
-        # but not the full height of the region the column was cut from.
+        # but not the full height of the region the column was cut from. The
+        # threshold uses the total gap (outside cells included), since a
+        # large outside void must trigger this fallback exactly like a large
+        # enclosed one would; only the enclosed portion is a real inset.
         return _region(grid, ctx, i0, i1, j0, j1)
+    low_mm, _ = low
+    high_mm, _ = high
     return _make_board(board, cross_axis, low_mm, high_mm, ctx)
 
 
@@ -625,11 +626,25 @@ def _make_board(
         if board.irregular
         else None
     )
+    # cross_axis is the slab's cross-section axis; the enclosing Division's
+    # own axis is whichever of the grid's two elevation axes cross_axis is
+    # not. When that axis is not the board's own thin axis, the board's real
+    # measured span along it (not its catalog thickness) is what the
+    # Division must carry, a divider shorter than its neighbors say.
+    enclosing_axis = ctx.horizontal if cross_axis is ctx.vertical else ctx.vertical
+    axis_size_mm = None
+    if enclosing_axis is not board.thin_axis:
+        axis_size_mm = (
+            board.h1_mm - board.h0_mm
+            if enclosing_axis is ctx.horizontal
+            else board.v1_mm - board.v0_mm
+        )
     return Board(
         pinned_size_mm=pinned_size_mm,
         material=None if material == ctx.default_material else material,
         insets=Insets(**insets_kwargs),
         role=board.name,
+        axis_size_mm=axis_size_mm,
         # A scanned Box's name is the source object's stable FreeCAD Name
         # (freecad.Shelving.container.read_container sets it), so keying a
         # board's id to it, rather than a fresh uuid, is what lets
@@ -661,11 +676,18 @@ def _gap(
     lines_mm: Sequence[float],
     *,
     horizontal: bool,
-) -> float | None:
-    """Enclosed gap width walking ``along`` from a board's end toward the
-    region edge, or ``None`` when another board blocks the line. Outside
-    cells cost nothing; enclosed uncovered cells add their width."""
-    gap_mm = 0.0
+) -> tuple[float, float] | None:
+    """``(enclosed_mm, total_mm)`` walking ``along`` from a board's end toward
+    the region edge, or ``None`` when another board blocks the line.
+
+    ``enclosed_mm`` counts only uncovered cells not classified ``outside``,
+    the value a passing board uses for its own inset. ``total_mm`` counts
+    every uncovered cell regardless of classification, so a large outside
+    void triggers the same "does not reach across" fallback a large enclosed
+    gap does, rather than being silently absorbed as a near-zero inset.
+    """
+    enclosed_mm = 0.0
+    total_mm = 0.0
     for a in along:
         enclosed = False
         for b in across:
@@ -674,9 +696,11 @@ def _gap(
                 return None
             if not grid.outside[j][i]:
                 enclosed = True
+        width_mm = lines_mm[a + 1] - lines_mm[a]
+        total_mm += width_mm
         if enclosed:
-            gap_mm += lines_mm[a + 1] - lines_mm[a]
-    return gap_mm
+            enclosed_mm += width_mm
+    return enclosed_mm, total_mm
 
 
 def _empty(grid: _Grid, i0: int, i1: int, j0: int, j1: int) -> Region:

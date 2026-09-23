@@ -35,7 +35,10 @@ def test_stair_step_report_shows_plane_facing_and_tree() -> None:
     assert lines[2] == ""
     assert lines[3] == "division along z"
     assert "  division along y, 1480.34 mm (clear)" in lines
-    assert "    board panelZX012 (default material)" in lines
+    # panelZX012 (330.2 mm) is shorter than its tallest neighbor panelZX008
+    # (1480.3374 mm), so it is nested a level deeper, under its own void.
+    assert "    division along z" in lines
+    assert "      board panelZX012 (default material)" in lines
     assert "skipped" not in text
 
 

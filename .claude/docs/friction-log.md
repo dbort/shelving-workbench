@@ -1,5 +1,5 @@
 ---
-next_id: friction-020
+next_id: friction-021
 ---
 
 # Friction log
@@ -237,3 +237,20 @@ Sweeping the log is a human-triggered act, like task sign-off: the user asks for
   previously-fine comment inaccurate," so a growing duplication does not
   keep surviving sweep after sweep just because no single sweep introduced
   it.
+
+- `friction-020` - **a task's Execution Plan named only one of two test files
+  a corrected tree shape changed**: sh-025's Must Have list and Execution
+  Plan Step 4 named `test_scan.py`'s `real_stair_step`/`real_two_units`
+  whole-tree assertions as needing an update for the corrected
+  `Division`+`Void` wrapping, but the same fixture's rendered text summary
+  in `test_report.py::test_stair_step_report_shows_plane_facing_and_tree`
+  also asserts a literal indentation depth for `panelZX012`, which shifted
+  one level deeper once the fix wrapped it. `pixi run tests` at the
+  deferred checkpoint caught it as an unplanned failure only after steps 1-4
+  landed, not named anywhere in the task file. Fixed by updating that one
+  assertion to the corrected report output. Simpler if: the planning pass
+  had grepped the fixture name (`REAL_STAIR_STEP`/`real_stair_step`) across
+  `freecad/Shelving/core/tests/` before writing the Must Have list, the way
+  friction-007 already flagged for a deletion step's blast radius; a
+  tree-shape change has the same "everything that renders this fixture" risk
+  a signature-deletion change does.

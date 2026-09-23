@@ -84,8 +84,10 @@ class Insets:
 
     The pair on a division's own axis (for example ``x_min_mm`` /
     ``x_max_mm`` on a board in an ``Axis.X`` division) is ignored: a board
-    always fills its region's extent along that axis with its own
-    thickness. Only the pair on each of the two cross-section axes applies.
+    fills its region's extent along that axis with its own thickness only
+    when the board's ``axis_size_mm`` is ``None``; when it is set, that
+    value is the division-axis extent instead. Only the pair on each of the
+    two cross-section axes applies, in either case.
     """
 
     x_min_mm: float = 0.0
@@ -98,7 +100,14 @@ class Insets:
 
 @dataclass
 class Board:
-    """One physical member, sized along its division's axis by its thickness."""
+    """One physical member, sized along its division's axis by its thickness.
+
+    That is true only when ``axis_size_mm`` is ``None``, the default: the
+    board's division-axis extent is its catalog thickness. When
+    ``axis_size_mm`` is set, that value is the extent instead, for a board
+    whose measured size along its containing division's axis is not its
+    thickness, a divider shorter than its neighbors say.
+    """
 
     # ``None`` means the board is regenerable: the solver derives its extent
     # from the layout, same as any other item. A value means the workbench
@@ -110,6 +119,10 @@ class Board:
     # to a thickness, this model keeps the ``None`` verbatim.
     material: MaterialId | None = None
     insets: Insets = Insets()
+    # The board's ``Fixed`` size along its containing ``Division``'s own
+    # axis, when that is not the board's catalog thickness. ``None`` means
+    # "use catalog thickness", the only behavior before this field existed.
+    axis_size_mm: float | None = None
     # Free-form, set by the caller: the tree has no closed set of positions,
     # and a stepped outline has several tops, none of them *the* top.
     # Deriving a role from tree position is M7's problem.
