@@ -859,34 +859,21 @@ def _catalog_from_thicknesses(boxes: Sequence[Box]) -> Catalog:
 
 
 def test_real_stair_step_solves_to_three_distinct_divider_heights() -> None:
-    """``panelZX012``/``panelZX007``/``panelZX008`` solve to their own
-    measured heights (330.2 / 940.5874 / 1480.3374 mm), not all stretched to
-    the tallest's height, and each wrapped divider's solved Z-extent matches
-    its ``axis_size_mm``.
-
-    Also asserts each wrapped divider's and each column body's own CROSS-axis
-    (Y) size: ``panelZX012`` and ``panelZX007`` each keep their own
-    ~18.24 mm width, and the ``Shelf015``/``panelYX003`` column bodies each
-    keep their own ~887.03 mm width, rather than all four being equalized by
-    `_finalize_items`'s sibling-uniformity comparison to a shared ~452.63 mm
-    share (see sh-025 Frontier Advice, "ROOT CAUSE, PART 3"): the two
-    dividers' wrap ``Division``s are excluded from that comparison entirely,
-    each keeping its own raw grid width; the two column bodies are genuine
-    ``Fill`` twins of each other (within ``snap_mm``) so they legitimately
-    share the remaining span equally, landing within a hair of their own raw
-    widths rather than being crushed against the dividers'.
-
-    ``test_real_stair_step_whole_tree`` above uses the coarse whole-mm
-    ``CATALOG``, which only checks the tree shape and never calls
-    :func:`solve`; that catalog's ``ply18`` (18.0 mm) is ~0.26 mm off this
-    fixture's real panel thickness, which overflows ``solve``. This is a
-    known, deliberately deferred issue, tracked as ``friction-009`` in
-    ``.claude/docs/friction-log.md``. This test instead builds its catalog
-    from the fixture's own measured thicknesses with a tight ``snap_mm``,
-    exactly as ``test_svg.py``'s end-to-end stair-step test does, so it can
-    solve the corrected tree shape and assert the three heights it produces.
+    """``panelZX012``/``panelZX007``/``panelZX008`` each solve to their own
+    measured Z height (330.2 / 940.5874 / 1480.3374 mm) rather than being
+    stretched to the tallest's height, with each wrapped divider's solved
+    Z-extent matching its ``axis_size_mm``; each wrapped divider's and each
+    column body's own cross-axis (Y) size stays its own true width too,
+    rather than being equalized with its near-equal-width siblings.
     """
     boxes = boxes_from_json(REAL_STAIR_STEP.read_text(encoding="utf-8"))
+    # test_real_stair_step_whole_tree above uses the coarse whole-mm CATALOG,
+    # whose ply18 (18.0 mm) is ~0.26 mm off this fixture's real panel
+    # thickness and overflows solve() (tracked as friction-009 in
+    # .claude/docs/friction-log.md); build the catalog from the fixture's
+    # own measured thicknesses instead, with a tight snap_mm, exactly as
+    # test_svg.py's end-to-end stair-step test does, so this test can solve
+    # the corrected tree shape.
     catalog = _catalog_from_thicknesses(boxes)
     result = scan(boxes, catalog, snap_mm=0.1)
     spaces = solve(result.unit, catalog)
@@ -922,6 +909,11 @@ def test_real_stair_step_solves_to_three_distinct_divider_heights() -> None:
         assert board is not None
         assert spaces[board.id].size.y_mm == pytest.approx(expected, abs=0.01)
 
+    # `_finalize_items` excludes the dividers' wrap Divisions from its
+    # sibling-uniformity comparison, so each keeps its own raw grid width;
+    # the two column bodies are genuine Fill twins of each other (within
+    # snap_mm), so they share the remaining span equally (see sh-025
+    # Frontier Advice, "ROOT CAUSE, PART 3").
     assert spaces[shelf015_column.id].size.y_mm == pytest.approx(887.0283, abs=0.01)
     assert spaces[panel_yx003_column.id].size.y_mm == pytest.approx(887.0283, abs=0.01)
 
@@ -995,23 +987,24 @@ def _stepped_columns_boxes() -> list[Box]:
 
     ``LeftSide`` runs the shell's full height (982 mm above ``Bottom``);
     ``Divider``, ``RightSide``, and ``Divider2`` all stop 400 mm short of it,
-    at 582 mm. ``Shelf`` splits the left bay only, giving the shell one
-    enclosed ``Bay`` so ``scan`` accepts it as a tree. ``Divider2`` and the
-    void gap beside it (mirroring ``RightSide``'s own gap) exist only to give
-    the outer "body" ``Division`` a second near-equal-width wrap (three
-    18 mm dividers) and a second near-equal-width void (two 379 mm gaps):
-    a lone divider's wrap never lands in `_finalize_items`'s sibling
-    comparison at all when nothing else in the division is close to its own
-    width, so this shape is what actually exercises `has_twin` and would
-    catch a regression a single wrap cannot (see sh-025 Frontier Advice,
-    "ROOT CAUSE, PART 3").
+    at 582 mm.
     """
     return [
         _box("Bottom", (0.0, 0.0, 0.0), (1211.0, 300.0, 18.0)),
         _box("LeftSide", (0.0, 0.0, 18.0), (18.0, 300.0, 982.0)),
         _box("Divider", (399.0, 0.0, 18.0), (18.0, 300.0, 582.0)),
         _box("RightSide", (796.0, 0.0, 18.0), (18.0, 300.0, 582.0)),
+        # Splits the left bay only, giving the shell one enclosed Bay so
+        # scan accepts it as a tree.
         _box("Shelf", (18.0, 0.0, 500.0), (381.0, 300.0, 18.0)),
+        # Mirrors RightSide's own gap, giving the outer "body" Division a
+        # second near-equal-width wrap (three 18 mm dividers) and a second
+        # near-equal-width void (two 379 mm gaps): a lone divider's wrap
+        # never lands in _finalize_items's sibling comparison at all when
+        # nothing else in the division is close to its own width, so this
+        # shape is what exercises has_twin and would catch a regression a
+        # single wrap cannot (see sh-025 Frontier Advice, "ROOT CAUSE,
+        # PART 3").
         _box("Divider2", (1193.0, 0.0, 18.0), (18.0, 300.0, 582.0)),
     ]
 
@@ -1023,13 +1016,6 @@ def test_short_divider_between_differently_sized_bays_keeps_its_own_height() -> 
     region's own cross-axis size (the axis the outer "body" ``Division``
     itself runs along) is its own true width too, not equalized with its
     near-equal-width siblings by ``Fill``.
-
-    Three wrap ``Division``s (``Divider``, ``RightSide``, ``Divider2``) share
-    the same 18 mm width and two void gaps share the same 379 mm width, so
-    without the ``_finalize_items`` wrap exclusion, all five are wrongly
-    compared as siblings and equalized to 162.4 mm each; the wrap exclusion
-    and the void gaps' own genuine ``Fill`` comparison must each land on
-    their own true, different-by-class width instead.
     """
     boxes = _stepped_columns_boxes()
     result = scan(boxes, CATALOG)

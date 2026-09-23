@@ -74,9 +74,10 @@ from freecad.Shelving.core.svg import to_svg  # noqa: E402
 
 PLY18 = MaterialId("ply18")
 MDF12 = MaterialId("mdf12")
-# The unit's default material's thickness: _sample_unit needs it (to compute
-# the middle division's own Z extent, hand-built rather than solved) ahead
-# of _sample_catalog, so it is a constant rather than read off the catalog.
+# The unit's default material's thickness. _sample_unit needs it, ahead of
+# _sample_catalog, to hand-compute the middle division's own Z extent
+# rather than solve it, so it is a constant rather than read off the
+# catalog.
 PLY18_THICKNESS_MM = 18.0
 
 

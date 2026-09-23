@@ -100,13 +100,8 @@ class Insets:
 
 @dataclass
 class Board:
-    """One physical member, sized along its division's axis by its thickness.
-
-    That is true only when ``axis_size_mm`` is ``None``, the default: the
-    board's division-axis extent is its catalog thickness. When
-    ``axis_size_mm`` is set, that value is the extent instead, for a board
-    whose measured size along its containing division's axis is not its
-    thickness, a divider shorter than its neighbors say.
+    """One physical member, sized along its division's axis by its thickness,
+    or by ``axis_size_mm`` when that is set.
     """
 
     # ``None`` means the board is regenerable: the solver derives its extent
@@ -119,9 +114,10 @@ class Board:
     # to a thickness, this model keeps the ``None`` verbatim.
     material: MaterialId | None = None
     insets: Insets = Insets()
-    # The board's ``Fixed`` size along its containing ``Division``'s own
-    # axis, when that is not the board's catalog thickness. ``None`` means
-    # "use catalog thickness".
+    # ``None`` means the division-axis extent is the board's catalog
+    # thickness. A value overrides that, for a board whose measured size
+    # along its containing division's axis is not its thickness, a divider
+    # shorter than its neighbors say.
     axis_size_mm: float | None = None
     # Free-form, set by the caller: the tree has no closed set of positions,
     # and a stepped outline has several tops, none of them *the* top.
