@@ -58,7 +58,15 @@ thickness axis. This revision adds that model support (`layout.py`,
       span along that axis, the same `_Elevated` fields `_unit_size_mm`
       already reads for `pinned_size_mm`); leaves it `None` otherwise (the
       unchanged, thin-axis-matches-division-axis case).
-- [x] `freecad/Shelving/core/tests/test_scan.py`'s `test_real_stair_step_whole_tree`
+- [ ] NEW, from round-3 sign-off: `freecad/Shelving/core/scan.py`'s
+      `_finalize_items` excludes a wrap `Division` (the `Division{Board,
+      Void}` shape `_slab`'s fallback produces for the axis-mismatch case)
+      from `_recover_rules`'s sibling-uniformity comparison, the same way it
+      already excludes a bare `Board`, and assigns it `Fixed` at its own raw
+      grid width directly instead. See Frontier Advice "ROOT CAUSE, PART 3"
+      for the exact bug this closes and why the existing Board-only
+      exclusion no longer covers the case this task itself introduces.
+- [ ] `freecad/Shelving/core/tests/test_scan.py`'s `test_real_stair_step_whole_tree`
       is updated to assert the corrected tree shape: solving
       `real_stair_step.boxes.json` produces three distinct Z-extents for the
       `panelZX012`/`panelZX007`/`panelZX008` divider boards (approximately
@@ -67,11 +75,24 @@ thickness axis. This revision adds that model support (`layout.py`,
       its real height falls short of its neighbors', matching the pattern
       already used for column bodies (`Bay`, `top`, `Void`), and each
       wrapped board's `axis_size_mm` matches its solved Z-extent.
-- [x] A new test in `freecad/Shelving/core/tests/test_scan.py`, independent of the
+- [ ] NEW, from round-3 sign-off: every wrapped board's and every column
+      body's CROSS-axis size in `real_stair_step`'s solved tree is asserted
+      too, not just Z-extent. Minimum coverage: `panelZX012`'s and
+      `panelZX007`'s own Y-cross-section is each their true raw divider
+      width (~18.24 mm, NOT an equal share of the columns division), and
+      the `Shelf015`-column and `panelYX003`-column bodies' own Y-widths
+      are each their true raw span (~887.02 mm and ~887.03 mm respectively,
+      NOT crushed to match the dividers). See Frontier Advice "ROOT CAUSE,
+      PART 3" for why this specific pair-of-near-equal-dividers,
+      pair-of-near-equal-column-bodies shape is exactly what exposes the
+      bug a single-divider hand-built test cannot.
+- [ ] A new test in `freecad/Shelving/core/tests/test_scan.py`, independent of the
       real fixture, hand-builds two adjacent bays of different heights
       separated by a divider shorter than the taller one, and asserts the
       divider solves to its own true height with an explicit `Void` sibling
-      for the shortfall, not stretched to the taller bay's height.
+      for the shortfall, not stretched to the taller bay's height, AND
+      asserts the divider's and both bays' cross-axis sizes are each their
+      own true width, not equalized by `Fill`.
 - [x] `freecad/Shelving/core/tests/test_scan.py`'s `test_real_two_units_whole_tree`
       is updated to assert the CORRECTED tree shape for `panelFaceYX` (a
       1828.7975 mm void) and `panelZX008` (a 921.5374 mm void): this task's
@@ -199,6 +220,50 @@ every board this codebase currently scans correctly). Do not add a new
 `Item` variant or new tree-walking logic; `_region`'s cut-finder itself
 needs no change, only what happens with the `Board` it already produces.
 
+ROOT CAUSE, PART 3 (found at user sign-off, round 3's own code). Wrapping a
+short divider in `Division{Board(axis_size_mm=...), Void}` (Part 2's fix)
+changes what TYPE of item occupies that divider's own slot in the OUTER
+division that positions it beside its neighbors: from a bare `Board`
+(which `_finalize_items`, `freecad/Shelving/core/scan.py` ~line 537,
+deliberately excludes from its sibling-uniformity comparison, per its own
+comment: "two boards happening to be the same thickness as some region
+must not make that region `Fill`") to a `Division` (which
+`_finalize_items` does NOT exclude). Reproduced directly against
+`real_stair_step`: the outer "columns" division's call into
+`_finalize_items` receives `region_sizes_mm = [18.2411, 887.0227, 18.2372,
+887.0251]` (the wrap around `panelZX012`, the `Shelf015` column body, the
+wrap around `panelZX007`, the `panelYX003` column body). `_recover_rules`
+finds the two ~18 mm items match each other within `snap_mm` and the two
+~887 mm items match each other, so ALL FOUR get `Fill()` and split the
+remaining span equally at 452.63 mm each: the two dividers balloon to
+~25× their true thickness and the two column bodies are crushed to half
+their true width. Confirmed by inspection in a real FreeCAD document: the
+inflated dividers visibly crowd out the shelves and the second divider in
+their own column bodies. This bug requires TWO near-equal-width dividers
+(or two near-equal-width column bodies) in the same outer division to
+manifest via `has_twin`, which is exactly why round 3's own new hand-built
+test (a single divider, no twin to match against) never caught it, and why
+neither `test_real_stair_step_whole_tree` nor
+`test_real_two_units_whole_tree`'s existing assertions caught it either:
+none of the three rounds asserted a wrapped board's or a column body's
+CROSS-axis size, only Z-extent.
+
+THE FIX, PART 3. In `_finalize_items`, exclude a wrap `Division` from
+`region_positions`/`region_sizes_mm` the same way a bare `Board` already
+is, and assign it `Fixed(size_mm=<its own raw grid width>,
+basis=Basis.CLEAR)` directly, unconditionally, bypassing
+`_recover_rules` entirely for it (matching how a bare `Board`'s size was
+never subject to the sibling comparison either). Detect a wrap `Division`
+by its exact, distinctive shape: exactly two items, one `Board` whose
+`axis_size_mm` is not `None`, one `Void`; nothing else in this codebase
+produces that shape. A helper (`_is_axis_wrap(item) -> bool` or similar)
+checked before both the exclusion filter and the direct-Fixed-assignment
+step keeps the two call sites in agreement. Do not change
+`_recover_rules`'s general has-twin logic itself: it is correct for
+genuine multi-item regions (two same-width `Bay`s legitimately sharing
+`Fill`), the bug is only that a wrap `Division` was never a genuine region
+to begin with.
+
 sh-026 INTERACTION, now a HARD BLOCKER (this task's frontmatter does not
 list it as `blocked_by` since sh-026 depends on THIS task, not the other
 way; sh-026's own frontmatter is being updated to add `blocked_by:
@@ -285,3 +350,19 @@ clean. Shell stays simple does not apply; this task adds no shell.
       corrected demo's actual real output. Steps 5-6 are one
       deferred-verification unit for the same reason as steps 1-4: run
       `pixi run tests` green once, after step 6.
+- [ ] **Step 7** (`freecad/Shelving/core/scan.py`): Fix `_finalize_items`
+      per Frontier Advice "THE FIX, PART 3": add a helper detecting a wrap
+      `Division` (exactly one `Board` with `axis_size_mm` set, one `Void`),
+      exclude it from the sibling-uniformity comparison the same way a bare
+      `Board` already is, and assign it `Fixed` at its own raw grid width
+      directly.
+- [ ] **Step 8** (`freecad/Shelving/core/tests/test_scan.py`): Add the
+      missing cross-axis assertions per the two NEW Must Haves: extend
+      `test_real_stair_step_whole_tree` to assert `panelZX012`'s,
+      `panelZX007`'s, the `Shelf015`-column's, and the `panelYX003`-column's
+      own cross-axis (Y) sizes match their true raw widths, and extend the
+      hand-built short-divider regression test to assert cross-axis sizes
+      too. Steps 7-8 are one deferred-verification unit: run `pixi run
+      tests` green once, after step 8, and confirm by walking the solved
+      tree and printing each item's actual size the same way this round's
+      diagnosis did, not by trusting the assertions alone.
