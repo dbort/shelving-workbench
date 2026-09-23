@@ -2,7 +2,7 @@
 id: sh-019
 title: "The material catalog as a document object"
 current_agent: user
-current_phase: user_signoff
+current_phase: done
 review_rejections: 2
 blocked_by: [sh-018]
 ---
@@ -20,7 +20,7 @@ makes a changed thickness reach the boards using it. Milestone M8.
 - [x] Planning
 - [x] Implementation
 - [x] Review
-- [ ] User sign-off
+- [x] User sign-off
 
 ## Must Have
 - [x] `pixi run tests` green.
