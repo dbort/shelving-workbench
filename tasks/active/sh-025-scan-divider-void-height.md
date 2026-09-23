@@ -1,9 +1,9 @@
 ---
 id: sh-025
 title: "Fix scan stretching a short divider over its void instead of splitting it off"
-current_agent: reviewer
-current_phase: review
-review_rejections: 0
+current_agent: implementer
+current_phase: implementation
+review_rejections: 1
 ---
 
 # sh-025: Fix scan stretching a short divider over its void instead of splitting it off
