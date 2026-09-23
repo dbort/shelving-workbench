@@ -8,7 +8,7 @@ which does nothing beyond seed the catalog if needed, add the entry, select
 it, and wrap both in a transaction. There is no dialog: the new entry's
 ``MaterialId`` is a placeholder and its ``Thickness`` is zero, both left for
 the user to fill in through the property editor, which is why this command
-selects the entry rather than just reporting its name.
+selects the entry rather than only reporting its name.
 """
 
 import os

@@ -336,8 +336,7 @@ with no group prefix and no dialog. `Thickness` shows with units (`18 mm`).
    `Thickness` from `18 mm` to `25 mm`.
 
 Expected: nothing in the 3D view moves. Reflow is a command, not a
-recompute (see this task's Frontier Advice); a property edit alone never
-touches a board.
+recompute; a property edit alone never touches a board.
 
 2. With nothing selected, run **Reflow All** from the **Shelving** toolbar
    or menu.

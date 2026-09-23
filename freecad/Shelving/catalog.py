@@ -6,17 +6,9 @@ A catalog is an ``App::DocumentObjectGroup`` carrying
 document mentions no ``Proxy``, ``FeaturePython``, or ``PythonObject``: the
 same promise the boards make (see ``freecad.Shelving.container``). Editing an
 entry is the property editor and deleting one is the tree; this module adds
-no dialog of its own.
-
-:func:`ensure_catalog` is the one entry point every command uses: it finds
-the document's catalog or seeds one from
-``freecad.Shelving.default_catalog.DEFAULT_CATALOG``, so a fresh document
-works with no setup and nothing ever fails for want of a catalog.
-:func:`read_catalog` turns a catalog group into the
-``freecad.Shelving.core.materials.Catalog`` the solver and scanner consume,
-validating as it goes: a duplicate ``MaterialId`` or a non-positive
-``Thickness`` raises rather than silently producing a catalog a board's
-material id cannot resolve against.
+no dialog of its own. :func:`ensure_catalog` is the one entry point every
+command uses, and :func:`read_catalog` turns a catalog group into the
+``freecad.Shelving.core.materials.Catalog`` the solver and scanner consume.
 
 ``MaterialId`` is the stable key a board stores, not an entry's ``Name`` or
 ``Label``: either is renameable from the tree, and a rename must not orphan
@@ -143,10 +135,10 @@ def ensure_catalog(doc: FreeCAD.Document) -> FreeCAD.DocumentObject:
 def _entry_objects(group: FreeCAD.DocumentObject) -> list[FreeCAD.DocumentObject]:
     """Every member of ``group`` that carries the entry properties: what
     :func:`read_catalog` and :func:`add_entry` treat as a catalog entry. A
-    member missing them (nothing this module ever adds, but nothing stops a
-    user dragging some other object into the group) is silently not an
-    entry, the same tolerance ``freecad.Shelving.container`` gives an
-    untagged object it does not recognize."""
+    member missing them is silently not an entry, the same tolerance
+    ``freecad.Shelving.container`` gives an untagged object it does not
+    recognize. Nothing this module adds is ever missing them; the only way
+    one occurs is a user dragging some other object into the group."""
     members = cast("FreeCAD.DocumentObjectGroup", group).Group
     return [m for m in members if properties.has_entry_properties(m)]
 

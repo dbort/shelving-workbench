@@ -5,10 +5,8 @@ entry reach the boards using it.
 Run via ``freecadcmd tools/freecad_catalog_smoke.py``. Not a self-invoking
 pytest module like ``tools/freecad_scan_smoke.py`` and
 ``tools/freecad_write_smoke.py``: a straight-line script of assertions that
-prints ``shelving catalog OK`` on success, in the shape
-``tools/freecad_smoke.py`` used before it was folded into
-``freecad_scan_smoke.py`` (``git log`` still has it). ``freecadcmd`` does
-not propagate an uncaught exception's exit status
+prints ``shelving catalog OK`` on success. ``freecadcmd`` does not
+propagate an uncaught exception's exit status
 (``docs/freecadcmd-notes.md``), so the printed marker line, which
 ``tools/run-tests.sh`` greps for, is the success signal, not the process
 exit code.
@@ -308,9 +306,11 @@ def _case_unknown_material_refuses_at_scan() -> None:
 def _case_create_unit_reflow_rewrites_the_boards_it_wrote() -> None:
     """The path ``_closed_box_unit`` sidesteps: a unit built by
     ``Shelving_CreateUnit`` itself, where every board's material equals
-    ``Unit.default_material`` rather than being set per board. Proves F1's
-    fix rather than a fixture that stores a material id explicitly on every
-    board regardless of it (see ``_closed_box_unit``'s docstring)."""
+    ``Unit.default_material`` rather than being set per board. Proves that
+    ``expand()`` resolves the inherited default to a concrete id before
+    ``container.py`` writes it, rather than a fixture that stores a
+    material id explicitly on every board regardless of it (see
+    ``_closed_box_unit``'s docstring)."""
     doc = _new_document("catalog_smoke_create_unit_reflow")
     try:
         container = create_unit(doc)
@@ -418,7 +418,7 @@ def _case_reflow_all_rewrites_the_changed_material() -> None:
         assert abs(extent_after.z_mm - extent_before.z_mm) < _TOL_MM
 
         # The refused unit's boards are untouched: write_container's own
-        # expand() call raises before any board object is mutated.
+        # expand() call raises before it mutates any board object.
         boxes_tight_after, _s, _r = read_container(container_tight)
         for box in boxes_tight_after:
             assert abs(_thin_axis_mm(box) - 18.0) < _TOL_MM
