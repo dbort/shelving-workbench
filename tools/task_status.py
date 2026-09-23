@@ -652,10 +652,10 @@ def render_human_report(report: Report) -> str:
     Sections appear in `_PHASE_SECTIONS` order and are omitted when empty.
     Within a section, tasks are ordered by a layered topological sort over
     the `blocked_by` DAG restricted to edges between two tasks both in
-    `report.tasks` (`layered_topological_order`), computed once across all
-    of `report.tasks` and then partitioned by section so a task's position
-    still reflects the same dependency-completion order; a task caught in a
-    `circular_blocked_by` cycle sorts last within its section, by id. The
+    `report.tasks` (`layered_topological_order`); a task's position within
+    its section still reflects that same global dependency-completion
+    order, and a task caught in a `circular_blocked_by` cycle sorts last
+    within its section, by id. The
     `planning` section splits into an `Unblocked` and a `Blocked`
     subsection so an unblocked task's bullet can omit the always-`(none)`
     "blocked by" line. A `current_phase` value outside `_PHASE_SECTIONS`
