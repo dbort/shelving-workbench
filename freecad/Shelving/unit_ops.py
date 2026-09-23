@@ -127,12 +127,15 @@ def rescan_unit(container: FreeCAD.DocumentObject, catalog: Catalog) -> WriteRes
 
 @dataclasses.dataclass(frozen=True)
 class ReflowResult:
-    """What :func:`reflow_all` did across every unit in one document: each
-    container's own ``Name`` paired with its :class:`WriteResult` on
-    success, or with the refusal message on failure. A unit that fails is
-    absent from ``succeeded`` and present in ``failed``, never both."""
+    """What :func:`reflow_all` did across every unit in one document.
 
+    A unit that fails is absent from ``succeeded`` and present in
+    ``failed``, never both.
+    """
+
+    # Each succeeded container's own Name paired with its WriteResult.
     succeeded: tuple[tuple[str, WriteResult], ...]
+    # Each failed container's own Name paired with its refusal message.
     failed: tuple[tuple[str, str], ...]
 
 

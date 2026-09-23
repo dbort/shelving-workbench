@@ -230,13 +230,13 @@ def _case_add_entry_is_blank_and_excluded_until_edited() -> None:
     """``add_entry`` leaves a new entry at ``Thickness`` ``0 mm`` until
     edited. ``read_catalog``, asked to build every entry in the group at
     once, still refuses on it: that narrow, in-isolation contract is what
-    this case exercises first. But that is not what a command actually
-    builds against: ``read_usable_catalog`` excludes the incomplete entry
-    instead of refusing the whole group, which is why the same document can
+    this case exercises first. A command builds against
+    ``read_usable_catalog`` instead, which excludes the incomplete entry
+    rather than refusing the whole group, which is why the same document can
     still stand in for "one incomplete entry among otherwise-valid ones"
     rather than "a document with no usable catalog at all". See
     ``_case_incomplete_entry_does_not_block_a_valid_unit`` for the
-    consequence that actually matters: a unit that never references the
+    consequence that matters: a unit that never references the
     incomplete entry keeps working while it sits there unedited (bug-002 /
     sh-019 review round 2, F1).
     """

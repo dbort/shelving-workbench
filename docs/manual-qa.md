@@ -335,8 +335,9 @@ with no group prefix and no dialog. `Thickness` shows with units (`18 mm`).
 1. Select the **18 mm birch plywood** entry. In the property editor, change
    `Thickness` from `18 mm` to `25 mm`.
 
-Expected: nothing in the 3D view moves. Reflow is a command, not a
-recompute; a property edit alone never touches a board.
+Expected: nothing in the 3D view moves. Reflow runs only as an explicit
+command, not through FreeCAD's automatic recompute; a property edit alone
+never touches a board.
 
 2. With nothing selected, run **Reflow All** from the **Shelving** toolbar
    or menu.
@@ -366,10 +367,10 @@ by the normal `ShelvingUnit` line reporting the reflow as usual (`updated
 0` if nothing changed since case 2, or otherwise consistent with whatever
 state the unit was left in). Nothing about the unit is refused: the
 unfinished entry sits in the catalog unusable, but no board references it,
-so it never blocks a unit that doesn't need it (sh-019 review round 2, F1;
-compare to case 4 of the M6 section, where a genuinely invalid *board*
-refuses the whole scan and names the offenders — an unreferenced, merely
-incomplete catalog entry must not do the same).
+so it never blocks a unit that doesn't need it (sh-019 review round 2, F1).
+Compare case 4 of the M6 section, where a genuinely invalid *board* refuses
+the whole scan and names the offenders: an unreferenced, merely incomplete
+catalog entry must not do the same.
 
 3. Select the new entry again and change `MaterialId` to something
    memorable (`oak6`, say), `Thickness` to `6 mm`, and `MaterialType` to

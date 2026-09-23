@@ -15,7 +15,7 @@ command uses, and :func:`read_catalog` turns a catalog group into the
 a board that already references the id.
 
 :func:`read_catalog` builds the whole document's catalog at once and raises
-the moment any one entry cannot stand: a caller that genuinely needs every
+the moment any one entry cannot stand: a caller that needs every
 entry validated together (an isolated check, or a case in this module's own
 smoke) wants that. A command touching one unit does not: an unrelated
 entry an editor left half-filled in (an :func:`add_entry` result nobody has
@@ -25,8 +25,8 @@ entries that individually validate and reports the rest as skipped rather
 than refusing the whole document. A board that needed a skipped entry fails
 the same way it already fails on any id absent from the catalog (see
 ``freecad.Shelving.core.scan``'s "not in the catalog" refusal, naming the
-board), so the attribution a user sees is the board or unit actually
-touched, not a bare entry name.
+board), so the attribution a user sees is the board or unit touched, not a
+bare entry name.
 """
 
 from __future__ import annotations
@@ -207,7 +207,7 @@ def read_usable_catalog(
     since neither can be preferred over the other).
 
     Unlike :func:`read_catalog`, an invalid entry does not stop the build: it
-    is simply absent from the returned ``Catalog``, the same as an id nobody
+    is absent from the returned ``Catalog``, the same as an id nobody
     ever wrote a catalog entry for. This is what every catalog-touching
     command builds against, so one entry an editor has not finished yet
     never blocks a unit whose boards never reference it.
