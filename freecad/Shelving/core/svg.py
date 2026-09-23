@@ -264,8 +264,9 @@ def _apply_insets(axis: Axis, space: Space, insets: Insets) -> Space:
     """``space`` with ``insets`` applied to its two cross-section axes.
 
     The pair on ``axis`` itself (the enclosing division's axis) is ignored: a
-    board always fills that axis with its solved extent, its own thickness,
-    never an inset. Mirrors :func:`freecad.Shelving.core.expand._apply_insets`; kept
+    board always fills that axis with its solved extent, its catalog
+    thickness unless ``axis_size_mm`` overrides it, never an inset. Mirrors
+    :func:`freecad.Shelving.core.expand._apply_insets`; kept
     as its own copy here rather than imported, the way each module in this
     package keeps its own small geometry helpers instead of reaching into
     another module's private names.

@@ -127,25 +127,28 @@ def _column(void_mm: float, prefix: str, *, with_shelf: bool = False) -> Divisio
     return Division(axis=Axis.Z, items=items, id=f"{prefix}_column")
 
 
-def _divider(axis_size_mm: float, void_mm: float, prefix: str) -> Item:
+def _divider(axis_size_mm: float | None, void_mm: float, prefix: str) -> Item:
     """A vertical divider between two columns, its own true height.
 
     ``divider0`` (between ``left_side`` and ``col0``, both full height)
     needs no wrapping: a bare ``Board`` already reaches the middle
-    division's full height on its own. A divider between two columns of
-    different heights, ``divider1`` here, is only as tall as the taller of
-    its two immediate neighbors, so it is wrapped in the same
-    ``Division``+``Void`` pattern ``_column`` uses for a stepped column,
-    with ``axis_size_mm`` set explicitly since this tree is hand-built
-    rather than produced by ``scan``, which is the only thing that
-    computes it automatically.
+    division's full height on its own, so its caller passes ``void_mm=0``
+    and ``axis_size_mm=None`` together, making "no shortfall, no override"
+    explicit rather than passing a height this branch would ignore. A
+    divider between two columns of different heights, ``divider1`` here, is
+    only as tall as the taller of its two immediate neighbors, so it is
+    wrapped in the same ``Division``+``Void`` pattern ``_column`` uses for a
+    stepped column, with ``axis_size_mm`` set explicitly since this tree is
+    hand-built rather than produced by ``scan``, which is the only thing
+    that computes it automatically.
     """
     if void_mm <= 0:
-        return Board(role="divider", id=f"{prefix}")
+        return Board(role="divider", id=prefix)
+    assert axis_size_mm is not None
     return Division(
         axis=Axis.Z,
         items=[
-            Board(role="divider", axis_size_mm=axis_size_mm, id=f"{prefix}"),
+            Board(role="divider", axis_size_mm=axis_size_mm, id=prefix),
             Void(rule=Fixed(void_mm), id=f"{prefix}_void"),
         ],
         # The wrap itself is a Division item in "middle" (axis=X), so its
@@ -179,7 +182,7 @@ def _sample_unit() -> Unit:
                     items=[
                         Board(role="left_side", id="left_side"),
                         _column(0.0, "col0", with_shelf=True),
-                        _divider(middle_height_mm, 0.0, "divider0"),
+                        _divider(None, 0.0, "divider0"),
                         _column(300.0, "col1"),
                         # divider1 sits between col1 (882 mm) and col2 (582
                         # mm); its true height matches the taller neighbor,

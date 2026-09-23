@@ -831,6 +831,68 @@ def test_real_stair_step_whole_tree() -> None:
         assert _kinds_names(sub) == ("oPo", [shelf_name])
 
 
+def _catalog_from_thicknesses(boxes: Sequence[Box]) -> Catalog:
+    """A generic material per distinct board thickness in ``boxes``, built
+    from the fixture's own geometry rather than a hand-picked catalog.
+
+    Mirrors :func:`freecad.Shelving.core.tests.test_svg._catalog_from_thicknesses`;
+    kept as its own copy since each test module keeps its own fixtures
+    rather than importing across test modules. The round to four decimal
+    places only merges the sub-thousandth jitter real exported geometry has
+    between nominally identical boards; it must not round away real
+    precision the way a whole-millimetre bucket would.
+    """
+    thicknesses_mm = sorted(
+        {round(min(b.size_mm.x_mm, b.size_mm.y_mm, b.size_mm.z_mm), 4) for b in boxes}
+    )
+    return Catalog(
+        entries={
+            MaterialId(f"generic{t}"): MaterialEntry(
+                id=MaterialId(f"generic{t}"),
+                name=f"{t} mm stock",
+                thickness_mm=float(t),
+                material_type="generic",
+            )
+            for t in thicknesses_mm
+        }
+    )
+
+
+def test_real_stair_step_solves_to_three_distinct_divider_heights() -> None:
+    """``panelZX012``/``panelZX007``/``panelZX008`` solve to their own
+    measured heights (330.2 / 940.5874 / 1480.3374 mm), not all stretched to
+    the tallest's height, and each wrapped divider's solved Z-extent matches
+    its ``axis_size_mm``.
+
+    ``test_real_stair_step_whole_tree`` above uses the coarse whole-mm
+    ``CATALOG``, which only checks the tree shape and never calls
+    :func:`solve`; that catalog's ``ply18`` (18.0 mm) is ~0.26 mm off this
+    fixture's real panel thickness, which overflows ``solve`` (a known,
+    deliberately deferred issue, ``friction-009`` in
+    ``.claude/docs/friction-log.md``). This test instead builds its catalog
+    from the fixture's own measured thicknesses with a tight ``snap_mm``,
+    exactly as ``test_svg.py``'s end-to-end stair-step test does, so it can
+    solve the corrected tree shape and assert the three heights it produces.
+    """
+    boxes = boxes_from_json(REAL_STAIR_STEP.read_text(encoding="utf-8"))
+    catalog = _catalog_from_thicknesses(boxes)
+    result = scan(boxes, catalog, snap_mm=0.1)
+    spaces = solve(result.unit, catalog)
+
+    expected_z_mm = {
+        "panelZX012": 330.2,
+        "panelZX007": 940.5874,
+        "panelZX008": 1480.3374,
+    }
+    for role, expected in expected_z_mm.items():
+        board = _find_board(result.unit.root, role)
+        assert board is not None
+        solved_z_mm = spaces[board.id].size.z_mm
+        assert solved_z_mm == pytest.approx(expected, abs=0.01)
+        if board.axis_size_mm is not None:
+            assert board.axis_size_mm == pytest.approx(solved_z_mm, abs=0.01)
+
+
 def test_real_two_units_whole_tree() -> None:
     """Both seams present (one an adjacent ``Board``, the other now wrapped
     in its own ``Division``+``Void`` for its shortfall), the units' two top

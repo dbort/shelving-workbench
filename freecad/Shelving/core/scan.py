@@ -530,10 +530,10 @@ def _finalize_items(
     """``raw`` with each non-``Board`` item's ``rule`` set by the
     equal-siblings heuristic, sized from its span in ``bounds``/``coords_mm``.
 
-    A ``Board``'s size along its division's axis is its own thickness, never
-    a rule, so it is excluded from the sibling comparison: two boards
-    happening to be the same thickness as some region must not make that
-    region ``Fill``.
+    A ``Board``'s size along its division's axis is fixed (its own thickness,
+    or its ``axis_size_mm`` override), never a rule, so it is excluded from
+    the sibling comparison: two boards happening to be the same size as some
+    region must not make that region ``Fill``.
     """
     region_positions = [i for i, item in enumerate(raw) if not isinstance(item, Board)]
     region_sizes_mm = [
@@ -564,30 +564,34 @@ def _slab(
     pi0, pi1 = grid.cols[index]
     pj0, pj1 = grid.rows[index]
     if across:
-        low = _gap(
+        low_gap_mm = _gap(
             grid,
             range(pj0 - 1, j0 - 1, -1),
             range(pi0, pi1),
             grid.vs_mm,
             horizontal=False,
         )
-        high = _gap(grid, range(pj1, j1), range(pi0, pi1), grid.vs_mm, horizontal=False)
+        high_gap_mm = _gap(
+            grid, range(pj1, j1), range(pi0, pi1), grid.vs_mm, horizontal=False
+        )
         cross_axis = ctx.vertical
     else:
-        low = _gap(
+        low_gap_mm = _gap(
             grid,
             range(pi0 - 1, i0 - 1, -1),
             range(pj0, pj1),
             grid.hs_mm,
             horizontal=True,
         )
-        high = _gap(grid, range(pi1, i1), range(pj0, pj1), grid.hs_mm, horizontal=True)
+        high_gap_mm = _gap(
+            grid, range(pi1, i1), range(pj0, pj1), grid.hs_mm, horizontal=True
+        )
         cross_axis = ctx.horizontal
     if (
-        low is None
-        or high is None
-        or low[1] > ctx.clearance_mm
-        or high[1] > ctx.clearance_mm
+        low_gap_mm is None
+        or high_gap_mm is None
+        or low_gap_mm[1] > ctx.clearance_mm
+        or high_gap_mm[1] > ctx.clearance_mm
     ):
         # It sits alone in the slab but does not reach across it, so the slab
         # divides again along the other axis and the board spans whatever is
@@ -597,8 +601,8 @@ def _slab(
         # large outside void must trigger this fallback exactly like a large
         # enclosed one would; only the enclosed portion is a real inset.
         return _region(grid, ctx, i0, i1, j0, j1)
-    low_mm, _ = low
-    high_mm, _ = high
+    low_mm, _ = low_gap_mm
+    high_mm, _ = high_gap_mm
     return _make_board(board, cross_axis, low_mm, high_mm, ctx)
 
 
