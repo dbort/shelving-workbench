@@ -29,12 +29,7 @@ _RESOURCE_DIR = os.path.join(os.path.dirname(__file__), "resources")
 
 
 class ShelvingWorkbench(_WorkbenchBase):
-    """FreeCAD workbench entry point for parametric shelving.
-
-    `Initialize` registers the Shelving toolbar and menu, wired to the
-    `Shelving_Scan`, `Shelving_ExportBoxes`, `Shelving_CreateUnit`, and
-    `Shelving_ResizeUnit` commands.
-    """
+    """FreeCAD workbench entry point for parametric shelving."""
 
     MenuText = "Shelving"
     ToolTip = "Parametric shelving layout"
@@ -44,10 +39,13 @@ class ShelvingWorkbench(_WorkbenchBase):
         # Deferred so a headless `import freecad.Shelving.init_gui` never reaches
         # GUI-only code: each command module runs `Gui.addCommand` at import.
         from freecad.Shelving.commands import (  # noqa: F401
+            add_material,
             create_unit,
             export_boxes,
+            reflow_all,
             resize_unit,
             scan,
+            seed_catalog,
         )
 
         command_ids = [
@@ -55,6 +53,9 @@ class ShelvingWorkbench(_WorkbenchBase):
             "Shelving_ExportBoxes",
             "Shelving_CreateUnit",
             "Shelving_ResizeUnit",
+            "Shelving_SeedCatalog",
+            "Shelving_AddMaterial",
+            "Shelving_ReflowAll",
         ]
         self.appendToolbar("Shelving", command_ids)
         # freecad-stubs leaves `appendMenu` unannotated.

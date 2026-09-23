@@ -1,5 +1,5 @@
 ---
-next_id: bug-002
+next_id: bug-003
 ---
 
 # Bug log

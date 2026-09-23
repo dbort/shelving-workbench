@@ -11,10 +11,10 @@ from typing import TYPE_CHECKING, TypedDict, cast
 
 import FreeCAD
 
+from freecad.Shelving.catalog import ensure_catalog, read_usable_catalog
 from freecad.Shelving.container import read_container
 from freecad.Shelving.core.report import report
 from freecad.Shelving.core.scan import ScanError, scan
-from freecad.Shelving.default_catalog import DEFAULT_CATALOG
 
 _RESOURCE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources")
 _ICON = os.path.join(_RESOURCE_DIR, "shelving.svg")
@@ -77,22 +77,42 @@ class ScanCommand:
         return bool(FreeCAD.ActiveDocument)
 
     def Activated(self) -> None:
+        doc = FreeCAD.ActiveDocument
+        # IsActive already required this; re-checked so mypy sees doc as
+        # non-None rather than trusting the GUI never calls Activated
+        # without it.
+        if doc is None:
+            return
+        # ensure_catalog can create the catalog group and its entries as a
+        # side effect of a command that otherwise only reads and reports, so
+        # this opens a transaction the same as every other catalog-touching
+        # command, making that creation one undo step rather than several.
+        doc.openTransaction("Scan Unit")  # type: ignore[no-untyped-call]
         try:
             container = _selected_container()
             boxes, skipped, record = read_container(container)
+            catalog, skipped_entries = read_usable_catalog(ensure_catalog(doc))
             result = scan(
                 boxes,
-                DEFAULT_CATALOG,
+                catalog,
                 skipped=skipped,
                 depth_axis=record.depth_axis,
                 front_at_min=record.front_at_min,
             )
         except ScanError as err:
+            doc.abortTransaction()  # type: ignore[no-untyped-call]
             print(f"REFUSED: {err}")
             if err.objects:
                 print("objects: " + ", ".join(err.objects))
             _select_offenders(err)
             return
+        except Exception as err:  # noqa: BLE001 - report, don't crash the GUI
+            doc.abortTransaction()  # type: ignore[no-untyped-call]
+            print(f"REFUSED: {err}")
+            return
+        doc.commitTransaction()  # type: ignore[no-untyped-call]
+        for message in skipped_entries:
+            print(f"catalog entry skipped: {message}")
         print(report(result))
 
 

@@ -534,7 +534,10 @@ def _create_board(
     cast("FreeCAD.DocumentObjectGroup", container).addObject(obj)
     _write_geometry(obj, spec, board)
     tagged = properties.ensure_board_properties(obj)
-    properties.write_board_material(tagged, board.material)
+    # spec.material, not board.material: expand() has already resolved
+    # Board.material's None (inherit Unit.default_material) to a concrete
+    # id, and only the resolved id is a MaterialId a rescan can look up.
+    properties.write_board_material(tagged, spec.material)
     properties.write_board_irregular(tagged, board.pinned_size_mm is not None)
     properties.write_board_born_as(tagged, obj.Name)
     properties.write_board_born_in(tagged, doc.Uid)
@@ -609,7 +612,7 @@ def write_container(
         adopting = not properties.has_board_properties(obj) or copy
         _write_geometry(obj, spec, board)
         tagged = properties.ensure_board_properties(obj)
-        properties.write_board_material(tagged, board.material)
+        properties.write_board_material(tagged, spec.material)
         properties.write_board_irregular(tagged, board.pinned_size_mm is not None)
         if adopting:
             properties.write_board_born_as(tagged, obj.Name)

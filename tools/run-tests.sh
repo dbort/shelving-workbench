@@ -65,3 +65,12 @@ if [ "$write_smoke_status" -ne 0 ]; then
 	echo "ERROR: freecad_write_smoke.py failed (see output above)." >&2
 	exit 1
 fi
+
+printf '== %s\n' freecad_catalog_smoke.py
+catalog_smoke_status=0
+freecadcmd tools/freecad_catalog_smoke.py || catalog_smoke_status=$?
+printf '\n'
+if [ "$catalog_smoke_status" -ne 0 ]; then
+	echo "ERROR: freecad_catalog_smoke.py failed (see output above)." >&2
+	exit 1
+fi

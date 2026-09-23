@@ -1,9 +1,11 @@
-"""In-code default material catalog for the FreeCAD object layer.
+"""Seed data for a document's material catalog.
 
-Stopgap: M8 moves the catalog into the document as a group of `App::VarSet`
-entries, edited through the property editor rather than in code. Standard
-library plus the sibling `freecad.Shelving.core` package only; no `FreeCAD`
-import, so it loads under a bare `python` as well as inside FreeCAD.
+`freecad.Shelving.catalog.seed_catalog` copies these entries into a
+document's own `App::VarSet` group the first time anything needs a catalog;
+from then on the document's copy, editable through the property editor, is
+authoritative, not this module. Standard library plus the sibling
+`freecad.Shelving.core` package only; no `FreeCAD` import, so it loads under
+a bare `python` as well as inside FreeCAD.
 """
 
 from freecad.Shelving.core.materials import (
@@ -45,5 +47,3 @@ _ENTRIES: tuple[MaterialEntry, ...] = (
 DEFAULT_CATALOG: Catalog = Catalog(entries={entry.id: entry for entry in _ENTRIES})
 
 DEFAULT_MATERIAL_ID: MaterialId = MaterialId("ply18")
-
-DEFAULT_CATALOG_IDS: list[str] = [str(entry.id) for entry in _ENTRIES]

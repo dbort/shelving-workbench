@@ -261,7 +261,7 @@ intact.
 
 ## M8 — Material catalog
 
-**Status:** Task sh-019
+**Status:** Done sh-019
 
 The catalog moves out of code and into the document: a group of `VarSet`
 entries, one per stock item, each editable in the property editor. No
