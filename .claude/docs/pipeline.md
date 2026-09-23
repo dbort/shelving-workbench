@@ -235,7 +235,10 @@ not new work.
   branch, not `main`. The working tree's copy of a task file is stale for
   any task whose branch isn't currently checked out; read authoritative
   state via `git show sh-XXX:tasks/active/sh-XXX-*.md`
-  (details in `dispatch-tasks`'s Step 1).
+  (details in `dispatch-tasks`'s Step 1). `tools/task_status.py` performs
+  this read for every task in `tasks/active/` and reports which source it
+  used (`working_tree` or `branch:sh-XXX`) as each entry's `source` field;
+  `dispatch-tasks` reads that instead of re-deriving it by hand.
 
 ## Task dependencies (`blocked_by`)
 
@@ -272,7 +275,10 @@ auto-advanced out of `planning` by `dispatch-tasks`.
   `done` — no automated agent abandons a task on its own.
 - **Id allocation:** the next unused integer across ALL THREE directories,
   zero-padded to match existing width. An id is never reused, whether the
-  task completed or was abandoned.
+  task completed or was abandoned. `tools/task_status.py`'s `next_id`
+  field computes this (across every local branch's own copy of the three
+  directories too, not just the working tree's); `new-task` reads it from
+  there rather than listing the directories by hand.
 - **Frontmatter fields:** `id`, `title`, `current_agent`
   (planner/implementer/reviewer/user), `current_phase` (see § Phases),
   `review_rejections` (see the rejection loop), optional `blocked_by`

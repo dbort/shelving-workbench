@@ -13,16 +13,15 @@ Tell these apart from how you were triggered this turn, not from the task files 
 
 
 ### Step 1: Locate the named task
-Look for `tasks/active/sh-XXX-*.md` matching the given id. If it isn't there, check `tasks/completed/` and `tasks/abandoned/` to give a specific reason ("sh-XXX is already done" / "sh-XXX was abandoned"); if it's in neither, report "no such task" and stop — don't fall back to scanning or picking a different task. Also list `tasks/completed/*.md` and note their `id`s — Step 2 needs that set to resolve `blocked_by`.
+Run `python3 tools/task_status.py` (or `pixi run task-status`) and find the given id in its `tasks` array.
 
-The working tree's copy of the task file is not automatically trusted as authoritative. Check whether a local branch named exactly `sh-XXX` exists (`git rev-parse --verify --quiet refs/heads/sh-XXX`):
-- **No such branch:** the working tree's copy is authoritative — the task is still fully on `main` (hasn't reached implementation yet, so nothing has branched off it).
-- **Branch exists:** a task's phase-transition commits (advance to implementation, review rounds, approval) happen ON its own `sh-XXX` branch, not on `main` (`pipeline.md` § Git branching). The working tree only reflects that branch's true state if it happens to already be the checked-out branch — otherwise (including `main`'s own copy) it's frozen at whatever the file said when the branch was cut, which can be as stale as `planning` for a task that's actually all the way at `user_signoff`. Read the authoritative frontmatter straight from the branch instead: `git show sh-XXX:tasks/active/sh-XXX-*.md`. If that path doesn't exist there, try `git show sh-XXX:tasks/completed/sh-XXX-*.md` — the file may have already moved (a prior `approve-task` run that finished finalizing the task but hasn't yet merged; see that skill's own Step 1 retry-state handling for the same distinction).
+- **Found:** read `current_phase`, `review_rejections`, `blocked`, `unmet_blockers`, `branch_exists`, and `source` straight from that entry. The tool already performs the authoritative-read sequence — working tree vs. a `branch:sh-XXX` read straight from that branch's own tip, `tasks/active/` falling back to `tasks/completed/` for a task whose `approve-task` run finished finalizing but hasn't merged yet (`pipeline.md` § Git branching) — and already resolves `blocked_by` against `tasks/completed/`'s ids (`pipeline.md` § Task dependencies). Don't re-derive any of this by hand with `git show`/`git rev-parse`.
+- **Not found in the `tasks` array:** the id isn't in `tasks/active/` (the tool only reports that directory). Check `tasks/completed/sh-XXX-*.md` and `tasks/abandoned/sh-XXX-*.md` directly to give a specific reason ("sh-XXX is already done" / "sh-XXX was abandoned"); if it's in neither, report "no such task" and stop — don't fall back to scanning or picking a different task.
 
-Read `current_phase`, `review_rejections`, `id`, and `blocked_by` (if present) from whichever copy is authoritative, per the above.
+Between successive dispatches within the same tick (see "Automated phase chaining" below), re-run the tool rather than reading the task file's frontmatter directly — it reflects whatever the last subagent call just committed.
 
 ### Step 2: Dispatch by phase
-First check `blocked_by` (`pipeline.md` § Task dependencies): if it's absent or empty, or every id it lists is present among `tasks/completed/`'s ids, the task is unblocked — proceed to the phase table below. Otherwise, this task is **blocked**: don't dispatch to any subagent, and don't perform the planning auto-approval flip either, regardless of `current_phase`. Report it in Step 3 as blocked on the specific unmet id(s) and stop.
+If Step 1's entry reported `blocked: true`, don't dispatch to any subagent, and don't perform the planning auto-approval flip either, regardless of `current_phase`. Report it in Step 3 as blocked on `unmet_blockers` and stop.
 
 Act according to the unblocked task's `current_phase`:
 

@@ -55,7 +55,7 @@ A task branch can pick up commits after `dispatch-tasks`' post-review `doc-hygie
   - Any fail: `git merge --abort`, which restores `main` to exactly its pre-merge state. Report the failure prominently (which check, its output) and stop. Do not delete `sh-XXX` — its Step 2/3 commits stand as-is. Once the underlying issue is fixed (on `sh-XXX`, or on `main` if something else regressed it), re-invoking `/approve-task sh-XXX` resumes at Step 4 via Step 1's retry-state check.
 
 ### Step 5: Report
-State plainly: what got merged, whether `doc-hygiene` found anything to fix, whether the branch was deleted. List any other tasks still in `tasks/active/` (id + `current_phase`) as a reminder — not an action taken — that they may be worth merging `main` into to check for coexistence; this skill only ever touches the one branch it was invoked on plus `main`.
+State plainly: what got merged, whether `doc-hygiene` found anything to fix, whether the branch was deleted. List any other tasks still in `tasks/active/` (id + `current_phase`) as a reminder — not an action taken — that they may be worth merging `main` into to check for coexistence; this skill only ever touches the one branch it was invoked on plus `main`. Get that listing by running `python3 tools/task_status.py` (or `--human` for a Markdown view) on `main` after the merge, rather than manually inspecting `tasks/active/`.
 
 ## Constraints
 - Never invoke this skill from `dispatch-tasks` or any other unattended loop. `user_signoff` is explicitly human-gated (`pipeline.md` § Phases); this skill exists to be run BY a human, not on their behalf, and it treats invocation itself as the approval — that only holds if a human is the one doing the invoking.
