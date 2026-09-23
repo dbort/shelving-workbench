@@ -11,10 +11,10 @@ from typing import TYPE_CHECKING, TypedDict, cast
 
 import FreeCAD
 
+from freecad.Shelving.catalog import ensure_catalog, read_catalog
 from freecad.Shelving.container import read_container
 from freecad.Shelving.core.report import report
 from freecad.Shelving.core.scan import ScanError, scan
-from freecad.Shelving.default_catalog import DEFAULT_CATALOG
 
 _RESOURCE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources")
 _ICON = os.path.join(_RESOURCE_DIR, "shelving.svg")
@@ -80,9 +80,10 @@ class ScanCommand:
         try:
             container = _selected_container()
             boxes, skipped, record = read_container(container)
+            catalog = read_catalog(ensure_catalog(container.Document))
             result = scan(
                 boxes,
-                DEFAULT_CATALOG,
+                catalog,
                 skipped=skipped,
                 depth_axis=record.depth_axis,
                 front_at_min=record.front_at_min,

@@ -14,10 +14,10 @@ from typing import TYPE_CHECKING, TypedDict, cast
 
 import FreeCAD
 
+from freecad.Shelving.catalog import ensure_catalog, read_catalog
 from freecad.Shelving.container import WriteResult, read_container
 from freecad.Shelving.core.geometry import Vec3
 from freecad.Shelving.core.scan import Box
-from freecad.Shelving.default_catalog import DEFAULT_CATALOG
 from freecad.Shelving.unit_ops import resize_unit
 
 _RESOURCE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources")
@@ -143,7 +143,8 @@ class ResizeUnitCommand:
         doc = container.Document
         doc.openTransaction("Resize Shelving Unit")  # type: ignore[no-untyped-call]
         try:
-            result = resize_unit(container, size_mm, DEFAULT_CATALOG)
+            catalog = read_catalog(ensure_catalog(doc))
+            result = resize_unit(container, size_mm, catalog)
             doc.recompute()
         except Exception as err:  # noqa: BLE001 - report, don't crash the GUI
             doc.abortTransaction()  # type: ignore[no-untyped-call]
