@@ -264,8 +264,10 @@ def add_entry(group: FreeCAD.DocumentObject) -> FreeCAD.DocumentObject:
 
     ``Thickness`` is left at its ``App::PropertyLength`` default of zero:
     the one field :func:`read_catalog` refuses on, so a blank entry left
-    unedited stops the catalog from being used rather than silently
-    resolving boards against a meaningless thickness.
+    unedited is excluded by :func:`read_usable_catalog` and reported as
+    skipped rather than silently resolving boards against a meaningless
+    thickness. It stays unusable, by that id, until edited; it does not
+    block any other entry.
     """
     doc = group.Document
     existing_ids = {
