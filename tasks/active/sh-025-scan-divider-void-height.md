@@ -2,7 +2,7 @@
 id: sh-025
 title: "Fix scan stretching a short divider over its void instead of splitting it off"
 current_agent: implementer
-current_phase: planning
+current_phase: implementation
 review_rejections: 0
 ---
 
@@ -27,7 +27,7 @@ thickness axis. This revision adds that model support (`layout.py`,
 `solver.py`) alongside the original `scan.py` fix.
 
 ## Status
-- [ ] Planning
+- [x] Planning
 - [ ] Implementation
 - [ ] Review
 - [ ] User sign-off
