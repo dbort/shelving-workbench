@@ -1,8 +1,8 @@
 ---
 id: sh-019
 title: "The material catalog as a document object"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 1
 blocked_by: [sh-018]
 ---

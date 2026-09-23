@@ -156,15 +156,19 @@ def read_catalog(group: FreeCAD.DocumentObject) -> Catalog:
     entry in ``group``, in the order the group holds them.
 
     Raises a ``ValueError`` naming both entries when two share a
-    ``MaterialId``, and naming the entry when its ``Thickness`` is zero or
-    negative: either would make the catalog resolve a board's stored id
+    ``MaterialId``, naming the entry when its ``Thickness`` is zero or
+    negative, and naming the entry when its ``MaterialId`` is blank: any of
+    the three would make the catalog resolve a board's stored id
     ambiguously or unusably, so this refuses to build one rather than
-    silently picking a winner.
+    silently picking a winner or falling back to the object's ``Name``,
+    which ``MaterialId`` is deliberately not (see this module's docstring).
     """
     entries: dict[MaterialId, MaterialEntry] = {}
     object_by_id: dict[MaterialId, FreeCAD.DocumentObject] = {}
     for obj in _entry_objects(group):
-        material_id = properties.read_entry_material_id(obj) or MaterialId(obj.Name)
+        material_id = properties.read_entry_material_id(obj)
+        if material_id is None:
+            raise ValueError(f"{obj.Name}: MaterialId must not be blank")
         thickness_mm = properties.read_entry_thickness_mm(obj)
         if thickness_mm <= 0:
             raise ValueError(

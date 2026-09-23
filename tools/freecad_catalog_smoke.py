@@ -202,6 +202,27 @@ def _case_duplicate_material_id_raises() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
+def _case_blank_material_id_raises() -> None:
+    """Clearing ``MaterialId`` in the property editor must refuse rather
+    than silently keying the entry on its object ``Name``, which
+    ``MaterialId`` is deliberately not (see ``catalog.py``'s docstring)."""
+    doc = _new_document("catalog_smoke_blank_material_id")
+    try:
+        group = ensure_catalog(doc)
+        entry = _entry_by_material_id(group, MaterialId("ply18"))
+        properties.write_entry_material_id(
+            cast("properties.CatalogEntryObject", entry), MaterialId("")
+        )
+        try:
+            read_catalog(group)
+        except ValueError as err:
+            assert entry.Name in str(err), err
+        else:
+            raise AssertionError("expected read_catalog to raise on a blank MaterialId")
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
 def _case_add_entry_is_blank_and_blocks_read_catalog_until_edited() -> None:
     doc = _new_document("catalog_smoke_add_entry")
     try:
@@ -246,6 +267,8 @@ def _case_create_unit_seeds_catalog_and_uses_it() -> None:
         assert len(skipped) == 0, skipped
         ply18_thickness_mm = catalog[MaterialId("ply18")].thickness_mm
         for box in boxes:
+            assert box.material is not None, box
+            assert box.material in catalog, box.material
             assert abs(_thin_axis_mm(box) - ply18_thickness_mm) < _TOL_MM
     finally:
         FreeCAD.closeDocument(doc.Name)
@@ -278,6 +301,53 @@ def _case_unknown_material_refuses_at_scan() -> None:
             assert "bottom" in err.objects, err.objects
         else:
             raise AssertionError("expected scan to refuse an unknown material id")
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def _case_create_unit_reflow_rewrites_the_boards_it_wrote() -> None:
+    """The path ``_closed_box_unit`` sidesteps: a unit built by
+    ``Shelving_CreateUnit`` itself, where every board's material equals
+    ``Unit.default_material`` rather than being set per board. Proves F1's
+    fix rather than a fixture that stores a material id explicitly on every
+    board regardless of it (see ``_closed_box_unit``'s docstring)."""
+    doc = _new_document("catalog_smoke_create_unit_reflow")
+    try:
+        container = create_unit(doc)
+        doc.recompute()
+
+        group = find_catalog(doc)
+        assert group is not None
+        catalog_before = read_catalog(group)
+        ply18 = MaterialId("ply18")
+
+        boxes_before, skipped_before, _r = read_container(container)
+        assert len(skipped_before) == 0, skipped_before
+        assert len(boxes_before) == 4, boxes_before
+        for box in boxes_before:
+            assert box.material is not None, box
+            assert box.material in catalog_before, box.material
+        extent_before = _bounding_extent_mm(boxes_before)
+
+        entry = _entry_by_material_id(group, ply18)
+        properties.write_entry_thickness_mm(
+            cast("properties.CatalogEntryObject", entry), 25.0
+        )
+        catalog_after = read_catalog(group)
+        assert catalog_after[ply18].thickness_mm == 25.0
+
+        result = reflow_all(doc, catalog_after)
+        doc.recompute()
+        assert container.Name in {name for name, _wr in result.succeeded}, result.failed
+
+        boxes_after, skipped_after, _r = read_container(container)
+        assert len(skipped_after) == 0, skipped_after
+        for box in boxes_after:
+            assert abs(_thin_axis_mm(box) - 25.0) < _TOL_MM
+        extent_after = _bounding_extent_mm(boxes_after)
+        assert abs(extent_after.x_mm - extent_before.x_mm) < _TOL_MM
+        assert abs(extent_after.y_mm - extent_before.y_mm) < _TOL_MM
+        assert abs(extent_after.z_mm - extent_before.z_mm) < _TOL_MM
     finally:
         FreeCAD.closeDocument(doc.Name)
 
@@ -392,9 +462,11 @@ _CASES = (
     _case_read_catalog_reproduces_the_default,
     _case_two_marked_groups_make_find_catalog_raise,
     _case_duplicate_material_id_raises,
+    _case_blank_material_id_raises,
     _case_add_entry_is_blank_and_blocks_read_catalog_until_edited,
     _case_create_unit_seeds_catalog_and_uses_it,
     _case_unknown_material_refuses_at_scan,
+    _case_create_unit_reflow_rewrites_the_boards_it_wrote,
     _case_reflow_all_rewrites_the_changed_material,
     _case_saved_document_has_no_proxy_and_reopens,
 )

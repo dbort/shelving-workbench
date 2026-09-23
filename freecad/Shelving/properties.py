@@ -120,7 +120,9 @@ class CatalogEntryObject(Protocol):
     Label: str
     MaterialId: str
     Description: str
-    Thickness: FreeCAD.Quantity
+    # App::PropertyLength reads back as a Quantity but accepts a plain
+    # float on assignment, which is what write_entry_thickness_mm writes.
+    Thickness: float | FreeCAD.Quantity
     MaterialType: str
     NominalThickness: str
 
@@ -433,7 +435,7 @@ def read_entry_thickness_mm(obj: FreeCAD.DocumentObject) -> float:
 
 
 def write_entry_thickness_mm(obj: CatalogEntryObject, thickness_mm: float) -> None:
-    obj.Thickness = cast("FreeCAD.Quantity", thickness_mm)
+    obj.Thickness = thickness_mm
 
 
 def read_entry_material_type(obj: FreeCAD.DocumentObject) -> str:

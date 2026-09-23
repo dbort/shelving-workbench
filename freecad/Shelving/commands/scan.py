@@ -77,10 +77,21 @@ class ScanCommand:
         return bool(FreeCAD.ActiveDocument)
 
     def Activated(self) -> None:
+        doc = FreeCAD.ActiveDocument
+        # IsActive already required this; re-checked so mypy sees doc as
+        # non-None rather than trusting the GUI never calls Activated
+        # without it.
+        if doc is None:
+            return
+        # ensure_catalog can create the catalog group and its entries as a
+        # side effect of a command that otherwise only reads and reports, so
+        # this opens a transaction the same as every other catalog-touching
+        # command, making that creation one undo step rather than several.
+        doc.openTransaction("Scan Unit")  # type: ignore[no-untyped-call]
         try:
             container = _selected_container()
             boxes, skipped, record = read_container(container)
-            catalog = read_catalog(ensure_catalog(container.Document))
+            catalog = read_catalog(ensure_catalog(doc))
             result = scan(
                 boxes,
                 catalog,
@@ -89,11 +100,17 @@ class ScanCommand:
                 front_at_min=record.front_at_min,
             )
         except ScanError as err:
+            doc.abortTransaction()  # type: ignore[no-untyped-call]
             print(f"REFUSED: {err}")
             if err.objects:
                 print("objects: " + ", ".join(err.objects))
             _select_offenders(err)
             return
+        except Exception as err:  # noqa: BLE001 - report, don't crash the GUI
+            doc.abortTransaction()  # type: ignore[no-untyped-call]
+            print(f"REFUSED: {err}")
+            return
+        doc.commitTransaction()  # type: ignore[no-untyped-call]
         print(report(result))
 
 

@@ -339,9 +339,8 @@ Expected: nothing in the 3D view moves. Reflow is a command, not a
 recompute (see this task's Frontier Advice); a property edit alone never
 touches a board.
 
-2. Select **ShelvingUnit** and run **Resize Unit** or **Scan Unit** first,
-   just to confirm the unit still reads correctly, then run **Reflow All**
-   from the **Shelving** toolbar or menu, with nothing selected.
+2. With nothing selected, run **Reflow All** from the **Shelving** toolbar
+   or menu.
 
 Expected: the Report view prints one line for `ShelvingUnit`, in the same
 `updated N, created N, deleted N, left alone N` shape **Resize Unit**
@@ -362,7 +361,7 @@ properties: `MaterialId` reads `new_material`, `Thickness` reads `0 mm`.
    memorable (`oak6`, say), `Thickness` to `6 mm`, and `MaterialType` to
    `hardwood`.
 3. Select **Bottom** (or any other board) and change its `ShelvingMaterial`
-   property from empty to `oak6`.
+   property from `ply18` to `oak6`.
 4. Run **Reflow All**.
 
 Expected: **Bottom** is now 6 mm thick; every other board is unaffected.
