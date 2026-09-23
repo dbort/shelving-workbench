@@ -2,7 +2,7 @@
 id: sh-025
 title: "Fix scan stretching a short divider over its void instead of splitting it off"
 current_agent: implementer
-current_phase: planning
+current_phase: implementation
 review_rejections: 0
 ---
 
@@ -20,7 +20,7 @@ against real geometry: three real divider panels measuring 330 mm, 940 mm,
 and 1480 mm tall all currently solve to the same 1480 mm.
 
 ## Status
-- [ ] Planning
+- [x] Planning
 - [ ] Implementation
 - [ ] Review
 - [ ] User sign-off
