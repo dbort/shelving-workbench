@@ -1,14 +1,15 @@
-"""Plain functions behind the create/resize/rescan commands.
+"""Plain functions behind the create/resize/rescan/reflow commands.
 
 Kept out of the command classes, not merely called by them, so
 ``tools/freecad_write_smoke.py`` can call each operation directly without
 going through ``Gui``: command modules are guarded from import under
 ``freecadcmd`` (see ``freecad/Shelving/init_gui.py``), and testing the
 actual behavior through that guard would mean the smoke never runs
-headless. Each function calls
-``freecad.Shelving.container.write_container`` exactly once and returns its
-``WriteResult`` so a caller (a command's ``Activated``, or a test) can
-report what happened.
+headless. Each of ``create_unit``, ``resize_unit``, and ``rescan_unit``
+calls ``freecad.Shelving.container.write_container`` exactly once and
+returns its ``WriteResult`` so a caller (a command's ``Activated``, or a
+test) can report what happened; ``reflow_all`` calls ``rescan_unit`` once
+per tagged container and collects the results.
 
 ``resize_unit`` and ``rescan_unit`` never cache a model between calls: both
 start from :func:`_rescanned_unit`, which reads the container fresh and
@@ -22,13 +23,15 @@ from typing import cast
 
 import FreeCAD
 
+from freecad.Shelving import properties
+from freecad.Shelving.catalog import ensure_catalog, read_catalog
 from freecad.Shelving.container import WriteResult, read_container, write_container
 from freecad.Shelving.core.geometry import Vec3
 from freecad.Shelving.core.layout import Axis, Bay, Board, Division, Unit
 from freecad.Shelving.core.materials import Catalog
 from freecad.Shelving.core.record import rules_from_json, with_stored_rules
 from freecad.Shelving.core.scan import scan
-from freecad.Shelving.default_catalog import DEFAULT_CATALOG, DEFAULT_MATERIAL_ID
+from freecad.Shelving.default_catalog import DEFAULT_MATERIAL_ID
 
 # Shelving_CreateUnit's starting point: a single enclosed bay, closed on
 # every side, that Shelving_ResizeUnit reshapes from there. The values
@@ -69,13 +72,17 @@ def _default_unit() -> Unit:
 
 def create_unit(doc: FreeCAD.Document) -> FreeCAD.DocumentObject:
     """Build a new ``App::Part``, seed it with a closed single-bay unit at
-    fixed defaults, and return the container. Against the in-code
-    ``DEFAULT_CATALOG``; there is no per-call catalog parameter because
-    there is only ever one catalog to build the starting point from."""
+    fixed defaults, and return the container. Against ``ensure_catalog(doc)``,
+    seeding the document's catalog from ``freecad.Shelving.default_catalog``
+    the first time this runs, which is what makes Create Unit work on an
+    empty document with no setup. There is no per-call catalog parameter
+    because there is only ever one catalog per document to build the
+    starting point from."""
     container = cast(
         "FreeCAD.DocumentObject", doc.addObject("App::Part", "ShelvingUnit")
     )
-    write_container(container, _default_unit(), DEFAULT_CATALOG)
+    catalog = read_catalog(ensure_catalog(doc))
+    write_container(container, _default_unit(), catalog)
     return container
 
 
@@ -113,3 +120,39 @@ def rescan_unit(container: FreeCAD.DocumentObject, catalog: Catalog) -> WriteRes
     """Rescan ``container`` and write the result straight back: the reflow
     a hand edit needs, with no size change of its own."""
     return write_container(container, _rescanned_unit(container, catalog), catalog)
+
+
+@dataclasses.dataclass(frozen=True)
+class ReflowResult:
+    """What :func:`reflow_all` did across every unit in one document: each
+    container's own ``Name`` paired with its :class:`WriteResult` on
+    success, or with the refusal message on failure. A unit that fails is
+    absent from ``succeeded`` and present in ``failed``, never both."""
+
+    succeeded: tuple[tuple[str, WriteResult], ...]
+    failed: tuple[tuple[str, str], ...]
+
+
+def reflow_all(doc: FreeCAD.Document, catalog: Catalog) -> ReflowResult:
+    """Rescan and rewrite every container in ``doc`` that carries a
+    ``ShelvingUnitId`` against ``catalog``, which is what makes a changed
+    catalog entry (a thickness edit, most commonly) reach the boards using
+    it.
+
+    A unit whose layout refuses does not stop the others: its error is
+    collected into ``ReflowResult.failed`` and the scan moves on, so one bad
+    unit never hides every other unit's report. Opens no transaction; the
+    caller owns that, the same as :func:`rescan_unit`.
+    """
+    succeeded: list[tuple[str, WriteResult]] = []
+    failed: list[tuple[str, str]] = []
+    for obj in doc.Objects:
+        if properties.read_container_unit_id(obj) is None:
+            continue
+        try:
+            result = rescan_unit(obj, catalog)
+        except Exception as err:  # noqa: BLE001 - collected per unit, not fatal
+            failed.append((obj.Name, str(err)))
+            continue
+        succeeded.append((obj.Name, result))
+    return ReflowResult(succeeded=tuple(succeeded), failed=tuple(failed))
