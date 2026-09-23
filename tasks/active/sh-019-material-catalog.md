@@ -2,7 +2,7 @@
 id: sh-019
 title: "The material catalog as a document object"
 current_agent: implementer
-current_phase: planning
+current_phase: implementation
 review_rejections: 0
 blocked_by: [sh-018]
 ---
@@ -17,7 +17,7 @@ Adds a command that reflows every tagged unit in the document, which is what
 makes a changed thickness reach the boards using it. Milestone M8.
 
 ## Status
-- [ ] Planning
+- [x] Planning
 - [ ] Implementation
 - [ ] Review
 - [ ] User sign-off
