@@ -1,8 +1,8 @@
 ---
 id: sh-019
 title: "The material catalog as a document object"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 0
 blocked_by: [sh-018]
 ---
@@ -18,44 +18,44 @@ makes a changed thickness reach the boards using it. Milestone M8.
 
 ## Status
 - [x] Planning
-- [ ] Implementation
+- [x] Implementation
 - [ ] Review
 - [ ] User sign-off
 
 ## Must Have
-- [ ] `pixi run tests` green.
-- [ ] `freecad/Shelving/catalog.py` exports `find_catalog`, `seed_catalog`,
+- [x] `pixi run tests` green.
+- [x] `freecad/Shelving/catalog.py` exports `find_catalog`, `seed_catalog`,
       `ensure_catalog`, `read_catalog`, and `add_entry`.
-- [ ] A catalog is an `App::DocumentObjectGroup` carrying a marker property,
+- [x] A catalog is an `App::DocumentObjectGroup` carrying a marker property,
       holding one `App::VarSet` per entry. No proxy anywhere: a saved document's
       `Document.xml` contains no `Proxy`, `FeaturePython`, or `PythonObject`
       entry, asserted in the smoke.
-- [ ] Each entry carries `MaterialId`, `Description`, `Thickness`,
+- [x] Each entry carries `MaterialId`, `Description`, `Thickness`,
       `MaterialType`, and `NominalThickness`, and `read_catalog` builds a
       `freecad.Shelving.core.materials.Catalog` from them.
-- [ ] `find_catalog` returns the one catalog in a document, `None` when there is
+- [x] `find_catalog` returns the one catalog in a document, `None` when there is
       none, and raises naming both objects when there are two.
-- [ ] `read_catalog` raises naming both entries when two share a `MaterialId`,
+- [x] `read_catalog` raises naming both entries when two share a `MaterialId`,
       and naming the entry when a `Thickness` is zero or negative.
-- [ ] `ensure_catalog(doc)` seeds from `freecad.Shelving.default_catalog` when
+- [x] `ensure_catalog(doc)` seeds from `freecad.Shelving.default_catalog` when
       the document has none and returns the existing one otherwise. Every
       command that needs a catalog goes through it, so Create Unit works on an
       empty document with no setup.
-- [ ] `Shelving_SeedCatalog` and `Shelving_AddMaterial` are registered and
+- [x] `Shelving_SeedCatalog` and `Shelving_AddMaterial` are registered and
       appear in the toolbar and menu. There is NO edit dialog: editing and
       deleting are the property editor and the tree.
-- [ ] `Shelving_ReflowAll` rescans and rewrites every container carrying
+- [x] `Shelving_ReflowAll` rescans and rewrites every container carrying
       `ShelvingUnitId`, continues past a unit that refuses, and reports per unit.
-- [ ] Changing an entry's `Thickness` and running `Shelving_ReflowAll` rewrites
+- [x] Changing an entry's `Thickness` and running `Shelving_ReflowAll` rewrites
       every board using it while each unit's outside dimensions hold. Asserted
       in the headless smoke against a document holding two units.
-- [ ] A board whose `ShelvingMaterial` names no catalog entry refuses at scan,
+- [x] A board whose `ShelvingMaterial` names no catalog entry refuses at scan,
       naming the board.
-- [ ] `tools/freecad_catalog_smoke.py` prints `shelving catalog OK` and
+- [x] `tools/freecad_catalog_smoke.py` prints `shelving catalog OK` and
       `tools/run-tests.sh` greps for it.
-- [ ] `docs/manual-qa.md` has an M8 section; `freecad/Shelving/default_catalog.py`
+- [x] `docs/manual-qa.md` has an M8 section; `freecad/Shelving/default_catalog.py`
       no longer claims M4 will replace it.
-- [ ] `mypy --strict` clean.
+- [x] `mypy --strict` clean.
 
 ## Frontier Advice
 
@@ -139,4 +139,4 @@ Every length identifier carries `_mm`.
 
 - [x] **Step 5** (`tools/freecad_catalog_smoke.py`, `tools/run-tests.sh`): Create the headless functional check, following the existing smokes' preamble. Assert, in order: `ensure_catalog` on an empty document creates a group of `App::VarSet` entries matching the in-code default, and a second call returns the same object rather than creating another; `read_catalog` reproduces the default catalog; a second group carrying the marker makes `find_catalog` raise naming both; a duplicate `MaterialId` and a zero `Thickness` each raise naming the entry; `create_unit` on an empty document seeds the catalog and writes boards referencing its ids. Then the milestone's point: build a document with two units, change one entry's `Thickness` from 18 to 25, run `reflow_all`, and assert every board using that entry is now 25 mm thick while each unit's overall bounding box is unchanged, and that a unit whose layout cannot absorb the change reports its error without preventing the other unit from reflowing. Finally save, reload, and assert the archive mentions no `Proxy`, `FeaturePython`, or `PythonObject`. Print `shelving catalog OK` last, and add a matching block to `tools/run-tests.sh`.
 
-- [ ] **Step 6** (`freecad/Shelving/default_catalog.py`, `docs/manual-qa.md`, `README.md`): Rewrite the module docstring: it is the seed data for a document catalog, not a stopgap, and the sentence naming M4 as its replacement is wrong and goes. Delete `DEFAULT_CATALOG_IDS` if nothing references it after Step 3. Add an `## M8` section to `docs/manual-qa.md` in the file's numbered-steps-then-expected-result shape, covering: create a unit on an empty document and confirm a materials group appears; change a thickness in the property editor and confirm nothing moves until Reflow All runs, then confirm boards change while the unit's outside size holds; add a material, assign it to one board by editing that board's `ShelvingMaterial`, and reflow. Extend the README glossary with catalog entry, `MaterialId` as the stable key, the one-catalog rule, and Reflow All, in the section's existing one-bullet-per-term shape.
+- [x] **Step 6** (`freecad/Shelving/default_catalog.py`, `docs/manual-qa.md`, `README.md`): Rewrite the module docstring: it is the seed data for a document catalog, not a stopgap, and the sentence naming M4 as its replacement is wrong and goes. Delete `DEFAULT_CATALOG_IDS` if nothing references it after Step 3. Add an `## M8` section to `docs/manual-qa.md` in the file's numbered-steps-then-expected-result shape, covering: create a unit on an empty document and confirm a materials group appears; change a thickness in the property editor and confirm nothing moves until Reflow All runs, then confirm boards change while the unit's outside size holds; add a material, assign it to one board by editing that board's `ShelvingMaterial`, and reflow. Extend the README glossary with catalog entry, `MaterialId` as the stable key, the one-catalog rule, and Reflow All, in the section's existing one-bullet-per-term shape.

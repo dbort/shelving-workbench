@@ -312,3 +312,61 @@ warning about a missing module, and the unit's boxes are present, correctly
 sized, and at their saved positions: plain `Part::Box` geometry needs no
 scripted type to regenerate. Restore the symlink afterward to keep using the
 workbench.
+
+## M8 — The material catalog as a document object
+
+Prerequisite: a FreeCAD 1.0 install with this workbench on its addon path,
+**View → Panels → Report view** open, a new document (`Ctrl+N`).
+
+### 1. Create a unit on an empty document and confirm a materials group appears
+
+1. With nothing selected, run **Create Unit** from the **Shelving** toolbar
+   or menu.
+
+Expected: alongside the new `ShelvingUnit`, a **Material Catalog** group
+appears in the tree, holding four `App::VarSet` entries (one per stock item
+in `freecad.Shelving.default_catalog.DEFAULT_CATALOG`). Select one, such as
+**18 mm birch plywood**: the property editor shows `MaterialId`,
+`Description`, `Thickness`, `MaterialType`, and `NominalThickness` directly,
+with no group prefix and no dialog. `Thickness` shows with units (`18 mm`).
+
+### 2. Change a thickness and confirm nothing moves until Reflow All runs
+
+1. Select the **18 mm birch plywood** entry. In the property editor, change
+   `Thickness` from `18 mm` to `25 mm`.
+
+Expected: nothing in the 3D view moves. Reflow is a command, not a
+recompute (see this task's Frontier Advice); a property edit alone never
+touches a board.
+
+2. Select **ShelvingUnit** and run **Resize Unit** or **Scan Unit** first,
+   just to confirm the unit still reads correctly, then run **Reflow All**
+   from the **Shelving** toolbar or menu, with nothing selected.
+
+Expected: the Report view prints one line for `ShelvingUnit`, in the same
+`updated N, created N, deleted N, left alone N` shape **Resize Unit**
+prints. **Bottom**, **Top**, and both sides are now 25 mm thick (check
+`Height` on **Bottom**, or measure in the 3D view), while the unit's outside
+size (600 × 300 × 900, or whatever you last resized it to) is unchanged:
+the interior bay absorbed the extra 7 mm on each of the two Z-axis boards.
+
+### 3. Add a material, assign it to one board, and reflow
+
+1. Run **Add Material** from the **Shelving** toolbar or menu.
+
+Expected: a new entry named **New material** appears in the **Material
+Catalog** group and is selected, so the property editor already shows its
+properties: `MaterialId` reads `new_material`, `Thickness` reads `0 mm`.
+
+2. With the new entry still selected, change `MaterialId` to something
+   memorable (`oak6`, say), `Thickness` to `6 mm`, and `MaterialType` to
+   `hardwood`.
+3. Select **Bottom** (or any other board) and change its `ShelvingMaterial`
+   property from empty to `oak6`.
+4. Run **Reflow All**.
+
+Expected: **Bottom** is now 6 mm thick; every other board is unaffected.
+The Report view's `ShelvingUnit` line shows `updated 4`. Running **Reflow
+All** again with `ShelvingMaterial` left at `oak6` reproduces the same
+result rather than drifting, since the stored id, not thickness matching,
+is what a rescan resolves it by.

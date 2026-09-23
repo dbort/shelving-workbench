@@ -145,3 +145,24 @@ The layout vocabulary and how each term maps onto the code in
 - **Shelving_ExportBoxes**: the command id that writes a selected
   container's boards and unreadable parts to JSON without scanning, so a
   unit `Shelving_Scan` refuses can still be captured.
+- **catalog entry**: one stock item as a document object: an `App::VarSet`
+  carrying `MaterialId`, `Description`, `Thickness`, `MaterialType`, and
+  `NominalThickness`, editable in the property editor with no dialog.
+  `freecad.Shelving.catalog.read_catalog` builds a `Catalog` from every
+  entry in a document's one catalog group.
+- **MaterialId as the stable key**: a board stores an entry's `MaterialId`,
+  never its object `Name` or `Label`, either of which is renameable from
+  the tree; a duplicate `MaterialId` is an error rather than something
+  silently resolved, since a board referring to it would otherwise be
+  ambiguous.
+- **the one-catalog rule**: a document holds at most one catalog group,
+  found by a marker property rather than by name; two is an error naming
+  both, since a board's material would otherwise depend on which one a
+  command happened to find. `freecad.Shelving.catalog.ensure_catalog` seeds
+  one from `freecad.Shelving.default_catalog` on demand, so an empty
+  document needs no setup before `Shelving_CreateUnit` runs.
+- **Reflow All**: the `Shelving_ReflowAll` command id. Rescans and rewrites
+  every container carrying `ShelvingUnitId` against the document's catalog,
+  in one transaction; a unit that refuses does not stop the others. Nothing
+  in this workbench recomputes on its own, so this is the only way a
+  changed catalog entry reaches the boards using it.
