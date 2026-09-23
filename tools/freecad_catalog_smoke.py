@@ -4,11 +4,11 @@ entry reach the boards using it.
 
 A real pytest module, not a hand-rolled assert-and-marker script, for the
 same reasons ``tools/freecad_scan_smoke.py`` is one; see that module's
-docstring for the ``freecadcmd`` mechanics (self-invoking ``pytest.main``,
-the recursion guard, the ``sys.stdout.flush()`` before ``sys.exit``, why
-``if __name__ == "__main__":`` does not work here) rather than repeating
-them, and ``docs/freecadcmd-notes.md`` for the underlying findings both
-modules rely on.
+docstring for the ``freecadcmd`` mechanics rather than repeating them here:
+self-invoking ``pytest.main``, the recursion guard, the
+``sys.stdout.flush()`` before ``sys.exit``, and why
+``if __name__ == "__main__":`` does not work. ``docs/freecadcmd-notes.md``
+covers the underlying findings both modules rely on.
 
 Each test builds its own document, closed before the next one starts,
 except the milestone test (``test_reflow_all_rewrites_the_changed_material``),
