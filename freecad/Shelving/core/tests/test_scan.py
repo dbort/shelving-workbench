@@ -797,7 +797,12 @@ def test_real_stair_step_whole_tree() -> None:
     assert isinstance(short_divider.items[0], Void)
     panel_zx012 = short_divider.items[1]
     assert isinstance(panel_zx012, Board)
-    assert panel_zx012.axis_size_mm == pytest.approx(330.2, abs=0.01)
+    # Comparing against Fixed(size_mm=pytest.approx(...)) directly would
+    # construct a Fixed whose size_mm is an ApproxScalar, and Fixed.__post_init__
+    # validates size_mm > 0 against it, raising TypeError; asserting the type
+    # and then the field separately avoids ever constructing that Fixed.
+    assert isinstance(panel_zx012.rule, Fixed)
+    assert panel_zx012.rule.size_mm == pytest.approx(330.2, abs=0.01)
 
     left = _division(columns.items[1])
     assert left.axis is Axis.Z
@@ -810,7 +815,8 @@ def test_real_stair_step_whole_tree() -> None:
     assert isinstance(mid_divider.items[0], Void)
     panel_zx007 = mid_divider.items[1]
     assert isinstance(panel_zx007, Board)
-    assert panel_zx007.axis_size_mm == pytest.approx(940.5874, abs=0.01)
+    assert isinstance(panel_zx007.rule, Fixed)
+    assert panel_zx007.rule.size_mm == pytest.approx(940.5874, abs=0.01)
 
     right = _division(columns.items[3])
     assert right.axis is Axis.Z
@@ -819,7 +825,7 @@ def test_real_stair_step_whole_tree() -> None:
 
     panel_zx008 = columns.items[4]
     assert isinstance(panel_zx008, Board)
-    assert panel_zx008.axis_size_mm is None
+    assert panel_zx008.rule is None
 
     middle = _division(right.items[2])
     assert middle.axis is Axis.Y
@@ -862,7 +868,7 @@ def test_real_stair_step_solves_to_three_distinct_divider_heights() -> None:
     """``panelZX012``/``panelZX007``/``panelZX008`` each solve to their own
     measured Z height (330.2 / 940.5874 / 1480.3374 mm) rather than being
     stretched to the tallest's height, with each wrapped divider's solved
-    Z-extent matching its ``axis_size_mm``; each wrapped divider's and each
+    Z-extent matching its ``rule``; each wrapped divider's and each
     column body's own cross-axis (Y) size stays its own true width too,
     rather than being equalized with its near-equal-width siblings.
     """
@@ -888,8 +894,9 @@ def test_real_stair_step_solves_to_three_distinct_divider_heights() -> None:
         assert board is not None
         solved_z_mm = spaces[board.id].size.z_mm
         assert solved_z_mm == pytest.approx(expected, abs=0.01)
-        if board.axis_size_mm is not None:
-            assert board.axis_size_mm == pytest.approx(solved_z_mm, abs=0.01)
+        if board.rule is not None:
+            assert isinstance(board.rule, Fixed)
+            assert board.rule.size_mm == pytest.approx(solved_z_mm, abs=0.01)
 
     root = result.unit.root
     assert isinstance(root, Division)
@@ -943,22 +950,21 @@ def test_real_two_units_whole_tree() -> None:
     assert face_void.rule.size_mm == pytest.approx(1828.7975, abs=0.001)
     face_board = face.items[1]
     assert isinstance(face_board, Board)
-    assert face_board.axis_size_mm == pytest.approx(1625.6, abs=0.01)
+    assert isinstance(face_board.rule, Fixed)
+    assert face_board.rule.size_mm == pytest.approx(1625.6, abs=0.01)
 
     tops = _division(root.items[2])
     assert tops.axis is Axis.Y
     # Together the two units' top boards span the width; neither spans it
     # alone, so they show up as two adjacent Board items, not one. Each is
-    # thin along Z, not Y, so each carries its own real Y-span as
-    # axis_size_mm rather than a catalog thickness.
+    # thin along Z, not Y, so each carries its own real Y-span as its own
+    # rule rather than a catalog thickness.
     assert _kinds_names(tops) == ("PP", ["panelYX", "panelYX004"])
     top_a, top_b = tops.items
-    assert isinstance(top_a, Board) and top_a.axis_size_mm == pytest.approx(
-        1828.8, abs=0.01
-    )
-    assert isinstance(top_b, Board) and top_b.axis_size_mm == pytest.approx(
-        1625.6, abs=0.01
-    )
+    assert isinstance(top_a, Board) and isinstance(top_a.rule, Fixed)
+    assert top_a.rule.size_mm == pytest.approx(1828.8, abs=0.01)
+    assert isinstance(top_b, Board) and isinstance(top_b.rule, Fixed)
+    assert top_b.rule.size_mm == pytest.approx(1625.6, abs=0.01)
 
     body = _division(root.items[1])
     assert body.axis is Axis.Y
@@ -976,9 +982,10 @@ def test_real_two_units_whole_tree() -> None:
     assert left_void.rule.size_mm == pytest.approx(921.5374, abs=0.001)
     left_side = left_wrap.items[1]
     assert isinstance(left_side, Board) and left_side.role == "panelZX008"
-    assert left_side.axis_size_mm == pytest.approx(1480.3374, abs=0.001)
+    assert isinstance(left_side.rule, Fixed)
+    assert left_side.rule.size_mm == pytest.approx(1480.3374, abs=0.001)
     assert isinstance(right_side, Board) and right_side.role == "panelZX001"
-    assert right_side.axis_size_mm is None
+    assert right_side.rule is None
 
 
 def _stepped_columns_boxes() -> list[Box]:
@@ -1031,7 +1038,8 @@ def test_short_divider_between_differently_sized_bays_keeps_its_own_height() -> 
     assert _kinds_names(divider_wrap) == ("Px", ["Divider"])
     divider = divider_wrap.items[0]
     assert isinstance(divider, Board) and divider.role == "Divider"
-    assert divider.axis_size_mm == pytest.approx(582.0)
+    assert isinstance(divider.rule, Fixed)
+    assert divider.rule.size_mm == pytest.approx(582.0)
     divider_void = divider_wrap.items[1]
     assert isinstance(divider_void, Void)
     assert isinstance(divider_void.rule, Fixed)

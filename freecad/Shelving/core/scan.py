@@ -522,11 +522,11 @@ def _region(
 
 
 def _is_axis_wrap(item: Item) -> bool:
-    """Whether ``item`` is the ``Division{Board(axis_size_mm=...), Void}``
+    """Whether ``item`` is the ``Division{Board(rule=...), Void}``
     shape ``_slab``'s fallback wraps a short board in.
 
     Nothing else in this codebase produces exactly this shape: one ``Board``
-    whose ``axis_size_mm`` is set (its division-axis extent is fixed by
+    whose ``rule`` is set (its division-axis extent is fixed by
     construction from its own measured span) alongside one ``Void`` for the
     shortfall.
     """
@@ -534,7 +534,7 @@ def _is_axis_wrap(item: Item) -> bool:
         return False
     boards = [child for child in item.items if isinstance(child, Board)]
     voids = [child for child in item.items if isinstance(child, Void)]
-    return len(boards) == 1 and len(voids) == 1 and boards[0].axis_size_mm is not None
+    return len(boards) == 1 and len(voids) == 1 and boards[0].rule is not None
 
 
 def _finalize_items(
@@ -547,12 +547,12 @@ def _finalize_items(
     equal-siblings heuristic, sized from its span in ``bounds``/``coords_mm``.
 
     A ``Board``'s size along its division's axis is fixed (its own thickness,
-    or its ``axis_size_mm`` override), never a rule, so it is excluded from
-    the sibling comparison: two boards happening to be the same size as some
-    region must not make that region ``Fill``. An axis-wrap ``Division``
-    (see ``_is_axis_wrap``) is excluded the same way and for the same
-    reason: its own axis extent is fixed by its wrapped ``Board``'s
-    ``axis_size_mm``, so it was never a genuine region the sibling
+    or its own ``rule`` override), never derived from the sibling
+    comparison, so it is excluded from it: two boards happening to be the
+    same size as some region must not make that region ``Fill``. An
+    axis-wrap ``Division`` (see ``_is_axis_wrap``) is excluded the same way
+    and for the same reason: its own axis extent is fixed by its wrapped
+    ``Board``'s own ``rule``, so it was never a genuine region the sibling
     heuristic could speak about, and gets ``Fixed`` at its own raw grid
     width directly instead of being compared against its siblings. Do not
     widen this filter back to a bare ``isinstance(item, Board)`` check;
@@ -671,19 +671,22 @@ def _make_board(
     # measured span along it (not its catalog thickness) is what the
     # Division must carry, a divider shorter than its neighbors say.
     enclosing_axis = ctx.horizontal if cross_axis is ctx.vertical else ctx.vertical
-    axis_size_mm = None
+    rule: SizeRule | None = None
     if enclosing_axis is not board.thin_axis:
-        axis_size_mm = (
-            board.h1_mm - board.h0_mm
-            if enclosing_axis is ctx.horizontal
-            else board.v1_mm - board.v0_mm
+        rule = Fixed(
+            size_mm=(
+                board.h1_mm - board.h0_mm
+                if enclosing_axis is ctx.horizontal
+                else board.v1_mm - board.v0_mm
+            ),
+            basis=Basis.CLEAR,
         )
     return Board(
         pinned_size_mm=pinned_size_mm,
         material=None if material == ctx.default_material else material,
         insets=Insets(**insets_kwargs),
         role=board.name,
-        axis_size_mm=axis_size_mm,
+        rule=rule,
         # A scanned Box's name is the source object's stable FreeCAD Name
         # (freecad.Shelving.container.read_container sets it), so keying a
         # board's id to it, rather than a fresh uuid, is what lets

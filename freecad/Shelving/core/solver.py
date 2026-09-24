@@ -201,14 +201,17 @@ def _rule_for_item(
     """The rule ``distribute`` should use for ``item``.
 
     A board's size along the axis is its thickness, a ``Fixed`` rule, so
-    boards and regions go through one distribution, unless the board's
-    ``axis_size_mm`` is set, in which case that value is used instead. A
-    region's own ``Basis.WITH_NEXT`` rule is resolved to ``Basis.CLEAR``
-    first.
+    boards and regions go through one distribution, unless the board's own
+    ``rule`` is set, in which case that rule is used directly instead. A
+    board's own rule is never routed through ``_resolve_with_next``: that
+    resolution is for a region's ``Basis.WITH_NEXT`` quoting a spacing
+    relative to the next item, a distinct concept a board's own size has no
+    use for. A region's own ``Basis.WITH_NEXT`` rule is resolved to
+    ``Basis.CLEAR`` first.
     """
     if isinstance(item, Board):
-        if item.axis_size_mm is not None:
-            return Fixed(size_mm=item.axis_size_mm)
+        if item.rule is not None:
+            return item.rule
         return Fixed(size_mm=_thickness_mm(item, unit, catalog))
     rule = item.rule
     if isinstance(rule, Fixed) and rule.basis is Basis.WITH_NEXT:

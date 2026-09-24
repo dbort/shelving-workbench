@@ -128,22 +128,22 @@ def _column(void_mm: float, prefix: str, *, with_shelf: bool = False) -> Divisio
     return Division(axis=Axis.Z, items=items, id=f"{prefix}_column")
 
 
-def _divider(axis_size_mm: float | None, void_mm: float, prefix: str) -> Item:
+def _divider(height_mm: float | None, void_mm: float, prefix: str) -> Item:
     """A vertical divider between two columns, sized to its own true height.
 
     A bare ``Board`` when ``void_mm`` is zero; otherwise wrapped in the same
     ``Division``+``Void`` pattern ``_column`` uses for a stepped column,
-    with ``axis_size_mm`` set explicitly since this tree is hand-built
-    rather than produced by ``scan``, which is the only thing that computes
-    it automatically.
+    with ``rule`` set explicitly to the board's own true height since this
+    tree is hand-built rather than produced by ``scan``, which is the only
+    thing that computes it automatically.
     """
     if void_mm <= 0:
         return Board(role="divider", id=prefix)
-    assert axis_size_mm is not None
+    assert height_mm is not None
     return Division(
         axis=Axis.Z,
         items=[
-            Board(role="divider", axis_size_mm=axis_size_mm, id=prefix),
+            Board(role="divider", rule=Fixed(size_mm=height_mm), id=prefix),
             Void(rule=Fixed(void_mm), id=f"{prefix}_void"),
         ],
         # The wrap itself is a Division item in "middle" (axis=X), so its
@@ -179,7 +179,7 @@ def _sample_unit() -> Unit:
                         _column(0.0, "col0", with_shelf=True),
                         # divider0 sits between left_side and col0, both full
                         # height, so it needs no wrapping: void_mm=0 and
-                        # axis_size_mm=None together make "no shortfall, no
+                        # height_mm=None together make "no shortfall, no
                         # override" explicit, rather than passing a height
                         # this branch would ignore.
                         _divider(None, 0.0, "divider0"),
