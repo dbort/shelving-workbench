@@ -35,8 +35,8 @@ consistent with it.
       tolerance, and the division has exactly one non-`Board`,
       non-`Fill`/`Weighted` (i.e. `Fixed`) sibling, that sibling's recovered
       `Fixed` size absorbs the delta so the division's total exactly sums to
-      its known span, and `solve` succeeds. A `Board` whose `axis_size_mm`
-      is set (sh-025) is excluded from this reconciliation entirely: it
+      its known span, and `solve` succeeds. A `Board` whose `rule` is set
+      (sh-025) is excluded from this reconciliation entirely: it
       contributes no delta, whatever its raw measured width is.
 - [ ] When such a division instead has two or more `Fixed` siblings and no
       `Fill`/`Weighted` absorber, `scan` raises `ScanError` naming the
@@ -79,34 +79,38 @@ consistent with it.
 
 ## Frontier Advice
 
-BLOCKED ON sh-025, NOT MERELY SEQUENCED (revised during sh-025's own
-planning; its round-1 implementation attempt found the two tasks are not
-mechanically independent, contrary to what this section originally
-claimed). `sh-025` (fixing scan's divider-height stretching) touches
-`freecad/Shelving/core/scan.py`, `freecad/Shelving/core/layout.py`, and
-`freecad/Shelving/core/solver.py`'s `_rule_for_item`, the exact function
-this task's own fix depends on. `sh-025` adds `Board.axis_size_mm: float |
-None`, consumed by `_rule_for_item` in place of catalog thickness when set,
-for a board whose containing `Division` axis is not its own thin axis (a
-divider shorter than its neighbor, the case `_finalize_items`'s
+sh-025 HAS MERGED; `blocked_by` STAYS FOR THE RECORD, NOT AS A LIVE GATE.
+`sh-025` (fixed scan's divider-height stretching, in `tasks/completed/`)
+touched `freecad/Shelving/core/scan.py`, `freecad/Shelving/core/layout.py`,
+and `freecad/Shelving/core/solver.py`'s `_rule_for_item`, the exact
+function this task's own fix depends on, confirming the original
+"mechanically independent" claim this section made was wrong. `sh-025`
+added `Board.rule: SizeRule | None` (`freecad/Shelving/core/layout.py:124`;
+went through an intermediate `axis_size_mm: float | None` shape in its own
+rounds 1-4, replaced by `rule` in round 5 for reasons unrelated to this
+task, see `tasks/completed/sh-025-scan-divider-void-height.md`'s Frontier
+Advice "THE REDESIGN, PART 4" if curious), consumed by `_rule_for_item`
+(`solver.py:213-216`) in place of catalog thickness when set, for a board
+whose containing `Division` axis is not its own thin axis (a divider
+shorter than its neighbor, the case `_finalize_items`'s
 `generic{t}`-per-thickness catalog fixtures do not otherwise exercise).
-THE FIX below's delta-summing loop must skip any `Board` whose
-`axis_size_mm` is set: such a board's division-axis contribution is exact
-by construction (it is the board's own raw measured extent, not a
-catalog-resolved thickness with a small delta to reconcile), and treating
-it as an ordinary catalog-thickness board would misattribute a
-potentially large "delta" (hundreds of mm, not the sub-millimetre gap this
-task targets) to whatever `Fixed` sibling happens to be present. This task
-also touches `test_real_stair_step_whole_tree`, the same fixture and test
-function `sh-025` touches (a different function within `scan.py`,
+THE FIX below's delta-summing loop must skip any `Board` whose `rule` is
+set: such a board's division-axis contribution is exact by construction
+(it is the board's own raw measured extent, not a catalog-resolved
+thickness with a small delta to reconcile), and treating it as an ordinary
+catalog-thickness board would misattribute a potentially large "delta"
+(hundreds of mm, not the sub-millimetre gap this task targets) to whatever
+`Fixed` sibling happens to be present. This task also touches
+`test_real_stair_step_whole_tree`, the same fixture and test function
+`sh-025` touches (a different function within `scan.py`,
 `_finalize_items`/`_recover_rules` here vs `_slab`/`_gap`/`_make_board`
 there, but the same `_rule_for_item` both tasks change the meaning of).
-Do not start implementation until `sh-025` has merged into `main`.
+Implementation may start now.
 
 ROOT CAUSE, verified by direct inspection. `solver.py`'s `_thickness_mm`
-(~line 152) returns `catalog[board.material or unit.default_material].thickness_mm`
+(~line 159) returns `catalog[board.material or unit.default_material].thickness_mm`
 for a `Board`'s size along its division's axis; it never looks at the
-board's own measured extent. `scan.py`'s `_finalize_items` (~line 498)
+board's own measured extent. `scan.py`'s `_finalize_items` (~line 540)
 computes every OTHER sibling's `Fixed` size from
 `coords_mm[bounds[i+1]] - coords_mm[bounds[i]]`, i.e. purely from grid
 snap-line coordinates built from raw measured geometry
@@ -131,12 +135,17 @@ catalog) into `_finalize_items`, and before or while calling
 `_recover_rules`, compute each `Board` sibling's delta
 (`catalog[resolved].thickness_mm` minus the board's own raw measured
 width, i.e. its raw slot width from `coords_mm`/`bounds` at that board's
-own position in `raw`), EXCLUDING any `Board` whose `axis_size_mm` is set
-(sh-025) from this computation entirely: that board's division-axis
-contribution is already its own raw measured value by construction, not
-catalog thickness, so it has no catalog-vs-raw delta to reconcile and must
-not be summed into the residual. Sum the deltas across the remaining
-`Board` items in the division. If the division has exactly one non-`Board`, non-`Fill`/`Weighted`
+own position in `raw`), EXCLUDING any `Board` whose `rule` is set (sh-025)
+from this computation entirely: that board's division-axis contribution is
+already its own raw measured value by construction, not catalog
+thickness, so it has no catalog-vs-raw delta to reconcile and must not be
+summed into the residual. `scan.py`'s own `_is_axis_wrap` helper already
+identifies the analogous wrap-`Division` case for `_finalize_items`'s
+sibling-uniformity filter (sh-025's round 4); this task's exclusion is the
+same idea applied to a plain `Board` sibling's `rule` rather than a
+wrapping `Division`'s shape, not a case `_is_axis_wrap` itself already
+covers. Sum the deltas across the remaining `Board` items in the division.
+If the division has exactly one non-`Board`, non-`Fill`/`Weighted`
 region item, add the summed delta to that item's recovered `Fixed` size
 before it is assigned. If there is a `Fill`/`Weighted` sibling instead,
 leave `_recover_rules` untouched: `distribute` already absorbs the
@@ -148,7 +157,7 @@ more `Fixed` (non-`Fill`/`Weighted`) siblings and no absorber, raise
 `ScanError` (not a new `LayoutSolveError` reason: this is detected in
 `scan`, before `solve` ever runs) naming the mismatched board(s) via
 `ScanError.objects`, per the existing `ScanError(message, objects)`
-pattern (~line 89). Do not guess which of several `Fixed` siblings should
+pattern (~line 101). Do not guess which of several `Fixed` siblings should
 absorb it.
 
 WHY snap_mm=0.1 MASKED THIS RATHER THAN FIXING IT. The real fixture's
@@ -190,3 +199,12 @@ clean. Shell stays simple does not apply; this task adds no shell.
       call, confirming it still passes at the true default. Independent of
       steps 1-2's own file changes but depends on step 1's fix landing
       first; run `pixi run tests` green after this step.
+- [ ] **Step 4** (`freecad/Shelving/core/tests/test_scan.py`): Extend
+      `test_real_two_units_whole_tree` (or add a sibling test) to call
+      `solve()` on `real_two_units` and assert it succeeds, with both the
+      existing fixed `ply18`/`mdf12` catalog and a fixture-derived catalog
+      (mirroring `test_svg.py`'s `_catalog_from_thicknesses` pattern),
+      closing the Must Have this task's own planning added after round-3
+      sign-off found `real_two_units` fails to solve on `main` today.
+      Depends on step 1's fix landing first; run `pixi run tests` green
+      after this step.
