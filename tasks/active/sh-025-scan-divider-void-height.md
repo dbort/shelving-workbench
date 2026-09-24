@@ -3,7 +3,7 @@ id: sh-025
 title: "Fix scan stretching a short divider over its void instead of splitting it off"
 current_agent: user
 current_phase: user_signoff
-review_rejections: 2
+review_rejections: 0
 ---
 
 # sh-025: Fix scan stretching a short divider over its void instead of splitting it off
