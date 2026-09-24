@@ -2,7 +2,7 @@
 id: sh-026
 title: "Reconcile a board's catalog-resolved thickness with its raw measured width"
 current_agent: implementer
-current_phase: planning
+current_phase: implementation
 review_rejections: 0
 blocked_by: [sh-025]
 ---
@@ -23,7 +23,7 @@ already resolves every board's material before building the tree
 consistent with it.
 
 ## Status
-- [ ] Planning
+- [x] Planning
 - [ ] Implementation
 - [ ] Review
 - [ ] User sign-off
