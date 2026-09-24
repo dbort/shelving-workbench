@@ -33,98 +33,98 @@ thickness axis. This revision adds that model support (`layout.py`,
 - [ ] User sign-off
 
 ## Must Have
-- [x] `pixi run tests` green.
+- [ ] `pixi run tests` green.
 - [x] In `freecad/Shelving/core/scan.py`, a single board's "reaches across its slab"
       check in `_slab`/`_gap` treats a gap beyond `clearance_mm` the same
       way regardless of whether the space past the board is classified
       `outside` or enclosed: both fall through to `_region`'s existing
       recursive cut-finder rather than being silently absorbed as a
       near-zero inset. A gap within `clearance_mm` keeps behaving exactly as
-      it does today, `outside` or not.
-- [x] `freecad/Shelving/core/layout.py`'s `Board` carries a new
-      `axis_size_mm: float | None = None` field: the board's `Fixed` size
-      along its containing `Division`'s own axis when it is NOT the board's
-      catalog thickness; `None` means "use catalog thickness", the only
-      behavior before this task. `Board`'s and `Insets`'s docstrings are
-      updated to state this as the actual invariant (a board's division-axis
-      size is its thickness ONLY when `axis_size_mm` is `None`) rather than
-      the current unconditional "always".
-- [x] `freecad/Shelving/core/solver.py`'s `_rule_for_item` returns
-      `Fixed(size_mm=item.axis_size_mm)` when a `Board`'s `axis_size_mm` is
-      set, `Fixed(size_mm=_thickness_mm(...))` exactly as today otherwise.
-- [x] `freecad/Shelving/core/scan.py`'s `_make_board` sets `axis_size_mm`
-      whenever the board is being placed under a `Division` axis that is not
-      the board's own `thin_axis` (computed from the board's real measured
-      span along that axis, the same `_Elevated` fields `_unit_size_mm`
-      already reads for `pinned_size_mm`); leaves it `None` otherwise (the
-      unchanged, thin-axis-matches-division-axis case).
-- [x] NEW, from round-3 sign-off: `freecad/Shelving/core/scan.py`'s
-      `_finalize_items` excludes a wrap `Division` (the `Division{Board,
-      Void}` shape `_slab`'s fallback produces for the axis-mismatch case)
-      from `_recover_rules`'s sibling-uniformity comparison, the same way it
-      already excludes a bare `Board`, and assigns it `Fixed` at its own raw
-      grid width directly instead. See Frontier Advice "ROOT CAUSE, PART 3"
-      for the exact bug this closes and why the existing Board-only
-      exclusion no longer covers the case this task itself introduces.
-- [x] `freecad/Shelving/core/tests/test_scan.py`'s `test_real_stair_step_whole_tree`
-      is updated to assert the corrected tree shape: solving
-      `real_stair_step.boxes.json` produces three distinct Z-extents for the
-      `panelZX012`/`panelZX007`/`panelZX008` divider boards (approximately
-      330 mm, 940 mm, and 1480 mm respectively, previously all identical at
-      ~1480.337 mm), each wrapped in its own nested `Division`+`Void` where
-      its real height falls short of its neighbors', matching the pattern
-      already used for column bodies (`Bay`, `top`, `Void`), and each
-      wrapped board's `axis_size_mm` matches its solved Z-extent.
-- [x] NEW, from round-3 sign-off: every wrapped board's and every column
-      body's CROSS-axis size in `real_stair_step`'s solved tree is asserted
-      too, not just Z-extent. Minimum coverage: `panelZX012`'s and
-      `panelZX007`'s own Y-cross-section is each their true raw divider
-      width (~18.24 mm, NOT an equal share of the columns division), and
-      the `Shelf015`-column and `panelYX003`-column bodies' own Y-widths
-      are each their true raw span (~887.02 mm and ~887.03 mm respectively,
-      NOT crushed to match the dividers). See Frontier Advice "ROOT CAUSE,
-      PART 3" for why this specific pair-of-near-equal-dividers,
-      pair-of-near-equal-column-bodies shape is exactly what exposes the
-      bug a single-divider hand-built test cannot.
-- [x] A new test in `freecad/Shelving/core/tests/test_scan.py`, independent of the
-      real fixture, hand-builds two adjacent bays of different heights
-      separated by a divider shorter than the taller one, and asserts the
-      divider solves to its own true height with an explicit `Void` sibling
-      for the shortfall, not stretched to the taller bay's height, AND
-      asserts the divider's and both bays' cross-axis sizes are each their
-      own true width, not equalized by `Fill`.
-- [x] `freecad/Shelving/core/tests/test_scan.py`'s `test_real_two_units_whole_tree`
-      is updated to assert the CORRECTED tree shape for `panelFaceYX` (a
-      1828.7975 mm void) and `panelZX008` (a 921.5374 mm void): this task's
-      own round-1 implementation attempt, applied exactly as originally
-      specified, surfaced and fixed the identical bug on these two boards,
-      which the original planning pass's real-geometry check missed. Do not
-      leave this fixture's test asserting the pre-fix (stretched) shape.
+      it does today, `outside` or not. (Unaffected by the round-5 redesign
+      below; already correct.)
+- [ ] SUPERSEDES rounds 1-4's `axis_size_mm: float | None` field.
+      `freecad/Shelving/core/layout.py`'s `Board` carries a new
+      `rule: SizeRule | None = None` field instead: the SAME `Fixed` /
+      `Weighted` / `Fill` type every `Bay`/`Void`/`Division` already carries
+      as its own `rule`, now also available on `Board` for the board's
+      solve-time rule along its containing `Division`'s own axis. `None`
+      means "derive `Fixed` from catalog thickness", the only behavior
+      before this task. `Board`'s and `Insets`'s docstrings state this as
+      the actual invariant (a board's division-axis size is derived from
+      catalog thickness ONLY when `rule` is `None`) rather than the
+      unconditional "always" the type had before this task. See Frontier
+      Advice "THE REDESIGN, PART 4" for why this replaces `axis_size_mm`
+      rather than sitting alongside it.
+- [ ] `freecad/Shelving/core/solver.py`'s `_rule_for_item` returns
+      `item.rule` directly when a `Board`'s `rule` is set, `Fixed(size_mm=
+      _thickness_mm(...))` exactly as today otherwise. A `Board`'s own
+      `rule` is NOT routed through `_resolve_with_next`: that resolution is
+      for a region's `Basis.WITH_NEXT` quoting a spacing relative to the
+      next item, a distinct concept a `Board`'s own rule has no use for.
+- [ ] `freecad/Shelving/core/scan.py`'s `_make_board` sets `rule` to
+      `Fixed(size_mm=<the board's own measured span>, basis=Basis.CLEAR)`
+      whenever the board is being placed under a `Division` axis that is
+      not the board's own `thin_axis` (computed from the same `_Elevated`
+      fields `_unit_size_mm` already reads for `pinned_size_mm`); leaves it
+      `None` otherwise (the unchanged, thin-axis-matches-division-axis
+      case).
+- [ ] `freecad/Shelving/core/scan.py`'s `_is_axis_wrap` (added round 4)
+      detects a wrap by `boards[0].rule is not None` (was `axis_size_mm is
+      not None`); `_finalize_items` still excludes such a wrap from
+      `_recover_rules`'s sibling-uniformity comparison and assigns it
+      `Fixed` at its own raw grid width directly, unchanged in mechanism
+      from round 4, only the field it inspects renamed.
+- [ ] `freecad/Shelving/core/tests/test_scan.py`'s
+      `test_real_stair_step_solves_to_three_distinct_divider_heights`
+      (added round 3, extended round 4) is updated so every place it reads
+      `.axis_size_mm` instead reads `.rule` (e.g. `board.rule ==
+      Fixed(size_mm=pytest.approx(...))` or `board.rule is None`), with the
+      same real-number coverage already established: solving
+      `real_stair_step.boxes.json` produces three distinct Z-extents for
+      `panelZX012`/`panelZX007`/`panelZX008` (~330 mm, ~940 mm, ~1480 mm),
+      each wrapped board's `rule` is `Fixed` at its solved Z-extent (or
+      `None` for the unwrapped one), and `panelZX012`'s/`panelZX007`'s own
+      Y-cross-section plus the `Shelf015`/`panelYX003` column bodies' own
+      Y-widths keep asserting their true raw values (~18.24 mm and ~887 mm
+      respectively), not equalized. Same rename for
+      `test_short_divider_between_differently_sized_bays_keeps_its_own_height`
+      (added round 3, extended round 4) and its `_stepped_columns_boxes`
+      fixture.
+- [ ] `freecad/Shelving/core/tests/test_scan.py`'s `test_real_two_units_whole_tree`
+      keeps asserting the corrected tree shape for `panelFaceYX` (a
+      1828.7975 mm void) and `panelZX008` (a 921.5374 mm void) established
+      in round 1, renamed from `.axis_size_mm` to `.rule` the same way.
       `real_magicstart_f1` and every existing clearance-scale inset test
       stay green, unmodified in intent: a small gap (within `clearance_mm`)
       continues to be absorbed as a board inset exactly as today, whether
       the space beyond it is `outside` or enclosed.
-- [x] `tools/layout_demo.py`'s `_sample_unit`/`_column` are updated so
-      `divider0`/`divider1` (or whichever of the two actually needs it once
-      the fix lands) reflect their true, correctly stepped heights via the
-      same `Division`+`Void` pattern with `axis_size_mm` set explicitly
-      (this demo hand-builds its `Unit` directly, not through `scan`, so
-      nothing computes `axis_size_mm` for it automatically), instead of
-      being stretched to the unit's full height as bare `Board` siblings.
-- [x] `tests/test_layout_demo.py`'s printed-output assertions (board count,
-      void count, per-row content) are updated to match the corrected
-      demo's actual output — read the corrected demo's real printed output
-      before writing the new assertion values; do not guess a count.
+- [ ] `tools/layout_demo.py`'s `_divider` helper (added round 3, extended
+      round 4) sets `rule=Fixed(size_mm=height_mm)` instead of
+      `axis_size_mm=height_mm` on the wrapped `Board`; `divider0` keeps
+      passing `None` since its true height already equals the unit's full
+      height. This demo hand-builds its `Unit` directly, not through
+      `scan`, so nothing computes the rule for it automatically; the
+      caller still states the board's own true height explicitly, just
+      through the same `SizeRule` type every other item in the tree already
+      uses, per Frontier Advice "THE REDESIGN, PART 4".
+- [ ] `tests/test_layout_demo.py`'s printed-output assertions stay matched
+      to the demo's actual output after the rename; re-run and re-read the
+      real output rather than assuming the round-3/4 values are unaffected.
 - [x] This task does NOT touch `snap_mm` handling, `_material_for_thickness_mm`,
       or the `snap_mm=0.1` argument already passed to `scan` for
       `real_stair_step` in `freecad/Shelving/core/tests/test_scan.py` or
       `freecad/Shelving/core/tests/test_svg.py`. That is a separate, already-logged,
       deliberately deferred issue (`friction-009` in
       `.claude/docs/friction-log.md`); leave those call sites exactly as
-      they are.
-- [x] `mypy --strict` clean over every changed file.
+      they are. (Unaffected by the round-5 redesign.)
+- [ ] `mypy --strict` clean over every changed file.
 
 ## Frontier Advice
+
+FIELD RENAMED IN ROUND 5: everywhere below that says `axis_size_mm` is
+describing rounds 1-4's history accurately; the field itself is superseded
+by `Board.rule: SizeRule | None` per "THE REDESIGN, PART 4" further down.
+Read the history for the diagnosis, not as the current field name.
 
 ROUND 1 FAILED ON A WRONG "NARROW FIX" CLAIM. Round 1 implemented exactly
 what an earlier version of this advice prescribed (the `_slab`/`_gap`
@@ -264,18 +264,70 @@ genuine multi-item regions (two same-width `Bay`s legitimately sharing
 `Fill`), the bug is only that a wrap `Division` was never a genuine region
 to begin with.
 
+THE REDESIGN, PART 4 (round 5, found at user sign-off, not a bug). Rounds
+1-4's `Board.axis_size_mm: float | None` works and is now fully tested,
+but it is a bespoke, axis-ambiguous field: its correct value depends on
+which axis a `Board` happens to sit under at its current position in the
+tree, information the field's own type (`float`) carries no hint of. A
+caller authoring or editing a tree by hand (`tools/layout_demo.py` today;
+`freecad/Shelving/core/edit.py`'s `split_region`/`merge_at`, planned for
+sh-020's elevation editor, tomorrow) has to independently know "which axis
+is my enclosing `Division` cutting along" to set it correctly, a fact nothing
+else in this codebase requires a `Board`-tree author to reason about.
+Replace it with `Board.rule: SizeRule | None`, reusing the exact `Fixed` /
+`Weighted` / `Fill` type `Bay`, `Void`, and `Division` already carry as
+their own `rule`. A `SizeRule` is already understood, by this codebase's
+own established convention, to mean "size along whatever axis this item's
+containing `Division` uses" — extending that same convention to `Board`
+removes the axis-position dependency entirely: `Board(rule=Fixed(882.0))`
+means the same thing regardless of where in the tree it ends up, exactly
+like `Bay(rule=Fixed(300.0))` already does.
+
+MECHANICAL SCOPE, verified by grep before this section was written:
+`axis_size_mm` appears in `freecad/Shelving/core/layout.py` (the field
+itself, `Board`'s and `Insets`' docstrings), `freecad/Shelving/core/solver.py`
+(`_rule_for_item`), `freecad/Shelving/core/scan.py` (`_make_board`,
+`_is_axis_wrap`, `_finalize_items`'s docstring), `freecad/Shelving/core/svg.py`
+and `freecad/Shelving/core/expand.py` (one docstring reference each,
+factual not behavioral), `tools/layout_demo.py` (`_divider`), and roughly
+a dozen assertion sites across `freecad/Shelving/core/tests/test_scan.py`.
+Every one of these is a rename plus, where the old code did
+`axis_size_mm = <value>` then `Board(..., axis_size_mm=axis_size_mm)`, a
+wrap into `Fixed(size_mm=<value>, basis=Basis.CLEAR)` assigned to `rule`
+instead. `_finalize_items`'s SEPARATE wrap-`Division` sizing (the round-4
+fix, assigning the OUTER wrapping `Division`'s own rule from its raw grid
+width) is UNTOUCHED by this redesign: that computation is about the wrap's
+position among its siblings, not about how the `Board` inside it expresses
+its own axis value, and the two are independent. `_recover_rules`'s
+general logic is untouched too, for the same reason as round 4.
+
+WHAT DOES NOT CHANGE. `_rule_for_item`'s Board branch keeps its two-case
+shape (explicit rule if set, else derive `Fixed` from catalog thickness);
+only the explicit-value case's TYPE changes, from a bare `float` to a full
+`SizeRule`. Do not route a `Board`'s own `rule` through
+`_resolve_with_next`: `Basis.WITH_NEXT` quotes a spacing relative to the
+NEXT item in a region's own list, a concept that belongs to a region
+expressing "the opening plus the next board," not to a `Board` stating its
+own size. If a caller ever sets `Basis.WITH_NEXT` on a `Board`'s `rule`,
+that is unreachable from `scan()` today and out of this task's scope,
+matching how round 3's Reviewer scoped the analogous `_resolve_with_next`
+observation for `axis_size_mm`; do not add resolution logic for it
+speculatively.
+
 sh-026 INTERACTION, now a HARD BLOCKER (this task's frontmatter does not
 list it as `blocked_by` since sh-026 depends on THIS task, not the other
-way; sh-026's own frontmatter is being updated to add `blocked_by:
-[sh-025]` in this same planning pass). sh-026 (still in planning) reconciles
-a `Board`'s catalog thickness against its raw measured width by having ONE
+way; sh-026's own frontmatter already has `blocked_by: [sh-025]`, added
+during this task's own planning). sh-026 (still in planning) reconciles a
+`Board`'s catalog thickness against its raw measured width by having ONE
 `Fixed` sibling absorb the (small, sub-millimetre) delta; its own
-`_finalize_items` change must skip any `Board` whose `axis_size_mm` is set,
-since such a board's division-axis contribution is already exact by
-construction and has no catalog-thickness delta to reconcile against. Do
-not let sh-026's delta-summing loop see `axis_size_mm`-overridden boards as
-ordinary catalog-thickness boards; that would silently misattribute a
-~300 mm "delta" to whatever sibling happens to be present.
+`_finalize_items` change must skip any `Board` whose `rule` is set (round
+5's name for what sh-026's own task file still calls `axis_size_mm` as of
+this writing; whoever revises sh-026's plan next should update that
+reference too), since such a board's division-axis contribution is already
+exact by construction and has no catalog-thickness delta to reconcile
+against. Do not let sh-026's delta-summing loop see `rule`-overridden
+boards as ordinary catalog-thickness boards; that would silently
+misattribute a ~300 mm "delta" to whatever sibling happens to be present.
 
 VERIFY AGAINST REAL NUMBERS, not just the updated test's own pass/fail.
 Reproduce first: `boxes_from_json` +
@@ -308,9 +360,9 @@ taller of `divider1`'s own two immediate neighbors), not the unit's full
 height. Confirm which of the two actually needs the `Division`+`Void`
 wrapping by computing it, not by assuming both do. This demo hand-builds
 its `Unit` directly rather than going through `scan`, so whichever divider
-needs wrapping needs its `axis_size_mm` set explicitly in the hand-built
-tree too; nothing computes it automatically outside `scan.py`'s
-`_make_board`.
+needs wrapping needs its `rule` set explicitly in the hand-built tree too
+(round 5's field; see "THE REDESIGN, PART 4"), since nothing computes it
+automatically outside `scan.py`'s `_make_board`.
 
 STANDING OBLIGATIONS (`CLAUDE.md`). Typed Python already governs this
 codebase throughout; no new bare `Any` or bare containers. `mypy --strict`
@@ -366,3 +418,50 @@ clean. Shell stays simple does not apply; this task adds no shell.
       tests` green once, after step 8, and confirm by walking the solved
       tree and printing each item's actual size the same way this round's
       diagnosis did, not by trusting the assertions alone.
+- [ ] **Step 9** (`freecad/Shelving/core/layout.py`): Replace
+      `Board.axis_size_mm: float | None = None` with `Board.rule: SizeRule
+      | None = None`. Update `Board`'s and `Insets`' docstrings to name
+      `rule` instead of `axis_size_mm`, per Frontier Advice "THE REDESIGN,
+      PART 4".
+- [ ] **Step 10** (`freecad/Shelving/core/solver.py`): `_rule_for_item`
+      returns `item.rule` directly when a `Board`'s `rule` is set,
+      unchanged (`Fixed(size_mm=_thickness_mm(...))`) otherwise. Do not
+      route it through `_resolve_with_next`.
+- [ ] **Step 11** (`freecad/Shelving/core/scan.py`): In `_make_board`, set
+      `rule = Fixed(size_mm=<measured span>, basis=Basis.CLEAR)` instead of
+      `axis_size_mm = <measured span>`, same trigger condition (enclosing
+      axis is not `board.thin_axis`) unchanged. In `_is_axis_wrap`, check
+      `boards[0].rule is not None` instead of `axis_size_mm`. Leave
+      `_finalize_items`'s own wrap-sizing logic (assigning the OUTER
+      wrapping `Division`'s rule) untouched; it does not reference
+      `axis_size_mm`/`rule` at all.
+- [ ] **Step 12** (`freecad/Shelving/core/svg.py`, `freecad/Shelving/core/expand.py`):
+      Update the one docstring reference to `axis_size_mm` in each file to
+      say `rule` instead. No behavioral change; these files never read the
+      field, only mention it in prose.
+- [ ] **Step 13** (`freecad/Shelving/core/tests/test_scan.py`): Rename every
+      `.axis_size_mm` read/assertion to `.rule`, wrapping the compared value
+      in `Fixed(size_mm=...)` where the old assertion compared a bare float
+      (e.g. `board.axis_size_mm == pytest.approx(X)` becomes `board.rule ==
+      Fixed(size_mm=pytest.approx(X))`), and `... is None` assertions
+      unchanged in shape. Covers
+      `test_real_stair_step_solves_to_three_distinct_divider_heights`,
+      `test_short_divider_between_differently_sized_bays_keeps_its_own_height`,
+      `_stepped_columns_boxes`, and `test_real_two_units_whole_tree`. No
+      new test cases; this step is a rename, not new coverage.
+- [ ] **Step 14** (`tools/layout_demo.py`): In `_divider`, set
+      `rule=Fixed(size_mm=height_mm)` instead of `axis_size_mm=height_mm`
+      on the wrapped `Board`; `divider0`'s call site keeps passing `None`.
+      Rename the parameter from `axis_size_mm` to something reflecting the
+      new type (e.g. `height_mm: float | None`, constructing `Fixed` inside
+      `_divider` itself) or keep constructing `Fixed` at the call site,
+      whichever reads more clearly; either is acceptable.
+- [ ] **Step 15** (`tests/test_layout_demo.py`): Update the printed-output
+      assertions to match the renamed demo's actual real output. Steps
+      9-15 are one deferred-verification unit (`pipeline.md` § Deferred
+      verification): the rename touches every file at once and
+      intermediate states will not type-check or pass tests, so `pixi run
+      tests` and `mypy --strict` are only required green once, after step
+      15. Confirm by walking the solved tree and printing real numbers
+      again, the same way rounds 1-4 did; a pure rename should reproduce
+      every number already established, not change any of them.
