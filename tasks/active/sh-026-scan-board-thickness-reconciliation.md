@@ -59,6 +59,18 @@ consistent with it.
       back to `DEFAULT_SNAP_MM`) and confirm both still pass. If either
       still needs a non-default `snap_mm` after this fix, that is a signal
       the fix is incomplete, not a reason to restore the tighter value.
+- [ ] `solve()` succeeds on `real_two_units` (`freecad/Shelving/core/tests/fixtures/real_two_units.boxes.json`),
+      asserted by a committed test, with both the existing fixed `ply18`/`mdf12`
+      catalog and a fixture-derived catalog. Confirmed failing before this
+      task on both `main` and `sh-025`'s branch tip (`LayoutSolveError`,
+      reason `no_slack_absorber`, sub-millimetre `slack_mm`: 0.2626 mm on
+      `main` with the coarse catalog, 0.0279 mm with a fixture-derived one)
+      by sh-025's round-3 review — the same catalog-thickness-vs-measured-width
+      class this task exists to fix, on a second fixture the original
+      planning pass did not check. `test_real_two_units_whole_tree` currently
+      asserts tree shape only, never calling `solve`; extend it (or add a
+      sibling test) rather than leaving this fixture's own reconciliation
+      unverified.
 - [ ] `_material_for_thickness_mm`'s matching strategy (first catalog entry
       within tolerance, not nearest) is UNCHANGED by this task — this task
       fixes the downstream geometric reconciliation, not material matching.
