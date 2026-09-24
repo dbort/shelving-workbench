@@ -773,9 +773,9 @@ def test_real_magicstart_f1_whole_tree() -> None:
 
 
 def test_real_stair_step_whole_tree() -> None:
-    """A top board over everything, three uprights under it (the two shorter
+    """A top board over everything, three uprights under it, the two shorter
     than the tallest each wrapped in their own ``Division``+``Void`` for
-    their shortfall), ``Void`` below each step, and the two inner shelves
+    their shortfall, ``Void`` below each step, and the two inner shelves
     under their own divider."""
     boxes = boxes_from_json(REAL_STAIR_STEP.read_text(encoding="utf-8"))
     result = scan(boxes, CATALOG)
@@ -926,8 +926,8 @@ def test_real_stair_step_solves_to_three_distinct_divider_heights() -> None:
 
 
 def test_real_two_units_whole_tree() -> None:
-    """Both seams present (one an adjacent ``Board``, the other wrapped in
-    its own ``Division``+``Void`` for its shortfall), the units' two top
+    """Both seams present, one an adjacent ``Board`` and the other wrapped in
+    its own ``Division``+``Void`` for its shortfall, the units' two top
     boards side by side, and the notched panel appearing in ``skipped``
     rather than as a board."""
     boxes, skipped = export_from_json(REAL_TWO_UNITS.read_text(encoding="utf-8"))

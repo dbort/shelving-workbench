@@ -4,10 +4,11 @@
 :class:`~freecad.Shelving.core.geometry.Space` placing one space per region
 and board id. Slack along a division's axis is distributed by
 :func:`distribute`, a pure function that knows nothing about
-regions, boards, or axes: a board contributes ``Fixed(thickness_mm)`` and a
-region contributes its own rule, so the arithmetic never needs to know which
-is which. A layout that cannot be satisfied raises :class:`LayoutSolveError`
-with a machine-readable ``reason`` and the id of the offending node.
+regions, boards, or axes: a board contributes ``Fixed(thickness_mm)``, or its
+own ``rule`` when that is set, and a region contributes its own rule, so the
+arithmetic never needs to know which is which. A layout that cannot be
+satisfied raises :class:`LayoutSolveError` with a machine-readable ``reason``
+and the id of the offending node.
 
 All lengths are float millimetres. There is no rounding or quantisation;
 :data:`EPS_MM` is the tolerance for the "does it fit" and "is it positive"
