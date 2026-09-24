@@ -4,10 +4,11 @@
 :class:`~freecad.Shelving.core.geometry.Space` placing one space per region
 and board id. Slack along a division's axis is distributed by
 :func:`distribute`, a pure function that knows nothing about
-regions, boards, or axes: a board contributes ``Fixed(thickness_mm)`` and a
-region contributes its own rule, so the arithmetic never needs to know which
-is which. A layout that cannot be satisfied raises :class:`LayoutSolveError`
-with a machine-readable ``reason`` and the id of the offending node.
+regions, boards, or axes: a board contributes ``Fixed(thickness_mm)``, or its
+own ``rule`` when that is set, and a region contributes its own rule, so the
+arithmetic never needs to know which is which. A layout that cannot be
+satisfied raises :class:`LayoutSolveError` with a machine-readable ``reason``
+and the id of the offending node.
 
 All lengths are float millimetres. There is no rounding or quantisation;
 :data:`EPS_MM` is the tolerance for the "does it fit" and "is it positive"
@@ -201,10 +202,17 @@ def _rule_for_item(
     """The rule ``distribute`` should use for ``item``.
 
     A board's size along the axis is its thickness, a ``Fixed`` rule, so
-    boards and regions go through one distribution. A region's own
-    ``Basis.WITH_NEXT`` rule is resolved to ``Basis.CLEAR`` first.
+    boards and regions go through one distribution, unless the board's own
+    ``rule`` is set, in which case that rule is used directly instead. A
+    board's own rule is never routed through ``_resolve_with_next``: that
+    resolution is for a region's ``Basis.WITH_NEXT`` quoting a spacing
+    relative to the next item, a distinct concept a board's own size has no
+    use for. A region's own ``Basis.WITH_NEXT`` rule is resolved to
+    ``Basis.CLEAR`` first.
     """
     if isinstance(item, Board):
+        if item.rule is not None:
+            return item.rule
         return Fixed(size_mm=_thickness_mm(item, unit, catalog))
     rule = item.rule
     if isinstance(rule, Fixed) and rule.basis is Basis.WITH_NEXT:

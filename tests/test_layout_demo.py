@@ -48,9 +48,10 @@ def test_demo_runs_and_prints_the_solved_sample() -> None:
     for line in region_lines:
         assert any(f" {kind} " in line for kind in ("bay", "void", "division"))
         assert "origin=(" in line and "size=(" in line
-    # The sample's two Voids (the shorter columns' steps) are regions, printed
-    # here, but contribute no board below.
-    assert sum(1 for line in region_lines if " void " in line) == 2
+    # The sample's three Voids, the two shorter columns' steps and
+    # divider1's own shortfall against its taller neighbor col1, are
+    # regions, printed here, but contribute no board below.
+    assert sum(1 for line in region_lines if " void " in line) == 3
 
     total_line = next(line for line in lines if line.startswith("Total board volume:"))
     board_rows = lines[boards_start + 1 : lines.index(total_line)]

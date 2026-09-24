@@ -74,6 +74,11 @@ from freecad.Shelving.core.svg import to_svg  # noqa: E402
 
 PLY18 = MaterialId("ply18")
 MDF12 = MaterialId("mdf12")
+# The unit's default material's thickness. _sample_unit needs it, ahead of
+# _sample_catalog, to hand-compute the middle division's own Z extent
+# rather than solve it, so it is a constant rather than read off the
+# catalog.
+PLY18_THICKNESS_MM = 18.0
 
 
 def _sample_catalog() -> Catalog:
@@ -83,7 +88,7 @@ def _sample_catalog() -> Catalog:
             PLY18: MaterialEntry(
                 id=PLY18,
                 name="18 mm birch ply",
-                thickness_mm=18.0,
+                thickness_mm=PLY18_THICKNESS_MM,
                 material_type="plywood",
                 nominal_thickness='3/4"',
             ),
@@ -123,9 +128,42 @@ def _column(void_mm: float, prefix: str, *, with_shelf: bool = False) -> Divisio
     return Division(axis=Axis.Z, items=items, id=f"{prefix}_column")
 
 
+def _divider(height_mm: float | None, void_mm: float, prefix: str) -> Item:
+    """A vertical divider between two columns, sized to its own true height.
+
+    A bare ``Board`` when ``void_mm`` is zero; otherwise wrapped in the same
+    ``Division``+``Void`` pattern ``_column`` uses for a stepped column,
+    with ``rule`` set explicitly to the board's own true height since this
+    tree is hand-built rather than produced by ``scan``, which is the only
+    thing that computes it automatically.
+    """
+    if void_mm <= 0:
+        return Board(role="divider", id=prefix)
+    assert height_mm is not None
+    return Division(
+        axis=Axis.Z,
+        items=[
+            Board(role="divider", rule=Fixed(size_mm=height_mm), id=prefix),
+            Void(rule=Fixed(void_mm), id=f"{prefix}_void"),
+        ],
+        # The wrap itself is a Division item in "middle" (axis=X), so its
+        # own X-width comes from this rule, not from the divider board's
+        # thickness one level down: without it, "middle" would size the
+        # wrap by the equal-share Fill default every other column uses,
+        # rather than the divider's fixed thickness.
+        rule=Fixed(size_mm=PLY18_THICKNESS_MM),
+        id=f"{prefix}_wrap",
+    )
+
+
 def _sample_unit() -> Unit:
     """Three columns of falling height on a continuous floor: a stepped
     outline the carcass shell rule could never state."""
+    # The middle division's own Z extent: the unit's height less the bottom
+    # board's thickness, the same span every column's void is measured
+    # against.
+    middle_height_mm = 1200.0 - PLY18_THICKNESS_MM
+    col1_height_mm = middle_height_mm - 300.0
     return Unit(
         size_mm=Vec3(1200.0, 300.0, 1200.0),
         default_material=PLY18,
@@ -139,9 +177,21 @@ def _sample_unit() -> Unit:
                     items=[
                         Board(role="left_side", id="left_side"),
                         _column(0.0, "col0", with_shelf=True),
-                        Board(role="divider", id="divider0"),
+                        # divider0 sits between left_side and col0, both full
+                        # height, so it needs no wrapping: void_mm=0 and
+                        # height_mm=None together make "no shortfall, no
+                        # override" explicit, rather than passing a height
+                        # this branch would ignore.
+                        _divider(None, 0.0, "divider0"),
                         _column(300.0, "col1"),
-                        Board(role="divider", id="divider1"),
+                        # divider1 sits between col1 (882 mm) and col2 (582
+                        # mm); its true height matches the taller neighbor,
+                        # col1, not the unit's full height.
+                        _divider(
+                            col1_height_mm,
+                            middle_height_mm - col1_height_mm,
+                            "divider1",
+                        ),
                         _column(600.0, "col2"),
                         Board(role="right_side", id="right_side"),
                     ],

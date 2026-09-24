@@ -521,21 +521,49 @@ def _region(
     )
 
 
+def _is_axis_wrap(item: Item) -> bool:
+    """Whether ``item`` is the ``Division{Board(rule=...), Void}``
+    shape ``_slab``'s fallback wraps a short board in.
+
+    Nothing else in this codebase produces exactly this shape: one ``Board``
+    whose ``rule`` is set (its division-axis extent is fixed by
+    construction from its own measured span) alongside one ``Void`` for the
+    shortfall.
+    """
+    if not isinstance(item, Division) or len(item.items) != 2:
+        return False
+    boards = [child for child in item.items if isinstance(child, Board)]
+    voids = [child for child in item.items if isinstance(child, Void)]
+    return len(boards) == 1 and len(voids) == 1 and boards[0].rule is not None
+
+
 def _finalize_items(
     raw: Sequence[Item],
     bounds: Sequence[int],
     coords_mm: Sequence[float],
     snap_mm: float,
 ) -> list[Item]:
-    """``raw`` with each non-``Board`` item's ``rule`` set by the
+    """``raw`` with each non-``Board``, non-wrap item's ``rule`` set by the
     equal-siblings heuristic, sized from its span in ``bounds``/``coords_mm``.
 
-    A ``Board``'s size along its division's axis is its own thickness, never
-    a rule, so it is excluded from the sibling comparison: two boards
-    happening to be the same thickness as some region must not make that
-    region ``Fill``.
+    A ``Board``'s size along its division's axis is fixed (its own thickness,
+    or its own ``rule`` override), never derived from the sibling
+    comparison, so it is excluded from it: two boards happening to be the
+    same size as some region must not make that region ``Fill``. An
+    axis-wrap ``Division`` (see ``_is_axis_wrap``) is excluded the same way
+    and for the same reason: its own axis extent is fixed by its wrapped
+    ``Board``'s own ``rule``, so it was never a genuine region the sibling
+    heuristic could speak about, and gets ``Fixed`` at its own raw grid
+    width directly instead of being compared against its siblings. Do not
+    widen this filter back to a bare ``isinstance(item, Board)`` check;
+    that would let an axis-wrap ``Division`` back into the comparison and
+    reintroduce the bug this exclusion closes.
     """
-    region_positions = [i for i, item in enumerate(raw) if not isinstance(item, Board)]
+    region_positions = [
+        i
+        for i, item in enumerate(raw)
+        if not isinstance(item, Board) and not _is_axis_wrap(item)
+    ]
     region_sizes_mm = [
         coords_mm[bounds[i + 1]] - coords_mm[bounds[i]] for i in region_positions
     ]
@@ -545,6 +573,13 @@ def _finalize_items(
         region_item = items[position]
         assert isinstance(region_item, Bay | Void | Division)
         region_item.rule = rule
+    for i, item in enumerate(raw):
+        if _is_axis_wrap(item):
+            assert isinstance(item, Division)
+            item.rule = Fixed(
+                size_mm=coords_mm[bounds[i + 1]] - coords_mm[bounds[i]],
+                basis=Basis.CLEAR,
+            )
     return items
 
 
@@ -564,40 +599,45 @@ def _slab(
     pi0, pi1 = grid.cols[index]
     pj0, pj1 = grid.rows[index]
     if across:
-        low_mm = _gap(
+        low_gap_mm = _gap(
             grid,
             range(pj0 - 1, j0 - 1, -1),
             range(pi0, pi1),
             grid.vs_mm,
             horizontal=False,
         )
-        high_mm = _gap(
+        high_gap_mm = _gap(
             grid, range(pj1, j1), range(pi0, pi1), grid.vs_mm, horizontal=False
         )
         cross_axis = ctx.vertical
     else:
-        low_mm = _gap(
+        low_gap_mm = _gap(
             grid,
             range(pi0 - 1, i0 - 1, -1),
             range(pj0, pj1),
             grid.hs_mm,
             horizontal=True,
         )
-        high_mm = _gap(
+        high_gap_mm = _gap(
             grid, range(pi1, i1), range(pj0, pj1), grid.hs_mm, horizontal=True
         )
         cross_axis = ctx.horizontal
     if (
-        low_mm is None
-        or high_mm is None
-        or low_mm > ctx.clearance_mm
-        or high_mm > ctx.clearance_mm
+        low_gap_mm is None
+        or high_gap_mm is None
+        or low_gap_mm[1] > ctx.clearance_mm
+        or high_gap_mm[1] > ctx.clearance_mm
     ):
         # It sits alone in the slab but does not reach across it, so the slab
         # divides again along the other axis and the board spans whatever is
         # left. Refusing here would reject a shelf that fills its own column
-        # but not the full height of the region the column was cut from.
+        # but not the full height of the region the column was cut from. The
+        # threshold uses the total gap (outside cells included), since a
+        # large outside void must trigger this fallback exactly like a large
+        # enclosed one would; only the enclosed portion is a real inset.
         return _region(grid, ctx, i0, i1, j0, j1)
+    low_mm, _ = low_gap_mm
+    high_mm, _ = high_gap_mm
     return _make_board(board, cross_axis, low_mm, high_mm, ctx)
 
 
@@ -625,11 +665,28 @@ def _make_board(
         if board.irregular
         else None
     )
+    # cross_axis is the slab's cross-section axis; the enclosing Division's
+    # own axis is whichever of the grid's two elevation axes cross_axis is
+    # not. When that axis is not the board's own thin axis, the board's real
+    # measured span along it (not its catalog thickness) is what the
+    # Division must carry, a divider shorter than its neighbors say.
+    enclosing_axis = ctx.horizontal if cross_axis is ctx.vertical else ctx.vertical
+    rule: SizeRule | None = None
+    if enclosing_axis is not board.thin_axis:
+        rule = Fixed(
+            size_mm=(
+                board.h1_mm - board.h0_mm
+                if enclosing_axis is ctx.horizontal
+                else board.v1_mm - board.v0_mm
+            ),
+            basis=Basis.CLEAR,
+        )
     return Board(
         pinned_size_mm=pinned_size_mm,
         material=None if material == ctx.default_material else material,
         insets=Insets(**insets_kwargs),
         role=board.name,
+        rule=rule,
         # A scanned Box's name is the source object's stable FreeCAD Name
         # (freecad.Shelving.container.read_container sets it), so keying a
         # board's id to it, rather than a fresh uuid, is what lets
@@ -661,11 +718,18 @@ def _gap(
     lines_mm: Sequence[float],
     *,
     horizontal: bool,
-) -> float | None:
-    """Enclosed gap width walking ``along`` from a board's end toward the
-    region edge, or ``None`` when another board blocks the line. Outside
-    cells cost nothing; enclosed uncovered cells add their width."""
-    gap_mm = 0.0
+) -> tuple[float, float] | None:
+    """``(enclosed_mm, total_mm)`` walking ``along`` from a board's end toward
+    the region edge, or ``None`` when another board blocks the line.
+
+    ``enclosed_mm`` counts only uncovered cells not classified ``outside``,
+    the value a passing board uses for its own inset. ``total_mm`` counts
+    every uncovered cell regardless of classification, so a large outside
+    void triggers the same "does not reach across" fallback a large enclosed
+    gap does, rather than being silently absorbed as a near-zero inset.
+    """
+    enclosed_mm = 0.0
+    total_mm = 0.0
     for a in along:
         enclosed = False
         for b in across:
@@ -674,9 +738,11 @@ def _gap(
                 return None
             if not grid.outside[j][i]:
                 enclosed = True
+        width_mm = lines_mm[a + 1] - lines_mm[a]
+        total_mm += width_mm
         if enclosed:
-            gap_mm += lines_mm[a + 1] - lines_mm[a]
-    return gap_mm
+            enclosed_mm += width_mm
+    return enclosed_mm, total_mm
 
 
 def _empty(grid: _Grid, i0: int, i1: int, j0: int, j1: int) -> Region:
