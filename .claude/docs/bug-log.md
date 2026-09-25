@@ -1,5 +1,5 @@
 ---
-next_id: bug-004
+next_id: bug-006
 ---
 
 # Bug log
@@ -177,3 +177,34 @@ asks for a sweep; no agent schedules one on its own.
   architectural decision, not a mechanical patch, worth a `new-task`
   interview starting from this entry's trace rather than re-deriving it
   from scratch.
+
+- `bug-004` - **the Edit Unit panel's elevation is drawn far larger than
+  the task pane, so a whole unit cannot be seen or worked on at once**:
+  the `QGraphicsView` in `freecad/Shelving/editor/panel.py` shows the scene
+  at 1 scene unit per pixel, and scene units are millimetres
+  (`editor/scene.py`), so a typical unit is several times taller and wider
+  than the docked Tasks pane. The user had to scroll down about 12 screens
+  and right about 2 to see all of it. Found during `sh-020`'s manual QA
+  sign-off. The panel never fits the view to the scene or offers any
+  zoom. Fix: `sh-XXX task`. Fit-to-view on open is the obvious minimum,
+  but the user wants the editing interface itself rethought. The options
+  include zoom in/out controls and a full-screen, Sketcher-style editing
+  mode, and choosing between them is a product decision for a `new-task`
+  interview.
+
+- `bug-005` - **once a divider is deleted from beside a stack of shelves,
+  a full-height divider cannot be added back without first deleting the
+  shelves**: starting from the default unit, add a divider, then add a
+  shelf on one side, then delete the divider. The shelves now span the
+  whole unit, as expected, but no button can now add a divider running the
+  full height of the unit. The whole-width region is a `Division` holding
+  the shelves, not a `Bay`. `Session.can_split` and `core.edit.split_region`
+  act only on a selected `Bay`, and the elevation offers no way to select
+  a `Division` region. The only compartments that can be split are the bays
+  between the shelves, each of which gets a divider only its own height.
+  Found during `sh-020`'s manual QA sign-off. Fix: `sh-XXX task`. It needs
+  a new edit, splitting a `Division` region across the cross axis by
+  wrapping it (or re-parenting its shelves into two halves). It also needs
+  a way to select a non-leaf region in the scene. Which shelves each half
+  keeps, and how a user picks a region that has no area of its own to
+  click, are design questions and not a mechanical patch.
