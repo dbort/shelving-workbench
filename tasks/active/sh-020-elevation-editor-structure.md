@@ -1,8 +1,8 @@
 ---
 id: sh-020
 title: "The elevation editor: structure"
-current_agent: reviewer
-current_phase: review
+current_agent: user
+current_phase: user_signoff
 review_rejections: 1
 blocked_by: [sh-019]
 ---
@@ -24,7 +24,7 @@ Milestone M9, part 1 of 2.
 ## Status
 - [x] Planning
 - [x] Implementation
-- [ ] Review
+- [x] Review
 - [ ] User sign-off
 
 ## Must Have
