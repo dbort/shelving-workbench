@@ -62,6 +62,9 @@ Milestone M9, part 1 of 2.
       inserts `Bay, Board, Bay` into that parent's run; no same-axis
       `Division` is ever nested directly inside another. Asserted in
       `test_edit.py`.
+- [ ] A merge never leaves a same-axis `Division` directly inside another,
+      and moves no surviving board. Asserted in `test_edit.py` for the
+      divider, shelf left, delete divider sequence.
 - [x] No edit moves a board it did not create or delete: after every split and
       merge, every surviving board's solved origin and size match its
       pre-edit values within `1e-6` mm. Asserted in `test_edit.py` for splits
@@ -180,8 +183,12 @@ RULES:
 5. OUT OF SCOPE: bug-005, splitting a non-`Bay` region, and bug-007, stored
    rules overriding hand-moved geometry. Do not fix them here; a test may
    avoid hand moves.
-6. `merge_at`'s collapse behaviour for a nested cross-axis `Division`
-   neighbour is unchanged.
+6. MERGE KEEPS RUNS FLAT TOO. When a merge collapses a `Division` to a
+   single region and that region is itself a `Division` on the
+   grandparent's axis (divider, shelf left, delete divider), splice its
+   items into the grandparent's run in its place, assigning rules by rule 2
+   so no board moves. Dropping a divided second neighbour's subtree is
+   otherwise unchanged.
 
 DEBUG LOG STAYS. `freecad/Shelving/debug_log.py` and its `Stopwatch` calls
 in `edit_unit.py`, `panel.py`, `session.py` are permanent diagnostics the
