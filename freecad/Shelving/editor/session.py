@@ -25,7 +25,11 @@ from typing import Literal
 import FreeCAD
 
 from freecad.Shelving.catalog import ensure_catalog, read_usable_catalog
-from freecad.Shelving.container import read_container, write_container
+from freecad.Shelving.container import (
+    read_container,
+    renamed_board_ids,
+    write_container,
+)
 from freecad.Shelving.core.edit import EditError, merge_at, split_region
 from freecad.Shelving.core.geometry import Space
 from freecad.Shelving.core.layout import Axis, Bay, Board, Division, Region, Unit
@@ -65,6 +69,19 @@ def _find_node(region: Region, node_id: str) -> Region | Board | None:
             if found is not None:
                 return found
     return None
+
+
+def _renamed_spaces(
+    spaces: Mapping[str, Space], renames: Mapping[str, str]
+) -> Mapping[str, Space]:
+    """``spaces`` with every key present in ``renames`` replaced by its
+    mapped value; every other key is untouched. Keeps a session's solved
+    spaces keyed the same way as ``self.unit``'s board ids after
+    :func:`~freecad.Shelving.container.renamed_board_ids` adopts a
+    freshly-created board's real ``Name``."""
+    if not renames:
+        return spaces
+    return {renames.get(node_id, node_id): space for node_id, space in spaces.items()}
 
 
 def _read_unit(container: FreeCAD.DocumentObject, catalog: Catalog) -> Unit:
@@ -166,12 +183,22 @@ class Session:
         document, clearing the selection, or return an :class:`EditFailure`
         when it fails to solve, leaving the session and document untouched."""
         try:
-            spaces = solve(candidate, self.catalog)
+            spaces: Mapping[str, Space] = solve(candidate, self.catalog)
             # write_container solves again before writing any board, so a
             # LayoutSolveError from either call means nothing was written.
-            write_container(self.container, candidate, self.catalog)
+            result = write_container(self.container, candidate, self.catalog)
         except LayoutSolveError as err:
             return EditFailure(str(err), err.node_id)
+        if result.id_renames:
+            # A board split created carries a fresh new_id(), not yet a
+            # document object Name; without adopting the real Name here,
+            # the next _apply's write_container call would fail to match
+            # this board by Name and delete and recreate it instead
+            # (bug-008).
+            candidate = dataclasses.replace(
+                candidate, root=renamed_board_ids(candidate.root, result.id_renames)
+            )
+            spaces = _renamed_spaces(spaces, result.id_renames)
         self.unit = candidate
         self.spaces = spaces
         self.selected_id = None

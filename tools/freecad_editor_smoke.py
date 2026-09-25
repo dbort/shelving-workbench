@@ -1,8 +1,10 @@
 """Headless functional check for the elevation editor's session: selection
 permissions, split, merge, both refusal reasons a session edit returns
-rather than raises, cancel, commit-then-undo, and that a committed layout
-survives a fresh session's rescan (bug-006); plus the selection-to-unit
-mapping that decides when Edit Unit is enabled.
+rather than raises, cancel, commit-then-undo, that a committed layout
+survives a fresh session's rescan (bug-006), and that a split-created
+board's id keeps naming the same document object through a later, unrelated
+edit in the same session (bug-008); plus the selection-to-unit mapping that
+decides when Edit Unit is enabled.
 
 Drives :class:`freecad.Shelving.editor.session.Session` directly rather than
 :class:`freecad.Shelving.editor.panel.EditUnitPanel`: ``FreeCADGui.Control``,
@@ -25,6 +27,7 @@ if _REPO_ROOT not in sys.path:
 
 import FreeCAD  # noqa: E402
 
+from freecad.Shelving import properties  # noqa: E402
 from freecad.Shelving.container import (  # noqa: E402
     read_container,
     unit_for_selection,
@@ -39,6 +42,7 @@ from freecad.Shelving.core.layout import (  # noqa: E402
     Region,
     Unit,
 )
+from freecad.Shelving.core.scan import elevation_axes  # noqa: E402
 from freecad.Shelving.default_catalog import (  # noqa: E402
     DEFAULT_CATALOG,
     DEFAULT_MATERIAL_ID,
@@ -58,6 +62,13 @@ class _BoxFeature(_Placeable, Protocol):
 
 
 _BoardSnapshot = tuple[tuple[str, float, float, float, float, float, float], ...]
+
+# Index into one _board_snapshot_by_name entry (Length, Width, Height, x, y,
+# z) for a given model axis's size component: X to Length, Y to Width, Z to
+# Height, matching _write_geometry's mapping. Position always compares
+# whole (indices 3:6), since nothing in this suite moves a surviving
+# board's origin, only sometimes its extent along one axis.
+_AXIS_SIZE_INDEX: dict[Axis, int] = {Axis.X: 0, Axis.Y: 1, Axis.Z: 2}
 
 
 def _find_bay_id(region: Region) -> str:
@@ -195,6 +206,20 @@ def _board_snapshot_by_name(
     return {entry[0]: entry[1:] for entry in _board_snapshot(container)}
 
 
+def _assert_unit_ids_match_document(session: Session) -> None:
+    """Every id ``session.unit``'s tree names equals a live document
+    object's ``Name``: the precondition the next ``write_container`` call
+    relies on to match a board by name rather than delete and recreate it
+    (bug-008). ``Session._apply`` maintains this after every accepted
+    edit, adopting a freshly-created board's real ``Name`` via
+    ``WriteResult.id_renames``."""
+    document_board_names = {obj.Name for obj in _board_objects(session.container)}
+    assert _board_ids(session.unit.root) == document_board_names, (
+        _board_ids(session.unit.root),
+        document_board_names,
+    )
+
+
 def _assert_session_matches_document(session: Session) -> None:
     """Every board id ``session.unit`` names has a document object of that
     name whose placement and size agree with ``session.spaces``, within
@@ -203,11 +228,7 @@ def _assert_session_matches_document(session: Session) -> None:
     container, before any further edit or write happens."""
     doc = session.container.Document
     tol_mm = 1e-6
-    document_board_names = {obj.Name for obj in _board_objects(session.container)}
-    assert _board_ids(session.unit.root) == document_board_names, (
-        _board_ids(session.unit.root),
-        document_board_names,
-    )
+    _assert_unit_ids_match_document(session)
     for board_id in _board_ids(session.unit.root):
         space = session.spaces[board_id]
         obj = cast("_BoxFeature", doc.getObject(board_id))
@@ -294,12 +315,16 @@ def _check_deleting_a_divider_reaches_the_merge_collapse_splice() -> None:
     collapses the divider's ``Axis.X`` division down to the ``Axis.Z``
     division the "shelf left" split nested, which shares the parent
     ``Axis.Z`` division the first shelf itself nested, and must splice
-    rather than nest. Only the container's four boundary boards are
-    checked for exact placement and size (bug-008: a split-created board's
-    real object Name never equals its core id, so a *further* unrelated
-    write - here, each split after the one that created it - deletes and
-    recreates it under a new Name; the boundary boards are exempt because
-    scanning gave them a Name-as-id from the start)."""
+    rather than nest.
+
+    Every surviving board is snapshotted by ``Name`` (F2, review round 5),
+    and every one of them must keep its placement (all three axes) and its
+    size along the column's axis, the unit's vertical elevation axis: the
+    axis the spliced-in run shares with its new, flatter home. The "shelf
+    left of the divider" board is expected to widen along the horizontal
+    axis, since the splice hands it the width the deleted divider and the
+    bay on its other side used to occupy; only its horizontal size is
+    exempt from the comparison."""
     doc = FreeCAD.newDocument("editor_smoke_merge_collapse_reachable")
     try:
         container = create_unit(doc)
@@ -327,6 +352,10 @@ def _check_deleting_a_divider_reaches_the_merge_collapse_splice() -> None:
 
             snapshot_before_delete = _board_snapshot_by_name(container)
             board_count_before_delete = len(_board_names(container))
+            depth_axis = session.unit.depth_axis
+            assert depth_axis is not None, session.unit.id
+            column_axis = elevation_axes(depth_axis)[1]  # vertical
+            size_index = _AXIS_SIZE_INDEX[column_axis]
 
             session.select(divider_id)
             assert session.can_merge() is True
@@ -336,8 +365,63 @@ def _check_deleting_a_divider_reaches_the_merge_collapse_splice() -> None:
 
             assert len(_board_names(container)) == board_count_before_delete - 1
             snapshot_after_delete = _board_snapshot_by_name(container)
-            for name in ("bottom", "top", "left_side", "right_side"):
-                assert snapshot_after_delete[name] == snapshot_before_delete[name], name
+            for name, before in snapshot_before_delete.items():
+                after = snapshot_after_delete.get(name)
+                if after is None:
+                    continue  # the deleted divider itself
+                assert after[3:6] == before[3:6], (name, "placement")
+                assert after[size_index] == before[size_index], (name, "column size")
+        finally:
+            session.cancel()
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def _check_split_created_board_keeps_its_name_across_edits() -> None:
+    """bug-008: a board a split creates carries a fresh ``new_id()``, not a
+    document object ``Name``, until ``write_container`` creates its object;
+    ``Session._apply`` must adopt that real ``Name`` immediately so a
+    second, unrelated split's ``write_container`` call matches the first
+    board by name instead of deleting and recreating it under a new one.
+    Checks both that the first board's id keeps naming the same live
+    object after the second split, and that every id in ``session.unit``
+    equals a document object ``Name`` after each edit."""
+    doc = FreeCAD.newDocument("editor_smoke_bug_008")
+    try:
+        container = create_unit(doc)
+        doc.recompute()
+
+        session = Session(container)
+        session.open()
+        try:
+            bay_id = _find_bay_id(session.unit.root)
+            unit_before_first_split = session.unit
+            session.select(bay_id)
+            assert session.split("horizontal") is None
+            doc.recompute()
+            _assert_unit_ids_match_document(session)
+            first_board_id = _find_new_board_id(
+                unit_before_first_split.root, session.unit.root
+            )
+            first_board_obj = doc.getObject(first_board_id)
+            assert first_board_obj is not None, first_board_id
+
+            born_as_before = properties.read_board_born_as(first_board_obj)
+
+            other_bay_id = _find_bay_ids_in_order(session.unit.root)[-1]
+            session.select(other_bay_id)
+            assert session.split("vertical") is None
+            doc.recompute()
+            _assert_unit_ids_match_document(session)
+
+            # The name captured right after the first split must still name
+            # a live object with the same provenance, not a
+            # deleted-and-recreated one under a fresh name, and session.unit
+            # must still carry that id rather than a stale one.
+            still_there = doc.getObject(first_board_id)
+            assert still_there is not None, first_board_id
+            assert properties.read_board_born_as(still_there) == born_as_before
+            assert first_board_id in _board_ids(session.unit.root)
         finally:
             session.cancel()
     finally:
@@ -705,6 +789,7 @@ def main() -> None:
     _check_commit_then_one_undo_reverses_the_session()
     _check_an_editor_layout_survives_a_rescan()
     _check_deleting_a_divider_reaches_the_merge_collapse_splice()
+    _check_split_created_board_keeps_its_name_across_edits()
     print("shelving editor OK")
     sys.stdout.flush()
 

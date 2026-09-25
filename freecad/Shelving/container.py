@@ -30,7 +30,7 @@ the identity and provenance rules it follows.
 """
 
 import dataclasses
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from typing import Protocol, cast
 
 import FreeCAD
@@ -357,12 +357,23 @@ class WriteResult:
     before the call, but re-baptized with a fresh provenance and label, so
     it is reported the way a user would think of it, as a new board, not as
     an update to the board it was copied from.
+
+    ``id_renames`` maps a board's ``Board.id`` as passed into this call to
+    the ``Name`` its newly-created document object actually received: only
+    populated for a board created in this call whose id was not already a
+    valid document object name (a hand-built ``Unit``'s fresh ``new_id()``,
+    never a rescanned one). A caller that holds onto ``unit`` past this call
+    and writes it again must apply this mapping first, to both the unit's
+    board ids and any per-board state keyed by them, or the next
+    ``write_container`` call will not match those boards by ``Name`` and
+    will delete and recreate them instead.
     """
 
     updated: tuple[str, ...]
     created: tuple[str, ...]
     deleted: tuple[str, ...]
     left_alone: tuple[str, ...]
+    id_renames: Mapping[str, str]
 
 
 def _boards_by_id(region: Region) -> dict[str, Board]:
@@ -538,11 +549,14 @@ def _sanitize_name(role: str) -> str:
     return cleaned
 
 
-def _renamed_board_ids(region: Region, renames: dict[str, str]) -> Region:
+def renamed_board_ids(region: Region, renames: Mapping[str, str]) -> Region:
     """``region`` with every ``Board.id`` present in ``renames`` replaced by
     its mapped value; every other board and every region's own id is
-    untouched. See ``write_container``'s ``id_renames`` comment for why this
-    runs before ``rules_to_json``."""
+    untouched. Used both by ``write_container`` (see its ``id_renames``
+    comment, for why this runs before ``rules_to_json``) and by any caller
+    that keeps a ``Unit`` alive across more than one ``write_container``
+    call, to adopt the real ``Name`` a freshly-created board received (see
+    ``WriteResult.id_renames``)."""
     if not isinstance(region, Division):
         return region
     new_items: list[Item] = []
@@ -553,7 +567,7 @@ def _renamed_board_ids(region: Region, renames: dict[str, str]) -> Region:
                 dataclasses.replace(item, id=new_name) if new_name is not None else item
             )
         else:
-            new_items.append(_renamed_board_ids(item, renames))
+            new_items.append(renamed_board_ids(item, renames))
     return dataclasses.replace(region, items=new_items)
 
 
@@ -682,7 +696,7 @@ def write_container(
             updated.append(obj.Name)
 
     rules_unit = (
-        dataclasses.replace(unit, root=_renamed_board_ids(unit.root, id_renames))
+        dataclasses.replace(unit, root=renamed_board_ids(unit.root, id_renames))
         if id_renames
         else unit
     )
@@ -710,4 +724,5 @@ def write_container(
         created=tuple(sorted(created)),
         deleted=tuple(sorted(deleted)),
         left_alone=tuple(sorted(left_alone)),
+        id_renames=dict(id_renames),
     )
