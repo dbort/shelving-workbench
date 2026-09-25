@@ -2,7 +2,7 @@
 id: sh-020
 title: "The elevation editor: structure"
 current_agent: implementer
-current_phase: planning
+current_phase: implementation
 review_rejections: 0
 blocked_by: [sh-019]
 ---
@@ -19,7 +19,7 @@ one transaction, so OK commits and Cancel reverses the whole session.
 Milestone M9, part 1 of 2.
 
 ## Status
-- [ ] Planning
+- [x] Planning
 - [ ] Implementation
 - [ ] Review
 - [ ] User sign-off
