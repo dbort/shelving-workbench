@@ -1,5 +1,5 @@
 ---
-next_id: friction-021
+next_id: friction-022
 ---
 
 # Friction log
@@ -254,3 +254,11 @@ Sweeping the log is a human-triggered act, like task sign-off: the user asks for
   friction-007 already flagged for a deletion step's blast radius; a
   tree-shape change has the same "everything that renders this fixture" risk
   a signature-deletion change does.
+- `friction-021` - **readable `pixi run tests` output**: in sh-020's review,
+  the FreeCAD smokes printed `Recompute......` progress bars made of tabs and
+  percentages, which hid the pass/fail lines. The workaround was to
+  redirect the run to a file, record `$?` separately, and pipe the log through
+  `tr '\t' ' ' | grep -Ev 'Recompute|\([0-9]+ %\)'` to read it. Simpler if:
+  `tools/run-tests.sh` (or the smokes themselves) suppressed or filtered
+  FreeCAD's console progress indicator so the harness output shows only the
+  check headers and results.
