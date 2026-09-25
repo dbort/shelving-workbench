@@ -1,0 +1,129 @@
+"""The elevation editor's task panel: a thin Qt shell over one ``Session``.
+
+``EditUnitPanel`` is a plain object matching the duck-typed protocol
+``FreeCADGui.Control.showDialog`` expects: a ``form`` attribute (the
+``QWidget`` shown in the task panel), ``getStandardButtons``, ``accept``,
+``reject``. Every button here does nothing but call a ``Session`` method
+and redraw from what it returns; no decision worth a unit test lives in this
+module (see this repo's sh-020 Frontier Advice, "the panel must hold NO
+logic worth testing"), which is also why nothing here is covered by
+:mod:`tools.freecad_editor_smoke`: ``FreeCADGui.Control`` itself does not
+exist under ``freecadcmd``, so that smoke drives ``Session`` directly
+instead (see this module's own command, ``edit_unit.py``).
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import cast
+
+import FreeCAD
+from PySide6 import QtCore, QtGui, QtWidgets
+
+from freecad.Shelving.core.layout import Axis
+from freecad.Shelving.editor.scene import build_scene, hit_test
+from freecad.Shelving.editor.session import EditFailure, Session
+
+
+class _EditorView(QtWidgets.QGraphicsView):
+    """A ``QGraphicsView`` that reports the scene position of every click to
+    ``on_click``, which is all the selection wiring the panel needs."""
+
+    def __init__(self, on_click: Callable[[QtCore.QPointF], None]) -> None:
+        super().__init__()
+        self._on_click = on_click
+
+    def mousePressEvent(self, event: QtGui.QMouseEvent) -> None:
+        super().mousePressEvent(event)
+        scene = self.scene()
+        if scene is not None:
+            self._on_click(self.mapToScene(event.position().toPoint()))
+
+
+class EditUnitPanel:
+    """One elevation-editing task panel over ``container``.
+
+    Opens its ``Session`` (and, through it, the one transaction the whole
+    session shares) at construction, which is what makes ``getStandardButtons``
+    / ``accept`` / ``reject`` alone enough to commit or cancel the whole
+    session: neither does anything else.
+    """
+
+    def __init__(self, container: FreeCAD.DocumentObject) -> None:
+        self.session = Session(container)
+        self.session.open()
+
+        self.form = QtWidgets.QWidget()
+        self.form.setWindowTitle("Edit Unit")
+        layout = QtWidgets.QVBoxLayout(self.form)
+
+        self.view = _EditorView(self._on_scene_click)
+        layout.addWidget(self.view)
+
+        button_row = QtWidgets.QHBoxLayout()
+        self.split_horizontal_button = QtWidgets.QPushButton("Split Horizontal")
+        self.split_vertical_button = QtWidgets.QPushButton("Split Vertical")
+        self.delete_button = QtWidgets.QPushButton("Delete")
+        for button in (
+            self.split_horizontal_button,
+            self.split_vertical_button,
+            self.delete_button,
+        ):
+            button_row.addWidget(button)
+        layout.addLayout(button_row)
+
+        self.message_label = QtWidgets.QLabel("")
+        layout.addWidget(self.message_label)
+
+        self.split_horizontal_button.clicked.connect(lambda: self._split(Axis.X))
+        self.split_vertical_button.clicked.connect(lambda: self._split(Axis.Z))
+        self.delete_button.clicked.connect(self._merge)
+
+        self._refresh()
+
+    def _on_scene_click(self, point: QtCore.QPointF) -> None:
+        scene = self.view.scene()
+        node_id = hit_test(scene, point) if scene is not None else None
+        self.session.select(node_id)
+        self._refresh()
+
+    def _split(self, axis: Axis) -> None:
+        self._show_result(self.session.split(axis))
+
+    def _merge(self) -> None:
+        self._show_result(self.session.merge())
+
+    def _show_result(self, failure: EditFailure | None) -> None:
+        self.message_label.setText("" if failure is None else failure.message)
+        self._refresh()
+
+    def _refresh(self) -> None:
+        """Rebuild the scene from the session's current state and re-derive
+        the two buttons' enabled state; called after every selection change
+        and every edit attempt, successful or not."""
+        scene = build_scene(
+            self.session.unit, self.session.spaces, self.session.selected_id
+        )
+        self.view.setScene(scene)
+        self.split_horizontal_button.setEnabled(self.session.can_split())
+        self.split_vertical_button.setEnabled(self.session.can_split())
+        self.delete_button.setEnabled(self.session.can_merge())
+
+    def getStandardButtons(self) -> int:
+        buttons = (
+            QtWidgets.QDialogButtonBox.StandardButton.Ok
+            | QtWidgets.QDialogButtonBox.StandardButton.Cancel
+        )
+        # PySide6-stubs types enum.Flag.value as the flag's own class rather
+        # than int (verified: reveal_type shows StandardButton, not int, even
+        # though the runtime value is a plain int); FreeCAD's own C++ side
+        # only accepts a real int here.
+        return cast("int", buttons.value)
+
+    def accept(self) -> bool:
+        self.session.commit()
+        return True
+
+    def reject(self) -> bool:
+        self.session.cancel()
+        return True

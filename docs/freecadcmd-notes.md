@@ -173,6 +173,22 @@ obj.State` or `obj.isValid() is False`. Do not assert on `"Touched" in obj.State
 alone: an object the recompute never visited also carries `"Touched"`, so that
 predicate passes even when `execute` never ran.
 
+## A scripted document's `UndoMode` starts off
+
+`FreeCAD.newDocument(name)` returns a document with `UndoMode == 0`
+(verified directly against FreeCAD 1.0.0), unlike a document created through
+the GUI, whose default comes from the user's preferences and is normally
+on. With `UndoMode` off, `openTransaction`/`commitTransaction`/
+`abortTransaction` still run without raising, but record nothing:
+`abortTransaction` is a silent no-op, leaving every edit made since
+`openTransaction` in place instead of reverting it.
+
+Consequence for any headless caller whose correctness depends on abort
+actually reverting: set `doc.UndoMode = 1` before the first
+`openTransaction`, rather than assuming a document is undo-capable because
+it opened without error. `freecad/Shelving/editor/session.py`'s `Session.open`
+does this for exactly this reason.
+
 ## A `DocumentObject`'s `ViewObject` is `None`
 
 FreeCAD 1.0.0 under `freecadcmd` gives every `DocumentObject` a `ViewObject`

@@ -41,6 +41,7 @@ class ShelvingWorkbench(_WorkbenchBase):
         from freecad.Shelving.commands import (  # noqa: F401
             add_material,
             create_unit,
+            edit_unit,
             export_boxes,
             reflow_all,
             resize_unit,
@@ -53,6 +54,7 @@ class ShelvingWorkbench(_WorkbenchBase):
             "Shelving_ExportBoxes",
             "Shelving_CreateUnit",
             "Shelving_ResizeUnit",
+            "Shelving_EditUnit",
             "Shelving_SeedCatalog",
             "Shelving_AddMaterial",
             "Shelving_ReflowAll",

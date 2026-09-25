@@ -1,8 +1,8 @@
 ---
 id: sh-020
 title: "The elevation editor: structure"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 0
 blocked_by: [sh-019]
 ---
@@ -20,45 +20,45 @@ Milestone M9, part 1 of 2.
 
 ## Status
 - [x] Planning
-- [ ] Implementation
+- [x] Implementation
 - [ ] Review
 - [ ] User sign-off
 
 ## Must Have
-- [ ] `pixi run tests` green.
-- [ ] `freecad/Shelving/core/edit.py` exports `split_region`, `merge_at`, and
+- [x] `pixi run tests` green.
+- [x] `freecad/Shelving/core/edit.py` exports `split_region`, `merge_at`, and
       `EditError`. Every function takes a `Unit` and returns a `Unit`, never
       mutating its argument, and imports no Qt and no FreeCAD.
-- [ ] `split_region(unit, region_id, axis, material)` divides a `Bay` into two
+- [x] `split_region(unit, region_id, axis, material)` divides a `Bay` into two
       equal bays separated by a board, and refuses a `Void`, a `Division`, and
       an unknown id, each naming what it refused.
-- [ ] `merge_at(unit, board_id)` removes a board and merges the regions either
+- [x] `merge_at(unit, board_id)` removes a board and merges the regions either
       side into one, and refuses a board whose neighbours are not both regions,
       naming it.
-- [ ] Splitting then merging at the new board returns a unit whose tree shape
+- [x] Splitting then merging at the new board returns a unit whose tree shape
       equals the original. Asserted for at least three starting shapes.
-- [ ] `freecad/Shelving/editor/scene.py` builds a `QGraphicsScene` from a
+- [x] `freecad/Shelving/editor/scene.py` builds a `QGraphicsScene` from a
       `Unit` and its solved spaces, with each item carrying the id of the region
       or board it draws, and hit-testing a scene point returning that id.
-- [ ] The scene is tested headlessly: an offscreen `QApplication`, an asserted
+- [x] The scene is tested headlessly: an offscreen `QApplication`, an asserted
       item count and bounding rect, hit tests landing on the expected ids, and a
       simulated click through `QtTest` reaching the scene.
-- [ ] A `Void` draws distinctly from a `Bay`, and a selected region draws
+- [x] A `Void` draws distinctly from a `Bay`, and a selected region draws
       distinctly from an unselected one. Asserted by item state, not by pixels.
-- [ ] `Shelving_EditUnit` opens the panel on exactly one selected container,
+- [x] `Shelving_EditUnit` opens the panel on exactly one selected container,
       refusing anything else with a message.
-- [ ] The panel opens one transaction on show, commits on OK, aborts on Cancel.
+- [x] The panel opens one transaction on show, commits on OK, aborts on Cancel.
       A test drives the underlying session object, not the panel, through a
       split and a cancel, and asserts the document is byte-identical in board
       count, names, sizes and placements.
-- [ ] An edit that will not solve leaves the document at the last state that
+- [x] An edit that will not solve leaves the document at the last state that
       did: the session returns the error rather than raising, and no partial
       write reaches the document. One test per refusal reason.
-- [ ] `tools/freecad_editor_smoke.py` prints `shelving editor OK` and
+- [x] `tools/freecad_editor_smoke.py` prints `shelving editor OK` and
       `tools/run-tests.sh` greps for it.
-- [ ] `docs/manual-qa.md` has an M9 section covering the panel shell, selection,
+- [x] `docs/manual-qa.md` has an M9 section covering the panel shell, selection,
       split, merge, and undo of a whole session.
-- [ ] `mypy --strict` clean.
+- [x] `mypy --strict` clean.
 
 ## Frontier Advice
 
@@ -145,16 +145,16 @@ Every length identifier carries `_mm`.
 
 ## Execution Plan
 
-- [ ] **Step 1** (`freecad/Shelving/core/edit.py`, `freecad/Shelving/core/tests/test_edit.py`): Create the module. `EditError(ValueError)` carrying the offending id. `split_region(unit, region_id, axis, material=None) -> Unit` rebuilding the tree with the named `Bay` replaced by a `Division` along `axis` holding bay, board, bay, both bays `Fill`; refuse a `Void`, a `Division`, and an unknown id. `merge_at(unit, board_id) -> Unit` replacing a board and its two neighbouring regions with one region carrying the first's rule; refuse a board whose neighbours are not both regions and an unknown id. Both must return a new tree and leave the argument untouched, asserted. Tests: each refusal; split then merge round-trips the tree shape for a single bay, a nested division, and a stepped unit; the argument unit is unchanged after each call.
+- [x] **Step 1** (`freecad/Shelving/core/edit.py`, `freecad/Shelving/core/tests/test_edit.py`): Create the module. `EditError(ValueError)` carrying the offending id. `split_region(unit, region_id, axis, material=None) -> Unit` rebuilding the tree with the named `Bay` replaced by a `Division` along `axis` holding bay, board, bay, both bays `Fill`; refuse a `Void`, a `Division`, and an unknown id. `merge_at(unit, board_id) -> Unit` replacing a board and its two neighbouring regions with one region carrying the first's rule; refuse a board whose neighbours are not both regions and an unknown id. Both must return a new tree and leave the argument untouched, asserted. Tests: each refusal; split then merge round-trips the tree shape for a single bay, a nested division, and a stepped unit; the argument unit is unchanged after each call.
 
-- [ ] **Step 2** (`freecad/Shelving/editor/scene.py`): Create the scene builder, importing Qt but no FreeCAD. `build_scene(unit, spaces, selected_id=None) -> QGraphicsScene` adding one rect per region and per board, projected along the unit's depth axis, each carrying its id via `setData`. A `Void` gets a distinct brush from a `Bay`, and the selected item gets a distinct pen. `hit_test(scene, point) -> str | None` returning the id of the topmost item at a scene point. Keep the drawing primitives shared with `freecad/Shelving/core/svg.py` in spirit but do not import it: an SVG string cannot become Qt items.
+- [x] **Step 2** (`freecad/Shelving/editor/scene.py`): Create the scene builder, importing Qt but no FreeCAD. `build_scene(unit, spaces, selected_id=None) -> QGraphicsScene` adding one rect per region and per board, projected along the unit's depth axis, each carrying its id via `setData`. A `Void` gets a distinct brush from a `Bay`, and the selected item gets a distinct pen. `hit_test(scene, point) -> str | None` returning the id of the topmost item at a scene point. Keep the drawing primitives shared with `freecad/Shelving/core/svg.py` in spirit but do not import it: an SVG string cannot become Qt items.
 
-- [ ] **Step 3** (`freecad/Shelving/editor/tests/test_scene.py` or the repo's test location for FreeCAD-side code): Create the offscreen suite. Set `QT_QPA_PLATFORM=offscreen` before importing PySide6 and reuse an existing `QApplication`. Assert: item count matches regions plus boards; the scene bounding rect matches the unit's projected extent; hit tests at points inside a known bay, a known board, and a known void return those ids; a point outside returns `None`; the selected item's pen differs from the others'; a `Void`'s brush differs from a `Bay`'s; and a `QtTest.QTest.mouseClick` on a view over the scene reaches the scene and reports the expected id.
+- [x] **Step 3** (`tests/test_editor_scene.py`): Create the offscreen suite. Set `QT_QPA_PLATFORM=offscreen` before importing PySide6 and reuse an existing `QApplication`. Assert: item count matches regions plus boards; the scene bounding rect matches the unit's projected extent; hit tests at points inside a known bay, a known board, and a known void return those ids; a point outside returns `None`; the selected item's pen differs from the others'; a `Void`'s brush differs from a `Bay`'s; and a `QtTest.QTest.mouseClick` on a view over the scene reaches the scene and reports the expected id.
 
-- [ ] **Step 4** (`freecad/Shelving/editor/session.py`): Create the session, which owns the document side and holds every decision the panel would otherwise make. Construct from a container: read it, scan it, apply stored rules, and keep the resulting `Unit` plus the catalog. `open()` starting the transaction. `select(id)`, `can_split()`, `can_merge()` reporting what the current selection permits. `split(axis)` and `merge()` calling the core edit, re-solving, writing through sh-018's write path, and returning either the new state or a structured failure carrying the message and the offending id; on failure change nothing. `commit()` and `cancel()` ending the transaction. No Qt anywhere in this module.
+- [x] **Step 4** (`freecad/Shelving/editor/session.py`): Create the session, which owns the document side and holds every decision the panel would otherwise make. Construct from a container: read it, scan it, apply stored rules, and keep the resulting `Unit` plus the catalog. `open()` starting the transaction. `select(id)`, `can_split()`, `can_merge()` reporting what the current selection permits. `split(axis)` and `merge()` calling the core edit, re-solving, writing through sh-018's write path, and returning either the new state or a structured failure carrying the message and the offending id; on failure change nothing. `commit()` and `cancel()` ending the transaction. No Qt anywhere in this module.
 
-- [ ] **Step 5** (`freecad/Shelving/editor/panel.py`, `freecad/Shelving/commands/edit_unit.py`, `freecad/Shelving/init_gui.py`): The task panel and its command. The panel holds a `QGraphicsView` over the scene, buttons for Split Horizontal, Split Vertical and Delete, and a message line; it constructs a session, rebuilds the scene after each edit, enables buttons from `can_split` and `can_merge`, and shows a failure's message without changing the view. `getStandardButtons` returning OK and Cancel, `accept` calling `commit`, `reject` calling `cancel`. `Shelving_EditUnit` requires exactly one selected container and shows the panel through `FreeCADGui.Control.showDialog`, behind the headless-safe guard. Add the id to `init_gui`'s `command_ids`.
+- [x] **Step 5** (`freecad/Shelving/editor/panel.py`, `freecad/Shelving/commands/edit_unit.py`, `freecad/Shelving/init_gui.py`): The task panel and its command. The panel holds a `QGraphicsView` over the scene, buttons for Split Horizontal, Split Vertical and Delete, and a message line; it constructs a session, rebuilds the scene after each edit, enables buttons from `can_split` and `can_merge`, and shows a failure's message without changing the view. `getStandardButtons` returning OK and Cancel, `accept` calling `commit`, `reject` calling `cancel`. `Shelving_EditUnit` requires exactly one selected container and shows the panel through `FreeCADGui.Control.showDialog`, behind the headless-safe guard. Add the id to `init_gui`'s `command_ids`.
 
-- [ ] **Step 6** (`tools/freecad_editor_smoke.py`, `tools/run-tests.sh`): The headless functional check, driving the SESSION rather than the panel, since `FreeCADGui.Control` does not exist under `freecadcmd`. Build a document with a unit, open a session, and assert: selecting a bay permits split and not merge; splitting writes one new board and two bays; selecting that board permits merge; merging removes it and restores the original board count and names; an edit that cannot solve returns a failure and leaves board count, names, sizes and placements unchanged; cancel after several edits restores the document to its opening state exactly; commit after the same edits leaves them in place and one undo reverses the lot. Print `shelving editor OK` last and add a matching block to `tools/run-tests.sh`.
+- [x] **Step 6** (`tools/freecad_editor_smoke.py`, `tools/run-tests.sh`): The headless functional check, driving the SESSION rather than the panel, since `FreeCADGui.Control` does not exist under `freecadcmd`. Build a document with a unit, open a session, and assert: selecting a bay permits split and not merge; splitting writes one new board and two bays; selecting that board permits merge; merging removes it and restores the original board count and names; an edit that cannot solve returns a failure and leaves board count, names, sizes and placements unchanged; cancel after several edits restores the document to its opening state exactly; commit after the same edits leaves them in place and one undo reverses the lot. Print `shelving editor OK` last and add a matching block to `tools/run-tests.sh`.
 
-- [ ] **Step 7** (`docs/manual-qa.md`, `README.md`): Add an `## M9` section in the file's numbered-steps-then-expected-result shape, covering what only a human can check: the panel opens and docks, the elevation is legible and matches the 3D, clicking a compartment highlights it, Split and Delete are enabled only when they apply, the 3D follows each edit, Cancel reverses everything, and one undo after OK reverses the whole session. Extend the README glossary with the three editor layers and the session, in the section's existing one-bullet-per-term shape.
+- [x] **Step 7** (`docs/manual-qa.md`, `README.md`): Add an `## M9` section in the file's numbered-steps-then-expected-result shape, covering what only a human can check: the panel opens and docks, the elevation is legible and matches the 3D, clicking a compartment highlights it, Split and Delete are enabled only when they apply, the 3D follows each edit, Cancel reverses everything, and one undo after OK reverses the whole session. Extend the README glossary with the three editor layers and the session, in the section's existing one-bullet-per-term shape.
