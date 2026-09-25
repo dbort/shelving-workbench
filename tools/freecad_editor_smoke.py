@@ -203,6 +203,11 @@ def _assert_session_matches_document(session: Session) -> None:
     container, before any further edit or write happens."""
     doc = session.container.Document
     tol_mm = 1e-6
+    document_board_names = {obj.Name for obj in _board_objects(session.container)}
+    assert _board_ids(session.unit.root) == document_board_names, (
+        _board_ids(session.unit.root),
+        document_board_names,
+    )
     for board_id in _board_ids(session.unit.root):
         space = session.spaces[board_id]
         obj = cast("_BoxFeature", doc.getObject(board_id))
@@ -250,14 +255,17 @@ def _check_an_editor_layout_survives_a_rescan() -> None:
         # division split_left just nested, the same axis as this split, so
         # it splices into that division's own run rather than nesting
         # again - the exact structure bug-006's rescan could not recover.
-        topleft_bay_id = _find_bay_ids_in_order(session.unit.root)[0]
+        # solve places a run's items from the axis minimum up, so of the two
+        # bays that division split_left just made, index [1] (not [0]) is
+        # the upper, top-left one.
+        topleft_bay_id = _find_bay_ids_in_order(session.unit.root)[1]
         session.select(topleft_bay_id)
         assert session.split("vertical") is None
         doc.recompute()
 
         session.commit()
         doc.recompute()
-        left_side_before = _board_snapshot_by_name(container)
+        boards_before = _board_snapshot_by_name(container)
 
         fresh = Session(container)
         _assert_session_matches_document(fresh)
@@ -270,9 +278,9 @@ def _check_an_editor_layout_survives_a_rescan() -> None:
         fresh.commit()
         doc.recompute()
 
-        left_side_after = _board_snapshot_by_name(container)
-        for name, snapshot_before in left_side_before.items():
-            assert left_side_after[name] == snapshot_before, name
+        boards_after = _board_snapshot_by_name(container)
+        for name, snapshot_before in boards_before.items():
+            assert boards_after[name] == snapshot_before, name
     finally:
         FreeCAD.closeDocument(doc.Name)
 

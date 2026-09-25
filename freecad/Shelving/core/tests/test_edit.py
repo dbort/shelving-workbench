@@ -108,6 +108,61 @@ def _run_unit(rule_a: SizeRule, rule_b: SizeRule, width_mm: float = 900.0) -> Un
     )
 
 
+def _multi_weighted_run_unit() -> Unit:
+    """A flat ``Axis.X`` run with four bays: ``Weighted(1.0)``,
+    ``Weighted(2.5)``, ``Fill()``, ``Weighted(4.0)``. Editing ``bay2``
+    leaves three OTHER driven siblings of different weights in the very
+    same run, exercising ``_other_driven_anchor`` past the trivial
+    single-other-sibling case every other fixture in this module gives it."""
+    return Unit(
+        size_mm=Vec3(2400.0, 300.0, 900.0),
+        default_material=PLY,
+        root=Division(
+            axis=Axis.X,
+            items=[
+                Board(role="b0"),
+                Bay(rule=Weighted(1.0), id="bay1"),
+                Board(role="b1"),
+                Bay(rule=Weighted(2.5), id="bay2"),
+                Board(role="b2"),
+                Bay(rule=Fill(), id="bay3"),
+                Board(role="b3"),
+                Bay(rule=Weighted(4.0), id="bay4"),
+                Board(role="b4"),
+            ],
+        ),
+        depth_axis=Axis.Y,
+    )
+
+
+def _fixed_and_weighted_merge_unit() -> Unit:
+    """A flat ``Axis.X`` run whose ``merge_board`` sits between a ``Fixed``
+    bay and a ``Weighted`` one, with two more ``Weighted`` bays of
+    different weights further down the same run: the non-trivial
+    ``Weighted`` branch of ``_merged_rule`` (the two merging neighbours are
+    not both ``Fixed``), anchored against an ``_other_driven_anchor`` that
+    has more than one candidate to choose from."""
+    return Unit(
+        size_mm=Vec3(2400.0, 300.0, 900.0),
+        default_material=PLY,
+        root=Division(
+            axis=Axis.X,
+            items=[
+                Board(role="b0"),
+                Bay(rule=Fixed(300.0), id="fixed_bay"),
+                Board(role="merge_board", id="merge_board"),
+                Bay(rule=Weighted(2.0), id="weighted_bay"),
+                Board(role="b1"),
+                Bay(rule=Weighted(3.5), id="bay_c"),
+                Board(role="b2"),
+                Bay(rule=Weighted(1.5), id="bay_d"),
+                Board(role="b3"),
+            ],
+        ),
+        depth_axis=Axis.Y,
+    )
+
+
 def _find_bay_id(region: Region) -> str:
     """The id of the first ``Bay`` found in ``region``'s subtree, depth first."""
     found = _find_bay(region)
@@ -129,6 +184,26 @@ def _find_bay(region: Region) -> str | None:
                 if found is not None:
                     return found
     return None
+
+
+def _find_bay_ids_in_order(region: Region) -> list[str]:
+    """Every ``Bay`` id in ``region``'s subtree, depth first: within one
+    ``Division``, item order is solved-position order (``solve`` places a
+    run's items from the axis minimum up), so the bays a single split just
+    produced come back lower-position first."""
+    out: list[str] = []
+    _collect_bay_ids(region, out)
+    return out
+
+
+def _collect_bay_ids(region: Region, out: list[str]) -> None:
+    if isinstance(region, Bay):
+        out.append(region.id)
+        return
+    if isinstance(region, Division):
+        for item in region.items:
+            if not isinstance(item, Board):
+                _collect_bay_ids(item, out)
 
 
 def _find_region(region: Region, node_id: str) -> Region | None:
@@ -602,7 +677,175 @@ def test_split_region_bug_006_sequence_preserves_every_prior_boards_geometry() -
     assert not _has_same_axis_nesting(unit.root)
     spaces = solve(unit, CATALOG)
 
-    topleft_bay_id = _find_bay_id(unit.root)
+    # The shelf-left split just nested a fresh Axis.Z Division holding the
+    # lower and upper halves of the old left bay, in that solved-position
+    # order; index [1] is the upper (top-left) one, not [0] (bottom-left).
+    ordered_bay_ids = _find_bay_ids_in_order(unit.root)
+    lower_left_bay_id, topleft_bay_id = ordered_bay_ids[0], ordered_bay_ids[1]
+    assert spaces[topleft_bay_id].origin.z_mm > spaces[lower_left_bay_id].origin.z_mm
     unit = split_region(unit, topleft_bay_id, Axis.Z, CATALOG)
     _assert_surviving_boards_unchanged(spaces, unit)
     assert not _has_same_axis_nesting(unit.root)
+
+
+# --- F2: three-or-more-other-driven-siblings coverage ------------------------
+
+
+def test_split_preserves_three_other_weighted_siblings_of_different_weights() -> None:
+    """Splitting ``bay2`` in a four-bay run leaves ``bay1`` (``Weighted(1.0)``),
+    ``bay3`` (``Fill()``) and ``bay4`` (``Weighted(4.0)``) all at their
+    pre-split ``Space``, not only the single other driven sibling every other
+    split fixture in this module gives ``_other_driven_anchor``."""
+    unit = _multi_weighted_run_unit()
+    spaces_before = solve(unit, CATALOG)
+
+    split = split_region(unit, "bay2", Axis.X, CATALOG)
+    assert not _has_same_axis_nesting(split.root)
+    _assert_surviving_boards_unchanged(spaces_before, split)
+    spaces_after = solve(split, CATALOG)
+    for bay_id in ("bay1", "bay3", "bay4"):
+        assert _spaces_equal(spaces_after[bay_id], spaces_before[bay_id]), bay_id
+
+
+def test_merge_preserves_three_other_weighted_siblings_of_different_weights() -> None:
+    """The matching merge back, in the same four-bay run: splitting ``bay2``
+    then merging at the board the split just added restores ``bay2``'s own
+    geometry, and still leaves ``bay1``, ``bay3`` and ``bay4`` untouched."""
+    unit = _multi_weighted_run_unit()
+    spaces_before = solve(unit, CATALOG)
+
+    split = split_region(unit, "bay2", Axis.X, CATALOG)
+    board_id = _new_board_id(unit, split)
+    spaces_after_split = solve(split, CATALOG)
+
+    merged = merge_at(split, board_id, CATALOG)
+    assert not _has_same_axis_nesting(merged.root)
+    _assert_surviving_boards_unchanged(spaces_after_split, merged)
+    spaces_after_merge = solve(merged, CATALOG)
+    for bay_id in ("bay1", "bay3", "bay4"):
+        assert _spaces_equal(spaces_after_merge[bay_id], spaces_before[bay_id]), bay_id
+    merged_root = merged.root
+    assert isinstance(merged_root, Division)
+    merged_bay2 = merged_root.items[3]
+    assert isinstance(merged_bay2, Bay)
+    assert _spaces_equal(spaces_after_merge[merged_bay2.id], spaces_before["bay2"])
+
+
+def test_merge_a_fixed_bay_with_a_weighted_one_leaves_other_weighted_siblings() -> None:
+    """Merging away ``merge_board`` combines a ``Fixed`` bay with a
+    ``Weighted`` one - the non-``Fixed``/``Fixed`` branch of
+    ``_merged_rule`` - while ``bay_c`` and ``bay_d``, two more ``Weighted``
+    bays of different weights elsewhere in the run, keep their pre-merge
+    ``Space`` exactly."""
+    unit = _fixed_and_weighted_merge_unit()
+    spaces_before = solve(unit, CATALOG)
+
+    merged = merge_at(unit, "merge_board", CATALOG)
+    assert not _has_same_axis_nesting(merged.root)
+    _assert_surviving_boards_unchanged(spaces_before, merged)
+    spaces_after = solve(merged, CATALOG)
+    for bay_id in ("bay_c", "bay_d"):
+        assert _spaces_equal(spaces_after[bay_id], spaces_before[bay_id]), bay_id
+
+    merged_root = merged.root
+    assert isinstance(merged_root, Division)
+    merged_bay = merged_root.items[1]
+    assert isinstance(merged_bay, Bay)
+    assert isinstance(merged_bay.rule, Weighted)
+    fixed_extent_mm = spaces_before["fixed_bay"].extent_mm(0)
+    weighted_extent_mm = spaces_before["weighted_bay"].extent_mm(0)
+    board_extent_mm = spaces_before["merge_board"].extent_mm(0)
+    expected_extent_mm = fixed_extent_mm + board_extent_mm + weighted_extent_mm
+    assert abs(spaces_after[merged_bay.id].extent_mm(0) - expected_extent_mm) <= 1e-6
+
+
+# --- N5: split's own item shape at the splice site ---------------------------
+
+
+def test_split_region_spliced_items_are_bay_board_bay_in_place() -> None:
+    """The literal Must Have wording for the splice case (the bay's parent
+    already runs on the split axis): the parent's ``items`` gain exactly
+    ``Bay, Board, Bay`` at the split bay's old slot, no more, no fewer."""
+    unit = _run_unit(Weighted(1.5), Weighted(2.5))
+    assert isinstance(unit.root, Division)
+    bay_a = unit.root.items[1]
+    assert isinstance(bay_a, Bay)
+    index = 1
+
+    split = split_region(unit, bay_a.id, Axis.X, CATALOG)
+    assert isinstance(split.root, Division)
+    spliced = split.root.items[index : index + 3]
+    kinds = [type(item).__name__ for item in spliced]
+    assert kinds == ["Bay", "Board", "Bay"], kinds
+    # Nothing else in the run moved: nothing before or after the spliced
+    # slot changed identity or count.
+    assert len(split.root.items) == len(unit.root.items) + 2
+    assert split.root.items[:index] == unit.root.items[:index]
+    assert split.root.items[index + 3 :] == unit.root.items[index + 1 :]
+
+
+# --- N4: a merge's collapse never nests a same-axis Division either --------
+
+
+def _bare_column_unit() -> Unit:
+    """A ``Division`` (axis ``Z``) whose middle item is an ``Axis.X``
+    ``Division`` holding a single bare ``Bay``: no side boards flank it, so
+    a splice-then-nest-then-collapse sequence on that bay can reduce the
+    ``Axis.X`` division to one item and promote it straight into the
+    ``Axis.Z`` run above - the same axis as the promoted item once the
+    intervening split nests a ``Division`` sharing it. A second ``Weighted``
+    bay elsewhere in the ``Axis.Z`` run gives the promoted items' own
+    ``_other_driven_anchor`` something real to solve against."""
+    return Unit(
+        size_mm=Vec3(600.0, 300.0, 1800.0),
+        default_material=PLY,
+        root=Division(
+            axis=Axis.Z,
+            items=[
+                Board(role="bottom"),
+                Division(axis=Axis.X, items=[Bay(rule=Weighted(1.0))]),
+                Board(role="mid"),
+                Bay(rule=Weighted(2.0)),
+                Board(role="top"),
+            ],
+        ),
+        depth_axis=Axis.Y,
+    )
+
+
+def test_merge_collapse_never_nests_a_same_axis_division_either() -> None:
+    """The divider, shelf left, delete divider sequence: add a divider
+    (splice, the bare column's own axis), a shelf on its left half (nest,
+    a different axis), then delete the divider - the delete collapses the
+    ``Axis.X`` division to its one surviving item, the ``Axis.Z`` division
+    ``shelf left`` just nested, which shares the grandparent (``Axis.Z``)
+    run's own axis; that promoted division's items must splice into the
+    grandparent's run rather than nest inside it, and every surviving
+    board - the unit's ``bottom``, ``mid`` and ``top`` - must keep its
+    solved ``Space`` throughout."""
+    unit = _bare_column_unit()
+    spaces_before_divider = solve(unit, CATALOG)
+
+    boards_before_divider = _all_board_ids(unit.root)
+    bay_id = _find_bay_id(unit.root)
+    unit = split_region(unit, bay_id, Axis.X, CATALOG)
+    assert not _has_same_axis_nesting(unit.root)
+    divider_id = next(iter(_all_board_ids(unit.root) - boards_before_divider))
+    _assert_surviving_boards_unchanged(spaces_before_divider, unit)
+    spaces_after_divider = solve(unit, CATALOG)
+
+    left_bay_id = _find_bay_id(unit.root)
+    unit = split_region(unit, left_bay_id, Axis.Z, CATALOG)
+    assert not _has_same_axis_nesting(unit.root)
+    _assert_surviving_boards_unchanged(spaces_after_divider, unit)
+
+    merged = merge_at(unit, divider_id, CATALOG)
+    assert not _has_same_axis_nesting(merged.root)
+    _assert_surviving_boards_unchanged(spaces_before_divider, merged)
+
+    merged_root = merged.root
+    assert isinstance(merged_root, Division)
+    assert merged_root.axis == Axis.Z
+    # The promoted division's items spliced straight into the Axis.Z run in
+    # place of the collapsed Axis.X division: no nested Division survives.
+    assert all(not isinstance(item, Division) for item in merged_root.items)

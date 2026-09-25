@@ -490,14 +490,14 @@ single unit.
 
 1. Run **Create Unit**, open **Edit Unit**, and add a divider (case 3).
 2. Select the left-hand opening and click **Add Shelf**.
-3. Select the upper-left opening (the smaller bay the last shelf just made)
-   and click **Add Shelf** again.
+3. Select the upper-left opening (the upper of the two equal halves the
+   last shelf just made) and click **Add Shelf** again.
 4. Click **OK**.
 5. Run **Edit Unit** again, select the right-hand opening, and click
-   **Add Divider**.
+   **Add Shelf**.
 6. Click **OK**.
 
 Expected: at every step the elevation and the 3D view show only the new
 board moving; neither shelf added on the left in steps 2-3 shifts when the
-divider on the right is added in step 5, and re-opening **Edit Unit** after
-step 6 still shows both left-hand shelves exactly where cases 2-3 put them.
+shelf on the right is added in step 5, and re-opening **Edit Unit** after
+step 6 still shows both left-hand shelves exactly where steps 2-3 put them.

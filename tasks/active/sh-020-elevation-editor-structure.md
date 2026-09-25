@@ -1,8 +1,8 @@
 ---
 id: sh-020
 title: "The elevation editor: structure"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 2
 blocked_by: [sh-019]
 ---
@@ -62,7 +62,7 @@ Milestone M9, part 1 of 2.
       inserts `Bay, Board, Bay` into that parent's run; no same-axis
       `Division` is ever nested directly inside another. Asserted in
       `test_edit.py`.
-- [ ] A merge never leaves a same-axis `Division` directly inside another,
+- [x] A merge never leaves a same-axis `Division` directly inside another,
       and moves no surviving board. Asserted in `test_edit.py` for the
       divider, shelf left, delete divider sequence.
 - [x] No edit moves a board it did not create or delete: after every split and

@@ -116,22 +116,23 @@ def split_region(
     """``unit`` with the ``Bay`` named ``region_id`` replaced by a board on
     ``axis``, splitting it into two bays.
 
-    When ``region_id``'s parent ``Division`` already runs along ``axis``
-    (or ``region_id`` is the tree's own root), the replacement is a new
-    ``Division`` on ``axis`` holding ``Bay``, ``Board``, ``Bay``, carrying
-    the split ``Bay``'s own rule so the slot it occupied in its parent still
-    claims the same share of space; a fresh run has no other region to
-    preserve, so both new bays are always ``Fill``. Otherwise ``region_id``'s
-    parent already runs along ``axis``: rather than nest a same-axis
-    ``Division`` inside another, which scanning cannot tell apart from a
-    flat run of the same boards and would then re-solve to different sizes
-    (bug-006), the two new bays splice directly into the parent's own
-    ``items`` in ``region_id``'s place, with rules chosen so ``solve``
-    reproduces every other region's pre-edit size in that run: a ``Fixed``
-    bay splits into two ``Fixed`` halves of ``(size - thickness) / 2``; a
-    ``Weighted`` or ``Fill`` bay splits into two ``Weighted`` halves solved
-    against another driven sibling in the run, or two ``Fill`` halves when
-    no such sibling exists.
+    When ``region_id``'s parent ``Division`` runs along a *different* axis
+    than ``axis`` (or ``region_id`` is the tree's own root, which has no
+    parent), the replacement is a new ``Division`` on ``axis`` holding
+    ``Bay``, ``Board``, ``Bay``, carrying the split ``Bay``'s own rule so
+    the slot it occupied in its parent still claims the same share of
+    space; a fresh run has no other region to preserve, so both new bays
+    are always ``Fill``. Otherwise ``region_id``'s parent already runs
+    along ``axis``: rather than nest a same-axis ``Division`` inside
+    another, which scanning cannot tell apart from a flat run of the same
+    boards and would then re-solve to different sizes (bug-006), the two
+    new bays splice directly into the parent's own ``items`` in
+    ``region_id``'s place, with rules chosen so ``solve`` reproduces every
+    other region's pre-edit size in that run: a ``Fixed`` bay splits into
+    two ``Fixed`` halves of ``(size - thickness) / 2``; a ``Weighted`` or
+    ``Fill`` bay splits into two ``Weighted`` halves solved against another
+    driven sibling in the run, or two ``Fill`` halves when no such sibling
+    exists.
 
     ``material`` is the new board's material, ``None`` meaning it inherits
     ``unit.default_material`` the same as any other board. Raises
@@ -276,6 +277,16 @@ def merge_at(unit: Unit, board_id: str, catalog: Catalog) -> Unit:
     names no board in ``unit``, or a board whose neighbour on either side is
     missing (the end of a run) or is itself a ``Board`` rather than a
     region.
+
+    A collapse can promote a surviving ``Division`` (``before``'s own
+    subtree, carried up whole) to sit where the collapsing ``Division``
+    used to, one level up in the tree; when that promoted ``Division``'s
+    axis matches its *new* parent's axis, same-axis nesting would result
+    (bug-006's shape, reached through merge rather than split), so its
+    items splice into the new parent's run in its place instead, with
+    ``Fixed`` items keeping the size they already had and any driven item
+    getting a fresh geometry-preserving weight against the new run's other
+    driven siblings, the same as :func:`split_region`'s splice case.
     """
     spaces = solve(unit, catalog)
     new_root, found = _merge_at(unit.root, board_id, spaces)
@@ -316,16 +327,58 @@ def _merge_at(
             return dataclasses.replace(region, items=merged_items), True
     new_items: list[Item] = []
     changed = False
-    for item in items:
+    for index, item in enumerate(items):
         if isinstance(item, Board):
             new_items.append(item)
             continue
         new_child, child_found = _merge_at(item, board_id, spaces)
-        new_items.append(new_child)
+        if (
+            child_found
+            and isinstance(new_child, Division)
+            and new_child.axis == region.axis
+        ):
+            new_items.extend(
+                _splice_collapsed_child(items, index, axis_index, new_child, spaces)
+            )
+        else:
+            new_items.append(new_child)
         changed = changed or child_found
     if changed:
         return dataclasses.replace(region, items=new_items), True
     return region, False
+
+
+def _splice_collapsed_child(
+    items: Sequence[Item],
+    index: int,
+    axis_index: AxisIndex,
+    new_child: Division,
+    spaces: Mapping[str, Space],
+) -> list[Item]:
+    """``new_child``'s own items, each rewritten so ``solve`` still gives it
+    its pre-merge size once it sits directly in ``items`` (``new_child``'s
+    new parent's run) rather than inside ``new_child`` itself: a ``Fixed``
+    item's size never depended on context, so it is unchanged, but a driven
+    (``Weighted`` or ``Fill``) item's weight was scaled to ``new_child``'s
+    own now-discarded ``distribute()`` call and must be re-solved against
+    ``items``'s other driven siblings (or given ``Fill`` when ``items`` has
+    none), the same rule :func:`_split_halves_rules` and :func:`_merged_rule`
+    use.
+    """
+    anchor = _other_driven_anchor(items, {index}, spaces, axis_index)
+    spliced: list[Item] = []
+    for child_item in new_child.items:
+        if isinstance(child_item, Board) or _driven_weight(child_item.rule) is None:
+            spliced.append(child_item)
+            continue
+        if anchor is None:
+            spliced.append(dataclasses.replace(child_item, rule=Fill()))
+            continue
+        anchor_weight, anchor_size_mm = anchor
+        size_mm = spaces[child_item.id].extent_mm(axis_index)
+        new_rule: SizeRule = Weighted(weight=size_mm * anchor_weight / anchor_size_mm)
+        spliced.append(dataclasses.replace(child_item, rule=new_rule))
+    return spliced
 
 
 def _merged_rule(
