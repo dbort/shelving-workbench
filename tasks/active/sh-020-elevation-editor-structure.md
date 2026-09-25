@@ -1,9 +1,9 @@
 ---
 id: sh-020
 title: "The elevation editor: structure"
-current_agent: user
-current_phase: blocked_needs_human
-review_rejections: 3
+current_agent: implementer
+current_phase: implementation
+review_rejections: 0
 blocked_by: [sh-019]
 ---
 
