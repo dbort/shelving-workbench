@@ -285,6 +285,65 @@ def _check_an_editor_layout_survives_a_rescan() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
+def _check_deleting_a_divider_reaches_the_merge_collapse_splice() -> None:
+    """F1 (review round 4): the collapse-then-splice path
+    ``_splice_collapsed_child`` implements is reachable from a real
+    ``Session`` edit, not only a hand-built core fixture. On the default
+    unit: add a shelf, a divider in the bay it creates below the shelf, a
+    shelf left of that divider, then delete the divider - the delete
+    collapses the divider's ``Axis.X`` division down to the ``Axis.Z``
+    division the "shelf left" split nested, which shares the parent
+    ``Axis.Z`` division the first shelf itself nested, and must splice
+    rather than nest. Only the container's four boundary boards are
+    checked for exact placement and size (bug-008: a split-created board's
+    real object Name never equals its core id, so a *further* unrelated
+    write - here, each split after the one that created it - deletes and
+    recreates it under a new Name; the boundary boards are exempt because
+    scanning gave them a Name-as-id from the start)."""
+    doc = FreeCAD.newDocument("editor_smoke_merge_collapse_reachable")
+    try:
+        container = create_unit(doc)
+        doc.recompute()
+
+        session = Session(container)
+        session.open()
+        try:
+            bay_id = _find_bay_id(session.unit.root)
+            session.select(bay_id)
+            assert session.split("vertical") is None  # a shelf
+            doc.recompute()
+
+            lower_bay_id = _find_bay_ids_in_order(session.unit.root)[0]
+            unit_before_divider = session.unit
+            session.select(lower_bay_id)
+            assert session.split("horizontal") is None  # a divider below it
+            doc.recompute()
+            divider_id = _find_new_board_id(unit_before_divider.root, session.unit.root)
+
+            left_bay_id = _find_bay_ids_in_order(session.unit.root)[0]
+            session.select(left_bay_id)
+            assert session.split("vertical") is None  # a shelf left of it
+            doc.recompute()
+
+            snapshot_before_delete = _board_snapshot_by_name(container)
+            board_count_before_delete = len(_board_names(container))
+
+            session.select(divider_id)
+            assert session.can_merge() is True
+            result = session.merge()
+            assert result is None, result
+            doc.recompute()
+
+            assert len(_board_names(container)) == board_count_before_delete - 1
+            snapshot_after_delete = _board_snapshot_by_name(container)
+            for name in ("bottom", "top", "left_side", "right_side"):
+                assert snapshot_after_delete[name] == snapshot_before_delete[name], name
+        finally:
+            session.cancel()
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
 def _tiny_unit() -> Unit:
     """A closed single-bay unit 40mm wide: its interior bay (40 - 2*18 = 4mm)
     is far too narrow to hold a divider board, so splitting it always fails
@@ -645,6 +704,7 @@ def main() -> None:
     _check_cancel_restores_the_opening_state()
     _check_commit_then_one_undo_reverses_the_session()
     _check_an_editor_layout_survives_a_rescan()
+    _check_deleting_a_divider_reaches_the_merge_collapse_splice()
     print("shelving editor OK")
     sys.stdout.flush()
 

@@ -1,8 +1,8 @@
 ---
 id: sh-020
 title: "The elevation editor: structure"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 0
 blocked_by: [sh-019]
 ---
@@ -64,7 +64,8 @@ Milestone M9, part 1 of 2.
       `test_edit.py`.
 - [x] A merge never leaves a same-axis `Division` directly inside another,
       and moves no surviving board. Asserted in `test_edit.py` for the
-      divider, shelf left, delete divider sequence.
+      shelf, divider below it, shelf left of the divider, delete divider
+      sequence.
 - [x] No edit moves a board it did not create or delete: after every split and
       merge, every surviving board's solved origin and size match its
       pre-edit values within `1e-6` mm. Asserted in `test_edit.py` for splits
@@ -185,10 +186,13 @@ RULES:
    avoid hand moves.
 6. MERGE KEEPS RUNS FLAT TOO. When a merge collapses a `Division` to a
    single region and that region is itself a `Division` on the
-   grandparent's axis (divider, shelf left, delete divider), splice its
-   items into the grandparent's run in its place, assigning rules by rule 2
-   so no board moves. Dropping a divided second neighbour's subtree is
-   otherwise unchanged.
+   grandparent's axis (shelf, divider below it, shelf left of the divider,
+   delete divider - "divider, shelf left, delete divider" alone never
+   collapses on a real unit, since the divider's own two bays leave the
+   divider's Division with two items, not one), splice its items into the
+   grandparent's run in its place, assigning rules by rule 2 so no board
+   moves. Dropping a divided second neighbour's subtree is otherwise
+   unchanged.
 
 DEBUG LOG STAYS. `freecad/Shelving/debug_log.py` and its `Stopwatch` calls
 in `edit_unit.py`, `panel.py`, `session.py` are permanent diagnostics the

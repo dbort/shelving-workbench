@@ -284,12 +284,16 @@ def merge_at(unit: Unit, board_id: str, catalog: Catalog) -> Unit:
     axis matches its *new* parent's axis, same-axis nesting would result
     (bug-006's shape, reached through merge rather than split), so its
     items splice into the new parent's run in its place instead, with
-    ``Fixed`` items keeping the size they already had and any driven item
-    getting a fresh geometry-preserving weight against the new run's other
-    driven siblings, the same as :func:`split_region`'s splice case.
+    ``Fixed`` items keeping the size they already had. A driven item gets a
+    fresh geometry-preserving weight against the new run's other driven
+    siblings when the new run has one, the same as :func:`split_region`'s
+    splice case; when it has none, every driven item spliced in keeps its
+    own rule unchanged, since it and its formerly-nested siblings were
+    already the promoted ``Division``'s only claimants on the slack it
+    itself used to claim (see :func:`_splice_collapsed_child`).
     """
     spaces = solve(unit, catalog)
-    new_root, found = _merge_at(unit.root, board_id, spaces)
+    new_root, found, _collapsed = _merge_at(unit.root, board_id, spaces)
     if not found:
         raise EditError(board_id, f"no board with id {board_id!r}")
     return dataclasses.replace(unit, root=new_root)
@@ -297,9 +301,21 @@ def merge_at(unit: Unit, board_id: str, catalog: Catalog) -> Unit:
 
 def _merge_at(
     region: Region, board_id: str, spaces: Mapping[str, Space]
-) -> tuple[Region, bool]:
+) -> tuple[Region, bool, bool]:
+    """``region`` with ``board_id`` merged away, whether a board of that id
+    was found anywhere in its subtree, and whether *this exact call*
+    collapsed ``region`` itself down to one promoted item (the third
+    element, checked by the caller before splicing, N1 review round 4):
+    true only for the direct board-match branch's own ``len(merged_items)
+    == 1`` case, never for a collapse the recursive branch merely passes
+    through from deeper in the tree. A ``Division`` already same-axis
+    nested with its parent for some other reason (unreachable through
+    scanning or this module today) is therefore left alone rather than
+    spliced, matching what "a collapse can promote a surviving Division"
+    in :func:`merge_at`'s own docstring actually claims.
+    """
     if not isinstance(region, Division):
-        return region, False
+        return region, False, False
     items = region.items
     axis_index = _axis_index(region.axis)
     for index, item in enumerate(items):
@@ -323,17 +339,17 @@ def _merge_at(
             merged_items = items[: index - 1] + [merged] + items[index + 2 :]
             if len(merged_items) == 1:
                 collapsed = dataclasses.replace(merged, rule=region.rule)
-                return collapsed, True
-            return dataclasses.replace(region, items=merged_items), True
+                return collapsed, True, True
+            return dataclasses.replace(region, items=merged_items), True, False
     new_items: list[Item] = []
     changed = False
     for index, item in enumerate(items):
         if isinstance(item, Board):
             new_items.append(item)
             continue
-        new_child, child_found = _merge_at(item, board_id, spaces)
+        new_child, child_found, child_collapsed = _merge_at(item, board_id, spaces)
         if (
-            child_found
+            child_collapsed
             and isinstance(new_child, Division)
             and new_child.axis == region.axis
         ):
@@ -344,8 +360,8 @@ def _merge_at(
             new_items.append(new_child)
         changed = changed or child_found
     if changed:
-        return dataclasses.replace(region, items=new_items), True
-    return region, False
+        return dataclasses.replace(region, items=new_items), True, False
+    return region, False, False
 
 
 def _splice_collapsed_child(
@@ -358,23 +374,31 @@ def _splice_collapsed_child(
     """``new_child``'s own items, each rewritten so ``solve`` still gives it
     its pre-merge size once it sits directly in ``items`` (``new_child``'s
     new parent's run) rather than inside ``new_child`` itself: a ``Fixed``
-    item's size never depended on context, so it is unchanged, but a driven
-    (``Weighted`` or ``Fill``) item's weight was scaled to ``new_child``'s
-    own now-discarded ``distribute()`` call and must be re-solved against
-    ``items``'s other driven siblings (or given ``Fill`` when ``items`` has
-    none), the same rule :func:`_split_halves_rules` and :func:`_merged_rule`
-    use.
+    item's size never depended on context, so it is unchanged. A driven
+    (``Weighted`` or ``Fill``) item is re-solved against ``items``'s other
+    driven siblings, the same rule :func:`_split_halves_rules` and
+    :func:`_merged_rule` use, when ``items`` has one. When it has none, the
+    driven items among ``new_child.items`` are left exactly as they were:
+    ``new_child`` was the run's only driven claimant on ``items``'s slack
+    (that is what "no anchor" means here), so once its own children sit in
+    ``items`` directly they are still the only driven claimants, on exactly
+    the slack ``new_child`` itself used to claim, and the weight ratios they
+    already hold from ``new_child``'s own (now-discarded) ``distribute()``
+    call already divide that same slack the same way. Rewriting them to a
+    shared ``Fill()`` here, as if they were a symmetric fresh split, would
+    only be correct when they were originally equal-sized; in general it
+    equalizes children that were unequal and moves boards (bug-006, F1,
+    review round 4).
     """
     anchor = _other_driven_anchor(items, {index}, spaces, axis_index)
+    if anchor is None:
+        return list(new_child.items)
+    anchor_weight, anchor_size_mm = anchor
     spliced: list[Item] = []
     for child_item in new_child.items:
         if isinstance(child_item, Board) or _driven_weight(child_item.rule) is None:
             spliced.append(child_item)
             continue
-        if anchor is None:
-            spliced.append(dataclasses.replace(child_item, rule=Fill()))
-            continue
-        anchor_weight, anchor_size_mm = anchor
         size_mm = spaces[child_item.id].extent_mm(axis_index)
         new_rule: SizeRule = Weighted(weight=size_mm * anchor_weight / anchor_size_mm)
         spliced.append(dataclasses.replace(child_item, rule=new_rule))

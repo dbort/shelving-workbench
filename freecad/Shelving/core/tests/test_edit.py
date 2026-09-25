@@ -849,3 +849,106 @@ def test_merge_collapse_never_nests_a_same_axis_division_either() -> None:
     # The promoted division's items spliced straight into the Axis.Z run in
     # place of the collapsed Axis.X division: no nested Division survives.
     assert all(not isinstance(item, Division) for item in merged_root.items)
+
+
+# --- F1: a collapse with no other driven sibling keeps existing ratios ------
+
+
+def _two_unequal_fixed_openings_unit() -> Unit:
+    """Two unequal openings, both ``Fixed``: scanning a hand-built unit gives
+    every opening without a same-size twin its own ``Fixed`` rule (see
+    ``scan.py``'s ``_recover_rules``), so no bay in this run is ever driven
+    and every edit below exercises ``_splice_collapsed_child``'s
+    ``anchor is None`` branch, the one every other merge-collapse fixture in
+    this module leaves untested."""
+    return Unit(
+        size_mm=Vec3(600.0, 300.0, 350.0 + 400.0 + 3 * 18.0),
+        default_material=PLY,
+        root=Division(
+            axis=Axis.Z,
+            items=[
+                Board(role="bottom"),
+                Bay(rule=Fixed(350.0), id="lower"),
+                Board(role="shelf"),
+                Bay(rule=Fixed(400.0), id="upper"),
+                Board(role="top"),
+            ],
+        ),
+        depth_axis=Axis.Y,
+    )
+
+
+def test_merge_collapse_with_no_other_driven_sibling_moves_no_board() -> None:
+    """F1 (review round 4): a divider in the lower opening (nest, a
+    different axis than the Z-axis column), a shelf left of the divider
+    (nest again, a different axis than the divider's X-axis division), then
+    another shelf in the upper-left bay that split just made (splice: its
+    parent now shares the shelf's own Z axis), then delete the divider. The
+    delete collapses the divider's ``Axis.X`` division down to the "shelf
+    left" division alone, which shares the column's own ``Axis.Z`` axis and
+    must splice into it rather than nest - but with both openings ``Fixed``,
+    nothing else in the column is driven, so the splice has no other driven
+    sibling to solve a fresh weight against and must keep the two shelf
+    boards' own ratio instead of equalizing them to a shared ``Fill()``
+    share, which would move both (the bug this test reproduces)."""
+    unit = _two_unequal_fixed_openings_unit()
+    spaces_before_divider = solve(unit, CATALOG)
+    boards_before_divider = _all_board_ids(unit.root)
+
+    unit = split_region(unit, "lower", Axis.X, CATALOG)
+    assert not _has_same_axis_nesting(unit.root)
+    _assert_surviving_boards_unchanged(spaces_before_divider, unit)
+    divider_id = next(iter(_all_board_ids(unit.root) - boards_before_divider))
+
+    root = unit.root
+    assert isinstance(root, Division)
+    x_division = root.items[1]
+    assert isinstance(x_division, Division) and x_division.axis == Axis.X
+    left_bay = x_division.items[0]
+    assert isinstance(left_bay, Bay)
+
+    spaces_after_divider = solve(unit, CATALOG)
+    unit = split_region(unit, left_bay.id, Axis.Z, CATALOG)
+    assert not _has_same_axis_nesting(unit.root)
+    _assert_surviving_boards_unchanged(spaces_after_divider, unit)
+
+    root = unit.root
+    assert isinstance(root, Division)
+    x_division = root.items[1]
+    assert isinstance(x_division, Division)
+    p_division = x_division.items[0]
+    assert isinstance(p_division, Division) and p_division.axis == Axis.Z
+    lower_left_bay, shelf_board, upper_left_bay = p_division.items
+    assert isinstance(lower_left_bay, Bay)
+    assert isinstance(shelf_board, Board)
+    assert isinstance(upper_left_bay, Bay)
+
+    spaces_after_shelf_left = solve(unit, CATALOG)
+    assert (
+        spaces_after_shelf_left[upper_left_bay.id].origin.z_mm
+        > spaces_after_shelf_left[lower_left_bay.id].origin.z_mm
+    )
+    unit = split_region(unit, upper_left_bay.id, Axis.Z, CATALOG)
+    assert not _has_same_axis_nesting(unit.root)
+    _assert_surviving_boards_unchanged(spaces_after_shelf_left, unit)
+    other_board_ids = {divider_id, shelf_board.id} | boards_before_divider
+    board_id_2 = next(iter(_all_board_ids(unit.root) - other_board_ids))
+
+    # merge_at unifies the divider's left and right openings into one region
+    # that spans the divider's full pre-merge width, exactly as the divider's
+    # removal should: that width change (size.x_mm) reaches every board
+    # inside the promoted "shelf left" division, including shelf_board and
+    # board_id_2, and is not what F1 is about. What must not move is the
+    # column's Axis.Z share those two boards divide up between them: their
+    # z origin and z extent, which _splice_collapsed_child's anchor-is-None
+    # branch (the fix under test) must reproduce exactly.
+    spaces_before_delete = solve(unit, CATALOG)
+    merged = merge_at(unit, divider_id, CATALOG)
+    assert not _has_same_axis_nesting(merged.root)
+    _assert_surviving_boards_unchanged(spaces_before_divider, merged)
+    spaces_after_merge = solve(merged, CATALOG)
+    for board_id in (shelf_board.id, board_id_2):
+        before_space = spaces_before_delete[board_id]
+        after_space = spaces_after_merge[board_id]
+        assert abs(before_space.origin.z_mm - after_space.origin.z_mm) <= 1e-6, board_id
+        assert abs(before_space.size.z_mm - after_space.size.z_mm) <= 1e-6, board_id

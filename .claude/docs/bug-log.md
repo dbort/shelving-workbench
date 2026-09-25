@@ -1,5 +1,5 @@
 ---
-next_id: bug-008
+next_id: bug-009
 ---
 
 # Bug log
@@ -232,3 +232,35 @@ asks for a sweep; no agent schedules one on its own.
   where geometry is ambiguous (the reason `Basis.WITH_NEXT` is stored).
   Choosing that tolerance and precedence is a design question for
   `new-task`.
+
+- `bug-008` - **a split-created board is silently deleted and recreated
+  under a new name by the next unrelated edit in the same session**: in
+  the editor, split a bay (no material chosen, so the new board's `role`
+  is `None`), then split a second, unrelated bay elsewhere in the same
+  unit. The first board's FreeCAD object disappears and a new one appears
+  one name later (`Board` becomes `Board001`), even though nothing in the
+  tree touched it. Root cause: `container._create_board` names a new
+  object from `board.role` (`"Board"` when `role` is `None`), not from
+  `board.id`, so the object's real `Name` never equals the core id
+  `write_container` matches by; `write_container`'s docstring states "A
+  board matches an existing object by its `Board.id` equalling the
+  object's `Name`", which is exactly the equality this leaves false from
+  the moment the board is born. Every later `write_container` call (every
+  further edit in the same session, live preview writing on each one) then
+  finds no existing object for that board's id, deletes the "unmatched"
+  old object (it carries board properties from its own creation) as a
+  leftover, and creates a fresh one, losing whatever FreeCAD-side identity
+  or view state (`ViewObject` colour, external references by name) a real
+  document might have hung on it. `write_board_born_as` already tracks a
+  provenance Name separately for the copy-adoption case, but nothing
+  reuses it to match a board across writes within one uncommitted session.
+  Found while building `sh-020`'s F1 smoke check: a board id captured
+  right after a split did not resolve to any live object once a second,
+  unrelated split had run. Fix: `sh-XXX task`. Either name a new board
+  object after its own id (matching what `_assert_session_matches_document`
+  and the bug-006 rescan path already assume) or make `write_container`'s
+  matching consult `write_board_born_as`'s provenance instead of bare
+  `Name` equality; either touches `write_container`, shared by every
+  caller that writes a `Unit` (scan, resize, reflow, the editor), and
+  choosing between renaming-on-write versus provenance-matching is a
+  design call for `new-task`, not a mechanical patch.
