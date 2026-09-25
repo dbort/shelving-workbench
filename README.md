@@ -186,5 +186,6 @@ The layout vocabulary and how each term maps onto the code in
   an `EditFailure` (a message and the offending id) rather than raising, and
   changes nothing.
 - **Shelving_EditUnit**: the command id that opens the elevation editor task
-  panel on the selected container, refusing anything other than exactly one
+  panel on the unit the selection names: the unit's container, or any
+  objects inside it, all from the same unit. Disabled for any other
   selection.

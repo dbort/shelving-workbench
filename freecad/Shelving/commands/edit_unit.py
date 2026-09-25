@@ -14,8 +14,6 @@ import FreeCAD
 _RESOURCE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources")
 _ICON = os.path.join(_RESOURCE_DIR, "shelving.svg")
 
-_CONTAINERS = ("App::Part", "App::LinkGroup", "App::DocumentObjectGroup")
-
 
 class _CommandResources(TypedDict):
     MenuText: str
@@ -24,16 +22,14 @@ class _CommandResources(TypedDict):
 
 
 def _selected_container() -> FreeCAD.DocumentObject | None:
-    """The one selected container to edit, or ``None`` when the selection is
-    not exactly one ``App::Part``, ``App::LinkGroup``, or group."""
+    """The unit container the current selection names, per
+    :func:`freecad.Shelving.container.unit_for_selection`."""
     import FreeCADGui as Gui
 
+    from freecad.Shelving.container import unit_for_selection
+
     selection = cast("list[FreeCAD.DocumentObject]", Gui.Selection.getSelection())
-    if len(selection) == 1 and any(
-        selection[0].isDerivedFrom(kind) for kind in _CONTAINERS
-    ):
-        return selection[0]
-    return None
+    return unit_for_selection(selection)
 
 
 class EditUnitCommand:
@@ -54,8 +50,8 @@ class EditUnitCommand:
         container = _selected_container()
         if container is None:
             print(
-                "REFUSED: select exactly one App::Part, App::LinkGroup, or "
-                "group to edit"
+                "REFUSED: select one unit's container, or parts that all "
+                "belong to the same unit"
             )
             return
         # Imported here, as resize_unit.py does with Qt: a PySide6 import

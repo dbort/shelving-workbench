@@ -1,6 +1,7 @@
 """Headless functional check for the elevation editor's session: selection
 permissions, split, merge, both refusal reasons a session edit returns
-rather than raises, cancel, and commit-then-undo.
+rather than raises, cancel, and commit-then-undo; plus the selection-to-unit
+mapping that decides when Edit Unit is enabled.
 
 Drives :class:`freecad.Shelving.editor.session.Session` directly rather than
 :class:`freecad.Shelving.editor.panel.EditUnitPanel`: ``FreeCADGui.Control``,
@@ -23,7 +24,11 @@ if _REPO_ROOT not in sys.path:
 
 import FreeCAD  # noqa: E402
 
-from freecad.Shelving.container import read_container, write_container  # noqa: E402
+from freecad.Shelving.container import (  # noqa: E402
+    read_container,
+    unit_for_selection,
+    write_container,
+)
 from freecad.Shelving.core.geometry import Vec3  # noqa: E402
 from freecad.Shelving.core.layout import (  # noqa: E402
     Axis,
@@ -136,6 +141,14 @@ def _board_names(container: FreeCAD.DocumentObject) -> tuple[str, ...]:
     boxes, skipped, _record = read_container(container)
     assert not skipped, skipped
     return tuple(sorted(b.name for b in boxes))
+
+
+def _board_objects(container: FreeCAD.DocumentObject) -> list[FreeCAD.DocumentObject]:
+    return [
+        obj
+        for obj in cast("FreeCAD.DocumentObjectGroup", container).Group
+        if obj.isDerivedFrom("Part::Box")
+    ]
 
 
 def _board_snapshot(container: FreeCAD.DocumentObject) -> _BoardSnapshot:
@@ -413,8 +426,8 @@ def _check_a_refused_edit_after_an_accepted_edit_changes_nothing() -> None:
 
 
 def _check_split_direction_follows_the_units_depth_axis() -> None:
-    """A unit whose depth axis is X, not Y. Split Horizontal and Split
-    Vertical must resolve their model axis from
+    """A unit whose depth axis is X, not Y. Add Divider and Add Shelf
+    must resolve their model axis from
     ``elevation_axes(unit.depth_axis)`` rather than a hardcoded model axis,
     or the new board would lie in the elevation plane instead of dividing
     it. Asserts the new board's ``Division.axis`` is one of the elevation's
@@ -457,6 +470,48 @@ def _check_split_direction_follows_the_units_depth_axis() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
+def _check_selection_maps_to_its_unit() -> None:
+    """Boards inside one unit, alone or together with the unit's container
+    or a nested group, name that unit; objects from two units, or from
+    outside any unit, name nothing."""
+    doc = FreeCAD.newDocument("editor_smoke_selection")
+    try:
+        first = create_unit(doc)
+        second = create_unit(doc)
+        loose = cast("FreeCAD.DocumentObject", doc.addObject("Part::Box", "Loose"))
+        doc.recompute()
+        first_boards = _board_objects(first)
+        second_boards = _board_objects(second)
+
+        assert unit_for_selection([first]) is first
+        assert unit_for_selection(first_boards[:1]) is first
+        assert unit_for_selection(first_boards) is first
+        assert unit_for_selection([first, first_boards[0]]) is first
+
+        # A group nested inside the unit is climbed through, and selecting
+        # it alone maps to the unit, not to the group itself.
+        nested = cast(
+            "FreeCAD.DocumentObjectGroup",
+            doc.addObject("App::DocumentObjectGroup", "Nested"),
+        )
+        cast("FreeCAD.DocumentObjectGroup", first).addObject(nested)
+        extra = cast("FreeCAD.DocumentObject", doc.addObject("Part::Box", "Extra"))
+        nested.addObject(extra)
+        assert unit_for_selection([extra]) is first
+        assert unit_for_selection([nested]) is first
+
+        assert unit_for_selection([]) is None
+        assert unit_for_selection([loose]) is None
+        assert unit_for_selection([first_boards[0], second_boards[0]]) is None
+        assert unit_for_selection([first_boards[0], loose]) is None
+
+        # A container with no ShelvingUnitId yet is still editable on its own.
+        bare = cast("FreeCAD.DocumentObject", doc.addObject("App::Part", "Bare"))
+        assert unit_for_selection([bare]) is bare
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
 def main() -> None:
     doc = FreeCAD.newDocument("editor_smoke")
     try:
@@ -467,6 +522,7 @@ def main() -> None:
     _check_an_unsolvable_edit_changes_nothing()
     _check_a_refused_edit_after_an_accepted_edit_changes_nothing()
     _check_split_direction_follows_the_units_depth_axis()
+    _check_selection_maps_to_its_unit()
     _check_cancel_restores_the_opening_state()
     _check_commit_then_one_undo_reverses_the_session()
     print("shelving editor OK")

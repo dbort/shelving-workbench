@@ -57,12 +57,12 @@ class EditUnitPanel:
         layout.addWidget(self.view)
 
         button_row = QtWidgets.QHBoxLayout()
-        self.split_horizontal_button = QtWidgets.QPushButton("Split Horizontal")
-        self.split_vertical_button = QtWidgets.QPushButton("Split Vertical")
+        self.add_divider_button = QtWidgets.QPushButton("Add Divider")
+        self.add_shelf_button = QtWidgets.QPushButton("Add Shelf")
         self.delete_button = QtWidgets.QPushButton("Delete")
         for button in (
-            self.split_horizontal_button,
-            self.split_vertical_button,
+            self.add_divider_button,
+            self.add_shelf_button,
             self.delete_button,
         ):
             button_row.addWidget(button)
@@ -71,8 +71,8 @@ class EditUnitPanel:
         self.message_label = QtWidgets.QLabel("")
         layout.addWidget(self.message_label)
 
-        self.split_horizontal_button.clicked.connect(lambda: self._split("horizontal"))
-        self.split_vertical_button.clicked.connect(lambda: self._split("vertical"))
+        self.add_divider_button.clicked.connect(lambda: self._split("horizontal"))
+        self.add_shelf_button.clicked.connect(lambda: self._split("vertical"))
         self.delete_button.clicked.connect(self._merge)
 
         self._refresh()
@@ -101,8 +101,8 @@ class EditUnitPanel:
             self.session.unit, self.session.spaces, self.session.selected_id
         )
         self.view.setScene(scene)
-        self.split_horizontal_button.setEnabled(self.session.can_split())
-        self.split_vertical_button.setEnabled(self.session.can_split())
+        self.add_divider_button.setEnabled(self.session.can_split())
+        self.add_shelf_button.setEnabled(self.session.can_split())
         self.delete_button.setEnabled(self.session.can_merge())
 
     def getStandardButtons(self) -> int:
