@@ -1,28 +1,16 @@
 """The elevation editor's session: the document, the transaction, and the
 edits, behind one small API the panel drives.
 
-Constructed from a selected container, a :class:`Session` reads it once
-(:func:`freecad.Shelving.core.scan.scan`, with its stored rules reapplied),
-keeps the resulting :class:`~freecad.Shelving.core.layout.Unit` and the
-document's catalog, and solves it once for the elevation to draw. Every
-accepted edit rebuilds the tree through
-:mod:`freecad.Shelving.core.edit`, re-solves it, and writes it straight
-through sh-018's :func:`freecad.Shelving.container.write_container`, inside
-the one transaction :meth:`Session.open` starts: there is no separate
-preview model to keep in sync with the real write path (see this repo's
-sh-020 Frontier Advice, "live preview writes real boards").
+Every accepted edit writes straight through
+:func:`freecad.Shelving.container.write_container` inside the one
+transaction :meth:`Session.open` starts, so the live preview is the real
+boards: there is no separate preview model to drift from the real write
+path.
 
-A rejected edit, whether :mod:`freecad.Shelving.core.edit` refuses it as
-structurally impossible or the rebuilt tree fails to solve, changes nothing:
-:meth:`Session.split` and :meth:`Session.merge` re-solve the candidate tree
-and let :func:`~freecad.Shelving.container.write_container` run its own
-internal solve before writing anything, so a failure at either point never
-reaches the document. Every FreeCAD ``isinstance`` / structural match in
-this module is against ``freecad.Shelving.core.*`` types, imported fully
-qualified and consistently, per this repo's sh-020 Frontier Advice on why
-two importable copies of the same core classes is a real, previously-shipped
-bug (a divider vanishing because ``isinstance`` silently failed to match a
-``Board`` against itself).
+Every ``isinstance`` check and structural match here is against
+``freecad.Shelving.core.*`` types imported by their fully qualified name.
+Two importable copies of the core classes is a shipped bug: ``isinstance``
+silently failed to match a ``Board`` against itself and a divider vanished.
 
 Imports no Qt: the scene and the panel read this session's state, this
 session never reads theirs.
@@ -51,16 +39,12 @@ SplitDirection = Literal["horizontal", "vertical"]
 
 @dataclasses.dataclass(frozen=True)
 class EditFailure:
-    """A rejected :meth:`Session.split` or :meth:`Session.merge` call.
-
-    ``node_id`` is whatever :class:`~freecad.Shelving.core.edit.EditError` or
-    :class:`~freecad.Shelving.core.solver.LayoutSolveError` named: the region
-    or board the caller asked to edit, or the node a re-solve refused at.
-    ``None`` means no node was named at all, which only happens when nothing
-    was selected to act on in the first place.
-    """
+    """A rejected :meth:`Session.split` or :meth:`Session.merge` call."""
 
     message: str
+    # Whatever EditError or LayoutSolveError named: the region or board the
+    # caller asked to edit, or the node a re-solve refused at. None only when
+    # nothing was selected to act on.
     node_id: str | None
 
 
@@ -108,24 +92,19 @@ def _read_unit(container: FreeCAD.DocumentObject, catalog: Catalog) -> Unit:
 
 
 class Session:
-    """One elevation-editing session against a selected container.
-
-    ``unit`` and ``spaces`` are the current, already-solved state: read at
-    construction, replaced wholesale after every edit
-    :meth:`split`/:meth:`merge` accepts. ``selected_id`` is a region id or a
-    board id, or ``None`` when nothing is selected; :meth:`select` is the
-    only way it changes, including back to ``None``, which every accepted
-    edit does itself since the id it just edited no longer names anything
-    the caller can act on.
-    """
+    """One elevation-editing session against a selected container."""
 
     def __init__(self, container: FreeCAD.DocumentObject) -> None:
         self.container = container
         self.catalog, self._skipped_catalog_entries = read_usable_catalog(
             ensure_catalog(container.Document)
         )
+        # unit and spaces are the current, already-solved state, replaced
+        # wholesale by every accepted edit.
         self.unit = _read_unit(container, self.catalog)
         self.spaces: Mapping[str, Space] = solve(self.unit, self.catalog)
+        # A region or board id. Every accepted edit clears it, since the id
+        # it just edited no longer names anything the caller can act on.
         self.selected_id: str | None = None
 
     def open(self) -> None:
@@ -165,25 +144,22 @@ class Session:
 
     def can_merge(self) -> bool:
         """Whether the current selection is a ``Board``: the only kind of
-        node :meth:`merge` acts on. Whether that board's neighbours actually
-        permit a merge is only known once :meth:`merge` tries, since that is
-        exactly what :func:`~freecad.Shelving.core.edit.merge_at` itself
-        refuses by name when it does not hold."""
+        node :meth:`merge` acts on. ``True`` does not promise :meth:`merge`
+        succeeds: :func:`~freecad.Shelving.core.edit.merge_at` refuses by
+        name when the board's neighbours do not permit a merge."""
         if self.selected_id is None:
             return False
         node = _find_node(self.unit.root, self.selected_id)
         return isinstance(node, Board)
 
     def _apply(self, candidate: Unit) -> EditFailure | None:
-        """Re-solve ``candidate`` and write it through sh-018's write path;
-        on success, adopt it as this session's new state and clear the
-        selection. On failure, this session's ``unit``/``spaces`` are
-        untouched: :func:`~freecad.Shelving.container.write_container` runs
-        its own internal solve before writing any board, so a
-        :class:`~freecad.Shelving.core.solver.LayoutSolveError` here means
-        nothing reached the document."""
+        """Adopt ``candidate`` as this session's state and write it to the
+        document, clearing the selection, or return an :class:`EditFailure`
+        when it fails to solve, leaving the session and document untouched."""
         try:
             spaces = solve(candidate, self.catalog)
+            # write_container solves again before writing any board, so a
+            # LayoutSolveError from either call means nothing was written.
             write_container(self.container, candidate, self.catalog)
         except LayoutSolveError as err:
             return EditFailure(str(err), err.node_id)
@@ -193,13 +169,10 @@ class Session:
         return None
 
     def _elevation_axes(self) -> tuple[Axis, Axis]:
-        """This session's own ``(horizontal, vertical)`` elevation axes,
-        resolved from ``self.unit.depth_axis``. Raises ``ValueError`` naming
-        ``self.unit.id`` when it is ``None``, the same guard
-        :func:`freecad.Shelving.editor.scene.build_scene` already applies to
-        the very same unit before this method could ever run: a session is
-        always built from a scanned container, which always resolves a
-        depth axis (see :mod:`freecad.Shelving.core.scan`), so this is an
+        """The ``(horizontal, vertical)`` elevation axes of
+        ``self.unit.depth_axis``. Raises ``ValueError`` naming ``self.unit.id``
+        when it is ``None``; a scanned container always resolves a depth
+        axis (see :mod:`freecad.Shelving.core.scan`), so this is an
         invariant check, not a user-facing refusal."""
         depth_axis = self.unit.depth_axis
         if depth_axis is None:
@@ -211,16 +184,15 @@ class Session:
     def split(
         self, direction: SplitDirection, material: MaterialId | None = None
     ) -> EditFailure | None:
-        """Split the selected ``Bay`` into two, ``material`` defaulting to
-        the unit's own. ``direction`` chooses which of the elevation's two
-        axes (:func:`freecad.Shelving.core.scan.elevation_axes` of
-        ``self.unit.depth_axis``) the split runs along rather than naming a
-        model axis directly: "horizontal" divides the bay left and right
-        behind a vertical divider board, "vertical" stacks it top and bottom
-        behind a horizontal shelf, in both cases regardless of which model
-        axis (X, Y, or Z) the unit's depth actually runs along. Returns
-        ``None`` on success, an :class:`EditFailure` on refusal, changing
-        nothing either way but the selection on success."""
+        """Split the selected ``Bay`` in two, ``material`` defaulting to the
+        unit's own.
+
+        ``direction`` names an elevation axis, not a model axis:
+        "horizontal" divides the bay left and right behind a vertical
+        divider, "vertical" stacks it top and bottom behind a horizontal
+        shelf, whichever model axis the unit's depth runs along. Returns
+        ``None`` on success, which clears the selection, or an
+        :class:`EditFailure` on refusal, which changes nothing."""
         if self.selected_id is None:
             return EditFailure("select a bay to split", None)
         horizontal, vertical = self._elevation_axes()
@@ -233,8 +205,8 @@ class Session:
 
     def merge(self) -> EditFailure | None:
         """Remove the selected ``Board`` and merge its neighbouring regions.
-        Returns ``None`` on success, an :class:`EditFailure` on refusal,
-        changing nothing either way but the selection on success."""
+        Returns ``None`` on success, which clears the selection, or an
+        :class:`EditFailure` on refusal, which changes nothing."""
         if self.selected_id is None:
             return EditFailure("select a board to merge", None)
         try:

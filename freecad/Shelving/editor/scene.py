@@ -1,22 +1,9 @@
 """Build and hit-test a ``QGraphicsScene`` elevation for one ``Unit``.
 
-:func:`build_scene` reads the region tree from a ``Unit`` for structure and
-node ids, and a solved ``Mapping[str, Space]`` (see
-:func:`freecad.Shelving.core.solver.solve`) for placement, and draws one
-:class:`~PySide6.QtWidgets.QGraphicsRectItem` per region (``Bay``, ``Void``,
-``Division``) and per ``Board``, projected onto the unit's elevation plane the
-same way :mod:`freecad.Shelving.core.svg` projects it: horizontal and
+The projection matches :mod:`freecad.Shelving.core.svg`: horizontal and
 vertical are :func:`freecad.Shelving.core.scan.elevation_axes` of
-``unit.depth_axis``, and the vertical axis is flipped so the drawing reads
-bottom-up the way a real elevation does. Every item carries its region or
-board id via ``setData``; :func:`hit_test` reads that back for the topmost
-item at a scene point.
-
-A ``Division`` draws its own rect before recursing into its items, so its
-area sits entirely underneath its children's; every item's Z-value is its
-nesting depth, which is what makes a click always land on the most specific
-(deepest) item rather than an ancestor whose rect happens to cover the same
-point.
+``unit.depth_axis``, with vertical flipped so the drawing reads bottom-up
+the way a real elevation does.
 
 This module imports Qt and the layout-only parts of
 :mod:`freecad.Shelving.core`, never FreeCAD: nothing here touches a document
@@ -42,9 +29,8 @@ from freecad.Shelving.core.layout import (
 )
 from freecad.Shelving.core.scan import elevation_axes
 
-# The key build_scene's items carry their node id under, and hit_test reads
-# it back from; an arbitrary int, Qt's own convention for a QGraphicsItem's
-# custom data slots (QGraphicsItem.setData/data take one).
+# The QGraphicsItem.setData key each item carries its node id under; Qt
+# keys custom data by int, and any value works.
 _ID_DATA_ROLE = 0
 
 _BAY_BRUSH = QtGui.QBrush(QtGui.QColor(0xF2, 0xF2, 0xF2, 160))
@@ -147,11 +133,13 @@ def build_scene(
 ) -> QtWidgets.QGraphicsScene:
     """A ``QGraphicsScene`` with one rect item per region and per board in
     ``unit``, positioned from ``spaces`` (see
-    :func:`freecad.Shelving.core.solver.solve`).
+    :func:`freecad.Shelving.core.solver.solve`). Every item carries its node
+    id for :func:`hit_test`.
 
     Raises ``ValueError`` naming ``unit.id`` when ``unit.depth_axis`` is
     ``None``: a unit with no depth axis has no elevation plane to project
-    onto. ``selected_id``, when given, is the one item drawn with the
+    onto. Raises ``KeyError`` when ``spaces`` lacks a node in ``unit``.
+    ``selected_id``, when given, is the one item drawn with the
     selected pen; every other item gets the normal pen.
     """
     if unit.depth_axis is None:
@@ -167,6 +155,8 @@ def build_scene(
         rect = _rect_for(space, horizontal, vertical, unit_vertical_mm)
         pen = _SELECTED_PEN if node_id == selected_id else _NORMAL_PEN
         item = scene.addRect(rect, pen, brush)
+        # Z-value is nesting depth, so a click lands on the deepest item
+        # rather than an ancestor Division whose rect covers the same point.
         item.setZValue(float(depth))
         item.setData(_ID_DATA_ROLE, node_id)
 

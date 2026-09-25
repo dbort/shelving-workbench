@@ -1,12 +1,12 @@
 """Tree-rewriting edits for the elevation editor: split a bay, merge a board.
 
-``split_region`` and ``merge_at`` are each other's exact inverse and the only
-two edits this module knows. Both take a :class:`~freecad.Shelving.core.layout.Unit`
-and return a new one, never mutating the argument: every rebuilt node is a
-fresh dataclass, and every untouched subtree is reused by reference rather
-than copied, so the argument's own objects are never written to. Neither
-function calls the solver; a caller re-solves the returned ``Unit`` itself
-and is responsible for treating a
+``split_region`` and ``merge_at`` are each other's exact inverse. Both take
+a :class:`~freecad.Shelving.core.layout.Unit` and return a new one, never
+mutating the argument: every rebuilt node is a fresh dataclass, and every
+untouched subtree is reused by reference rather than copied, so the
+argument's own objects are never written to. Neither function calls the
+solver; a caller re-solves the returned ``Unit`` itself and is responsible
+for treating a
 :class:`~freecad.Shelving.core.solver.LayoutSolveError` from that as its own
 kind of refusal, distinct from :class:`EditError`.
 

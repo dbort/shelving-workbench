@@ -5,18 +5,12 @@ rather than raises, cancel, and commit-then-undo.
 Drives :class:`freecad.Shelving.editor.session.Session` directly rather than
 :class:`freecad.Shelving.editor.panel.EditUnitPanel`: ``FreeCADGui.Control``,
 which the panel needs to show itself, does not exist under ``freecadcmd``
-(``docs/freecadcmd-notes.md``, this repo's sh-020 Frontier Advice), so the
-panel's own wiring is a ``docs/manual-qa.md`` case instead. Unlike
-``tools/freecad_scan_smoke.py`` and ``tools/freecad_write_smoke.py``, this is
-a plain script, not a self-invoking ``pytest`` module: this repo's sh-020
-task file specifies printing ``shelving editor OK`` as this script's last
-line, with ``tools/run-tests.sh`` grepping the captured output for it, rather
-than relying on ``freecadcmd``'s own exit-code passthrough (which the other
-two smokes use instead, each via ``sys.exit(pytest.main(...))``).
-
-Every assertion below names the scenario it covers with an adjacent comment,
-matching the sh-020 Execution Plan's own list one for one so a failure's
-traceback line is enough to identify which bullet broke.
+(``docs/freecadcmd-notes.md``), so the panel's own wiring is a
+``docs/manual-qa.md`` case instead. Unlike ``tools/freecad_scan_smoke.py``,
+this is a plain script, not a self-invoking ``pytest`` module: ``freecadcmd``
+exits 0 on an uncaught exception, so it prints ``shelving editor OK`` as its
+last line only when every assertion held, and ``tools/run-tests.sh`` greps
+the captured output for that line.
 """
 
 import os
@@ -86,8 +80,8 @@ def _find_bay(region: Region) -> str | None:
 def _axis_of_new_board(before: Region, after: Region) -> Axis:
     """The ``Division.axis`` of the ``Division`` holding the one board
     present in ``after`` and absent from ``before``: the axis
-    :meth:`~freecad.Shelving.editor.session.Session.split` actually resolved
-    a direction to."""
+    :meth:`~freecad.Shelving.editor.session.Session.split` resolved a
+    direction to."""
     board_id = _find_new_board_id(before, after)
     axis = _axis_of_board(after, board_id)
     assert axis is not None, board_id
@@ -184,10 +178,10 @@ def _tiny_unit() -> Unit:
 def _rotated_default_unit() -> Unit:
     """The same closed single-bay shape :func:`create_unit` seeds, but
     rotated a quarter turn: depth is X, not Y, and the run of shelves is Y,
-    not X. Exercises the review's F1 bug: a hardcoded elevation axis picks
-    the wrong pair of model axes when ``depth_axis`` is not Y, splitting the
-    bay parallel to the elevation plane (invisible in the drawing) instead
-    of across it."""
+    not X. Guards against a hardcoded elevation axis, which picks the wrong
+    pair of model axes when ``depth_axis`` is not Y and splits the bay
+    parallel to the elevation plane (invisible in the drawing) instead of
+    across it."""
     return Unit(
         size_mm=Vec3(300.0, 600.0, 900.0),
         default_material=DEFAULT_MATERIAL_ID,
@@ -383,11 +377,11 @@ def _check_commit_then_one_undo_reverses_the_session() -> None:
 
 
 def _check_a_refused_edit_after_an_accepted_edit_changes_nothing() -> None:
-    """The Must Have says a refused edit leaves the document "at the last
-    state that did" solve, not necessarily the session's opening state:
-    split once (an accepted edit) before attempting the structurally
-    impossible merge, and assert the document still matches the state right
-    after that split, not the state from before it."""
+    """A refused edit leaves the document at the last state that solved,
+    not necessarily the session's opening state. Split once (an accepted
+    edit) before attempting the structurally impossible merge, then assert
+    the document still matches the state right after that split, not the
+    state from before it."""
     doc = FreeCAD.newDocument("editor_smoke_refused_after_accepted")
     try:
         container = create_unit(doc)
@@ -419,8 +413,8 @@ def _check_a_refused_edit_after_an_accepted_edit_changes_nothing() -> None:
 
 
 def _check_split_direction_follows_the_units_depth_axis() -> None:
-    """sh-020 review F1: a unit whose depth axis is X, not Y. Split
-    Horizontal and Split Vertical must resolve their model axis from
+    """A unit whose depth axis is X, not Y. Split Horizontal and Split
+    Vertical must resolve their model axis from
     ``elevation_axes(unit.depth_axis)`` rather than a hardcoded model axis,
     or the new board would lie in the elevation plane instead of dividing
     it. Asserts the new board's ``Division.axis`` is one of the elevation's

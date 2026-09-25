@@ -297,7 +297,7 @@ def test_merge_at_leaves_the_argument_unit_unchanged() -> None:
 def test_split_region_produces_a_division_of_bay_board_bay() -> None:
     """The replacement is a ``Division`` on the requested axis, carrying the
     split ``Bay``'s own rule; its items are ``Bay(Fill)``, ``Board``,
-    ``Bay(Fill)``; the parent's untouched siblings are the very same
+    ``Bay(Fill)``; the parent's untouched siblings are the same
     objects split_region reused, not copies of them."""
     unit = _closed_box_unit()
     bay_id = _find_bay_id(unit.root)

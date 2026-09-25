@@ -1,12 +1,8 @@
 """Headless coverage for ``freecad.Shelving.editor.scene``.
 
-Runs under plain ``pytest`` (the conda-forge ``pyside6`` build works outside
-``freecadcmd`` too, verified directly), not ``freecadcmd``: ``scene.py``
-imports no FreeCAD, so nothing here needs it either. ``QT_QPA_PLATFORM`` is
-forced to ``offscreen`` before ``PySide6`` is imported, per this repo's
-sh-020 Frontier Advice, and the module-scoped ``qapp`` fixture reuses an
-existing ``QApplication`` rather than creating a second one, which aborts
-the process.
+Runs under plain ``pytest``, not ``freecadcmd``: ``scene.py`` imports no
+FreeCAD, and the conda-forge ``pyside6`` build works outside ``freecadcmd``
+(verified directly).
 """
 
 import os
@@ -92,9 +88,9 @@ _ROTATED_UNIT = Unit(
 _ROTATED_SPACES = solve(_ROTATED_UNIT, CATALOG)
 
 # Scene (mm) coordinates known to land inside each named item, and one known
-# to land outside the unit entirely; derived from _SPACES above (bay1 spans
-# x in [0, 441], board1 [441, 459], void1 [459, 900], every item spanning
-# the full 600mm vertical extent).
+# to land outside the unit. Derived from _SPACES above: bay1 spans x in
+# [0, 441], board1 [441, 459], and void1 [459, 900]. Each item spans the full
+# 600mm vertical extent.
 _POINT_IN_BAY = QtCore.QPointF(220.0, 300.0)
 _POINT_IN_BOARD = QtCore.QPointF(450.0, 300.0)
 _POINT_IN_VOID = QtCore.QPointF(680.0, 300.0)
@@ -106,15 +102,16 @@ def qapp() -> Iterator[QtWidgets.QApplication]:
     # QApplication.instance() is typed as the QCoreApplication base class
     # (PySide6-stubs does not narrow a classmethod's return by the class it
     # was called on); this process never constructs any QCoreApplication
-    # that is not a QApplication, so the cast is safe.
+    # that is not a QApplication, so the cast is safe. Reusing an existing
+    # instance matters: constructing a second QApplication aborts the process.
     existing = cast("QtWidgets.QApplication | None", QtWidgets.QApplication.instance())
     yield existing or QtWidgets.QApplication([])
 
 
 class _RecordingView(QtWidgets.QGraphicsView):
     """A ``QGraphicsView`` that remembers the scene position of its last
-    mouse press, so a test can confirm a simulated click actually reached
-    the view rather than only that ``hit_test`` works in isolation."""
+    mouse press, so a test can confirm a simulated click reached the view,
+    beyond confirming that ``hit_test`` works in isolation."""
 
     def __init__(self, scene: QtWidgets.QGraphicsScene) -> None:
         super().__init__(scene)
@@ -127,7 +124,7 @@ class _RecordingView(QtWidgets.QGraphicsView):
 
 def _union_of_item_rects(scene: QtWidgets.QGraphicsScene) -> QtCore.QRectF:
     """The union of every item's own ``rect()``, the geometry ``build_scene``
-    actually placed each item at. Every item here has no transform beyond
+    placed each item at. Every item here has no transform beyond
     its position in ``addRect``'s own coordinates, so this is the drawn
     extent; unlike ``itemsBoundingRect()``, it is not inflated by the
     boundary items' pen width."""
@@ -152,9 +149,9 @@ def test_item_count_matches_regions_plus_boards(
 def test_scene_items_fill_the_unit_projected_extent(
     qapp: QtWidgets.QApplication, unit: Unit, spaces: Mapping[str, Space]
 ) -> None:
-    # The union of the drawn items' own rects, not sceneRect: sceneRect is
-    # exactly what build_scene sets from unit.size_mm directly, so it would
-    # pass even if _rect_for drew every item at the wrong place or size.
+    # The union of the drawn items' own rects, not sceneRect: build_scene
+    # sets sceneRect straight from unit.size_mm, so it would pass even if
+    # _rect_for drew every item at the wrong place or size.
     # Both a default unit (depth_axis Y) and a rotated one (depth_axis X) so
     # a projection bug that only shows up off the X/Z axis pair would fail
     # here.

@@ -419,13 +419,13 @@ disabled, since a bay, not a board, is selected.
 1. With the bay still selected, click **Split Horizontal**.
 
 Expected: the elevation redraws immediately with a new **vertical** divider
-board down the bay's middle (**Split Horizontal** divides the bay left and
-right; **Split Vertical** would instead divide it top and bottom behind a
-**horizontal** shelf), leaving two smaller bays side by side, both roughly
-equal in size; the message line stays blank. Switching to the 3D view
+board down the bay's middle, leaving two smaller bays side by side, both
+roughly equal in size; the message line stays blank. **Split Horizontal**
+divides the bay left and right; **Split Vertical** would instead divide it
+top and bottom behind a **horizontal** shelf. Switching to the 3D view
 (without closing the panel) shows the same new board as a real, positioned
-box, not only a drawing: this is sh-018's write path running live, not a
-preview that could disagree with it. Click the new divider board: **Delete**
+box, not only a drawing: each edit runs the workbench's real write path, not
+a preview that could disagree with it. Click the new divider board: **Delete**
 enables and both **Split** buttons disable, since a board, not a bay, is
 now selected.
 
@@ -469,6 +469,6 @@ view and elevation on the next **Edit Unit** open both show it).
 3. Run **Edit → Undo** once (or `Ctrl+Z`).
 
 Expected: the entire session reverses in that one undo step, back to the
-document's state from before step 1: not merely the split's own edit, but
-the whole commit, since the panel opens one transaction for the whole
-session rather than one per edit.
+document's state from before step 1. The panel opens one transaction for
+the whole session rather than one per edit, so the undo reverses the whole
+commit, not only the split's own edit.

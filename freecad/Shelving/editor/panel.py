@@ -1,15 +1,13 @@
 """The elevation editor's task panel: a thin Qt shell over one ``Session``.
 
-``EditUnitPanel`` is a plain object matching the duck-typed protocol
+``EditUnitPanel`` satisfies the duck-typed protocol
 ``FreeCADGui.Control.showDialog`` expects: a ``form`` attribute (the
 ``QWidget`` shown in the task panel), ``getStandardButtons``, ``accept``,
-``reject``. Every button here does nothing but call a ``Session`` method
-and redraw from what it returns; no decision worth a unit test lives in this
-module (see this repo's sh-020 Frontier Advice, "the panel must hold NO
-logic worth testing"), which is also why nothing here is covered by
-:mod:`tools.freecad_editor_smoke`: ``FreeCADGui.Control`` itself does not
-exist under ``freecadcmd``, so that smoke drives ``Session`` directly
-instead (see this module's own command, ``edit_unit.py``).
+``reject``. Every button calls a ``Session`` method and redraws from what it
+returns, so no decision worth a unit test lives here. That matters because
+``FreeCADGui.Control`` does not exist under ``freecadcmd``: the headless
+coverage in :mod:`tools.freecad_editor_smoke` drives ``Session`` directly
+and never reaches this module.
 """
 
 from __future__ import annotations
@@ -42,10 +40,9 @@ class _EditorView(QtWidgets.QGraphicsView):
 class EditUnitPanel:
     """One elevation-editing task panel over ``container``.
 
-    Opens its ``Session`` (and, through it, the one transaction the whole
-    session shares) at construction, which is what makes ``getStandardButtons``
-    / ``accept`` / ``reject`` alone enough to commit or cancel the whole
-    session: neither does anything else.
+    Construction opens the session's one transaction; ``accept`` commits it
+    and ``reject`` aborts it, so every edit made in the panel lands or
+    reverts together.
     """
 
     def __init__(self, container: FreeCAD.DocumentObject) -> None:

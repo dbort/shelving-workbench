@@ -1,20 +1,9 @@
 """The "Edit Unit" command: open the elevation editor on the selected container.
 
-The command id is ``Shelving_EditUnit``. ``Gui.addCommand`` runs behind a
-headless guard so ``import freecad.Shelving.commands.edit_unit`` succeeds
-under ``freecadcmd``. ``Activated`` shows
-:class:`freecad.Shelving.editor.panel.EditUnitPanel` through
-``FreeCADGui.Control.showDialog``, which does not exist under ``freecadcmd``
-(see ``docs/freecadcmd-notes.md`` and this repo's sh-020 Frontier Advice);
-the functional smoke drives :class:`freecad.Shelving.editor.session.Session`
-directly instead, the same way ``tools/freecad_write_smoke.py`` calls
-``unit_ops`` functions rather than going through a command's ``Activated``.
-
-``EditUnitPanel`` (and, with it, PySide6) is imported inside ``Activated``
-rather than at module scope, the same lazy-Qt convention
-``resize_unit.py`` uses: an import failure on some user's FreeCAD build would
-otherwise stop ``init_gui`` from registering every Shelving command, not
-only this one.
+``FreeCADGui.Control.showDialog`` does not exist under ``freecadcmd``, so the
+functional smoke drives :class:`freecad.Shelving.editor.session.Session`
+directly rather than this command's ``Activated``, the same way
+``tools/freecad_write_smoke.py`` calls ``unit_ops`` functions.
 """
 
 import os
@@ -69,6 +58,9 @@ class EditUnitCommand:
                 "group to edit"
             )
             return
+        # Imported here, as resize_unit.py does with Qt: a PySide6 import
+        # failure on some user's FreeCAD build would otherwise stop init_gui
+        # from registering every Shelving command, not only this one.
         from freecad.Shelving.editor.panel import EditUnitPanel
 
         try:

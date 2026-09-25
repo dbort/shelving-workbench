@@ -176,7 +176,7 @@ predicate passes even when `execute` never ran.
 ## A scripted document's `UndoMode` starts off
 
 `FreeCAD.newDocument(name)` returns a document with `UndoMode == 0`
-(verified directly against FreeCAD 1.0.0), unlike a document created through
+(verified against FreeCAD 1.0.0), unlike a document created through
 the GUI, whose default comes from the user's preferences and is normally
 on. With `UndoMode` off, `openTransaction`/`commitTransaction`/
 `abortTransaction` still run without raising, but record nothing:
@@ -184,10 +184,10 @@ on. With `UndoMode` off, `openTransaction`/`commitTransaction`/
 `openTransaction` in place instead of reverting it.
 
 Consequence for any headless caller whose correctness depends on abort
-actually reverting: set `doc.UndoMode = 1` before the first
+reverting: set `doc.UndoMode = 1` before the first
 `openTransaction`, rather than assuming a document is undo-capable because
 it opened without error. `freecad/Shelving/editor/session.py`'s `Session.open`
-does this for exactly this reason.
+does this for that reason.
 
 ## A `DocumentObject`'s `ViewObject` is `None`
 
