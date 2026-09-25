@@ -106,13 +106,19 @@ def merge_at(unit: Unit, board_id: str) -> Unit:
     either side of it merged into one.
 
     The merged region is the first (lower-index) neighbour, carrying that
-    neighbour's own rule; when the merge leaves its enclosing ``Division``
-    with only that one item left, the ``Division`` itself is replaced by it,
-    which is what makes this the exact inverse of :func:`split_region`
-    rather than leaving a degenerate one-item ``Division`` behind. Raises
-    :class:`EditError` naming ``board_id`` when it names no board in
-    ``unit``, or a board whose neighbour on either side is missing (the end
-    of a run) or is itself a ``Board`` rather than a region.
+    neighbour's own rule, *unless* the merge leaves its enclosing
+    ``Division`` with only that one item left: the ``Division`` itself is
+    then replaced by it, taking the ``Division``'s own rule instead, which is
+    what makes this the exact inverse of :func:`split_region` (whose new
+    ``Division`` starts out carrying the split ``Bay``'s rule) rather than
+    leaving a degenerate one-item ``Division`` behind. The second neighbour
+    is discarded whole: when it is itself a ``Division``, every board and
+    region in its subtree disappears with it, silently, rather than being
+    refused, since the letter of "regions either side merged into one" does
+    not distinguish a leaf region from a subtree. Raises :class:`EditError`
+    naming ``board_id`` when it names no board in ``unit``, or a board whose
+    neighbour on either side is missing (the end of a run) or is itself a
+    ``Board`` rather than a region.
     """
     new_root, found = _merge_at(unit.root, board_id)
     if not found:

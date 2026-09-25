@@ -1,6 +1,7 @@
 """``split_region`` / ``merge_at``: refusals, and split-then-merge round trips."""
 
 import copy
+import dataclasses
 
 import pytest
 
@@ -83,15 +84,56 @@ def _stepped_unit() -> Unit:
 
 def _find_bay_id(region: Region) -> str:
     """The id of the first ``Bay`` found in ``region``'s subtree, depth first."""
+    found = _find_bay(region)
+    if found is None:
+        raise AssertionError(f"no Bay found in {region!r}")
+    return found
+
+
+def _find_bay(region: Region) -> str | None:
+    """``_find_bay_id``'s recursive half: ``None`` rather than raising when
+    ``region``'s own subtree holds no ``Bay``, so a sibling's subtree still
+    gets searched instead of aborting the whole walk."""
     if isinstance(region, Bay):
         return region.id
     if isinstance(region, Division):
         for item in region.items:
             if not isinstance(item, Board):
-                found = _find_bay_id(item)
+                found = _find_bay(item)
                 if found is not None:
                     return found
-    raise AssertionError(f"no Bay found in {region!r}")
+    return None
+
+
+def _find_region(region: Region, node_id: str) -> Region | None:
+    """The ``Region`` in ``region``'s subtree (``region`` included) whose id
+    is ``node_id``, or ``None`` when nothing matches."""
+    if region.id == node_id:
+        return region
+    if not isinstance(region, Division):
+        return None
+    for item in region.items:
+        if not isinstance(item, Board):
+            found = _find_region(item, node_id)
+            if found is not None:
+                return found
+    return None
+
+
+def _find_parent(region: Region, node_id: str) -> Division | None:
+    """The ``Division`` in ``region``'s subtree directly holding the item
+    (``Region`` or ``Board``) named ``node_id``, or ``None`` when nothing
+    matches."""
+    if not isinstance(region, Division):
+        return None
+    if any(item.id == node_id for item in region.items):
+        return region
+    for item in region.items:
+        if not isinstance(item, Board):
+            found = _find_parent(item, node_id)
+            if found is not None:
+                return found
+    return None
 
 
 def _rule_shape(rule: SizeRule) -> tuple[object, ...]:
@@ -247,3 +289,101 @@ def test_merge_at_leaves_the_argument_unit_unchanged() -> None:
     board_id = _new_board_id(unit, split)
     merge_at(split, board_id)
     assert _region_shape(split.root) == _region_shape(before.root)
+
+
+# --- split_region's own result, not only what merge_at can invert -----------
+
+
+def test_split_region_produces_a_division_of_bay_board_bay() -> None:
+    """The replacement is a ``Division`` on the requested axis, carrying the
+    split ``Bay``'s own rule; its items are ``Bay(Fill)``, ``Board``,
+    ``Bay(Fill)``; the parent's untouched siblings are the very same
+    objects split_region reused, not copies of them."""
+    unit = _closed_box_unit()
+    bay_id = _find_bay_id(unit.root)
+    original_bay = _find_region(unit.root, bay_id)
+    assert isinstance(original_bay, Bay)
+    original_bay = dataclasses.replace(original_bay, rule=Weighted(3.0))
+    unit = dataclasses.replace(
+        unit, root=_replace_node(unit.root, bay_id, original_bay)
+    )
+    parent = _find_parent(unit.root, bay_id)
+    assert isinstance(parent, Division)
+    index = next(i for i, item in enumerate(parent.items) if item.id == bay_id)
+    siblings_before = [item for i, item in enumerate(parent.items) if i != index]
+
+    split = split_region(unit, bay_id, Axis.Z, material=PLY)
+
+    new_parent = _find_region(split.root, parent.id)
+    assert isinstance(new_parent, Division)
+    division = new_parent.items[index]
+    assert isinstance(division, Division)
+    assert division.axis == Axis.Z
+    assert division.rule == original_bay.rule
+
+    assert len(division.items) == 3
+    left, board, right = division.items
+    assert isinstance(left, Bay) and left.rule == Fill()
+    assert isinstance(right, Bay) and right.rule == Fill()
+    assert isinstance(board, Board)
+    assert board.material == PLY
+
+    siblings_after = [item for i, item in enumerate(new_parent.items) if i != index]
+    assert siblings_after == siblings_before
+    for before_item, after_item in zip(siblings_before, siblings_after, strict=True):
+        assert before_item is after_item
+
+
+def test_split_region_defaults_the_board_material_to_none() -> None:
+    unit = _closed_box_unit()
+    bay_id = _find_bay_id(unit.root)
+    split = split_region(unit, bay_id, Axis.X)
+    # split_region gave the replacement Division a fresh id (bay_id no longer
+    # names anything), so locate it by the parent slot instead.
+    parent = _find_parent(unit.root, bay_id)
+    assert isinstance(parent, Division)
+    index = next(i for i, item in enumerate(parent.items) if item.id == bay_id)
+    new_parent = _find_region(split.root, parent.id)
+    assert isinstance(new_parent, Division)
+    division = new_parent.items[index]
+    assert isinstance(division, Division)
+    _left, board, _right = division.items
+    assert isinstance(board, Board)
+    assert board.material is None
+
+
+def test_split_region_at_the_tree_root() -> None:
+    """``region_id`` can name the tree's own root, with no parent
+    ``Division`` to slot the replacement into."""
+    bay = Bay(rule=Fixed(500.0))
+    unit = Unit(size_mm=Vec3(600.0, 300.0, 900.0), default_material=PLY, root=bay)
+
+    split = split_region(unit, bay.id, Axis.X, material=PLY)
+
+    assert isinstance(split.root, Division)
+    assert split.root.axis == Axis.X
+    assert split.root.rule == bay.rule
+    assert len(split.root.items) == 3
+    left, board, right = split.root.items
+    assert isinstance(left, Bay) and left.rule == Fill()
+    assert isinstance(right, Bay) and right.rule == Fill()
+    assert isinstance(board, Board)
+    assert board.material == PLY
+
+
+def _replace_node(region: Region, node_id: str, replacement: Region) -> Region:
+    """``region`` with the node named ``node_id`` replaced by ``replacement``,
+    used only to seed a non-default rule onto the bay a test is about to
+    split, the same shape :mod:`freecad.Shelving.core.edit`'s own recursion
+    uses."""
+    if region.id == node_id:
+        return replacement
+    if not isinstance(region, Division):
+        return region
+    new_items: list[Item] = []
+    for item in region.items:
+        if isinstance(item, Board):
+            new_items.append(item)
+        else:
+            new_items.append(_replace_node(item, node_id, replacement))
+    return dataclasses.replace(region, items=new_items)

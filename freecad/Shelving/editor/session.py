@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import Mapping
+from typing import Literal
 
 import FreeCAD
 
@@ -42,8 +43,10 @@ from freecad.Shelving.core.geometry import Space
 from freecad.Shelving.core.layout import Axis, Bay, Board, Division, Region, Unit
 from freecad.Shelving.core.materials import Catalog, MaterialId
 from freecad.Shelving.core.record import rules_from_json, with_stored_rules
-from freecad.Shelving.core.scan import scan
+from freecad.Shelving.core.scan import elevation_axes, scan
 from freecad.Shelving.core.solver import LayoutSolveError, solve
+
+SplitDirection = Literal["horizontal", "vertical"]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -53,10 +56,12 @@ class EditFailure:
     ``node_id`` is whatever :class:`~freecad.Shelving.core.edit.EditError` or
     :class:`~freecad.Shelving.core.solver.LayoutSolveError` named: the region
     or board the caller asked to edit, or the node a re-solve refused at.
+    ``None`` means no node was named at all, which only happens when nothing
+    was selected to act on in the first place.
     """
 
     message: str
-    node_id: str
+    node_id: str | None
 
 
 def _find_node(region: Region, node_id: str) -> Region | Board | None:
@@ -187,15 +192,39 @@ class Session:
         self.selected_id = None
         return None
 
+    def _elevation_axes(self) -> tuple[Axis, Axis]:
+        """This session's own ``(horizontal, vertical)`` elevation axes,
+        resolved from ``self.unit.depth_axis``. Raises ``ValueError`` naming
+        ``self.unit.id`` when it is ``None``, the same guard
+        :func:`freecad.Shelving.editor.scene.build_scene` already applies to
+        the very same unit before this method could ever run: a session is
+        always built from a scanned container, which always resolves a
+        depth axis (see :mod:`freecad.Shelving.core.scan`), so this is an
+        invariant check, not a user-facing refusal."""
+        depth_axis = self.unit.depth_axis
+        if depth_axis is None:
+            raise ValueError(
+                f"unit {self.unit.id!r} has no depth_axis to split by direction"
+            )
+        return elevation_axes(depth_axis)
+
     def split(
-        self, axis: Axis, material: MaterialId | None = None
+        self, direction: SplitDirection, material: MaterialId | None = None
     ) -> EditFailure | None:
-        """Split the selected ``Bay`` along ``axis``, ``material`` defaulting
-        to the unit's own. Returns ``None`` on success, an :class:`EditFailure`
-        on refusal, changing nothing either way but the selection on
-        success."""
+        """Split the selected ``Bay`` into two, ``material`` defaulting to
+        the unit's own. ``direction`` chooses which of the elevation's two
+        axes (:func:`freecad.Shelving.core.scan.elevation_axes` of
+        ``self.unit.depth_axis``) the split runs along rather than naming a
+        model axis directly: "horizontal" divides the bay left and right
+        behind a vertical divider board, "vertical" stacks it top and bottom
+        behind a horizontal shelf, in both cases regardless of which model
+        axis (X, Y, or Z) the unit's depth actually runs along. Returns
+        ``None`` on success, an :class:`EditFailure` on refusal, changing
+        nothing either way but the selection on success."""
         if self.selected_id is None:
-            return EditFailure("select a bay to split", "")
+            return EditFailure("select a bay to split", None)
+        horizontal, vertical = self._elevation_axes()
+        axis = horizontal if direction == "horizontal" else vertical
         try:
             candidate = split_region(self.unit, self.selected_id, axis, material)
         except EditError as err:
@@ -207,7 +236,7 @@ class Session:
         Returns ``None`` on success, an :class:`EditFailure` on refusal,
         changing nothing either way but the selection on success."""
         if self.selected_id is None:
-            return EditFailure("select a board to merge", "")
+            return EditFailure("select a board to merge", None)
         try:
             candidate = merge_at(self.unit, self.selected_id)
         except EditError as err:

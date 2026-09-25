@@ -418,12 +418,14 @@ disabled, since a bay, not a board, is selected.
 
 1. With the bay still selected, click **Split Horizontal**.
 
-Expected: the elevation redraws immediately with a new divider board across
-the bay's middle and two smaller bays in its place, both roughly equal in
-size; the message line stays blank. Switching to the 3D view (without
-closing the panel) shows the same new board as a real, positioned box, not
-only a drawing: this is sh-018's write path running live, not a preview
-that could disagree with it. Click the new divider board: **Delete**
+Expected: the elevation redraws immediately with a new **vertical** divider
+board down the bay's middle (**Split Horizontal** divides the bay left and
+right; **Split Vertical** would instead divide it top and bottom behind a
+**horizontal** shelf), leaving two smaller bays side by side, both roughly
+equal in size; the message line stays blank. Switching to the 3D view
+(without closing the panel) shows the same new board as a real, positioned
+box, not only a drawing: this is sh-018's write path running live, not a
+preview that could disagree with it. Click the new divider board: **Delete**
 enables and both **Split** buttons disable, since a board, not a bay, is
 now selected.
 

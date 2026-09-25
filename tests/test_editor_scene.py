@@ -11,15 +11,19 @@ the process.
 
 import os
 
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+# A plain assignment, not setdefault: a developer's shell may already export
+# QT_QPA_PLATFORM (wayland, xcb) for interactive use elsewhere, and honoring
+# that here would make this suite try to open a real window instead of
+# running headless.
+os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
-from collections.abc import Iterator  # noqa: E402
+from collections.abc import Iterator, Mapping  # noqa: E402
 from typing import cast  # noqa: E402
 
 import pytest  # noqa: E402
 from PySide6 import QtCore, QtGui, QtTest, QtWidgets  # noqa: E402
 
-from freecad.Shelving.core.geometry import Vec3  # noqa: E402
+from freecad.Shelving.core.geometry import Space, Vec3  # noqa: E402
 from freecad.Shelving.core.layout import (  # noqa: E402
     Axis,
     Bay,
@@ -68,6 +72,25 @@ _UNIT = Unit(
 )
 _SPACES = solve(_UNIT, CATALOG)
 
+# The same run, rotated a quarter turn: depth is X, not Y, so the elevation's
+# horizontal axis is Y and its vertical axis is Z (unchanged, since Z is
+# never the depth axis here). Exercises _rect_for's projection along an axis
+# pair other than the X/Z default every other fixture in this module uses.
+_ROTATED_UNIT = Unit(
+    size_mm=Vec3(300.0, 900.0, 600.0),
+    default_material=PLY,
+    root=Division(
+        axis=Axis.Y,
+        items=[
+            Bay(id="rbay1", rule=Weighted(1.0)),
+            Board(id="rboard1", role="divider"),
+            Void(id="rvoid1"),
+        ],
+    ),
+    depth_axis=Axis.X,
+)
+_ROTATED_SPACES = solve(_ROTATED_UNIT, CATALOG)
+
 # Scene (mm) coordinates known to land inside each named item, and one known
 # to land outside the unit entirely; derived from _SPACES above (bay1 spans
 # x in [0, 441], board1 [441, 459], void1 [459, 900], every item spanning
@@ -102,6 +125,19 @@ class _RecordingView(QtWidgets.QGraphicsView):
         super().mousePressEvent(event)
 
 
+def _union_of_item_rects(scene: QtWidgets.QGraphicsScene) -> QtCore.QRectF:
+    """The union of every item's own ``rect()``, the geometry ``build_scene``
+    actually placed each item at. Every item here has no transform beyond
+    its position in ``addRect``'s own coordinates, so this is the drawn
+    extent; unlike ``itemsBoundingRect()``, it is not inflated by the
+    boundary items' pen width."""
+    union = QtCore.QRectF()
+    for item in scene.items():
+        assert isinstance(item, QtWidgets.QGraphicsRectItem)
+        union = union.united(item.rect())
+    return union
+
+
 def test_item_count_matches_regions_plus_boards(
     qapp: QtWidgets.QApplication,
 ) -> None:
@@ -110,11 +146,20 @@ def test_item_count_matches_regions_plus_boards(
     assert len(scene.items()) == 4
 
 
-def test_scene_rect_matches_the_unit_projected_extent(
-    qapp: QtWidgets.QApplication,
+@pytest.mark.parametrize(
+    ("unit", "spaces"), [(_UNIT, _SPACES), (_ROTATED_UNIT, _ROTATED_SPACES)]
+)
+def test_scene_items_fill_the_unit_projected_extent(
+    qapp: QtWidgets.QApplication, unit: Unit, spaces: Mapping[str, Space]
 ) -> None:
-    scene = build_scene(_UNIT, _SPACES)
-    rect = scene.sceneRect()
+    # The union of the drawn items' own rects, not sceneRect: sceneRect is
+    # exactly what build_scene sets from unit.size_mm directly, so it would
+    # pass even if _rect_for drew every item at the wrong place or size.
+    # Both a default unit (depth_axis Y) and a rotated one (depth_axis X) so
+    # a projection bug that only shows up off the X/Z axis pair would fail
+    # here.
+    scene = build_scene(unit, spaces)
+    rect = _union_of_item_rects(scene)
     assert rect.width() == pytest.approx(900.0)
     assert rect.height() == pytest.approx(600.0)
 

@@ -9,14 +9,18 @@ under ``freecadcmd``. ``Activated`` shows
 the functional smoke drives :class:`freecad.Shelving.editor.session.Session`
 directly instead, the same way ``tools/freecad_write_smoke.py`` calls
 ``unit_ops`` functions rather than going through a command's ``Activated``.
+
+``EditUnitPanel`` (and, with it, PySide6) is imported inside ``Activated``
+rather than at module scope, the same lazy-Qt convention
+``resize_unit.py`` uses: an import failure on some user's FreeCAD build would
+otherwise stop ``init_gui`` from registering every Shelving command, not
+only this one.
 """
 
 import os
 from typing import TYPE_CHECKING, TypedDict, cast
 
 import FreeCAD
-
-from freecad.Shelving.editor.panel import EditUnitPanel
 
 _RESOURCE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources")
 _ICON = os.path.join(_RESOURCE_DIR, "shelving.svg")
@@ -65,9 +69,23 @@ class EditUnitCommand:
                 "group to edit"
             )
             return
+        from freecad.Shelving.editor.panel import EditUnitPanel
+
+        try:
+            panel = EditUnitPanel(container)
+        except Exception as err:  # noqa: BLE001 - report, don't crash the GUI
+            print(f"REFUSED: {err}")
+            return
         import FreeCADGui as Gui
 
-        Gui.Control.showDialog(EditUnitPanel(container))
+        try:
+            Gui.Control.showDialog(panel)
+        except Exception as err:  # noqa: BLE001 - the transaction EditUnitPanel
+            # already opened would otherwise stay open with no dialog left to
+            # commit or abort it (showDialog raises RuntimeError when another
+            # task dialog is already active).
+            panel.session.cancel()
+            print(f"REFUSED: {err}")
 
 
 if not TYPE_CHECKING:

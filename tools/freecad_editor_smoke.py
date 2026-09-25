@@ -62,15 +62,50 @@ _BoardSnapshot = tuple[tuple[str, float, float, float, float, float, float], ...
 
 def _find_bay_id(region: Region) -> str:
     """The id of the first ``Bay`` found in ``region``'s subtree, depth first."""
+    found = _find_bay(region)
+    if found is None:
+        raise AssertionError(f"no Bay found in {region!r}")
+    return found
+
+
+def _find_bay(region: Region) -> str | None:
+    """``_find_bay_id``'s recursive half: ``None`` rather than raising when
+    ``region``'s own subtree holds no ``Bay``, so a sibling's subtree still
+    gets searched instead of aborting the whole walk."""
     if isinstance(region, Bay):
         return region.id
     if isinstance(region, Division):
         for item in region.items:
             if not isinstance(item, Board):
-                found = _find_bay_id(item)
+                found = _find_bay(item)
                 if found is not None:
                     return found
-    raise AssertionError(f"no Bay found in {region!r}")
+    return None
+
+
+def _axis_of_new_board(before: Region, after: Region) -> Axis:
+    """The ``Division.axis`` of the ``Division`` holding the one board
+    present in ``after`` and absent from ``before``: the axis
+    :meth:`~freecad.Shelving.editor.session.Session.split` actually resolved
+    a direction to."""
+    board_id = _find_new_board_id(before, after)
+    axis = _axis_of_board(after, board_id)
+    assert axis is not None, board_id
+    return axis
+
+
+def _axis_of_board(region: Region, board_id: str) -> Axis | None:
+    if not isinstance(region, Division):
+        return None
+    for item in region.items:
+        if isinstance(item, Board) and item.id == board_id:
+            return region.axis
+    for item in region.items:
+        if not isinstance(item, Board):
+            found = _axis_of_board(item, board_id)
+            if found is not None:
+                return found
+    return None
 
 
 def _find_new_board_id(before: Region, after: Region) -> str:
@@ -146,10 +181,37 @@ def _tiny_unit() -> Unit:
     )
 
 
+def _rotated_default_unit() -> Unit:
+    """The same closed single-bay shape :func:`create_unit` seeds, but
+    rotated a quarter turn: depth is X, not Y, and the run of shelves is Y,
+    not X. Exercises the review's F1 bug: a hardcoded elevation axis picks
+    the wrong pair of model axes when ``depth_axis`` is not Y, splitting the
+    bay parallel to the elevation plane (invisible in the drawing) instead
+    of across it."""
+    return Unit(
+        size_mm=Vec3(300.0, 600.0, 900.0),
+        default_material=DEFAULT_MATERIAL_ID,
+        root=Division(
+            axis=Axis.Z,
+            items=[
+                Board(role="bottom"),
+                Division(
+                    axis=Axis.Y,
+                    items=[Board(role="left_side"), Bay(), Board(role="right_side")],
+                ),
+                Board(role="top"),
+            ],
+        ),
+        depth_axis=Axis.X,
+    )
+
+
 def _check_selection_permissions_and_split(doc: FreeCAD.Document) -> None:
     """Selecting a bay permits split and not merge; splitting writes one new
     board and two bays; selecting that board permits merge; merging removes
-    it and restores the original board count and names."""
+    it and restores the original board count and names. Also covers the
+    "nothing selected" refusal both buttons can hit: no id was named to
+    refuse, so ``EditFailure.node_id`` is ``None`` rather than an id string."""
     container = create_unit(doc)
     doc.recompute()
     names_before = _board_names(container)
@@ -157,6 +219,14 @@ def _check_selection_permissions_and_split(doc: FreeCAD.Document) -> None:
     session = Session(container)
     session.open()
     try:
+        assert session.selected_id is None
+        no_selection_split = session.split("horizontal")
+        assert isinstance(no_selection_split, EditFailure), no_selection_split
+        assert no_selection_split.node_id is None, no_selection_split
+        no_selection_merge = session.merge()
+        assert isinstance(no_selection_merge, EditFailure), no_selection_merge
+        assert no_selection_merge.node_id is None, no_selection_merge
+
         bay_id = _find_bay_id(session.unit.root)
         bay_count_before = _bay_count(session.unit.root)
         session.select(bay_id)
@@ -164,7 +234,7 @@ def _check_selection_permissions_and_split(doc: FreeCAD.Document) -> None:
         assert session.can_merge() is False
 
         unit_before_split = session.unit
-        result = session.split(Axis.X)
+        result = session.split("horizontal")
         assert result is None, result
         doc.recompute()
         assert _bay_count(session.unit.root) == bay_count_before + 1
@@ -235,8 +305,12 @@ def _check_an_unsolvable_edit_changes_nothing() -> None:
             session.select(bay_id)
             snapshot_before = _board_snapshot(container)
 
-            result = session.split(Axis.X)
+            result = session.split("horizontal")
             assert isinstance(result, EditFailure), result
+            # A real node was pinned (the LayoutSolveError's own offending
+            # id), distinguishing this from the "nothing selected" refusal,
+            # which names none.
+            assert result.node_id is not None, result
             doc.recompute()
             assert _board_snapshot(container) == snapshot_before
         finally:
@@ -259,7 +333,7 @@ def _check_cancel_restores_the_opening_state() -> None:
         bay_id = _find_bay_id(session.unit.root)
         session.select(bay_id)
         unit_before_split = session.unit
-        assert session.split(Axis.X) is None
+        assert session.split("horizontal") is None
         doc.recompute()
 
         new_board_id = _find_new_board_id(unit_before_split.root, session.unit.root)
@@ -269,7 +343,7 @@ def _check_cancel_restores_the_opening_state() -> None:
 
         bay_id_again = _find_bay_id(session.unit.root)
         session.select(bay_id_again)
-        assert session.split(Axis.Z) is None
+        assert session.split("vertical") is None
         doc.recompute()
 
         session.cancel()
@@ -292,7 +366,7 @@ def _check_commit_then_one_undo_reverses_the_session() -> None:
         session.open()
         bay_id = _find_bay_id(session.unit.root)
         session.select(bay_id)
-        assert session.split(Axis.X) is None
+        assert session.split("horizontal") is None
         doc.recompute()
         names_after_split = _board_names(container)
         assert names_after_split != names_before
@@ -308,6 +382,87 @@ def _check_commit_then_one_undo_reverses_the_session() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
+def _check_a_refused_edit_after_an_accepted_edit_changes_nothing() -> None:
+    """The Must Have says a refused edit leaves the document "at the last
+    state that did" solve, not necessarily the session's opening state:
+    split once (an accepted edit) before attempting the structurally
+    impossible merge, and assert the document still matches the state right
+    after that split, not the state from before it."""
+    doc = FreeCAD.newDocument("editor_smoke_refused_after_accepted")
+    try:
+        container = create_unit(doc)
+        doc.recompute()
+
+        session = Session(container)
+        session.open()
+        try:
+            bay_id = _find_bay_id(session.unit.root)
+            session.select(bay_id)
+            assert session.split("horizontal") is None
+            doc.recompute()
+            snapshot_after_split = _board_snapshot(container)
+
+            # "bottom" sits first in its Division's items regardless of the
+            # split just made, so it still has no neighbour before it.
+            boxes, _skipped, _record = read_container(container)
+            bottom_name = next(b.name for b in boxes if b.name == "bottom")
+            session.select(bottom_name)
+            result = session.merge()
+            assert isinstance(result, EditFailure), result
+            assert result.node_id == bottom_name, result
+            doc.recompute()
+            assert _board_snapshot(container) == snapshot_after_split
+        finally:
+            session.cancel()
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def _check_split_direction_follows_the_units_depth_axis() -> None:
+    """sh-020 review F1: a unit whose depth axis is X, not Y. Split
+    Horizontal and Split Vertical must resolve their model axis from
+    ``elevation_axes(unit.depth_axis)`` rather than a hardcoded model axis,
+    or the new board would lie in the elevation plane instead of dividing
+    it. Asserts the new board's ``Division.axis`` is one of the elevation's
+    own two axes (Y horizontal, Z vertical here), never the depth axis (X)."""
+    doc = FreeCAD.newDocument("editor_smoke_depth_axis_not_y")
+    try:
+        container = cast(
+            "FreeCAD.DocumentObject", doc.addObject("App::Part", "RotatedUnit")
+        )
+        write_container(container, _rotated_default_unit(), DEFAULT_CATALOG)
+        doc.recompute()
+
+        session = Session(container)
+        session.open()
+        try:
+            assert session.unit.depth_axis == Axis.X
+
+            bay_id = _find_bay_id(session.unit.root)
+            session.select(bay_id)
+            unit_before_horizontal = session.unit
+            assert session.split("horizontal") is None
+            doc.recompute()
+            horizontal_axis = _axis_of_new_board(
+                unit_before_horizontal.root, session.unit.root
+            )
+            assert horizontal_axis == Axis.Y, horizontal_axis
+
+            bay_id = _find_bay_id(session.unit.root)
+            session.select(bay_id)
+            unit_before_vertical = session.unit
+            assert session.split("vertical") is None
+            doc.recompute()
+            vertical_axis = _axis_of_new_board(
+                unit_before_vertical.root, session.unit.root
+            )
+            assert vertical_axis == Axis.Z, vertical_axis
+        finally:
+            session.cancel()
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
 def main() -> None:
     doc = FreeCAD.newDocument("editor_smoke")
     try:
@@ -316,6 +471,8 @@ def main() -> None:
         FreeCAD.closeDocument(doc.Name)
     _check_a_structurally_refused_edit_changes_nothing()
     _check_an_unsolvable_edit_changes_nothing()
+    _check_a_refused_edit_after_an_accepted_edit_changes_nothing()
+    _check_split_direction_follows_the_units_depth_axis()
     _check_cancel_restores_the_opening_state()
     _check_commit_then_one_undo_reverses_the_session()
     print("shelving editor OK")

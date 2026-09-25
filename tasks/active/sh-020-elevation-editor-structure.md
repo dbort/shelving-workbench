@@ -1,8 +1,8 @@
 ---
 id: sh-020
 title: "The elevation editor: structure"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 1
 blocked_by: [sh-019]
 ---
@@ -149,7 +149,7 @@ Every length identifier carries `_mm`.
 
 - [x] **Step 2** (`freecad/Shelving/editor/scene.py`): Create the scene builder, importing Qt but no FreeCAD. `build_scene(unit, spaces, selected_id=None) -> QGraphicsScene` adding one rect per region and per board, projected along the unit's depth axis, each carrying its id via `setData`. A `Void` gets a distinct brush from a `Bay`, and the selected item gets a distinct pen. `hit_test(scene, point) -> str | None` returning the id of the topmost item at a scene point. Keep the drawing primitives shared with `freecad/Shelving/core/svg.py` in spirit but do not import it: an SVG string cannot become Qt items.
 
-- [x] **Step 3** (`tests/test_editor_scene.py`): Create the offscreen suite. Set `QT_QPA_PLATFORM=offscreen` before importing PySide6 and reuse an existing `QApplication`. Assert: item count matches regions plus boards; the scene bounding rect matches the unit's projected extent; hit tests at points inside a known bay, a known board, and a known void return those ids; a point outside returns `None`; the selected item's pen differs from the others'; a `Void`'s brush differs from a `Bay`'s; and a `QtTest.QTest.mouseClick` on a view over the scene reaches the scene and reports the expected id.
+- [x] **Step 3** (`freecad/Shelving/editor/tests/test_scene.py` or the repo's test location for FreeCAD-side code): Create the offscreen suite. Set `QT_QPA_PLATFORM=offscreen` before importing PySide6 and reuse an existing `QApplication`. Assert: item count matches regions plus boards; the scene bounding rect matches the unit's projected extent; hit tests at points inside a known bay, a known board, and a known void return those ids; a point outside returns `None`; the selected item's pen differs from the others'; a `Void`'s brush differs from a `Bay`'s; and a `QtTest.QTest.mouseClick` on a view over the scene reaches the scene and reports the expected id.
 
 - [x] **Step 4** (`freecad/Shelving/editor/session.py`): Create the session, which owns the document side and holds every decision the panel would otherwise make. Construct from a container: read it, scan it, apply stored rules, and keep the resulting `Unit` plus the catalog. `open()` starting the transaction. `select(id)`, `can_split()`, `can_merge()` reporting what the current selection permits. `split(axis)` and `merge()` calling the core edit, re-solving, writing through sh-018's write path, and returning either the new state or a structured failure carrying the message and the offending id; on failure change nothing. `commit()` and `cancel()` ending the transaction. No Qt anywhere in this module.
 

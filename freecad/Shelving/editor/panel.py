@@ -20,9 +20,8 @@ from typing import cast
 import FreeCAD
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from freecad.Shelving.core.layout import Axis
 from freecad.Shelving.editor.scene import build_scene, hit_test
-from freecad.Shelving.editor.session import EditFailure, Session
+from freecad.Shelving.editor.session import EditFailure, Session, SplitDirection
 
 
 class _EditorView(QtWidgets.QGraphicsView):
@@ -75,8 +74,8 @@ class EditUnitPanel:
         self.message_label = QtWidgets.QLabel("")
         layout.addWidget(self.message_label)
 
-        self.split_horizontal_button.clicked.connect(lambda: self._split(Axis.X))
-        self.split_vertical_button.clicked.connect(lambda: self._split(Axis.Z))
+        self.split_horizontal_button.clicked.connect(lambda: self._split("horizontal"))
+        self.split_vertical_button.clicked.connect(lambda: self._split("vertical"))
         self.delete_button.clicked.connect(self._merge)
 
         self._refresh()
@@ -87,8 +86,8 @@ class EditUnitPanel:
         self.session.select(node_id)
         self._refresh()
 
-    def _split(self, axis: Axis) -> None:
-        self._show_result(self.session.split(axis))
+    def _split(self, direction: SplitDirection) -> None:
+        self._show_result(self.session.split(direction))
 
     def _merge(self) -> None:
         self._show_result(self.session.merge())
