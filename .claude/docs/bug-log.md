@@ -1,5 +1,5 @@
 ---
-next_id: bug-006
+next_id: bug-008
 ---
 
 # Bug log
@@ -208,3 +208,55 @@ asks for a sweep; no agent schedules one on its own.
   a way to select a non-leaf region in the scene. Which shelves each half
   keeps, and how a user picks a region that has no area of its own to
   click, are design questions and not a mechanical patch.
+
+- `bug-006` - **an editor-built layout does not survive a rescan: reopening
+  the editor and making any edit moves shelves the user never touched**:
+  steps to reproduce:
+  1. Create Unit.
+  2. In the editor, add a divider.
+  3. Add a shelf in the left opening.
+  4. Add a shelf in the top-left opening, then click OK.
+  5. Reopen the editor and add a shelf on the right.
+
+  Both left shelves move, from z 441.0 / 661.5 to 294.0 / 588.0. The root
+  cause is that `core.edit.split_region` replaces a `Bay` with a nested
+  `Division(axis, [Bay, Board, Bay])` even when the enclosing `Division`
+  already runs along that axis. That produces
+  `Division z[Bay, shelf1, Division z[Bay, shelf2, Bay]]`, which is halves
+  of a half. Scanning cannot recover same-axis nesting from geometry, so
+  `Session` rereads the column as a flat `Division z[Bay, shelf1, Bay,
+  shelf2, Bay]`. The stored `Fill` rules keyed to shelf1 and shelf2 then
+  apply to the outer two bays, and the column solves to equal thirds. The
+  bug shows up only when something forces a re-solve and write: the next
+  edit, Resize Unit, or Reflow All. Found during `sh-020`'s manual QA
+  sign-off, while reproducing the user's report, with a `freecadcmd`
+  script driving `Session`. Fix: `sh-XXX task`. `split_region` has to
+  splice into a same-axis parent rather than nest, and flattening then has
+  to give the split bay's two halves rules that keep the current geometry.
+  Rules that do that (a `Fixed` pair, or `Weighted` values scaled by the
+  parent's weights) are a design choice. The fix also has to decide what
+  `merge_at` does in a flat run, which interacts with bug-005.
+
+- `bug-007` - **a board moved by hand snaps back on the next rescan when a
+  stored `Fill` rule bounds it**: steps to reproduce:
+  1. Create Unit.
+  2. In the editor, add one shelf, then click OK.
+  3. Move the shelf down 60 mm by hand.
+  4. Run `unit_ops.rescan_unit`.
+
+  The shelf returns to z 441.0 from 381.0. The same happens inside the
+  editor session, and with Resize Unit and Reflow All. The scan reads the
+  moved geometry correctly: the two bays are unequal, so it would assign
+  `Fixed`. But `record.with_stored_rules` then overwrites both bays with
+  the stored `Fill` rules keyed by their bounding boards, which still
+  exist, and the solve puts the shelf back in the middle. This contradicts
+  `docs/roadmap.md` M7's "a board moved by hand between operations is
+  taken up rather than overwritten". The mechanism predates `sh-020` (it
+  comes from `sh-018`'s rule record), but the editor is what makes shelves
+  with stored `Fill` rules common. Found during `sh-020`'s manual QA
+  sign-off, as a second contributor to the same user report as bug-006.
+  Fix: `sh-XXX task`. A stored rule has to yield when the scanned geometry
+  disagrees with what that rule would solve to, but it still has to win
+  where geometry is ambiguous (the reason `Basis.WITH_NEXT` is stored).
+  Choosing that tolerance and precedence is a design question for
+  `new-task`.
