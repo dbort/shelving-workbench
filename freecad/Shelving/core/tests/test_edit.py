@@ -1,12 +1,14 @@
-"""``split_region`` / ``merge_at``: refusals, and split-then-merge round trips."""
+"""``split_region`` / ``merge_at``: refusals, round trips, and (bug-006) that
+every other board and region in an edited run keeps its solved geometry."""
 
 import copy
 import dataclasses
+from collections.abc import Mapping
 
 import pytest
 
 from freecad.Shelving.core.edit import EditError, merge_at, split_region
-from freecad.Shelving.core.geometry import Vec3
+from freecad.Shelving.core.geometry import Space, Vec3
 from freecad.Shelving.core.layout import (
     Axis,
     Bay,
@@ -21,9 +23,12 @@ from freecad.Shelving.core.layout import (
     Void,
     Weighted,
 )
-from freecad.Shelving.core.materials import MaterialId
+from freecad.Shelving.core.materials import Catalog, MaterialEntry, MaterialId
+from freecad.Shelving.core.solver import solve
 
 PLY = MaterialId("ply18")
+
+CATALOG = Catalog(entries={PLY: MaterialEntry(PLY, "ply 18", 18.0, "plywood")})
 
 
 def _closed_box_unit() -> Unit:
@@ -77,6 +82,27 @@ def _stepped_unit() -> Unit:
         root=Division(
             axis=Axis.X,
             items=[Bay(rule=Weighted(2.0)), Board(role="divider"), Void()],
+        ),
+        depth_axis=Axis.Y,
+    )
+
+
+def _run_unit(rule_a: SizeRule, rule_b: SizeRule, width_mm: float = 900.0) -> Unit:
+    """A flat ``Axis.X`` run: three boards and two bays, ``rule_a`` and
+    ``rule_b``, so splitting or merging the first bay has a second sibling
+    in the very same run whose geometry must not move."""
+    return Unit(
+        size_mm=Vec3(width_mm, 300.0, 900.0),
+        default_material=PLY,
+        root=Division(
+            axis=Axis.X,
+            items=[
+                Board(role="left"),
+                Bay(rule=rule_a),
+                Board(role="mid"),
+                Bay(rule=rule_b),
+                Board(role="right"),
+            ],
         ),
         depth_axis=Axis.Y,
     )
@@ -167,9 +193,9 @@ def _region_shape(region: Region) -> object:
 
 def _split_then_merge_round_trips(unit: Unit) -> None:
     bay_id = _find_bay_id(unit.root)
-    split = split_region(unit, bay_id, Axis.Z, material=None)
+    split = split_region(unit, bay_id, Axis.Z, CATALOG, material=None)
     board_id = _new_board_id(unit, split)
-    merged = merge_at(split, board_id)
+    merged = merge_at(split, board_id, CATALOG)
     assert _region_shape(merged.root) == _region_shape(unit.root)
 
 
@@ -195,6 +221,52 @@ def _all_board_ids(region: Region) -> set[str]:
     return set()
 
 
+def _has_same_axis_nesting(region: Region) -> bool:
+    """Whether ``region``'s subtree nests a ``Division`` directly inside
+    another ``Division`` sharing its axis: the shape rescanning cannot tell
+    apart from a flat run of the same boards (bug-006), which
+    ``split_region`` must never produce."""
+    if not isinstance(region, Division):
+        return False
+    for item in region.items:
+        if isinstance(item, Division):
+            if item.axis == region.axis:
+                return True
+            if _has_same_axis_nesting(item):
+                return True
+    return False
+
+
+def _spaces_equal(a: Space, b: Space, *, tol_mm: float = 1e-6) -> bool:
+    return (
+        abs(a.origin.x_mm - b.origin.x_mm) <= tol_mm
+        and abs(a.origin.y_mm - b.origin.y_mm) <= tol_mm
+        and abs(a.origin.z_mm - b.origin.z_mm) <= tol_mm
+        and abs(a.size.x_mm - b.size.x_mm) <= tol_mm
+        and abs(a.size.y_mm - b.size.y_mm) <= tol_mm
+        and abs(a.size.z_mm - b.size.z_mm) <= tol_mm
+    )
+
+
+def _assert_surviving_boards_unchanged(
+    spaces_before: Mapping[str, Space], unit_after: Unit
+) -> None:
+    """Every board id present both in ``spaces_before`` and in
+    ``unit_after`` solves to the same ``Space``, within ``1e-6`` mm, as it
+    did before the edit that produced ``unit_after``. A region id is never
+    checked this way: split and merge both mint fresh region ids for
+    whatever they touch, so only a board can meaningfully "survive"."""
+    spaces_after = solve(unit_after, CATALOG)
+    for board_id in _all_board_ids(unit_after.root):
+        if board_id not in spaces_before:
+            continue
+        assert _spaces_equal(spaces_before[board_id], spaces_after[board_id]), (
+            board_id,
+            spaces_before[board_id],
+            spaces_after[board_id],
+        )
+
+
 # --- split_region refusals ---------------------------------------------------
 
 
@@ -202,7 +274,7 @@ def test_split_region_refuses_a_void() -> None:
     void = Void()
     unit = Unit(size_mm=Vec3(600.0, 300.0, 900.0), default_material=PLY, root=void)
     with pytest.raises(EditError, match=void.id) as exc_info:
-        split_region(unit, void.id, Axis.X)
+        split_region(unit, void.id, Axis.X, CATALOG)
     assert exc_info.value.node_id == void.id
 
 
@@ -210,15 +282,34 @@ def test_split_region_refuses_a_division() -> None:
     unit = _closed_box_unit()
     assert isinstance(unit.root, Division)
     with pytest.raises(EditError, match=unit.root.id) as exc_info:
-        split_region(unit, unit.root.id, Axis.X)
+        split_region(unit, unit.root.id, Axis.X, CATALOG)
     assert exc_info.value.node_id == unit.root.id
 
 
 def test_split_region_refuses_an_unknown_id() -> None:
     unit = _closed_box_unit()
     with pytest.raises(EditError, match="no-such-id") as exc_info:
-        split_region(unit, "no-such-id", Axis.X)
+        split_region(unit, "no-such-id", Axis.X, CATALOG)
     assert exc_info.value.node_id == "no-such-id"
+
+
+def test_split_region_refuses_a_bay_too_small_for_the_divider() -> None:
+    """A splice-case split (the bay's parent already runs along the split
+    axis) whose opening cannot fit the new board and still leave two
+    positive-sized halves is refused by the bay's own id, not left to a
+    downstream ``Fixed``/``Weighted`` construction to crash on."""
+    bay = Bay(rule=Fixed(10.0))
+    unit = Unit(
+        size_mm=Vec3(46.0, 300.0, 900.0),
+        default_material=PLY,
+        root=Division(
+            axis=Axis.X,
+            items=[Board(role="left"), bay, Board(role="right")],
+        ),
+    )
+    with pytest.raises(EditError, match=bay.id) as exc_info:
+        split_region(unit, bay.id, Axis.X, CATALOG)
+    assert exc_info.value.node_id == bay.id
 
 
 # --- merge_at refusals -------------------------------------------------------
@@ -227,7 +318,7 @@ def test_split_region_refuses_an_unknown_id() -> None:
 def test_merge_at_refuses_an_unknown_id() -> None:
     unit = _closed_box_unit()
     with pytest.raises(EditError, match="no-such-id") as exc_info:
-        merge_at(unit, "no-such-id")
+        merge_at(unit, "no-such-id", CATALOG)
     assert exc_info.value.node_id == "no-such-id"
 
 
@@ -239,7 +330,7 @@ def test_merge_at_refuses_a_board_with_no_neighbour_on_one_side() -> None:
         root=Division(axis=Axis.X, items=[edge_board, Bay()]),
     )
     with pytest.raises(EditError, match=edge_board.id) as exc_info:
-        merge_at(unit, edge_board.id)
+        merge_at(unit, edge_board.id, CATALOG)
     assert exc_info.value.node_id == edge_board.id
 
 
@@ -251,7 +342,7 @@ def test_merge_at_refuses_a_board_flanked_by_another_board() -> None:
         root=Division(axis=Axis.X, items=[Board(role="left"), middle_board, Bay()]),
     )
     with pytest.raises(EditError, match=middle_board.id) as exc_info:
-        merge_at(unit, middle_board.id)
+        merge_at(unit, middle_board.id, CATALOG)
     assert exc_info.value.node_id == middle_board.id
 
 
@@ -277,17 +368,17 @@ def test_split_region_leaves_the_argument_unit_unchanged() -> None:
     unit = _closed_box_unit()
     before = copy.deepcopy(unit)
     bay_id = _find_bay_id(unit.root)
-    split_region(unit, bay_id, Axis.X)
+    split_region(unit, bay_id, Axis.X, CATALOG)
     assert _region_shape(unit.root) == _region_shape(before.root)
 
 
 def test_merge_at_leaves_the_argument_unit_unchanged() -> None:
     unit = _closed_box_unit()
     bay_id = _find_bay_id(unit.root)
-    split = split_region(unit, bay_id, Axis.X)
+    split = split_region(unit, bay_id, Axis.X, CATALOG)
     before = copy.deepcopy(split)
     board_id = _new_board_id(unit, split)
-    merge_at(split, board_id)
+    merge_at(split, board_id, CATALOG)
     assert _region_shape(split.root) == _region_shape(before.root)
 
 
@@ -295,10 +386,12 @@ def test_merge_at_leaves_the_argument_unit_unchanged() -> None:
 
 
 def test_split_region_produces_a_division_of_bay_board_bay() -> None:
-    """The replacement is a ``Division`` on the requested axis, carrying the
-    split ``Bay``'s own rule; its items are ``Bay(Fill)``, ``Board``,
-    ``Bay(Fill)``; the parent's untouched siblings are the same
-    objects split_region reused, not copies of them."""
+    """A cross-axis split (the bay's parent runs on a different axis) nests
+    a new ``Division`` on the requested axis, carrying the split ``Bay``'s
+    own rule; its items are ``Bay(Fill)``, ``Board``, ``Bay(Fill)``: a fresh
+    run has no other region to preserve, so both halves are always
+    ``Fill`` regardless of the split bay's own rule. The parent's untouched
+    siblings are the same objects split_region reused, not copies of them."""
     unit = _closed_box_unit()
     bay_id = _find_bay_id(unit.root)
     original_bay = _find_region(unit.root, bay_id)
@@ -312,7 +405,7 @@ def test_split_region_produces_a_division_of_bay_board_bay() -> None:
     index = next(i for i, item in enumerate(parent.items) if item.id == bay_id)
     siblings_before = [item for i, item in enumerate(parent.items) if i != index]
 
-    split = split_region(unit, bay_id, Axis.Z, material=PLY)
+    split = split_region(unit, bay_id, Axis.Z, CATALOG, material=PLY)
 
     new_parent = _find_region(split.root, parent.id)
     assert isinstance(new_parent, Division)
@@ -335,9 +428,12 @@ def test_split_region_produces_a_division_of_bay_board_bay() -> None:
 
 
 def test_split_region_defaults_the_board_material_to_none() -> None:
+    """``Axis.Z`` differs from ``_closed_box_unit``'s inner division
+    (``Axis.X``), so this is the cross-axis nesting case: the new board
+    sits inside a wrapping ``Division`` at the bay's old slot."""
     unit = _closed_box_unit()
     bay_id = _find_bay_id(unit.root)
-    split = split_region(unit, bay_id, Axis.X)
+    split = split_region(unit, bay_id, Axis.Z, CATALOG)
     # split_region gave the replacement Division a fresh id (bay_id no longer
     # names anything), so locate it by the parent slot instead.
     parent = _find_parent(unit.root, bay_id)
@@ -354,11 +450,13 @@ def test_split_region_defaults_the_board_material_to_none() -> None:
 
 def test_split_region_at_the_tree_root() -> None:
     """``region_id`` can name the tree's own root, with no parent
-    ``Division`` to slot the replacement into."""
+    ``Division`` to slot the replacement into: always the cross-axis
+    nesting case, so the bay's own ``Fixed`` rule has no bearing on the two
+    new halves, which are ``Fill``."""
     bay = Bay(rule=Fixed(500.0))
     unit = Unit(size_mm=Vec3(600.0, 300.0, 900.0), default_material=PLY, root=bay)
 
-    split = split_region(unit, bay.id, Axis.X, material=PLY)
+    split = split_region(unit, bay.id, Axis.X, CATALOG, material=PLY)
 
     assert isinstance(split.root, Division)
     assert split.root.axis == Axis.X
@@ -387,3 +485,124 @@ def _replace_node(region: Region, node_id: str, replacement: Region) -> Region:
         else:
             new_items.append(_replace_node(item, node_id, replacement))
     return dataclasses.replace(region, items=new_items)
+
+
+# --- bug-006: a same-axis split/merge never moves the rest of its run -------
+
+
+def _check_split_and_merge_preserve_the_other_bay(
+    rule_a: SizeRule, rule_b: SizeRule, width_mm: float = 900.0
+) -> None:
+    unit = _run_unit(rule_a, rule_b, width_mm)
+    assert isinstance(unit.root, Division)
+    spaces_before = solve(unit, CATALOG)
+    bay_a = unit.root.items[1]
+    assert isinstance(bay_a, Bay)
+    bay_b = unit.root.items[3]
+    assert isinstance(bay_b, Bay)
+
+    split = split_region(unit, bay_a.id, Axis.X, CATALOG)
+    assert not _has_same_axis_nesting(split.root)
+    _assert_surviving_boards_unchanged(spaces_before, split)
+    spaces_after_split = solve(split, CATALOG)
+    assert _spaces_equal(spaces_after_split[bay_b.id], spaces_before[bay_b.id])
+
+    board_id = _new_board_id(unit, split)
+    merged = merge_at(split, board_id, CATALOG)
+    assert isinstance(merged.root, Division)
+    # Tree shape round-trips by item kind (Board, Bay, Board, Bay, Board);
+    # the merged bay's *rule* need not come back as the literal Fill() or
+    # Weighted() it started as (a Weighted anchor elsewhere in the run can
+    # solve it to a numerically equivalent but differently-typed rule), only
+    # its solved geometry, checked below, must round-trip exactly.
+    assert [type(item).__name__ for item in merged.root.items] == [
+        type(item).__name__ for item in unit.root.items
+    ]
+    _assert_surviving_boards_unchanged(spaces_after_split, merged)
+    spaces_after_merge = solve(merged, CATALOG)
+    assert _spaces_equal(spaces_after_merge[bay_b.id], spaces_before[bay_b.id])
+    merged_bay_a = merged.root.items[1]
+    assert isinstance(merged_bay_a, Bay)
+    assert _spaces_equal(spaces_after_merge[merged_bay_a.id], spaces_before[bay_a.id])
+
+
+def test_split_and_merge_preserve_the_other_bay_in_a_fill_run() -> None:
+    _check_split_and_merge_preserve_the_other_bay(Fill(), Fill())
+
+
+def test_split_and_merge_preserve_the_other_bay_in_a_weighted_run() -> None:
+    _check_split_and_merge_preserve_the_other_bay(Weighted(1.5), Weighted(2.5))
+
+
+def test_split_and_merge_preserve_the_other_bay_in_a_fixed_run() -> None:
+    # left + mid + right boards (18mm each) plus both Fixed bays, with no
+    # slack left over: an all-Fixed run must sum exactly to the span.
+    _check_split_and_merge_preserve_the_other_bay(
+        Fixed(300.0), Fixed(250.0), width_mm=3 * 18.0 + 300.0 + 250.0
+    )
+
+
+def test_split_and_merge_preserve_the_other_bay_in_a_mixed_run() -> None:
+    """``rule_b`` is ``Fixed``, not driven, so splitting or merging
+    ``rule_a`` finds no other driven sibling to solve a weight against and
+    falls back to ``Fill`` for the driven side, per
+    :func:`~freecad.Shelving.core.edit._other_driven_anchor`."""
+    _check_split_and_merge_preserve_the_other_bay(Weighted(1.0), Fixed(250.0))
+
+
+def test_split_preserves_a_weighted_sibling_across_an_intervening_fixed_bay() -> None:
+    """The anchor search skips a ``Fixed`` sibling in between and keeps
+    going to find the run's one genuinely driven item."""
+    unit = Unit(
+        size_mm=Vec3(1200.0, 300.0, 900.0),
+        default_material=PLY,
+        root=Division(
+            axis=Axis.X,
+            items=[
+                Board(role="left"),
+                Bay(rule=Weighted(1.0), id="bay_a"),
+                Board(role="mid1"),
+                Bay(rule=Fixed(200.0)),
+                Board(role="mid2"),
+                Bay(rule=Fill(), id="bay_c"),
+                Board(role="right"),
+            ],
+        ),
+        depth_axis=Axis.Y,
+    )
+    spaces_before = solve(unit, CATALOG)
+
+    split = split_region(unit, "bay_a", Axis.X, CATALOG)
+    assert not _has_same_axis_nesting(split.root)
+    _assert_surviving_boards_unchanged(spaces_before, split)
+    spaces_after = solve(split, CATALOG)
+    assert _spaces_equal(spaces_after["bay_c"], spaces_before["bay_c"])
+
+
+def test_split_region_bug_006_sequence_preserves_every_prior_boards_geometry() -> None:
+    """The exact bug-006 repro run directly against ``split_region``, no
+    rescan involved: add a divider (splice, the bay's parent already runs
+    on that axis), a shelf on the left (nest, a different axis), then a
+    shelf top-left (splice again, the just-nested division now shares its
+    axis) - every board added by an earlier step keeps its solved space
+    through every later one, and the final tree nests no same-axis
+    ``Division`` inside another."""
+    unit = _closed_box_unit()
+    spaces = solve(unit, CATALOG)
+
+    bay_id = _find_bay_id(unit.root)
+    unit = split_region(unit, bay_id, Axis.X, CATALOG)
+    _assert_surviving_boards_unchanged(spaces, unit)
+    assert not _has_same_axis_nesting(unit.root)
+    spaces = solve(unit, CATALOG)
+
+    left_bay_id = _find_bay_id(unit.root)
+    unit = split_region(unit, left_bay_id, Axis.Z, CATALOG)
+    _assert_surviving_boards_unchanged(spaces, unit)
+    assert not _has_same_axis_nesting(unit.root)
+    spaces = solve(unit, CATALOG)
+
+    topleft_bay_id = _find_bay_id(unit.root)
+    unit = split_region(unit, topleft_bay_id, Axis.Z, CATALOG)
+    _assert_surviving_boards_unchanged(spaces, unit)
+    assert not _has_same_axis_nesting(unit.root)

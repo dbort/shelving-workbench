@@ -1,6 +1,7 @@
 """Headless functional check for the elevation editor's session: selection
 permissions, split, merge, both refusal reasons a session edit returns
-rather than raises, cancel, and commit-then-undo; plus the selection-to-unit
+rather than raises, cancel, commit-then-undo, and that a committed layout
+survives a fresh session's rescan (bug-006); plus the selection-to-unit
 mapping that decides when Edit Unit is enabled.
 
 Drives :class:`freecad.Shelving.editor.session.Session` directly rather than
@@ -127,6 +128,25 @@ def _board_ids(region: Region) -> set[str]:
     return ids
 
 
+def _find_bay_ids_in_order(region: Region) -> list[str]:
+    """Every ``Bay`` id in ``region``'s subtree, depth first: the same order
+    an elevation's items run in, so the first is "the left opening" and the
+    last "the right" for a run split along the horizontal axis."""
+    out: list[str] = []
+    _collect_bay_ids(region, out)
+    return out
+
+
+def _collect_bay_ids(region: Region, out: list[str]) -> None:
+    if isinstance(region, Bay):
+        out.append(region.id)
+        return
+    if isinstance(region, Division):
+        for item in region.items:
+            if not isinstance(item, Board):
+                _collect_bay_ids(item, out)
+
+
 def _bay_count(region: Region) -> int:
     if isinstance(region, Bay):
         return 1
@@ -164,6 +184,97 @@ def _board_snapshot(container: FreeCAD.DocumentObject) -> _BoardSnapshot:
             (name, obj.Length, obj.Width, obj.Height, base.x, base.y, base.z)
         )
     return tuple(entries)
+
+
+def _board_snapshot_by_name(
+    container: FreeCAD.DocumentObject,
+) -> dict[str, tuple[float, float, float, float, float, float]]:
+    """:func:`_board_snapshot`, keyed by board name, so a caller can check
+    that a chosen subset of boards kept their geometry across an edit that
+    also adds boards the subset never named."""
+    return {entry[0]: entry[1:] for entry in _board_snapshot(container)}
+
+
+def _assert_session_matches_document(session: Session) -> None:
+    """Every board id ``session.unit`` names has a document object of that
+    name whose placement and size agree with ``session.spaces``, within
+    ``1e-6`` mm: what "an editor-built layout reads back unchanged"
+    (bug-006) means for a session immediately after it re-scans the
+    container, before any further edit or write happens."""
+    doc = session.container.Document
+    tol_mm = 1e-6
+    for board_id in _board_ids(session.unit.root):
+        space = session.spaces[board_id]
+        obj = cast("_BoxFeature", doc.getObject(board_id))
+        assert obj is not None, board_id
+        base = obj.Placement.Base
+        # obj.Length/Width/Height are FreeCAD Quantity values at runtime
+        # despite the Protocol's plain-float annotation; float() strips the
+        # unit before arithmetic, which otherwise raises "Unit mismatch"
+        # against space.size's plain millimetre floats.
+        assert abs(float(base.x) - space.origin.x_mm) <= tol_mm, (board_id, "origin.x")
+        assert abs(float(base.y) - space.origin.y_mm) <= tol_mm, (board_id, "origin.y")
+        assert abs(float(base.z) - space.origin.z_mm) <= tol_mm, (board_id, "origin.z")
+        assert abs(float(obj.Length) - space.size.x_mm) <= tol_mm, (board_id, "size.x")
+        assert abs(float(obj.Width) - space.size.y_mm) <= tol_mm, (board_id, "size.y")
+        assert abs(float(obj.Height) - space.size.z_mm) <= tol_mm, (board_id, "size.z")
+
+
+def _check_an_editor_layout_survives_a_rescan() -> None:
+    """bug-006 end to end: build the layout through one ``Session``, commit,
+    and confirm a *fresh* ``Session`` (a real rescan, not the same in-memory
+    tree) reads every board back at its just-written placement and size;
+    then a further edit elsewhere must not move any board on the left."""
+    doc = FreeCAD.newDocument("editor_smoke_bug_006")
+    try:
+        container = create_unit(doc)
+        doc.recompute()
+
+        session = Session(container)
+        session.open()
+        # Add a divider: the bay's parent (the inner Axis.X division)
+        # already runs along Axis.X, so this splices rather than nests.
+        bay_id = _find_bay_id(session.unit.root)
+        session.select(bay_id)
+        assert session.split("horizontal") is None
+        doc.recompute()
+
+        # Add a shelf on the left: that bay's parent is the Axis.X
+        # division, a different axis, so this nests instead.
+        left_bay_id = _find_bay_ids_in_order(session.unit.root)[0]
+        session.select(left_bay_id)
+        assert session.split("vertical") is None
+        doc.recompute()
+
+        # Add a shelf top-left: that bay's parent is now the Axis.Z
+        # division split_left just nested, the same axis as this split, so
+        # it splices into that division's own run rather than nesting
+        # again - the exact structure bug-006's rescan could not recover.
+        topleft_bay_id = _find_bay_ids_in_order(session.unit.root)[0]
+        session.select(topleft_bay_id)
+        assert session.split("vertical") is None
+        doc.recompute()
+
+        session.commit()
+        doc.recompute()
+        left_side_before = _board_snapshot_by_name(container)
+
+        fresh = Session(container)
+        _assert_session_matches_document(fresh)
+
+        fresh.open()
+        right_bay_id = _find_bay_ids_in_order(fresh.unit.root)[-1]
+        fresh.select(right_bay_id)
+        assert fresh.split("horizontal") is None
+        doc.recompute()
+        fresh.commit()
+        doc.recompute()
+
+        left_side_after = _board_snapshot_by_name(container)
+        for name, snapshot_before in left_side_before.items():
+            assert left_side_after[name] == snapshot_before, name
+    finally:
+        FreeCAD.closeDocument(doc.Name)
 
 
 def _tiny_unit() -> Unit:
@@ -525,6 +636,7 @@ def main() -> None:
     _check_selection_maps_to_its_unit()
     _check_cancel_restores_the_opening_state()
     _check_commit_then_one_undo_reverses_the_session()
+    _check_an_editor_layout_survives_a_rescan()
     print("shelving editor OK")
     sys.stdout.flush()
 

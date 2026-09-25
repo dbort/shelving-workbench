@@ -1,8 +1,8 @@
 ---
 id: sh-020
 title: "The elevation editor: structure"
-current_agent: implementer
-current_phase: implementation
+current_agent: reviewer
+current_phase: review
 review_rejections: 1
 blocked_by: [sh-019]
 ---
@@ -23,7 +23,7 @@ Milestone M9, part 1 of 2.
 
 ## Status
 - [x] Planning
-- [ ] Implementation
+- [x] Implementation
 - [ ] Review
 - [ ] User sign-off
 
@@ -58,21 +58,21 @@ Milestone M9, part 1 of 2.
       `is_enabled()`, each Edit Unit run logs `BEGIN`/`END` markers sharing a
       `#N` id and timestamp with every stage's time between them, and
       `tests/test_debug_log.py` covers markers, ids and the switch.
-- [ ] Splitting a bay whose parent `Division` runs along the split axis
+- [x] Splitting a bay whose parent `Division` runs along the split axis
       inserts `Bay, Board, Bay` into that parent's run; no same-axis
       `Division` is ever nested directly inside another. Asserted in
       `test_edit.py`.
-- [ ] No edit moves a board it did not create or delete: after every split and
+- [x] No edit moves a board it did not create or delete: after every split and
       merge, every surviving board's solved origin and size match its
       pre-edit values within `1e-6` mm. Asserted in `test_edit.py` for splits
       and merges in runs of Fill, Weighted and Fixed siblings, the user's
       bug-006 sequence among them.
-- [ ] An editor-built layout reads back unchanged. After the bug-006 sequence
+- [x] An editor-built layout reads back unchanged. After the bug-006 sequence
       (divider; shelf left; shelf top-left; OK), a fresh `Session` on the
       container solves every board to its document placement and size within
       `1e-6` mm, and a further edit elsewhere moves no left-side board.
       Asserted in `tools/freecad_editor_smoke.py`.
-- [ ] bug-006's entry is deleted from `.claude/docs/bug-log.md` in the
+- [x] bug-006's entry is deleted from `.claude/docs/bug-log.md` in the
       commit that fixes it; `next_id` unchanged.
 - [x] The panel opens one transaction on show, commits on OK, aborts on Cancel.
       A test drives the underlying session object, not the panel, through a
@@ -225,6 +225,6 @@ Every length identifier carries `_mm`.
 
 - [x] **Step 9** (`freecad/Shelving/debug_log.py`, `tests/test_debug_log.py`, `freecad/Shelving/commands/edit_unit.py`, `freecad/Shelving/editor/panel.py`, `freecad/Shelving/editor/session.py`, `README.md`): Switchable timing log, done at `user_signoff` (commit 595b406). REVIEWER: verify this step; it has not been reviewed.
 
-- [ ] **Step 10** (`freecad/Shelving/core/edit.py`, `freecad/Shelving/core/tests/test_edit.py`, `freecad/Shelving/editor/session.py`): Fix bug-006 per Frontier Advice § BUG-006. Splice same-axis splits into the parent run; assign geometry-preserving rules on split and merge; pass the session's catalog through. Tests: no same-axis nesting after any split; every surviving board's solved origin and size unchanged within `1e-6` mm across split and merge in Fill-only, Weighted, Fixed and mixed runs; the bug-006 sequence built in core (divider, shelf left, shelf top-left) keeps both left shelves where they were; split-then-merge still round-trips tree shape AND geometry; existing refusals unchanged.
+- [x] **Step 10** (`freecad/Shelving/core/edit.py`, `freecad/Shelving/core/tests/test_edit.py`, `freecad/Shelving/editor/session.py`): Fix bug-006 per Frontier Advice § BUG-006. Splice same-axis splits into the parent run; assign geometry-preserving rules on split and merge; pass the session's catalog through. Tests: no same-axis nesting after any split; every surviving board's solved origin and size unchanged within `1e-6` mm across split and merge in Fill-only, Weighted, Fixed and mixed runs; the bug-006 sequence built in core (divider, shelf left, shelf top-left) keeps both left shelves where they were; split-then-merge still round-trips tree shape AND geometry; existing refusals unchanged.
 
-- [ ] **Step 11** (`tools/freecad_editor_smoke.py`, `docs/manual-qa.md`, `.claude/docs/bug-log.md`): Smoke `_check_an_editor_layout_survives_a_rescan`: in a real document run the bug-006 sequence through `Session`, commit, open a fresh `Session`, assert every board's solved placement and size match the document within `1e-6` mm, add a shelf on the right, commit, assert no left-side board moved. Add M9 case 9 reproducing the bug-006 steps with the expected result that the left shelves stay put. Delete bug-006 from `.claude/docs/bug-log.md` in the fixing commit, leaving `next_id` untouched; the commit message names bug-006 and how it was fixed.
+- [x] **Step 11** (`tools/freecad_editor_smoke.py`, `docs/manual-qa.md`, `.claude/docs/bug-log.md`): Smoke `_check_an_editor_layout_survives_a_rescan`: in a real document run the bug-006 sequence through `Session`, commit, open a fresh `Session`, assert every board's solved placement and size match the document within `1e-6` mm, add a shelf on the right, commit, assert no left-side board moved. Add M9 case 9 reproducing the bug-006 steps with the expected result that the left shelves stay put. Delete bug-006 from `.claude/docs/bug-log.md` in the fixing commit, leaving `next_id` untouched; the commit message names bug-006 and how it was fixed.

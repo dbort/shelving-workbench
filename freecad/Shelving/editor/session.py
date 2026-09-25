@@ -207,7 +207,9 @@ class Session:
         horizontal, vertical = self._elevation_axes()
         axis = horizontal if direction == "horizontal" else vertical
         try:
-            candidate = split_region(self.unit, self.selected_id, axis, material)
+            candidate = split_region(
+                self.unit, self.selected_id, axis, self.catalog, material
+            )
         except EditError as err:
             return EditFailure(str(err), err.node_id)
         return self._apply(candidate)
@@ -219,7 +221,7 @@ class Session:
         if self.selected_id is None:
             return EditFailure("select a board to merge", None)
         try:
-            candidate = merge_at(self.unit, self.selected_id)
+            candidate = merge_at(self.unit, self.selected_id, self.catalog)
         except EditError as err:
             return EditFailure(str(err), err.node_id)
         return self._apply(candidate)
