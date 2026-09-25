@@ -1,91 +1,107 @@
-# sh-020 Review — Round 3
+# sh-020 Review — Round 4
 
-Scope: commits since the round-2 approval (80a7df9): Step 8 (ed632a9),
-Step 9 (595b406), Steps 10-11 (405bf78). `pixi run tests` is green at the
-branch tip (ruff, mypy 62 files, 284 core tests, all smokes, `shelving
-editor OK`).
+**Verdict:** REJECTED
 
-The weight-solving in `core/edit.py` is correct as far as derivation goes.
-Every driven item in one `distribute()` call has the same size/weight
-ratio `r = S / W`. Giving each half `w_h = h / r` gives
-`S' = r * W' = S - b + 2h = S - t`, which is the new slack, so every other
-driven sibling keeps its size, however many there are and whatever their
-weights. The merge inverse and the Fixed/Fill fallbacks check out the
-same way. The findings below are about coverage and accuracy, not that
-arithmetic. Steps 8 and 9 (`unit_for_selection`, button labels,
-`debug_log`) meet their Must Haves and have no blocking findings.
+Third rejection (round 2 was an approval), so `review_rejections` is now 3.
+
+Scope: the whole diff since the round-3 rejection (a23cf15): e961a22 (Frontier
+Advice rule 6 and the new merge Must Have) and 4b1a877 (round-3 fixes).
+`pixi run tests` is green at the branch tip: ruff clean, mypy clean on 62
+files, 289 core tests passed, all smokes passed, `shelving editor OK`.
+
+The round-3 findings are resolved:
+- F1: the `split_region` docstring now states the nest/splice rule the right
+  way round.
+- F2: the three new tests cover what was missing. They run a split and a
+  merge in a four-bay run with three other driven siblings of different
+  weights, and a `Fixed` + `Weighted` merge while other `Weighted` siblings
+  remain.
+- F3: the core test and the smoke both pick the upper bay, and the core test
+  asserts it by Z origin.
+- N1, N2, N3 and N5 are done as suggested.
+
+When `_splice_collapsed_child` has an anchor, its weight arithmetic is
+correct. Let P be the promoted `Division`, G the grandparent run and D the
+collapsing `Division`. Each driven child of P gets `w = size * w_a / s_a`,
+so it shares G's size/weight ratio `r`. If D was driven, the new slack is
+`S - s_D + sum(driven child sizes)`. That equals `r * (W - w_D) + sum(sizes)`,
+so every other region in G keeps its size. If D was `Fixed`, both sides gain
+`sum(driven child sizes)` instead. `spaces[child.id]` is also the right size
+source. The merge runs on D's other axis, so P's extent along G's axis, and
+therefore every child's extent, is the same before and after the merge.
+
+On the Implementer's claim: it is correct for that exact sequence, but the
+collapse branch is still reachable from a real unit. `_default_unit`'s X
+run is `[left_side, Bay, right_side]`. "Divider" splices into it, and
+deleting that divider leaves `[left_side, merged, right_side]`: three items,
+so no collapse. Nested `Division`s from a cross-axis split have no side
+boards, though. On a real unit, "shelf; divider in the lower bay; shelf in
+its left half; delete the divider" collapses the X `Division` to the Z one
+and promotes it into the Z run that the first shelf created. That reaches
+`_splice_collapsed_child`.
 
 ## Blocking findings
 
-- **F1** `freecad/Shelving/core/edit.py:119-127`: `split_region`'s
-  docstring states the bug-006 rule backwards. It says "When
-  ``region_id``'s parent ``Division`` already runs along ``axis`` ... the
-  replacement is a new ``Division``", then "Otherwise ``region_id``'s parent
-  already runs along ``axis``: ... splice". The code (`_split_replacement`,
-  `parent.axis != axis` -> nest) does the opposite of the first sentence.
-  This is the caller-facing contract for the central fix of this round, and
-  a reader following it would reintroduce bug-006. Fix: first sentence ->
-  "When the parent runs along a *different* axis (or `region_id` is the
-  root)".
+- **F1: the collapse splice moves boards when the grandparent run has no
+  other driven region** (`freecad/Shelving/core/edit.py:374-376`). When
+  `anchor is None`, every driven child of the promoted `Division` is
+  rewritten to `Fill()`, which gives them all equal shares of G's slack.
+  That is only correct when P has at most one driven child, or when all its
+  driven children are the same size. It differs from the split and merge
+  `anchor is None` cases, which each produce equal halves or a single
+  region.
 
-- **F2** `freecad/Shelving/core/tests/test_edit.py:90`, `:533`, `:553`:
-  no test covers a run where the edited bay has **two or more other driven
-  siblings with different weights**. The whole "any one driven sibling
-  anchors the ratio" design (`_other_driven_anchor`, `edit.py:83`) depends
-  on that case. `_run_unit` has only two bays, so after the split or merge
-  the anchor is always the only other driven item. The intervening-Fixed
-  test also has just one other driven sibling. If the anchor logic were
-  wrong (for example, using the anchor's weight share rather than its
-  ratio), every current test would still pass. The Must Have ("splits and
-  merges in runs of Fill, Weighted and Fixed siblings") and the dispatcher's
-  review brief both call out this case. Add at least:
-  - a split of a middle bay in a run such as
-    `[Board, Weighted(1), Board, Weighted(2.5), Board, Fill, Board, Weighted(4), Board]`,
-    asserting every surviving board and every untouched bay keeps its
-    `Space`;
-  - the matching merge back in the same run;
-  - a merge of a `Fixed` + driven pair while other driven siblings of
-    different weights remain, since that is the non-trivial `Weighted`
-    branch of `_merged_rule`, `edit.py:~352`.
+  Why this is reachable: scanning a hand-built unit gives every opening
+  without a same-size twin `Fixed` (`scan.py` `_recover_rules`). For
+  example, a column `[bottom, A(350, Fixed), shelf, B(400, Fixed), top]`
+  followed by these edits:
+  1. Divider in A. This nests `X[l, div, r]` with A's `Fixed` rule.
+  2. Shelf in l. This nests `P = Z[l1, s, l2]`, both halves `Fill`.
+  3. Shelf in l1. This splices into P, giving
+     `[Weighted(h/L2), s', Weighted(h/L2), s, Fill]`, where `h ~ L2/2`.
+  4. Delete the divider. The X `Division` collapses to P, and P splices into
+     the column. B is `Fixed`, so there is no anchor, and all three bays
+     become `Fill`. `s` and `s'` both move.
 
-- **F3** `tools/freecad_editor_smoke.py:253` and
-  `freecad/Shelving/core/tests/test_edit.py:605`: the "shelf top-left" step
-  splits the **bottom**-left bay. `solve` places a run's items from the
-  axis minimum up (`solver.py`, `cursor_mm` starts at `space.origin`), so
-  after the Z split of the left bay, the first bay depth-first (`[0]` /
-  `_find_bay_id`) is the lower one. Both sites' comments and the Must Have
-  ("divider; shelf left; shelf top-left; OK") name top-left. The spliced
-  code path is the same either way, but the tests do not run the sequence
-  they say they run, and the Must Have names that sequence. Fix: pick the
-  upper bay, e.g. `_find_bay_ids_in_order(...)[1]` in the smoke, and an
-  equivalent selector in the core test (not `_find_bay_id`). Optionally
-  assert it is the upper one by comparing Z origins.
+  This contradicts the new Must Have "A merge ... moves no surviving board".
+  I got this from reading the code and did not run it. The next round should
+  prove or disprove it with a committed test.
+
+  Fix direction (one line): when `anchor is None`, keep the child's existing
+  rule unchanged. Its driven siblings already share one ratio from P's own
+  `distribute()` call, and once spliced they are the only driven items in G.
+  G's leftover is then exactly the sum of their sizes.
+
+  Required test: a grandparent run whose other regions are all `Fixed`,
+  with a promoted `Division` that has two or more driven children of
+  different sizes, asserting `_assert_surviving_boards_unchanged` across the
+  merge. Building it with the real-unit sequence above, starting from a
+  `_default_unit`-shaped tree (side boards present), would also cover the
+  reachability point. The existing `_bare_column_unit` fixture is a
+  one-item `Division`, a shape the editor cannot produce.
 
 ## Non-blocking notes
 
-- **N1** `tools/freecad_editor_smoke.py:198`: `_assert_session_matches_document`
-  iterates only the board ids the fresh scan produced. A board the rescan
-  dropped or skipped would go unnoticed. Consider also asserting that
-  `_board_ids(fresh.unit.root)` equals the set of `Part::Box` names in the
-  container.
-- **N2** `tools/freecad_editor_smoke.py:260`, `:274`: `left_side_before`
-  snapshots every board, not only the left-side ones. That is a stronger
-  check and is fine, but the name misdescribes it. Rename it (e.g.
-  `boards_before`) or filter to the left side.
-- **N3** `docs/manual-qa.md:493`: "the smaller bay the last shelf just
-  made": both halves are equal, so neither is smaller. At `:503`, "where
-  cases 2-3 put them" should be "steps 2-3". Step 5 adds a divider on the
-  right, while bug-006's report added a shelf. Either is valid for "an edit
-  elsewhere", but matching the report makes the manual case a direct repro.
-- **N4** `freecad/Shelving/core/edit.py` `_merge_at`: when a merge
-  collapses a cross-axis Division whose surviving item is itself a
-  Division on the grandparent's axis, the result can be same-axis nesting.
-  Frontier Advice rule 6 leaves merge's collapse behaviour unchanged, so
-  this is out of scope here. Flagging it only because it produces the
-  bug-006 shape through the merge path. It may deserve its own bug-log
-  entry once someone confirms it.
-- **N5** The split tests assert no same-axis nesting plus preserved
-  geometry, but none checks directly that the parent's `items` gained
-  exactly `Bay, Board, Bay` in the split bay's slot, which is the literal
-  Must Have wording. One assertion on the item kinds around the index
-  would close that.
+- **N1: the splice trigger is broader than a collapse**
+  (`freecad/Shelving/core/edit.py:336-338`). The condition is
+  `child_found and isinstance(new_child, Division) and new_child.axis ==
+  region.axis`. That also fires for a child that did not collapse but was
+  already same-axis nested. In that case `merged` keeps `before.id`, and
+  `spaces[before.id]` is the pre-merge size, not the merged size, so the
+  weight would be wrong. Scanning never produces same-axis nesting, and
+  after this task the editor does not either, so this is unreachable today.
+  Gating the condition on an actual collapse, for example by having
+  `_merge_at` report it, would make the contract match the docstring.
+- **N2: Must Have wording** (`tasks/active/sh-020-elevation-editor-structure.md:65-67`
+  and Frontier Advice rule 6 at `:188`). "Divider, shelf left, delete
+  divider" does not collapse anything on a real unit (see above). A human
+  may want to restate the sequence as "shelf, divider below it, shelf left
+  of the divider, delete divider".
+
+## Cap reached
+review_rejections is at 3. current_phase is now blocked_needs_human. A
+human can clarify the task's requirements, fix the code directly, or
+reset review_rejections to 0 and demote to implementation for another
+round. F1 is a one-line change (keep the existing rule when `anchor is
+None` in `_splice_collapsed_child`) plus the test described above. Every
+other part of the task passed review.
