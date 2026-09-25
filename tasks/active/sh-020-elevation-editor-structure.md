@@ -1,8 +1,8 @@
 ---
 id: sh-020
 title: "The elevation editor: structure"
-current_agent: user
-current_phase: user_signoff
+current_agent: implementer
+current_phase: implementation
 review_rejections: 1
 blocked_by: [sh-019]
 ---
@@ -16,12 +16,15 @@ delete a board to merge its neighbours. Edits are tree operations in the core
 where the fast suite can test them, the Qt scene only renders and hit-tests, and
 the panel is a thin shell over both. Live preview writes the real boards inside
 one transaction, so OK commits and Cancel reverses the whole session.
+Sign-off added: clearer button labels, opening the editor from any selection
+inside one unit, switchable timing logs, and a fix so an editor-built layout
+reads back unchanged instead of shifting shelves on the next edit (bug-006).
 Milestone M9, part 1 of 2.
 
 ## Status
 - [x] Planning
-- [x] Implementation
-- [x] Review
+- [ ] Implementation
+- [ ] Review
 - [ ] User sign-off
 
 ## Must Have
@@ -45,8 +48,32 @@ Milestone M9, part 1 of 2.
       simulated click through `QtTest` reaching the scene.
 - [x] A `Void` draws distinctly from a `Bay`, and a selected region draws
       distinctly from an unselected one. Asserted by item state, not by pixels.
-- [x] `Shelving_EditUnit` opens the panel on exactly one selected container,
-      refusing anything else with a message.
+- [x] `Shelving_EditUnit` is enabled, and opens the panel, when
+      `container.unit_for_selection` names one unit: the unit's container, or
+      objects that all sit inside the same unit. A lone container with no
+      `ShelvingUnitId` also qualifies. Anything else is disabled and refused
+      with a message. The editor smoke covers the mapping.
+- [x] The panel's split buttons read **Add Divider** and **Add Shelf**.
+- [x] `freecad/Shelving/debug_log.py`: `enabled` defaults `True`, callers read
+      `is_enabled()`, each Edit Unit run logs `BEGIN`/`END` markers sharing a
+      `#N` id and timestamp with every stage's time between them, and
+      `tests/test_debug_log.py` covers markers, ids and the switch.
+- [ ] Splitting a bay whose parent `Division` runs along the split axis
+      inserts `Bay, Board, Bay` into that parent's run; no same-axis
+      `Division` is ever nested directly inside another. Asserted in
+      `test_edit.py`.
+- [ ] No edit moves a board it did not create or delete: after every split and
+      merge, every surviving board's solved origin and size match its
+      pre-edit values within `1e-6` mm. Asserted in `test_edit.py` for splits
+      and merges in runs of Fill, Weighted and Fixed siblings, the user's
+      bug-006 sequence among them.
+- [ ] An editor-built layout reads back unchanged. After the bug-006 sequence
+      (divider; shelf left; shelf top-left; OK), a fresh `Session` on the
+      container solves every board to its document placement and size within
+      `1e-6` mm, and a further edit elsewhere moves no left-side board.
+      Asserted in `tools/freecad_editor_smoke.py`.
+- [ ] bug-006's entry is deleted from `.claude/docs/bug-log.md` in the
+      commit that fixes it; `next_id` unchanged.
 - [x] The panel opens one transaction on show, commits on OK, aborts on Cancel.
       A test drives the underlying session object, not the panel, through a
       split and a cancel, and asserts the document is byte-identical in board
@@ -103,14 +130,13 @@ ONE TRANSACTION PER SESSION. `openTransaction` when the panel opens,
 is one undo step. Never open a transaction per edit. The transaction calls need
 `# type: ignore[no-untyped-call]`; `freecad-stubs` leaves them unannotated.
 
-SPLIT SEMANTICS. `split_region` puts a board in the middle of a bay and gives
-each half a `Fill` rule, so the two openings share the space equally and a later
-resize keeps them equal. The board's material is the caller's argument,
+SPLIT SEMANTICS. `split_region` puts a board in the middle of a bay, giving two
+equal openings. The board's material is the caller's argument,
 defaulting to the unit's. The new board's id is a fresh `new_id()`; sh-018's
 write path assigns the real FreeCAD name when it creates the object.
 
 MERGE SEMANTICS. `merge_at` is the exact inverse: remove the board, replace the
-two neighbouring regions with one whose rule is the first's. A board whose
+two neighbouring regions with one. A board whose
 neighbours are not both regions, meaning it sits against another board or at the
 end of a run, cannot be merged and must be refused by name rather than producing
 a surprising tree.
@@ -125,6 +151,42 @@ in this codebase (`freecad/Shelving/core/`); a prior version of this
 workbench, before that consolidation, lost every divider because two
 importable copies of the same classes produced two distinct `Board` classes
 that `isinstance` silently failed to match across.
+
+BUG-006: EDITS MUST SURVIVE A RESCAN. Read `.claude/docs/bug-log.md` bug-006
+first. Scanning cannot see same-axis nesting in geometry: a column the editor
+built as `z[Bay, s1, z[Bay, s2, Bay]]` rescans as `z[Bay, s1, Bay, s2, Bay]`,
+and stored rules keyed by bounding boards then solve it to different sizes.
+RULES:
+1. FLAT RUNS ONLY. When the selected bay's parent `Division` has the split
+   axis, splice `Bay, Board, Bay` into the parent's `items` in the bay's
+   place. Nest a new `Division` only when the axis differs from the parent's
+   (or the bay is the root). Never produce a same-axis `Division` directly
+   inside another.
+2. GEOMETRY-PRESERVING RULES. Choose the new regions' rules so `solve`
+   reproduces the pre-edit sizes of every other region in the run. A `Fixed`
+   bay splits into two `Fixed` halves of `(size - thickness) / 2`. For
+   weighted or `Fill` bays: a weighted region's size is `w / W_total * L`,
+   where `L` is the leftover the run's weighted regions share. Solve for the
+   halves' equal weight `w` so every other weighted sibling keeps its size
+   and each half gets `(size - thickness) / 2`. When the run holds no other
+   weighted region, give both halves `Fill`. Merging is the inverse: the
+   merged region takes `size1 + thickness + size2`, `Fixed` if both were
+   `Fixed`, otherwise a weight solved the same way.
+3. `edit.py` MAY IMPORT `core.solver` to read current sizes. `split_region`
+   and `merge_at` take the `Catalog` as a new parameter; this relaxes the
+   module docstring's "no solver call", so update it.
+4. Existing rejections stay: a solve failure is still returned by the
+   session, not raised.
+5. OUT OF SCOPE: bug-005, splitting a non-`Bay` region, and bug-007, stored
+   rules overriding hand-moved geometry. Do not fix them here; a test may
+   avoid hand moves.
+6. `merge_at`'s collapse behaviour for a nested cross-axis `Division`
+   neighbour is unchanged.
+
+DEBUG LOG STAYS. `freecad/Shelving/debug_log.py` and its `Stopwatch` calls
+in `edit_unit.py`, `panel.py`, `session.py` are permanent diagnostics the
+user asked to keep; do not remove them. New or changed code MAY add
+`debug_log.log` lines where a future bug report would need them.
 
 SELECTION IS A REGION ID OR A BOARD ID, held by the session, not the scene. The
 scene reports what a point hit; the session decides what that means and what the
@@ -158,3 +220,11 @@ Every length identifier carries `_mm`.
 - [x] **Step 6** (`tools/freecad_editor_smoke.py`, `tools/run-tests.sh`): The headless functional check, driving the SESSION rather than the panel, since `FreeCADGui.Control` does not exist under `freecadcmd`. Build a document with a unit, open a session, and assert: selecting a bay permits split and not merge; splitting writes one new board and two bays; selecting that board permits merge; merging removes it and restores the original board count and names; an edit that cannot solve returns a failure and leaves board count, names, sizes and placements unchanged; cancel after several edits restores the document to its opening state exactly; commit after the same edits leaves them in place and one undo reverses the lot. Print `shelving editor OK` last and add a matching block to `tools/run-tests.sh`.
 
 - [x] **Step 7** (`docs/manual-qa.md`, `README.md`): Add an `## M9` section in the file's numbered-steps-then-expected-result shape, covering what only a human can check: the panel opens and docks, the elevation is legible and matches the 3D, clicking a compartment highlights it, Split and Delete are enabled only when they apply, the 3D follows each edit, Cancel reverses everything, and one undo after OK reverses the whole session. Extend the README glossary with the three editor layers and the session, in the section's existing one-bullet-per-term shape.
+
+- [x] **Step 8** (`freecad/Shelving/editor/panel.py`, `freecad/Shelving/container.py`, `freecad/Shelving/commands/edit_unit.py`, `tools/freecad_editor_smoke.py`, `docs/manual-qa.md`, `README.md`): Sign-off feedback, done at `user_signoff` (commit ed632a9). Buttons read Add Divider and Add Shelf. `container.unit_for_selection` resolves a selection to its unit by walking group membership up `InList`; `Shelving_EditUnit` uses it for `IsActive` and `Activated`. Smoke check `_check_selection_maps_to_its_unit`; manual QA M9 case 8. REVIEWER: verify this step; it has not been reviewed.
+
+- [x] **Step 9** (`freecad/Shelving/debug_log.py`, `tests/test_debug_log.py`, `freecad/Shelving/commands/edit_unit.py`, `freecad/Shelving/editor/panel.py`, `freecad/Shelving/editor/session.py`, `README.md`): Switchable timing log, done at `user_signoff` (commit 595b406). REVIEWER: verify this step; it has not been reviewed.
+
+- [ ] **Step 10** (`freecad/Shelving/core/edit.py`, `freecad/Shelving/core/tests/test_edit.py`, `freecad/Shelving/editor/session.py`): Fix bug-006 per Frontier Advice § BUG-006. Splice same-axis splits into the parent run; assign geometry-preserving rules on split and merge; pass the session's catalog through. Tests: no same-axis nesting after any split; every surviving board's solved origin and size unchanged within `1e-6` mm across split and merge in Fill-only, Weighted, Fixed and mixed runs; the bug-006 sequence built in core (divider, shelf left, shelf top-left) keeps both left shelves where they were; split-then-merge still round-trips tree shape AND geometry; existing refusals unchanged.
+
+- [ ] **Step 11** (`tools/freecad_editor_smoke.py`, `docs/manual-qa.md`, `.claude/docs/bug-log.md`): Smoke `_check_an_editor_layout_survives_a_rescan`: in a real document run the bug-006 sequence through `Session`, commit, open a fresh `Session`, assert every board's solved placement and size match the document within `1e-6` mm, add a shelf on the right, commit, assert no left-side board moved. Add M9 case 9 reproducing the bug-006 steps with the expected result that the left shelves stay put. Delete bug-006 from `.claude/docs/bug-log.md` in the fixing commit, leaving `next_id` untouched; the commit message names bug-006 and how it was fixed.
