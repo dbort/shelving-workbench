@@ -1,107 +1,100 @@
-# sh-020 Review — Round 4
+# sh-020 Review — Round 5
 
 **Verdict:** REJECTED
 
-Third rejection (round 2 was an approval), so `review_rejections` is now 3.
+Round 5 is the first round since the human reset `review_rejections` to 0,
+so the count is now 1.
 
-Scope: the whole diff since the round-3 rejection (a23cf15): e961a22 (Frontier
-Advice rule 6 and the new merge Must Have) and 4b1a877 (round-3 fixes).
-`pixi run tests` is green at the branch tip: ruff clean, mypy clean on 62
-files, 289 core tests passed, all smokes passed, `shelving editor OK`.
+Scope: 67b1cb4, the round-4 fixes. `pixi run tests` is green at the branch
+tip: ruff clean, mypy clean on 62 files, 290 core tests passed, all smokes
+passed, `shelving editor OK`, exit 0.
 
-The round-3 findings are resolved:
-- F1: the `split_region` docstring now states the nest/splice rule the right
-  way round.
-- F2: the three new tests cover what was missing. They run a split and a
-  merge in a four-bay run with three other driven siblings of different
-  weights, and a `Fixed` + `Weighted` merge while other `Weighted` siblings
-  remain.
-- F3: the core test and the smoke both pick the upper bay, and the core test
-  asserts it by Z origin.
-- N1, N2, N3 and N5 are done as suggested.
-
-When `_splice_collapsed_child` has an anchor, its weight arithmetic is
-correct. Let P be the promoted `Division`, G the grandparent run and D the
-collapsing `Division`. Each driven child of P gets `w = size * w_a / s_a`,
-so it shares G's size/weight ratio `r`. If D was driven, the new slack is
-`S - s_D + sum(driven child sizes)`. That equals `r * (W - w_D) + sum(sizes)`,
-so every other region in G keeps its size. If D was `Fixed`, both sides gain
-`sum(driven child sizes)` instead. `spaces[child.id]` is also the right size
-source. The merge runs on D's other axis, so P's extent along G's axis, and
-therefore every child's extent, is the same before and after the merge.
-
-On the Implementer's claim: it is correct for that exact sequence, but the
-collapse branch is still reachable from a real unit. `_default_unit`'s X
-run is `[left_side, Bay, right_side]`. "Divider" splices into it, and
-deleting that divider leaves `[left_side, merged, right_side]`: three items,
-so no collapse. Nested `Division`s from a cross-axis split have no side
-boards, though. On a real unit, "shelf; divider in the lower bay; shelf in
-its left half; delete the divider" collapses the X `Division` to the Z one
-and promotes it into the Z run that the first shelf created. That reaches
-`_splice_collapsed_child`.
+The round-4 findings are resolved:
+- F1: when `anchor is None`, `_splice_collapsed_child`
+  (`freecad/Shelving/core/edit.py:394`) keeps the promoted children's
+  rules. This is correct. With no other driven claimant in the grandparent
+  run, the children claim exactly the leftover that the collapsed
+  `Division` claimed, whether it was `Fixed` or driven. Their existing
+  weights already divide that leftover the same way. The new test
+  `test_merge_collapse_with_no_other_driven_sibling_moves_no_board` covers
+  the case with unequal driven children (about 166 / 74 / 74 mm), which
+  `Fill()` would have equalized.
+- N1: `_merge_at` reports a direct collapse, and the splice is gated on it
+  (`edit.py:350-352`). The recursive branch always reports `False`.
+- N2: the Must Have and rule 6 wording now use the reachable sequence.
 
 ## Blocking findings
 
-- **F1: the collapse splice moves boards when the grandparent run has no
-  other driven region** (`freecad/Shelving/core/edit.py:374-376`). When
-  `anchor is None`, every driven child of the promoted `Division` is
-  rewritten to `Fill()`, which gives them all equal shares of G's slack.
-  That is only correct when P has at most one driven child, or when all its
-  driven children are the same size. It differs from the split and merge
-  `anchor is None` cases, which each produce equal halves or a single
-  region.
+- **F1: bug-008 comes from sh-020's own `Session`, not from shipped code, so
+  it belongs in this task** (`freecad/Shelving/editor/session.py:164-178`).
+  It does not belong in `.claude/docs/bug-log.md`.
 
-  Why this is reachable: scanning a hand-built unit gives every opening
-  without a same-size twin `Fixed` (`scan.py` `_recover_rules`). For
-  example, a column `[bottom, A(350, Fixed), shelf, B(400, Fixed), top]`
-  followed by these edits:
-  1. Divider in A. This nests `X[l, div, r]` with A's `Fixed` rule.
-  2. Shelf in l. This nests `P = Z[l1, s, l2]`, both halves `Fill`.
-  3. Shelf in l1. This splices into P, giving
-     `[Weighted(h/L2), s', Weighted(h/L2), s, Fill]`, where `h ~ L2/2`.
-  4. Delete the divider. The X `Division` collapses to P, and P splices into
-     the column. B is `Fixed`, so there is no anchor, and all three bays
-     become `Fill`. `s` and `s'` both move.
+  On `main`, every caller of `write_container` either writes a hand-built
+  unit once (`create_unit`) or writes a unit it has just rescanned
+  (`unit_ops._rescanned_unit`). A rescan makes every `Board.id` equal to
+  its object's `Name`. Because of that, the fact that `_create_board` names
+  an object from `role` rather than from `id` is never visible there.
+  `write_container` already remaps new ids to real Names for the rule
+  record (`container.py:655`), and nothing writes that same unit a second
+  time.
 
-  This contradicts the new Must Have "A merge ... moves no surviving board".
-  I got this from reading the code and did not run it. The next round should
-  prove or disprove it with a committed test.
+  `Session._apply` is the first caller that does write it a second time. It
+  writes `candidate` and then keeps `candidate` as `self.unit`, with its
+  split-created boards still carrying uuid ids that no document object is
+  named after. That breaks `write_container`'s documented precondition
+  ("A board matches an existing object by its `Board.id` equalling the
+  object's `Name` (set that way by `read_container` and ... `scan`)"). As a
+  result, every later edit in the session deletes and recreates every board
+  the session created earlier.
 
-  Fix direction (one line): when `anchor is None`, keep the child's existing
-  rule unchanged. Its driven siblings already share one ratio from P's own
-  `distribute()` call, and once spliced they are the only driven items in G.
-  G's leftover is then exactly the sum of their sizes.
+  The damage is limited:
+  - Geometry is not affected.
+  - The rule record stays consistent, because it is remapped on every
+    write.
+  - The bug-006 rescan invariant still holds. After commit, a fresh
+    `Session` rescans, so ids equal Names again. The rescan smoke
+    (`tools/freecad_editor_smoke.py:228-285`) snapshots every board by name
+    across a one-write fresh session, and that assertion is not weakened.
 
-  Required test: a grandparent run whose other regions are all `Fixed`,
-  with a promoted `Division` that has two or more driven children of
-  different sizes, asserting `_assert_surviving_boards_unchanged` across the
-  merge. Building it with the real-unit sequence above, starting from a
-  `_default_unit`-shaped tree (side boards present), would also cover the
-  reachability point. The existing `_bare_column_unit` fixture is a
-  one-item `Division`, a shape the editor cannot produce.
+  It is still an identity defect in this task's new code. Object Names
+  churn on every edit, and per-object state is lost. The Frontier Advice
+  assumed "sh-018's write path assigns the real FreeCAD name when it
+  creates the object", meaning once, and Session never adopts that name.
+
+  Fix direction, local to this task:
+  - Have `write_container` report its `id_renames`, for example as a new
+    `WriteResult` field.
+  - Have `Session._apply` rename `self.unit`'s board ids and `self.spaces`'
+    keys through that mapping. `container._renamed_board_ids` already
+    exists for this.
+
+  This does not require choosing between rename-on-write and
+  provenance-matching.
+
+  Required:
+  - A session-level smoke assertion that a board created by one split keeps
+    its object `Name` through a second, unrelated split, and that
+    `session.unit`'s ids equal the document's Names after each edit.
+  - Delete the bug-008 entry from `.claude/docs/bug-log.md` in the fixing
+    commit, leaving `next_id: bug-009`.
+
+- **F2: the collapse-splice smoke asserts nothing about the splice**
+  (`tools/freecad_editor_smoke.py:328-340`). The only boards it checks are
+  the four boundary boards, and no split or merge in any sequence moves
+  those. The boards the splice could move are the first shelf and the
+  shelf left of the divider, and the bug-008 workaround excludes them. The
+  merge Must Have ("Asserted in `test_edit.py`") is still met by the core
+  tests, so no Must Have is failed. However, the check's stated purpose,
+  that a real `Session` delete reaches the splice without moving a board,
+  is not verified. Once F1 is fixed, snapshot every board by Name before
+  the delete and assert that every surviving board keeps its placement and
+  its size along the column's axis. The widened left shelf's X extent is
+  expected to change.
 
 ## Non-blocking notes
 
-- **N1: the splice trigger is broader than a collapse**
-  (`freecad/Shelving/core/edit.py:336-338`). The condition is
-  `child_found and isinstance(new_child, Division) and new_child.axis ==
-  region.axis`. That also fires for a child that did not collapse but was
-  already same-axis nested. In that case `merged` keeps `before.id`, and
-  `spaces[before.id]` is the pre-merge size, not the merged size, so the
-  weight would be wrong. Scanning never produces same-axis nesting, and
-  after this task the editor does not either, so this is unreachable today.
-  Gating the condition on an actual collapse, for example by having
-  `_merge_at` report it, would make the contract match the docstring.
-- **N2: Must Have wording** (`tasks/active/sh-020-elevation-editor-structure.md:65-67`
-  and Frontier Advice rule 6 at `:188`). "Divider, shelf left, delete
-  divider" does not collapse anything on a real unit (see above). A human
-  may want to restate the sequence as "shelf, divider below it, shelf left
-  of the divider, delete divider".
-
-## Cap reached
-review_rejections is at 3. current_phase is now blocked_needs_human. A
-human can clarify the task's requirements, fix the code directly, or
-reset review_rejections to 0 and demote to implementation for another
-round. F1 is a one-line change (keep the existing rule when `anchor is
-None` in `_splice_collapsed_child`) plus the test described above. Every
-other part of the task passed review.
+- **N1: the core F1 fixture is a bare column.** On the default unit, the
+  smoke's sequence reaches the splice's anchored branch, because the upper
+  bay is `Fill`. Only a scanned hand-built unit with all-`Fixed` openings
+  reaches the `anchor is None` branch. That is fine. It is noted only so
+  that nobody reads the smoke as covering the branch F1 fixed.
