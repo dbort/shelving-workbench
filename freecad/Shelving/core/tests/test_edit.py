@@ -90,7 +90,7 @@ def _stepped_unit() -> Unit:
 def _run_unit(rule_a: SizeRule, rule_b: SizeRule, width_mm: float = 900.0) -> Unit:
     """A flat ``Axis.X`` run: three boards and two bays, ``rule_a`` and
     ``rule_b``, so splitting or merging the first bay has a second sibling
-    in the very same run whose geometry must not move."""
+    in the same run whose geometry must not move."""
     return Unit(
         size_mm=Vec3(width_mm, 300.0, 900.0),
         default_material=PLY,
@@ -111,7 +111,7 @@ def _run_unit(rule_a: SizeRule, rule_b: SizeRule, width_mm: float = 900.0) -> Un
 def _multi_weighted_run_unit() -> Unit:
     """A flat ``Axis.X`` run with four bays: ``Weighted(1.0)``,
     ``Weighted(2.5)``, ``Fill()``, ``Weighted(4.0)``. Editing ``bay2``
-    leaves three OTHER driven siblings of different weights in the very
+    leaves three OTHER driven siblings of different weights in the
     same run, exercising ``_other_driven_anchor`` past the trivial
     single-other-sibling case every other fixture in this module gives it."""
     return Unit(
@@ -330,7 +330,7 @@ def _assert_surviving_boards_unchanged(
     ``unit_after`` solves to the same ``Space``, within ``1e-6`` mm, as it
     did before the edit that produced ``unit_after``. A region id is never
     checked this way: split and merge both mint fresh region ids for
-    whatever they touch, so only a board can meaningfully "survive"."""
+    whatever they touch, so only a board can "survive"."""
     spaces_after = solve(unit_after, CATALOG)
     for board_id in _all_board_ids(unit_after.root):
         if board_id not in spaces_before:
@@ -627,7 +627,7 @@ def test_split_and_merge_preserve_the_other_bay_in_a_mixed_run() -> None:
 
 def test_split_preserves_a_weighted_sibling_across_an_intervening_fixed_bay() -> None:
     """The anchor search skips a ``Fixed`` sibling in between and keeps
-    going to find the run's one genuinely driven item."""
+    going to find the run's one driven item."""
     unit = Unit(
         size_mm=Vec3(1200.0, 300.0, 900.0),
         default_material=PLY,
@@ -659,7 +659,7 @@ def test_split_region_bug_006_sequence_preserves_every_prior_boards_geometry() -
     rescan involved: add a divider (splice, the bay's parent already runs
     on that axis), a shelf on the left (nest, a different axis), then a
     shelf top-left (splice again, the just-nested division now shares its
-    axis) - every board added by an earlier step keeps its solved space
+    axis). Every board added by an earlier step keeps its solved space
     through every later one, and the final tree nests no same-axis
     ``Division`` inside another."""
     unit = _closed_box_unit()
@@ -688,7 +688,7 @@ def test_split_region_bug_006_sequence_preserves_every_prior_boards_geometry() -
     assert not _has_same_axis_nesting(unit.root)
 
 
-# --- F2: three-or-more-other-driven-siblings coverage ------------------------
+# --- three or more other driven siblings -------------------------------------
 
 
 def test_split_preserves_three_other_weighted_siblings_of_different_weights() -> None:
@@ -733,8 +733,8 @@ def test_merge_preserves_three_other_weighted_siblings_of_different_weights() ->
 
 def test_merge_a_fixed_bay_with_a_weighted_one_leaves_other_weighted_siblings() -> None:
     """Merging away ``merge_board`` combines a ``Fixed`` bay with a
-    ``Weighted`` one - the non-``Fixed``/``Fixed`` branch of
-    ``_merged_rule`` - while ``bay_c`` and ``bay_d``, two more ``Weighted``
+    ``Weighted`` one, the non-``Fixed``/``Fixed`` branch of
+    ``_merged_rule``, while ``bay_c`` and ``bay_d``, two more ``Weighted``
     bays of different weights elsewhere in the run, keep their pre-merge
     ``Space`` exactly."""
     unit = _fixed_and_weighted_merge_unit()
@@ -759,12 +759,12 @@ def test_merge_a_fixed_bay_with_a_weighted_one_leaves_other_weighted_siblings() 
     assert abs(spaces_after[merged_bay.id].extent_mm(0) - expected_extent_mm) <= 1e-6
 
 
-# --- N5: split's own item shape at the splice site ---------------------------
+# --- split's own item shape at the splice site --------------------------------
 
 
 def test_split_region_spliced_items_are_bay_board_bay_in_place() -> None:
-    """The literal Must Have wording for the splice case (the bay's parent
-    already runs on the split axis): the parent's ``items`` gain exactly
+    """In the splice case (the bay's parent already runs on the split
+    axis), the parent's ``items`` gain exactly
     ``Bay, Board, Bay`` at the split bay's old slot, no more, no fewer."""
     unit = _run_unit(Weighted(1.5), Weighted(2.5))
     assert isinstance(unit.root, Division)
@@ -784,7 +784,7 @@ def test_split_region_spliced_items_are_bay_board_bay_in_place() -> None:
     assert split.root.items[index + 3 :] == unit.root.items[index + 1 :]
 
 
-# --- N4: a merge's collapse never nests a same-axis Division either --------
+# --- a merge's collapse never nests a same-axis Division either -------------
 
 
 def _bare_column_unit() -> Unit:
@@ -792,7 +792,7 @@ def _bare_column_unit() -> Unit:
     ``Division`` holding a single bare ``Bay``: no side boards flank it, so
     a splice-then-nest-then-collapse sequence on that bay can reduce the
     ``Axis.X`` division to one item and promote it straight into the
-    ``Axis.Z`` run above - the same axis as the promoted item once the
+    ``Axis.Z`` run above, the same axis as the promoted item once the
     intervening split nests a ``Division`` sharing it. A second ``Weighted``
     bay elsewhere in the ``Axis.Z`` run gives the promoted items' own
     ``_other_driven_anchor`` something real to solve against."""
@@ -816,12 +816,12 @@ def _bare_column_unit() -> Unit:
 def test_merge_collapse_never_nests_a_same_axis_division_either() -> None:
     """The divider, shelf left, delete divider sequence: add a divider
     (splice, the bare column's own axis), a shelf on its left half (nest,
-    a different axis), then delete the divider - the delete collapses the
+    a different axis), then delete the divider. The delete collapses the
     ``Axis.X`` division to its one surviving item, the ``Axis.Z`` division
     ``shelf left`` just nested, which shares the grandparent (``Axis.Z``)
     run's own axis; that promoted division's items must splice into the
     grandparent's run rather than nest inside it, and every surviving
-    board - the unit's ``bottom``, ``mid`` and ``top`` - must keep its
+    board (the unit's ``bottom``, ``mid`` and ``top``) must keep its
     solved ``Space`` throughout."""
     unit = _bare_column_unit()
     spaces_before_divider = solve(unit, CATALOG)
@@ -851,7 +851,7 @@ def test_merge_collapse_never_nests_a_same_axis_division_either() -> None:
     assert all(not isinstance(item, Division) for item in merged_root.items)
 
 
-# --- F1: a collapse with no other driven sibling keeps existing ratios ------
+# --- a collapse with no other driven sibling keeps existing ratios ----------
 
 
 def _two_unequal_fixed_openings_unit() -> Unit:
@@ -879,14 +879,14 @@ def _two_unequal_fixed_openings_unit() -> Unit:
 
 
 def test_merge_collapse_with_no_other_driven_sibling_moves_no_board() -> None:
-    """F1 (review round 4): a divider in the lower opening (nest, a
+    """A divider in the lower opening (nest, a
     different axis than the Z-axis column), a shelf left of the divider
     (nest again, a different axis than the divider's X-axis division), then
     another shelf in the upper-left bay that split just made (splice: its
     parent now shares the shelf's own Z axis), then delete the divider. The
     delete collapses the divider's ``Axis.X`` division down to the "shelf
     left" division alone, which shares the column's own ``Axis.Z`` axis and
-    must splice into it rather than nest - but with both openings ``Fixed``,
+    must splice into it rather than nest. With both openings ``Fixed``,
     nothing else in the column is driven, so the splice has no other driven
     sibling to solve a fresh weight against and must keep the two shelf
     boards' own ratio instead of equalizing them to a shared ``Fill()``
@@ -938,7 +938,7 @@ def test_merge_collapse_with_no_other_driven_sibling_moves_no_board() -> None:
     # that spans the divider's full pre-merge width, exactly as the divider's
     # removal should: that width change (size.x_mm) reaches every board
     # inside the promoted "shelf left" division, including shelf_board and
-    # board_id_2, and is not what F1 is about. What must not move is the
+    # board_id_2, and is not what this test checks. What must not move is the
     # column's Axis.Z share those two boards divide up between them: their
     # z origin and z extent, which _splice_collapsed_child's anchor-is-None
     # branch (the fix under test) must reproduce exactly.

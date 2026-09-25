@@ -1,21 +1,15 @@
 """Tree-rewriting edits for the elevation editor: split a bay, merge a board.
 
-``split_region`` and ``merge_at`` are each other's exact inverse. Both take
-a :class:`~freecad.Shelving.core.layout.Unit` and a
-:class:`~freecad.Shelving.core.materials.Catalog`, and return a new
-``Unit``, never mutating the argument: every rebuilt node is a fresh
-dataclass, and every untouched subtree is reused by reference rather than
-copied, so the argument's own objects are never written to. Neither
-function re-solves its own result; a caller does that and is responsible
-for treating a
-:class:`~freecad.Shelving.core.solver.LayoutSolveError` from that as its
-own kind of refusal, distinct from :class:`EditError`. Both call
-:func:`~freecad.Shelving.core.solver.solve` once, on the argument ``unit``,
-to read every node's pre-edit size: geometry-preserving rules (see
-``split_region`` and ``merge_at``) need the *actual* solved extent of the
-region being edited, not merely its own rule object, since a rule can be
-``Basis.WITH_NEXT`` or itself weighted against siblings that have since
-moved.
+``split_region`` and ``merge_at`` are each other's exact inverse. Neither
+mutates the argument ``Unit``: untouched subtrees are shared by reference
+with the result, so the argument must stay unmodified for the result to
+stay valid. Neither re-solves its own result; a caller does that and treats
+a :class:`~freecad.Shelving.core.solver.LayoutSolveError` from it as its
+own kind of refusal, distinct from :class:`EditError`. Both solve the
+argument ``unit`` once to read every node's pre-edit size: a
+geometry-preserving rule needs the region's *actual* solved extent, not
+only its rule object, since a rule can be ``Basis.WITH_NEXT`` or weighted
+against siblings.
 
 Imports no Qt and no FreeCAD, so the fast suite exercises every edit
 directly, the same way :mod:`freecad.Shelving.core.solver` does.
@@ -91,7 +85,7 @@ def _other_driven_anchor(
     none exists.
 
     Every driven item sharing one ``distribute()`` call has the same
-    size-per-weight ratio, so any single one of them anchors the
+    size-per-weight ratio, so any one of them anchors the
     computation that keeps every *other* driven sibling at its pre-edit
     size; ``None`` means the edited pair was the run's only driven item, so
     nothing else needs preserving and the caller may use ``Fill``.
@@ -123,12 +117,12 @@ def split_region(
     the slot it occupied in its parent still claims the same share of
     space; a fresh run has no other region to preserve, so both new bays
     are always ``Fill``. Otherwise ``region_id``'s parent already runs
-    along ``axis``: rather than nest a same-axis ``Division`` inside
-    another, which scanning cannot tell apart from a flat run of the same
-    boards and would then re-solve to different sizes (bug-006), the two
-    new bays splice directly into the parent's own ``items`` in
-    ``region_id``'s place, with rules chosen so ``solve`` reproduces every
-    other region's pre-edit size in that run: a ``Fixed`` bay splits into
+    along ``axis``, and the two new bays splice directly into the parent's
+    own ``items`` in ``region_id``'s place. A same-axis ``Division`` nested
+    inside another is one that scanning cannot tell apart from a flat run of
+    the same boards, so it would re-solve to different sizes (bug-006). The
+    spliced bays get rules chosen so ``solve`` reproduces every other
+    region's pre-edit size in that run: a ``Fixed`` bay splits into
     two ``Fixed`` halves of ``(size - thickness) / 2``; a ``Weighted`` or
     ``Fill`` bay splits into two ``Weighted`` halves solved against another
     driven sibling in the run, or two ``Fill`` halves when no such sibling
@@ -280,10 +274,10 @@ def merge_at(unit: Unit, board_id: str, catalog: Catalog) -> Unit:
 
     A collapse can promote a surviving ``Division`` (``before``'s own
     subtree, carried up whole) to sit where the collapsing ``Division``
-    used to, one level up in the tree; when that promoted ``Division``'s
-    axis matches its *new* parent's axis, same-axis nesting would result
-    (bug-006's shape, reached through merge rather than split), so its
-    items splice into the new parent's run in its place instead, with
+    used to, one level up in the tree. When that promoted ``Division``'s
+    axis matches its *new* parent's axis, leaving it in place would produce
+    bug-006's same-axis nesting through merge, so its items splice into the
+    new parent's run in its place instead, with
     ``Fixed`` items keeping the size they already had. A driven item gets a
     fresh geometry-preserving weight against the new run's other driven
     siblings when the new run has one, the same as :func:`split_region`'s
@@ -303,16 +297,12 @@ def _merge_at(
     region: Region, board_id: str, spaces: Mapping[str, Space]
 ) -> tuple[Region, bool, bool]:
     """``region`` with ``board_id`` merged away, whether a board of that id
-    was found anywhere in its subtree, and whether *this exact call*
-    collapsed ``region`` itself down to one promoted item (the third
-    element, checked by the caller before splicing, N1 review round 4):
-    true only for the direct board-match branch's own ``len(merged_items)
-    == 1`` case, never for a collapse the recursive branch merely passes
-    through from deeper in the tree. A ``Division`` already same-axis
-    nested with its parent for some other reason (unreachable through
-    scanning or this module today) is therefore left alone rather than
-    spliced, matching what "a collapse can promote a surviving Division"
-    in :func:`merge_at`'s own docstring actually claims.
+    was found anywhere in its subtree, and whether *this call*
+    collapsed ``region`` itself down to one promoted item. The third element
+    is never true for a collapse passed up from deeper in the tree, so the
+    caller splices only a ``Division`` this merge promoted, and leaves alone
+    one that was same-axis nested for some other reason (unreachable through
+    scanning or this module).
     """
     if not isinstance(region, Division):
         return region, False, False
@@ -371,27 +361,17 @@ def _splice_collapsed_child(
     new_child: Division,
     spaces: Mapping[str, Space],
 ) -> list[Item]:
-    """``new_child``'s own items, each rewritten so ``solve`` still gives it
-    its pre-merge size once it sits directly in ``items`` (``new_child``'s
-    new parent's run) rather than inside ``new_child`` itself: a ``Fixed``
-    item's size never depended on context, so it is unchanged. A driven
-    (``Weighted`` or ``Fill``) item is re-solved against ``items``'s other
-    driven siblings, the same rule :func:`_split_halves_rules` and
-    :func:`_merged_rule` use, when ``items`` has one. When it has none, the
-    driven items among ``new_child.items`` are left exactly as they were:
-    ``new_child`` was the run's only driven claimant on ``items``'s slack
-    (that is what "no anchor" means here), so once its own children sit in
-    ``items`` directly they are still the only driven claimants, on exactly
-    the slack ``new_child`` itself used to claim, and the weight ratios they
-    already hold from ``new_child``'s own (now-discarded) ``distribute()``
-    call already divide that same slack the same way. Rewriting them to a
-    shared ``Fill()`` here, as if they were a symmetric fresh split, would
-    only be correct when they were originally equal-sized; in general it
-    equalizes children that were unequal and moves boards (bug-006, F1,
-    review round 4).
+    """``new_child``'s own items, each with a rule under which ``solve`` gives
+    it its pre-merge size once it sits directly in ``items`` (``new_child``'s
+    new parent's run). ``Fixed`` items and boards are returned unchanged.
     """
     anchor = _other_driven_anchor(items, {index}, spaces, axis_index)
     if anchor is None:
+        # With no other driven sibling, new_child was the only driven claimant
+        # on this run's slack, so its children inherit exactly that slack and
+        # their existing weight ratios already divide it the same way.
+        # Resetting them to Fill would equalize unequal children and move
+        # boards (bug-006).
         return list(new_child.items)
     anchor_weight, anchor_size_mm = anchor
     spliced: list[Item] = []

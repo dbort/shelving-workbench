@@ -140,7 +140,7 @@ class Session:
         ``freecadcmd`` script and this workbench's own smoke does) starts
         with ``UndoMode`` off, unlike a document created through the GUI:
         ``openTransaction``/``abortTransaction`` are silent no-ops against
-        it, verified directly, so ``cancel`` would leave every edit in
+        it (verified), so ``cancel`` would leave every edit in
         place. Setting it here makes cancel work regardless of how the
         document was created.
         """

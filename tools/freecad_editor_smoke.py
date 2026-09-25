@@ -1,10 +1,4 @@
-"""Headless functional check for the elevation editor's session: selection
-permissions, split, merge, both refusal reasons a session edit returns
-rather than raises, cancel, commit-then-undo, that a committed layout
-survives a fresh session's rescan (bug-006), and that a split-created
-board's id keeps naming the same document object through a later, unrelated
-edit in the same session (bug-008); plus the selection-to-unit mapping that
-decides when Edit Unit is enabled.
+"""Headless functional check for the elevation editor's session.
 
 Drives :class:`freecad.Shelving.editor.session.Session` directly rather than
 :class:`freecad.Shelving.editor.panel.EditUnitPanel`: ``FreeCADGui.Control``,
@@ -273,12 +267,12 @@ def _check_an_editor_layout_survives_a_rescan() -> None:
         doc.recompute()
 
         # Add a shelf top-left: that bay's parent is now the Axis.Z
-        # division split_left just nested, the same axis as this split, so
-        # it splices into that division's own run rather than nesting
-        # again - the exact structure bug-006's rescan could not recover.
+        # division the previous split nested, the same axis as this split,
+        # so it splices into that division's own run rather than nesting
+        # again: the structure bug-006's rescan could not recover.
         # solve places a run's items from the axis minimum up, so of the two
-        # bays that division split_left just made, index [1] (not [0]) is
-        # the upper, top-left one.
+        # bays the previous split made, index [1] (not [0]) is the upper,
+        # top-left one.
         topleft_bay_id = _find_bay_ids_in_order(session.unit.root)[1]
         session.select(topleft_bay_id)
         assert session.split("vertical") is None
@@ -307,24 +301,21 @@ def _check_an_editor_layout_survives_a_rescan() -> None:
 
 
 def _check_deleting_a_divider_reaches_the_merge_collapse_splice() -> None:
-    """F1 (review round 4): the collapse-then-splice path
-    ``_splice_collapsed_child`` implements is reachable from a real
-    ``Session`` edit, not only a hand-built core fixture. On the default
-    unit: add a shelf, a divider in the bay it creates below the shelf, a
-    shelf left of that divider, then delete the divider - the delete
-    collapses the divider's ``Axis.X`` division down to the ``Axis.Z``
-    division the "shelf left" split nested, which shares the parent
-    ``Axis.Z`` division the first shelf itself nested, and must splice
+    """The collapse-then-splice path ``_splice_collapsed_child`` implements
+    is reachable from a real ``Session`` edit, not only a hand-built core
+    fixture. On the default unit: add a shelf, a divider in the bay below
+    the shelf, a shelf left of that divider, then delete the divider. The
+    delete collapses the divider's ``Axis.X`` division down to the
+    ``Axis.Z`` division the "shelf left" split nested, which shares the
+    parent ``Axis.Z`` division the first shelf nested, and must splice
     rather than nest.
 
-    Every surviving board is snapshotted by ``Name`` (F2, review round 5),
-    and every one of them must keep its placement (all three axes) and its
-    size along the column's axis, the unit's vertical elevation axis: the
+    Every surviving board, matched by ``Name``, keeps its placement (all
+    three axes) and its size along the unit's vertical elevation axis: the
     axis the spliced-in run shares with its new, flatter home. The "shelf
-    left of the divider" board is expected to widen along the horizontal
-    axis, since the splice hands it the width the deleted divider and the
-    bay on its other side used to occupy; only its horizontal size is
-    exempt from the comparison."""
+    left of the divider" board widens along the horizontal axis, since the
+    splice hands it the width the deleted divider and the bay on its other
+    side occupied, so horizontal size is exempt from the comparison."""
     doc = FreeCAD.newDocument("editor_smoke_merge_collapse_reachable")
     try:
         container = create_unit(doc)

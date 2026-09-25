@@ -101,7 +101,7 @@ class EditUnitPanel:
 
     def _refresh(self) -> None:
         """Rebuild the scene from the session's current state and re-derive
-        the two buttons' enabled state; called after every selection change
+        every button's enabled state; called after every selection change
         and every edit attempt, successful or not."""
         scene = build_scene(
             self.session.unit, self.session.spaces, self.session.selected_id
@@ -117,9 +117,8 @@ class EditUnitPanel:
             | QtWidgets.QDialogButtonBox.StandardButton.Cancel
         )
         # PySide6-stubs types enum.Flag.value as the flag's own class rather
-        # than int (verified: reveal_type shows StandardButton, not int, even
-        # though the runtime value is a plain int); FreeCAD's own C++ side
-        # only accepts a real int here.
+        # than int: reveal_type shows StandardButton, though the runtime value
+        # is a plain int. FreeCAD's own C++ side only accepts a real int here.
         return cast("int", buttons.value)
 
     def accept(self) -> bool:

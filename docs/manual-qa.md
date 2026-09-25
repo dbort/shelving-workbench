@@ -423,8 +423,8 @@ board down the bay's middle, leaving two smaller bays side by side, both
 roughly equal in size; the message line stays blank. **Add Shelf** would
 instead divide the bay top and bottom with a **horizontal** shelf. Switching to the 3D view
 (without closing the panel) shows the same new board as a real, positioned
-box, not only a drawing: each edit runs the workbench's real write path, not
-a preview that could disagree with it. Click the new divider board: **Delete**
+box, not only a drawing. Each edit runs the workbench's real write path, so
+no separate preview exists that could disagree with it. Click the new divider board: **Delete**
 enables and both **Add** buttons disable, since a board, not a bay, is now
 selected.
 

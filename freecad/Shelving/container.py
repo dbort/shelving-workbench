@@ -357,16 +357,6 @@ class WriteResult:
     before the call, but re-baptized with a fresh provenance and label, so
     it is reported the way a user would think of it, as a new board, not as
     an update to the board it was copied from.
-
-    ``id_renames`` maps a board's ``Board.id`` as passed into this call to
-    the ``Name`` its newly-created document object actually received: only
-    populated for a board created in this call whose id was not already a
-    valid document object name (a hand-built ``Unit``'s fresh ``new_id()``,
-    never a rescanned one). A caller that holds onto ``unit`` past this call
-    and writes it again must apply this mapping first, to both the unit's
-    board ids and any per-board state keyed by them, or the next
-    ``write_container`` call will not match those boards by ``Name`` and
-    will delete and recreate them instead.
     """
 
     updated: tuple[str, ...]
@@ -374,6 +364,14 @@ class WriteResult:
     deleted: tuple[str, ...]
     left_alone: tuple[str, ...]
     id_renames: Mapping[str, str]
+    """Each ``Board.id`` passed in mapped to the ``Name`` its newly-created
+    document object received, only for a board created in this call whose id
+    was not already a valid document object name (a hand-built ``Unit``'s
+    fresh ``new_id()``, never a rescanned one). A caller that writes the same
+    ``unit`` again must apply this mapping first, to both the unit's board
+    ids and any per-board state keyed by them, or the next
+    ``write_container`` call will not match those boards by ``Name`` and
+    will delete and recreate them instead."""
 
 
 def _boards_by_id(region: Region) -> dict[str, Board]:
@@ -552,11 +550,9 @@ def _sanitize_name(role: str) -> str:
 def renamed_board_ids(region: Region, renames: Mapping[str, str]) -> Region:
     """``region`` with every ``Board.id`` present in ``renames`` replaced by
     its mapped value; every other board and every region's own id is
-    untouched. Used both by ``write_container`` (see its ``id_renames``
-    comment, for why this runs before ``rules_to_json``) and by any caller
-    that keeps a ``Unit`` alive across more than one ``write_container``
-    call, to adopt the real ``Name`` a freshly-created board received (see
-    ``WriteResult.id_renames``)."""
+    untouched. A caller that writes one ``Unit`` more than once applies
+    ``WriteResult.id_renames`` through this; ``write_container``'s own
+    ``id_renames`` comment says why it runs before ``rules_to_json``."""
     if not isinstance(region, Division):
         return region
     new_items: list[Item] = []
