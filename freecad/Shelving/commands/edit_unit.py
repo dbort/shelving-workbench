@@ -92,6 +92,28 @@ class EditUnitCommand:
             run.end("refused")
             return
         run.lap("build panel")
+        from freecad.Shelving.editor.panel import FirstEvents
+
+        # Everything below lands after showDialog returns, when FreeCAD and Qt
+        # get round to showing and painting the panel; wall-clock times make
+        # a gap outside our code visible against the BEGIN timestamp.
+        FirstEvents(
+            panel.form,
+            {
+                QtCore.QEvent.Type.Show: "panel first shown",
+                QtCore.QEvent.Type.Paint: "panel first painted",
+            },
+            lambda name: run.lap(f"{name} at {debug_log.timestamp()}"),
+        )
+
+        def _elevation_painted(paint_ms: float) -> None:
+            run.lap(
+                f"elevation first painted at {debug_log.timestamp()}, "
+                f"paint took {paint_ms:.1f} ms"
+            )
+            run.end()
+
+        panel.view.on_first_paint = _elevation_painted
         try:
             Gui.Control.showDialog(panel)
         except Exception as err:  # noqa: BLE001 - the transaction EditUnitPanel
@@ -104,13 +126,17 @@ class EditUnitCommand:
             return
         run.lap("showDialog")
 
-        # Layout and first paint of the docked panel happen after showDialog
-        # returns, on the next pass of the event loop, so the run ends there.
-        def _first_pass() -> None:
-            run.lap("first event-loop pass after showDialog")
-            run.end()
-
-        QtCore.QTimer.singleShot(0, _first_pass)
+        QtCore.QTimer.singleShot(
+            0,
+            lambda: run.lap(
+                f"first event-loop pass after showDialog at {debug_log.timestamp()}"
+            ),
+        )
+        # A panel that is never painted (the Tasks pane hidden, say) would
+        # otherwise leave the run open until the next Edit Unit abandons it.
+        QtCore.QTimer.singleShot(
+            60_000, lambda: run.end("elevation not painted within 60 s")
+        )
 
 
 if not TYPE_CHECKING:

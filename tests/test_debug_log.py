@@ -81,3 +81,14 @@ def test_disabled_prints_nothing(
     debug_log.log("note")
     run.end()
     assert _lines(capsys) == []
+
+
+def test_a_late_lap_keeps_its_own_runs_id(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    old = debug_log.begin("old")
+    new = debug_log.begin("new")
+    old.lap("late paint")
+    new.end()
+    late = [line for line in _lines(capsys) if "late paint" in line]
+    assert late and late[0].startswith(f"[shelving] #{old.id} "), late

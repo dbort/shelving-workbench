@@ -12,7 +12,8 @@ and never reaches this module.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import time
+from collections.abc import Callable, Mapping
 from typing import cast
 
 import FreeCAD
@@ -30,12 +31,54 @@ class _EditorView(QtWidgets.QGraphicsView):
     def __init__(self, on_click: Callable[[QtCore.QPointF], None]) -> None:
         super().__init__()
         self._on_click = on_click
+        # Called once, with the paint's duration in ms, on the first paint of
+        # the elevation; the Edit Unit run's debug_log timing ends there.
+        self.on_first_paint: Callable[[float], None] | None = None
+
+    def paintEvent(self, event: QtGui.QPaintEvent) -> None:
+        callback = self.on_first_paint
+        if callback is None:
+            super().paintEvent(event)
+            return
+        self.on_first_paint = None
+        start_s = time.perf_counter()
+        super().paintEvent(event)
+        callback((time.perf_counter() - start_s) * 1000)
 
     def mousePressEvent(self, event: QtGui.QMouseEvent) -> None:
         super().mousePressEvent(event)
         scene = self.scene()
         if scene is not None:
             self._on_click(self.mapToScene(event.position().toPoint()))
+
+
+class FirstEvents(QtCore.QObject):
+    """Calls ``on_event`` with a name the first time each event type in
+    ``names`` reaches ``target``, then stops filtering; the event itself
+    is passed through untouched.
+
+    Parented to ``target``, so it lives exactly as long as the widget.
+    """
+
+    def __init__(
+        self,
+        target: QtCore.QObject,
+        names: Mapping[QtCore.QEvent.Type, str],
+        on_event: Callable[[str], None],
+    ) -> None:
+        super().__init__(target)
+        self._target = target
+        self._pending = dict(names)
+        self._on_event = on_event
+        target.installEventFilter(self)
+
+    def eventFilter(self, watched: QtCore.QObject, event: QtCore.QEvent) -> bool:
+        name = self._pending.pop(event.type(), None)
+        if name is not None:
+            self._on_event(name)
+            if not self._pending:
+                self._target.removeEventFilter(self)
+        return False
 
 
 class EditUnitPanel:

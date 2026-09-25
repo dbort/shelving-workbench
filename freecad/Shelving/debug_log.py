@@ -38,7 +38,8 @@ def log(message: str) -> None:
         print(f"{_tag()} {message}")
 
 
-def _timestamp() -> str:
+def timestamp() -> str:
+    """The current wall-clock time in the format the BEGIN/END markers use."""
     return datetime.now().isoformat(sep=" ", timespec="milliseconds")
 
 
@@ -53,11 +54,14 @@ class Stopwatch:
 
     def lap(self, stage: str) -> None:
         now_s = time.perf_counter()
-        log(
+        self._emit(
             f"{self.label}: {stage}: {(now_s - self._last_s) * 1000:.1f} ms "
             f"(total {(now_s - self._start_s) * 1000:.1f} ms)"
         )
         self._last_s = now_s
+
+    def _emit(self, message: str) -> None:
+        log(message)
 
     def total_ms(self) -> float:
         return (time.perf_counter() - self._start_s) * 1000
@@ -77,6 +81,12 @@ class Invocation(Stopwatch):
         self.id = next(_next_id)
         self._open = True
 
+    def _emit(self, message: str) -> None:
+        # A lap can arrive after this run ended or a newer run replaced it
+        # (a late paint), so it carries its own id rather than the current one.
+        if is_enabled():
+            print(f"{_PREFIX} #{self.id} {message}")
+
     def end(self, outcome: str = "done") -> None:
         global _current
         if not self._open:
@@ -86,7 +96,7 @@ class Invocation(Stopwatch):
             if is_enabled():
                 print(
                     f"{_PREFIX} #{self.id} ===== END {self.label} ({outcome}) "
-                    f"{_timestamp()}, total {self.total_ms():.1f} ms ====="
+                    f"{timestamp()}, total {self.total_ms():.1f} ms ====="
                 )
             _current = None
 
@@ -100,5 +110,5 @@ def begin(label: str) -> Invocation:
     run = Invocation(label)
     _current = run
     if is_enabled():
-        print(f"{_PREFIX} #{run.id} ===== BEGIN {label} {_timestamp()} =====")
+        print(f"{_PREFIX} #{run.id} ===== BEGIN {label} {timestamp()} =====")
     return run
