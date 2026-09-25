@@ -189,3 +189,9 @@ The layout vocabulary and how each term maps onto the code in
   panel on the unit the selection names: the unit's container, or any
   objects inside it, all from the same unit. Disabled for any other
   selection.
+- **debug_log**: `freecad.Shelving.debug_log`, the workbench's verbose
+  diagnostic output in the Report view, on by default. Turn it off from the
+  Python console with `from freecad.Shelving import debug_log;
+  debug_log.enabled = False`. Each command run it covers is bracketed by
+  `===== BEGIN` and `===== END` lines, and every line in between carries
+  the same `#N` run id.

@@ -18,6 +18,7 @@ from typing import cast
 import FreeCAD
 from PySide6 import QtCore, QtGui, QtWidgets
 
+from freecad.Shelving.debug_log import Stopwatch
 from freecad.Shelving.editor.scene import build_scene, hit_test
 from freecad.Shelving.editor.session import EditFailure, Session, SplitDirection
 
@@ -46,8 +47,11 @@ class EditUnitPanel:
     """
 
     def __init__(self, container: FreeCAD.DocumentObject) -> None:
+        watch = Stopwatch("panel")
         self.session = Session(container)
+        watch.lap("session")
         self.session.open()
+        watch.lap("open transaction")
 
         self.form = QtWidgets.QWidget()
         self.form.setWindowTitle("Edit Unit")
@@ -74,8 +78,10 @@ class EditUnitPanel:
         self.add_divider_button.clicked.connect(lambda: self._split("horizontal"))
         self.add_shelf_button.clicked.connect(lambda: self._split("vertical"))
         self.delete_button.clicked.connect(self._merge)
+        watch.lap("widgets")
 
         self._refresh()
+        watch.lap("first refresh (scene build)")
 
     def _on_scene_click(self, point: QtCore.QPointF) -> None:
         scene = self.view.scene()

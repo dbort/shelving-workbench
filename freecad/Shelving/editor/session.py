@@ -33,6 +33,7 @@ from freecad.Shelving.core.materials import Catalog, MaterialId
 from freecad.Shelving.core.record import rules_from_json, with_stored_rules
 from freecad.Shelving.core.scan import elevation_axes, scan
 from freecad.Shelving.core.solver import LayoutSolveError, solve
+from freecad.Shelving.debug_log import Stopwatch
 
 SplitDirection = Literal["horizontal", "vertical"]
 
@@ -75,7 +76,9 @@ def _read_unit(container: FreeCAD.DocumentObject, catalog: Catalog) -> Unit:
     FreeCAD-layer read helper in this codebase stays local to its own
     module rather than reaching into another module's private name.
     """
+    watch = Stopwatch("session read")
     boxes, skipped, record = read_container(container)
+    watch.lap(f"read_container ({len(boxes)} boxes, {len(skipped)} skipped)")
     scan_result = scan(
         boxes,
         catalog,
@@ -83,11 +86,13 @@ def _read_unit(container: FreeCAD.DocumentObject, catalog: Catalog) -> Unit:
         depth_axis=record.depth_axis,
         front_at_min=record.front_at_min,
     )
+    watch.lap("scan")
     unit = scan_result.unit
     if record.rules_json is not None:
         unit = with_stored_rules(unit, rules_from_json(record.rules_json))
     if record.unit_id is not None:
         unit = dataclasses.replace(unit, id=record.unit_id)
+    watch.lap("stored rules")
     return unit
 
 
@@ -95,14 +100,18 @@ class Session:
     """One elevation-editing session against a selected container."""
 
     def __init__(self, container: FreeCAD.DocumentObject) -> None:
+        watch = Stopwatch("session")
         self.container = container
         self.catalog, self._skipped_catalog_entries = read_usable_catalog(
             ensure_catalog(container.Document)
         )
+        watch.lap("catalog")
         # unit and spaces are the current, already-solved state, replaced
         # wholesale by every accepted edit.
         self.unit = _read_unit(container, self.catalog)
+        watch.lap("read unit")
         self.spaces: Mapping[str, Space] = solve(self.unit, self.catalog)
+        watch.lap("solve")
         # A region or board id. Every accepted edit clears it, since the id
         # it just edited no longer names anything the caller can act on.
         self.selected_id: str | None = None
