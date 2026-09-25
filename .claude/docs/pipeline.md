@@ -82,7 +82,7 @@ full cycle:
 
 | `current_phase` | Owner | What happens |
 |---|---|---|
-| `planning` | Planner + human | The Planner (via the `new-task` skill) interviews the user in depth and generates the task file. Human-gated: the user must approve the generated file before the Planner sets `current_phase: implementation`. |
+| `planning` | Planner + human | The Planner (via the `new-task` skill) interviews the user in depth and generates the task file. Human-gated: the user approves the generated file either by confirming it to the Planner or by running `dispatch-tasks sh-XXX` on it (§ Phase transitions); nothing else sets `current_phase: implementation`. |
 | `implementation` | Implementer | Executes the task file's `## Execution Plan` steps in order on the task's `sh-XXX` branch, then hands off to `review`. |
 | `review` | Reviewer | Diffs the branch against `main`, runs the checks itself via Bash (§ Verification commands), and either approves (→ `user_signoff`) or rejects (see the rejection loop below). |
 | `user_signoff` | Human | The user tests the branch manually, then runs `/approve-task sh-XXX` — invoking that skill against a task IS the sign-off act. It finalizes the task file, re-sweeps with `doc-hygiene`, and merges into `main` only after the merged result passes the checks. |
@@ -189,6 +189,15 @@ file is already complete by the time this transition fires (the interview
 happens before the file exists), so the gate is a human blessing finished
 content, not a live conversation.
 
+A user running `dispatch-tasks` on a `planning` task has explicitly
+approved that task's plan as written, and has authorized the one
+bookkeeping commit that records it: the frontmatter and `## Status` flip,
+committed directly to `main` because no `sh-XXX` branch exists yet. That
+commit touches only the task file, merges no code, and is not a review
+bypass; the task's code still goes through the Reviewer and the
+`user_signoff` gate on its own branch. The approval covers only the named
+task, only this invocation, and only if it is unblocked.
+
 ## Dispatch semantics
 
 The `dispatch-tasks` skill is the sole dispatcher (its `SKILL.md` holds the
@@ -205,10 +214,10 @@ not new work.
   `tasks/active/` to pick an eligible task on its own. All task work shares
   one working tree (see § Git branching), so there's no scenario where it
   needs to arbitrate between several ready tasks in one invocation.
-- **Planning auto-approval:** if the named task is at `planning` and
-  unblocked, naming it is treated as the user's approval — `dispatch-tasks`
-  flips it to `implementation` itself (see § Phase transitions) before
-  chaining into the Implementer.
+- **Planning approval:** if the named task is at `planning` and
+  unblocked, naming it is the user's explicit approval of its plan —
+  `dispatch-tasks` flips it to `implementation` itself (see § Phase
+  transitions) before chaining into the Implementer.
 - **Chaining:** the named task runs to completion within the tick —
   implementation → review, and on a rejection under the cap, back to
   implementation and review again — stopping only at a human gate or when

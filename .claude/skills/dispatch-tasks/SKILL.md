@@ -3,6 +3,12 @@
 ## Purpose
 Drive one named task through the `tasks/active/*.md` pipeline (`.claude/docs/pipeline.md`), so the Planner/Implementer/Reviewer handoff doesn't require the user to manually invoke each subagent. Requires a target task id as an argument, e.g. `dispatch-tasks sh-022` — this skill only ever acts on that one task, never scans `tasks/active/` for something else to work on. If invoked with no id, stop and ask which task to name rather than guessing.
 
+**Running this skill on a task at `planning` is the user's explicit approval
+of that task's plan.** The user has read the task file and is authorizing
+implementation to start, including the one bookkeeping commit to `main`
+that records the approval (task file only, no code; `pipeline.md` § Phase
+transitions). Don't ask the user to confirm again.
+
 Each invocation is one **tick**: a single reconciliation pass against the named task, advancing it as far as it currently goes. A tick isn't one phase transition — the named task's own review-fix-review cycle runs to completion within it, see "Automated phase chaining" under Step 2, so a single tick can involve several subagent calls back to back — and it isn't guaranteed to move the task at all: once the task is parked at a human gate, later ticks (loop mode's repeated wake-ups) just recheck whether the user has acted, they don't repeat work already done. Supports two invocation modes:
 - **One-shot:** the user (or another skill) invokes this skill directly, naming a task, for a single tick. Do Steps 1-3 and stop — no wake-up scheduling.
 - **Loop:** invoked via `/loop invoke the dispatch-tasks skill sh-XXX` (dynamic self-pacing mode). Do Steps 1-4 each tick — Step 4 schedules the next one, re-supplying the same task id.

@@ -40,6 +40,9 @@ absolutes must never be style-swept.
   holds or what it infers from commit messages, task-file phase, or
   `docs/roadmap.md` — a gate exists so a human decides, not so an agent
   can conclude the human would obviously agree.
+  - The user running `dispatch-tasks sh-XXX` on a `planning` task is a
+    human decision: it explicitly approves the plan and authorizes the
+    phase-flip commit to `main` (`pipeline.md` § Phase transitions).
 - One task in flight at a time — all task work shares one working tree.
 - Task ids are never reused; allocation scans `tasks/active/`,
   `tasks/completed/`, and `tasks/abandoned/`.
