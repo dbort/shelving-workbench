@@ -94,9 +94,9 @@ class EditUnitCommand:
         run.lap("build panel")
         from freecad.Shelving.editor.panel import FirstEvents
 
-        # Everything below lands after showDialog returns, when FreeCAD and Qt
-        # get round to showing and painting the panel; wall-clock times make
-        # a gap outside our code visible against the BEGIN timestamp.
+        # These show and paint events arrive after showDialog returns, whenever
+        # FreeCAD and Qt get round to them; wall-clock times make a gap
+        # outside our code visible against the BEGIN timestamp.
         FirstEvents(
             panel.form,
             {

@@ -73,7 +73,8 @@ class Invocation(Stopwatch):
     ``end`` is separate from the scope that called ``begin`` because a
     run can outlive its command's ``Activated``: the Edit Unit panel's first
     paint happens on a later pass of the event loop. Calling ``end`` twice,
-    or on a run that a newer ``begin`` already replaced, logs nothing more.
+    or on a run that a newer ``begin`` already replaced, logs no further
+    ``END`` line; a ``lap`` after that still prints, under this run's id.
     """
 
     def __init__(self, label: str) -> None:
