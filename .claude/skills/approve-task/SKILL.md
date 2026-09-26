@@ -1,7 +1,7 @@
 # Skill: Approve & Merge a Task
 
 ## Purpose
-Perform the User (Sign-off) step of the `tasks/active/*.md` pipeline (`.claude/docs/pipeline.md` § Phases) for a task sitting at `current_phase = "user_signoff"`: finalize its task file, re-sweep its branch for doc/comment rot introduced since the last `doc-hygiene` pass, merge it into `main` only after confirming the merged result actually passes the checks, then clean up the branch.
+Perform the User (Sign-off) step of the `tasks/active/*.md` pipeline (`.claude/docs/pipeline.md` § Phases) for a task sitting at `current_phase = "user_signoff"`: sweep its branch for doc/comment rot with `doc-hygiene`, finalize its task file, merge it into `main` only after confirming the merged result actually passes the checks, then clean up the branch.
 
 Invoking this skill against a specific task IS the human sign-off act. There is no separate confirmation prompt inside this skill — deciding to run `/approve-task sh-XXX` is the approval; the skill's job is to execute it correctly, not to re-ask whether you meant it.
 
@@ -23,12 +23,12 @@ Invoking this skill against a specific task IS the human sign-off act. There is 
   - Found at neither path: stop with an error naming the id that wasn't found.
 
 ### Step 2: Pre-merge doc-hygiene sweep (on branch `sh-XXX`)
-A task branch can pick up commits after `dispatch-tasks`' post-review `doc-hygiene --diff=main` pass already ran — manual review feedback, follow-up refactors — content that pass never saw. Re-sweeping `--diff=main` again here would also re-litigate everything that pass already covered, so scope tighter:
+This is the task's one `doc-hygiene` pass (`pipeline.md` § Dispatch semantics: review approvals run none). It runs here, after every rejection round and sign-off fix, so it sweeps the branch's final content once. A `doc-hygiene:` commit can still exist on the branch, from an earlier run of this skill whose Step 4 merge failed or from a manual sweep; scope to what changed since it rather than sweeping settled content again:
 
 - `git checkout sh-XXX`.
 - Find the most recent `doc-hygiene:`-prefixed commit on this branch: `git log --format='%H %s' sh-XXX | grep -m1 '^[0-9a-f]\+ doc-hygiene:'`.
   - Found: invoke the `doc-hygiene` skill with `--diff=<that commit's SHA>` — scopes the sweep to only what changed since that pass, not the whole branch.
-  - Not found (no `doc-hygiene` pass ever ran on this branch): invoke with `--diff=main` instead, matching what the first pass would have used.
+  - Not found, the normal case: invoke with `--diff=main`, sweeping everything the branch changed.
 - `doc-hygiene` never commits on its own, and runs its own sanity check (the checks, `pipeline.md` § Verification commands) before reporting (see its `SKILL.md`). If it made edits and its sanity check passed, commit them: `doc-hygiene: pre-merge pass on sh-XXX`. If its sanity check failed, stop here and flag it prominently — don't carry unverified edits into Step 3.
 - If it found nothing to fix, that's a normal outcome, not a failure. Note it and continue.
 

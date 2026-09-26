@@ -85,7 +85,7 @@ full cycle:
 | `planning` | Planner + human | The Planner (via the `new-task` skill) interviews the user in depth and generates the task file. Human-gated: the user approves the generated file either by confirming it to the Planner or by running `dispatch-tasks sh-XXX` on it (§ Phase transitions); nothing else sets `current_phase: implementation`. |
 | `implementation` | Implementer | Executes the task file's `## Execution Plan` steps in order on the task's `sh-XXX` branch, then hands off to `review`. |
 | `review` | Reviewer | Diffs the branch against `main`, runs the checks itself via Bash (§ Verification commands), and either approves (→ `user_signoff`) or rejects (see the rejection loop below). |
-| `user_signoff` | Human | The user tests the branch manually, then runs `/approve-task sh-XXX` — invoking that skill against a task IS the sign-off act. It finalizes the task file, re-sweeps with `doc-hygiene`, and merges into `main` only after the merged result passes the checks. |
+| `user_signoff` | Human | The user tests the branch manually, then runs `/approve-task sh-XXX` — invoking that skill against a task IS the sign-off act. It sweeps the branch with `doc-hygiene`, finalizes the task file, and merges into `main` only after the merged result passes the checks. |
 | `blocked_needs_human` | Human | Dead end for the automated pipeline: the rejection cap was hit. The user fixes the code, clarifies the task file, or resets `review_rejections: 0` and demotes to `implementation` for another run. |
 | `done` | — | Terminal. The task file moves to `tasks/completed/` (done by `approve-task`). A `done` task still sitting in `tasks/active/` is an anomaly worth flagging. |
 
@@ -165,7 +165,7 @@ Advance a task only by invoking the skill that owns the transition:
 `approve-task` for `user_signoff` → `done`. Never invoke the
 Implementer/Reviewer subagents directly via the Agent tool as a shortcut:
 the skills bundle required side effects (branch verification, phase
-chaining, the post-approval `doc-hygiene` pass) that a bare subagent call
+chaining, the pre-merge `doc-hygiene` pass) that a bare subagent call
 skips. This is a hard rule.
 
 "Invoking the skill" means the actual invocation mechanism: the user or an
@@ -222,10 +222,12 @@ not new work.
   implementation → review, and on a rejection under the cap, back to
   implementation and review again — stopping only at a human gate or when
   the task leaves `tasks/active/`.
-- **Post-approval hygiene:** the moment the Reviewer approves,
-  `dispatch-tasks` runs `doc-hygiene --diff=main` on the branch, before the
-  code merges — the last easy point to catch doc rot in what the agents
-  wrote.
+- **No hygiene pass at review:** a Reviewer approval stops at
+  `user_signoff` with nothing further run. `doc-hygiene` runs once per
+  task, in `approve-task` right before the merge, so it sweeps the
+  branch's final content a single time: every rejection round, sign-off
+  fix, and follow-up commit is already in place by then. A pass at each
+  approval would sweep the same files again after every later change.
 - **Loop mode:** driven by `/loop invoke the dispatch-tasks skill
   sh-XXX`, it self-paces, re-supplying the same task id on each
   wake-up, and ends itself once that task leaves `tasks/active/`.

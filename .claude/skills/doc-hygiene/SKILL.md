@@ -23,7 +23,7 @@ The Style Rules section below is adapted from the **stop-slop** skill (MIT Licen
 - No argument: whole repo, every tracked file swept in full.
 - `[path]`: a file or directory to scope the sweep to (e.g. `/doc-hygiene src/telemetry` or `/doc-hygiene docs/`), full files within that scope.
 - `--diff`: scope to files with *uncommitted* changes (`git diff HEAD`) instead of every tracked file, AND constrain edits within each file to the changed lines (plus any pre-existing comment the diff made stale) rather than sweeping the whole file. Use this after making code changes, before committing, so the hygiene pass reviews what actually changed instead of re-litigating unrelated, already-settled content elsewhere in the same file.
-- `--diff=<ref>`: same file-discovery/edit-scoping behavior as `--diff`, but scoped to everything **committed** on the current branch since it diverged from `<ref>` (`git diff <ref>...HEAD`), not uncommitted changes. Use this on a task branch whose work is already committed — e.g. right after a Reviewer approves a `sh-XXX` branch, before it merges to `main`: `/doc-hygiene --diff=main`.
+- `--diff=<ref>`: same file-discovery/edit-scoping behavior as `--diff`, but scoped to everything **committed** on the current branch since it diverged from `<ref>` (`git diff <ref>...HEAD`), not uncommitted changes. Use this on a task branch whose work is already committed, as `approve-task` does on a `sh-XXX` branch before it merges to `main`: `/doc-hygiene --diff=main`.
 
 Combine either diff form with `[path]` to further narrow which changed files count (e.g. `/doc-hygiene --diff=main src/telemetry`).
 
@@ -66,7 +66,7 @@ git diff "<ref>"...HEAD --name-only -- "$SCOPE" \
   | grep -vE '^tasks/|^\.claude/' \
   | grep -vx 'CLAUDE.md'
 ```
-Triple-dot (`<ref>...HEAD`) bounds the comparison at the merge-base, matching how the Reviewer already compares a task branch to `main` (`.claude/docs/pipeline.md` § Phases) — it shows only what changed on the current branch, not unrelated changes `<ref>` picked up in the meantime. No `git ls-files --others` half needed here: a task branch's work is expected to already be fully committed by the time this mode is used (post-review), so there's normally nothing untracked to add — if there is, that's usually a sign something wasn't committed, worth noticing rather than silently sweeping in.
+Triple-dot (`<ref>...HEAD`) bounds the comparison at the merge-base, matching how the Reviewer already compares a task branch to `main` (`.claude/docs/pipeline.md` § Phases) — it shows only what changed on the current branch, not unrelated changes `<ref>` picked up in the meantime. No `git ls-files --others` half needed here: a task branch's work is expected to already be fully committed by the time this mode is used (at `approve-task`), so there's normally nothing untracked to add — if there is, that's usually a sign something wasn't committed, worth noticing rather than silently sweeping in.
 
 Both modes exclude, regardless of `$SCOPE`:
 - `tasks/**` — pipeline data files with frontmatter the Planner/Implementer/Reviewer machinery parses; a prose pass here risks corrupting frontmatter or softening the intentionally instruction-dense `## Execution Plan` prose.

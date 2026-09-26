@@ -72,8 +72,8 @@ The Reviewer approved the diff. Before marking this done:
    yourself; passing tests and lint don't guarantee it does what you
    wanted.
 2. If it's good: run `/approve-task sh-XXX`. Running it against
-   a task IS the sign-off: it finalizes the task file, re-sweeps the
-   branch with `doc-hygiene`, and merges `sh-XXX` into `main`
+   a task IS the sign-off: it sweeps the branch with `doc-hygiene`,
+   finalizes the task file, and merges `sh-XXX` into `main`
    only after the checks pass against the merged result.
 3. If it's not good: don't hand it back through the pipeline yourself.
    Either fix it on the branch, or demote it back to `implementation` with a
