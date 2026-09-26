@@ -50,3 +50,7 @@ shelving-workbench = { path = ".", editable = true }
 # Type-check-only: PEP 561 type stubs for the FreeCAD / App / Part / FreeCADGui
 # modules.
 freecad-stubs = "*"
+# Type-check-only: the conda-forge pyside6 build ships no .pyi/py.typed of its
+# own (verified: zero .pyi files under site-packages/PySide6), so the editor
+# layer's mypy --strict pass depends on this pip-only stub package instead.
+pyside6-stubs = "==6.7.3.0"

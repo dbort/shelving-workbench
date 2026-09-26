@@ -74,3 +74,21 @@ if [ "$catalog_smoke_status" -ne 0 ]; then
 	echo "ERROR: freecad_catalog_smoke.py failed (see output above)." >&2
 	exit 1
 fi
+
+# freecad_editor_smoke.py is a plain script, not a self-invoking pytest
+# module, so an assertion failure inside it is an uncaught exception that
+# freecadcmd reports but still exits 0 for (docs/freecadcmd-notes.md); its
+# exit code alone would silently pass a failed run. It prints
+# "shelving editor OK" as its last line only when every assertion held, so
+# this greps the captured output for that line instead of trusting the
+# exit code the way the three smokes above do.
+printf '== %s\n' freecad_editor_smoke.py
+editor_smoke_log="$(mktemp)"
+freecadcmd tools/freecad_editor_smoke.py 2>&1 | tee "$editor_smoke_log"
+printf '\n'
+if ! grep -q "shelving editor OK" "$editor_smoke_log"; then
+	echo "ERROR: freecad_editor_smoke.py did not print 'shelving editor OK' (see output above)." >&2
+	rm -f "$editor_smoke_log"
+	exit 1
+fi
+rm -f "$editor_smoke_log"

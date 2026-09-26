@@ -166,3 +166,32 @@ The layout vocabulary and how each term maps onto the code in
   in one transaction; a unit that refuses does not stop the others. Nothing
   in this workbench recomputes on its own, so this is the only way a
   changed catalog entry reaches the boards using it.
+- **the core edit layer**: `freecad.Shelving.core.edit`. `split_region` and
+  `merge_at` rebuild a `Unit`'s tree, `Unit` in, `Unit` out, never mutating
+  the argument; `EditError` is the refusal either raises, carrying the
+  offending region or board id. No Qt, no FreeCAD, tested in the fast suite.
+- **the scene layer**: `freecad.Shelving.editor.scene`. `build_scene` draws a
+  `QGraphicsScene` elevation from a `Unit` and its solved spaces, one item
+  per region and per board, each tagged with its id; `hit_test` answers
+  what is at a scene point. Knows nothing about documents or transactions.
+- **the session/panel layer**: `freecad.Shelving.editor.session` and
+  `panel.py`. The session owns the document, the one transaction the whole
+  editing session shares, and the write path; the panel is the Qt task
+  dialog wiring buttons to it and holds no logic of its own worth testing.
+- **Session**: `freecad.Shelving.editor.session.Session`. Reads a container
+  once, then answers `can_split`/`can_merge` for the current selection and
+  applies `split`/`merge` through the core edit layer, re-solving and
+  writing through the real write path on each accepted edit; `open`,
+  `commit`, and `cancel` bound the one transaction. A rejected edit returns
+  an `EditFailure` (a message and the offending id) rather than raising, and
+  changes nothing.
+- **Shelving_EditUnit**: the command id that opens the elevation editor task
+  panel on the unit the selection names: the unit's container, or any
+  objects inside it, all from the same unit. Disabled for any other
+  selection.
+- **debug_log**: `freecad.Shelving.debug_log`, the workbench's verbose
+  diagnostic output in the Report view, on by default. Turn it off from the
+  Python console with `from freecad.Shelving import debug_log;
+  debug_log.enabled = False`. Each command run it covers is bracketed by
+  `===== BEGIN` and `===== END` lines, and every line in between carries
+  the same `#N` run id.

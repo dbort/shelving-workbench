@@ -30,7 +30,7 @@ the identity and provenance rules it follows.
 """
 
 import dataclasses
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping, Sequence
 from typing import Protocol, cast
 
 import FreeCAD
@@ -76,6 +76,58 @@ def _children(obj: FreeCAD.DocumentObject) -> list[FreeCAD.DocumentObject]:
         if isinstance(members, list):
             return [m for m in members if isinstance(m, FreeCAD.DocumentObject)]
     return []
+
+
+def _enclosing_unit(obj: FreeCAD.DocumentObject) -> FreeCAD.DocumentObject | None:
+    """The nearest container carrying a ``ShelvingUnitId`` at or above
+    ``obj``, or ``None`` when no ancestor carries one."""
+    seen: set[str] = set()
+    pending = [obj]
+    while pending:
+        current = pending.pop()
+        if current.Name in seen:
+            continue
+        seen.add(current.Name)
+        if properties.read_container_unit_id(current) is not None:
+            return current
+        # InList also holds objects that only reference ``current`` (a Pad
+        # referencing its Sketch); only group membership counts as enclosing.
+        # Any group-like parent qualifies here, unlike ``_children``: a board
+        # modelled as a PartDesign Body is selected as its Body or a feature
+        # inside it, and the walk has to climb out through that Body.
+        pending.extend(
+            parent
+            for parent in current.InList
+            if any(
+                current in (getattr(parent, attr, None) or ())
+                for attr in ("Group", "ElementList")
+            )
+        )
+    return None
+
+
+def unit_for_selection(
+    selection: Sequence[FreeCAD.DocumentObject],
+) -> FreeCAD.DocumentObject | None:
+    """The one unit container ``selection`` unambiguously names, or ``None``.
+
+    Each selected object maps to the nearest ``ShelvingUnitId``-carrying
+    container at or above it, and the result is that container only when
+    every object maps to the same one. A lone selected container that
+    carries no ``ShelvingUnitId`` yet is returned as-is, so a hand-built
+    container can still be opened for editing before its first scan.
+    """
+    if len(selection) == 1 and any(
+        selection[0].isDerivedFrom(kind) for kind in _CONTAINERS
+    ):
+        return _enclosing_unit(selection[0]) or selection[0]
+    units = [_enclosing_unit(obj) for obj in selection]
+    if not units or units[0] is None:
+        return None
+    first = units[0]
+    if all(unit is not None and unit.Name == first.Name for unit in units):
+        return first
+    return None
 
 
 def _walk(
@@ -311,6 +363,15 @@ class WriteResult:
     created: tuple[str, ...]
     deleted: tuple[str, ...]
     left_alone: tuple[str, ...]
+    id_renames: Mapping[str, str]
+    """Each ``Board.id`` passed in mapped to the ``Name`` its newly-created
+    document object received, only for a board created in this call whose id
+    was not already a valid document object name (a hand-built ``Unit``'s
+    fresh ``new_id()``, never a rescanned one). A caller that writes the same
+    ``unit`` again must apply this mapping first, to both the unit's board
+    ids and any per-board state keyed by them, or the next
+    ``write_container`` call will not match those boards by ``Name`` and
+    will delete and recreate them instead."""
 
 
 def _boards_by_id(region: Region) -> dict[str, Board]:
@@ -486,11 +547,12 @@ def _sanitize_name(role: str) -> str:
     return cleaned
 
 
-def _renamed_board_ids(region: Region, renames: dict[str, str]) -> Region:
+def renamed_board_ids(region: Region, renames: Mapping[str, str]) -> Region:
     """``region`` with every ``Board.id`` present in ``renames`` replaced by
     its mapped value; every other board and every region's own id is
-    untouched. See ``write_container``'s ``id_renames`` comment for why this
-    runs before ``rules_to_json``."""
+    untouched. A caller that writes one ``Unit`` more than once applies
+    ``WriteResult.id_renames`` through this; ``write_container``'s own
+    ``id_renames`` comment says why it runs before ``rules_to_json``."""
     if not isinstance(region, Division):
         return region
     new_items: list[Item] = []
@@ -501,7 +563,7 @@ def _renamed_board_ids(region: Region, renames: dict[str, str]) -> Region:
                 dataclasses.replace(item, id=new_name) if new_name is not None else item
             )
         else:
-            new_items.append(_renamed_board_ids(item, renames))
+            new_items.append(renamed_board_ids(item, renames))
     return dataclasses.replace(region, items=new_items)
 
 
@@ -630,7 +692,7 @@ def write_container(
             updated.append(obj.Name)
 
     rules_unit = (
-        dataclasses.replace(unit, root=_renamed_board_ids(unit.root, id_renames))
+        dataclasses.replace(unit, root=renamed_board_ids(unit.root, id_renames))
         if id_renames
         else unit
     )
@@ -658,4 +720,5 @@ def write_container(
         created=tuple(sorted(created)),
         deleted=tuple(sorted(deleted)),
         left_alone=tuple(sorted(left_alone)),
+        id_renames=dict(id_renames),
     )

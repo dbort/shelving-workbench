@@ -287,7 +287,7 @@ every board using it change while each unit's outside dimensions hold.
 
 **Status:** Tasks sh-020, sh-021
 
-- [ ] sh-020 — the panel, the scene, selection, split and merge
+- [x] sh-020 — the panel, the scene, selection, split and merge
 - [ ] sh-021 — dimensions, dragging, the measurement basis, and the
   untagged-object choice (blocked on sh-020)
 

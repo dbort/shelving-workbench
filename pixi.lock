@@ -318,6 +318,7 @@ environments:
       - pypi: ./
       - pypi: https://files.pythonhosted.org/packages/69/76/37c0ccd5ab968a6a438f9c623aeecc84c202ab2fabc6a8fd927580c15b5a/QtPy-2.4.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/99/bc/cdfb911f753b4b4f8e400d66d805e5718e32632837507b574a573b3efa24/freecad_stubs-1.0.21-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/e9/2e/3488fa3baca56ff494b9502424675f5b14b11e966eb74d5adaf1811cd651/pyside6_stubs-6.7.3.0-py3-none-any.whl
       linux-aarch64:
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/_openmp_mutex-4.5-20_gnu.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/actionlint-1.7.12-hddfeb4d_0.conda
@@ -609,6 +610,7 @@ environments:
       - pypi: ./
       - pypi: https://files.pythonhosted.org/packages/69/76/37c0ccd5ab968a6a438f9c623aeecc84c202ab2fabc6a8fd927580c15b5a/QtPy-2.4.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/99/bc/cdfb911f753b4b4f8e400d66d805e5718e32632837507b574a573b3efa24/freecad_stubs-1.0.21-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/e9/2e/3488fa3baca56ff494b9502424675f5b14b11e966eb74d5adaf1811cd651/pyside6_stubs-6.7.3.0-py3-none-any.whl
 packages:
 - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
   build_number: 20
@@ -9366,3 +9368,12 @@ packages:
   - libclang ; extra == 'stub-gen'
   - freecad-stubs[check,generate,stub-gen] ; extra == 'all'
   requires_python: '>=3.6'
+- pypi: https://files.pythonhosted.org/packages/e9/2e/3488fa3baca56ff494b9502424675f5b14b11e966eb74d5adaf1811cd651/pyside6_stubs-6.7.3.0-py3-none-any.whl
+  name: pyside6-stubs
+  version: 6.7.3.0
+  sha256: 7a2ef0d7486939f240e745829f80887ec3eab280e52c9930d64b48b3de95042a
+  requires_dist:
+  - mypy>=1.0
+  - pyside6>=6.0
+  - pytest ; extra == 'dev'
+  requires_python: '>=3.7'

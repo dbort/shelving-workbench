@@ -1,5 +1,5 @@
 ---
-next_id: bug-004
+next_id: bug-009
 ---
 
 # Bug log
@@ -177,3 +177,58 @@ asks for a sweep; no agent schedules one on its own.
   architectural decision, not a mechanical patch, worth a `new-task`
   interview starting from this entry's trace rather than re-deriving it
   from scratch.
+
+- `bug-004` - **the Edit Unit panel's elevation is drawn far larger than
+  the task pane, so a whole unit cannot be seen or worked on at once**:
+  the `QGraphicsView` in `freecad/Shelving/editor/panel.py` shows the scene
+  at 1 scene unit per pixel, and scene units are millimetres
+  (`editor/scene.py`), so a typical unit is several times taller and wider
+  than the docked Tasks pane. The user had to scroll down about 12 screens
+  and right about 2 to see all of it. Found during `sh-020`'s manual QA
+  sign-off. The panel never fits the view to the scene or offers any
+  zoom. Fix: `sh-XXX task`. Fit-to-view on open is the obvious minimum,
+  but the user wants the editing interface itself rethought. The options
+  include zoom in/out controls and a full-screen, Sketcher-style editing
+  mode, and choosing between them is a product decision for a `new-task`
+  interview.
+
+- `bug-005` - **once a divider is deleted from beside a stack of shelves,
+  a full-height divider cannot be added back without first deleting the
+  shelves**: starting from the default unit, add a divider, then add a
+  shelf on one side, then delete the divider. The shelves now span the
+  whole unit, as expected, but no button can now add a divider running the
+  full height of the unit. The whole-width region is a `Division` holding
+  the shelves, not a `Bay`. `Session.can_split` and `core.edit.split_region`
+  act only on a selected `Bay`, and the elevation offers no way to select
+  a `Division` region. The only compartments that can be split are the bays
+  between the shelves, each of which gets a divider only its own height.
+  Found during `sh-020`'s manual QA sign-off. Fix: `sh-XXX task`. It needs
+  a new edit, splitting a `Division` region across the cross axis by
+  wrapping it (or re-parenting its shelves into two halves). It also needs
+  a way to select a non-leaf region in the scene. Which shelves each half
+  keeps, and how a user picks a region that has no area of its own to
+  click, are design questions and not a mechanical patch.
+
+- `bug-007` - **a board moved by hand snaps back on the next rescan when a
+  stored `Fill` rule bounds it**: steps to reproduce:
+  1. Create Unit.
+  2. In the editor, add one shelf, then click OK.
+  3. Move the shelf down 60 mm by hand.
+  4. Run `unit_ops.rescan_unit`.
+
+  The shelf returns to z 441.0 from 381.0. The same happens inside the
+  editor session, and with Resize Unit and Reflow All. The scan reads the
+  moved geometry correctly: the two bays are unequal, so it would assign
+  `Fixed`. But `record.with_stored_rules` then overwrites both bays with
+  the stored `Fill` rules keyed by their bounding boards, which still
+  exist, and the solve puts the shelf back in the middle. This contradicts
+  `docs/roadmap.md` M7's "a board moved by hand between operations is
+  taken up rather than overwritten". The mechanism predates `sh-020` (it
+  comes from `sh-018`'s rule record), but the editor is what makes shelves
+  with stored `Fill` rules common. Found during `sh-020`'s manual QA
+  sign-off, as a second contributor to the same user report as bug-006.
+  Fix: `sh-XXX task`. A stored rule has to yield when the scanned geometry
+  disagrees with what that rule would solve to, but it still has to win
+  where geometry is ambiguous (the reason `Basis.WITH_NEXT` is stored).
+  Choosing that tolerance and precedence is a design question for
+  `new-task`.

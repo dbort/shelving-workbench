@@ -385,3 +385,119 @@ The Report view's `ShelvingUnit` line shows `updated 4`. Running **Reflow
 All** again with `ShelvingMaterial` left at `oak6` reproduces the same
 result rather than drifting, since the stored id, not thickness matching,
 is what a rescan resolves it by.
+
+## M9 — The elevation editor: structure
+
+Prerequisite: a FreeCAD 1.0 install with this workbench on its addon path,
+**View → Panels → Report view** open, a document holding one unit (**Create
+Unit**, or any unit from an earlier milestone's cases).
+
+### 1. Open the panel and confirm it docks and matches the 3D view
+
+1. Select the unit's container (`ShelvingUnit`, or whatever it is named)
+   and run **Edit Unit** from the **Shelving** toolbar or menu.
+
+Expected: a task panel opens and docks in the Tasks tab (it does not float
+as a separate window), titled **Edit Unit**, showing a flat elevation of
+the unit: one rectangle per bay, per void, and per board, legible at a
+glance and matching the shape and proportions of the same unit in the 3D
+view. **OK** and **Cancel** buttons are present; **Add Divider**, **Add
+Shelf**, and **Delete** are present but disabled, since nothing is selected
+yet.
+
+### 2. Click a compartment and confirm only the Add buttons enable
+
+1. Click the open bay in the elevation.
+
+Expected: that bay's rectangle draws distinctly from the others (a visibly
+different outline), and stays that way until a different item is clicked.
+**Add Divider** and **Add Shelf** enable; **Delete** stays disabled, since
+a bay, not a board, is selected.
+
+### 3. Add a divider and confirm the elevation and the 3D view both follow
+
+1. With the bay still selected, click **Add Divider**.
+
+Expected: the elevation redraws immediately with a new **vertical** divider
+board down the bay's middle, leaving two smaller bays side by side, both
+roughly equal in size; the message line stays blank. **Add Shelf** would
+instead divide the bay top and bottom with a **horizontal** shelf. Switching to the 3D view
+(without closing the panel) shows the same new board as a real, positioned
+box, not only a drawing. Each edit runs the workbench's real write path, so
+no separate preview exists that could disagree with it. Click the new divider board: **Delete**
+enables and both **Add** buttons disable, since a board, not a bay, is now
+selected.
+
+### 4. Delete a board that cannot be merged and confirm the message line, not a crash
+
+1. Click one of the unit's original outer boards (a side, the bottom, or
+   the top) rather than the divider just created.
+2. Click **Delete**.
+
+Expected: the message line reports a refusal naming that board (its
+neighbour on at least one side is not an open compartment), the elevation
+is unchanged, and the panel stays open and usable; nothing in the Report
+view suggests a crash or an unhandled exception.
+
+### 5. Delete the divider and confirm the merge reverses the split
+
+1. Click the divider board created in case 3 and click **Delete**.
+
+Expected: the elevation redraws back to the single original bay, and the
+3D view shows the divider board gone, the two smaller bays merged back into
+one open compartment matching what case 1 started from.
+
+### 6. Cancel and confirm the whole session reverses
+
+1. Repeat case 3 (add the divider again).
+2. Click **Cancel**.
+
+Expected: the panel closes, and the document, in both the 3D view and a
+fresh **Edit Unit** re-opened afterward, is exactly as it was before case 6
+step 1: the new divider board is gone, board count and names match the
+document's state from before this whole M9 section started.
+
+### 7. Commit and confirm one Undo reverses the whole session
+
+1. Run **Edit Unit** again and add a divider to the bay (case 3).
+2. Click **OK**.
+
+Expected: the panel closes and the new board stays in the document (3D
+view and elevation on the next **Edit Unit** open both show it).
+
+3. Run **Edit → Undo** once (or `Ctrl+Z`).
+
+Expected: the entire session reverses in that one undo step, back to the
+document's state from before step 1. The panel opens one transaction for
+the whole session rather than one per edit, so the undo reverses the whole
+commit, not only the divider's own edit.
+
+### 8. Open the editor from a board selection
+
+1. With no panel open, click one of the unit's boards in the 3D view (or
+   in the tree), then Ctrl-click a second board of the same unit.
+
+Expected: **Edit Unit** is enabled, and running it opens the panel on that
+unit, the same as selecting the container in case 1. Cancel the panel.
+
+2. Create a second unit (**Create Unit**), then select one board from each
+   unit.
+
+Expected: **Edit Unit** is disabled, since the selection does not name a
+single unit.
+
+### 9. An editor-built layout survives a rescan (bug-006)
+
+1. Run **Create Unit**, open **Edit Unit**, and add a divider (case 3).
+2. Select the left-hand opening and click **Add Shelf**.
+3. Select the upper-left opening (the upper of the two equal halves the
+   last shelf just made) and click **Add Shelf** again.
+4. Click **OK**.
+5. Run **Edit Unit** again, select the right-hand opening, and click
+   **Add Shelf**.
+6. Click **OK**.
+
+Expected: at every step the elevation and the 3D view show only the new
+board moving; neither shelf added on the left in steps 2-3 shifts when the
+shelf on the right is added in step 5, and re-opening **Edit Unit** after
+step 6 still shows both left-hand shelves exactly where steps 2-3 put them.
