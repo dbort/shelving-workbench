@@ -54,6 +54,12 @@ survives the reimport within the one process, so the second entry into
 that code path sees it already set and skips calling `pytest.main()`
 again.
 
+The block belongs above every FreeCAD and workbench import, not at the
+bottom of the file. `freecadcmd` exits 0 on an uncaught exception (see
+above), so an exception raised while importing before `pytest.main()` runs
+passes silently. Inside pytest's collection the same failure is a
+collection error with a nonzero status.
+
 ## `freecadcmd`'s own stdout buffering can hide a script's last output
 
 A `freecadcmd` script's process teardown does not flush Python's stdout

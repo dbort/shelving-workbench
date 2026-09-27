@@ -18,9 +18,21 @@ wording ("a document holding two units").
 
 import os
 import sys
-import tempfile
-import zipfile
-from typing import cast
+
+# See tools/freecad_scan_smoke.py's matching block for why this is neither
+# an `if __name__ == "__main__":` guard nor an unconditional call, and why it
+# precedes every FreeCAD import.
+if os.environ.get("_FREECAD_CATALOG_SMOKE_RUNNING") != "1":
+    os.environ["_FREECAD_CATALOG_SMOKE_RUNNING"] = "1"
+    import pytest
+
+    _exit_code = pytest.main([__file__, "-v"])
+    sys.stdout.flush()
+    sys.exit(_exit_code)
+
+import tempfile  # noqa: E402
+import zipfile  # noqa: E402
+from typing import cast  # noqa: E402
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _REPO_ROOT not in sys.path:
@@ -527,12 +539,3 @@ def test_saved_document_has_no_proxy_and_reopens() -> None:
         assert len(skipped) == 0, skipped
     finally:
         FreeCAD.closeDocument(reopened.Name)
-
-
-# See tools/freecad_scan_smoke.py's matching block for why this is neither
-# an `if __name__ == "__main__":` guard nor an unconditional call.
-if os.environ.get("_FREECAD_CATALOG_SMOKE_RUNNING") != "1":
-    os.environ["_FREECAD_CATALOG_SMOKE_RUNNING"] = "1"
-    _exit_code = pytest.main([__file__, "-v"])
-    sys.stdout.flush()
-    sys.exit(_exit_code)
