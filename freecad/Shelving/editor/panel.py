@@ -64,7 +64,9 @@ class _DimensionField:
     edit whose text goes to ``FreeCAD.Units.parseQuantity`` verbatim.
 
     ``on_size`` receives the resolved millimetres; ``on_error`` receives
-    ``parseQuantity``'s own message, from the fallback only.
+    ``parseQuantity``'s own message, from the fallback only;
+    ``on_expression_done`` is called once the f(x) dialog closes, after any
+    ``on_size`` it caused.
     """
 
     def __init__(
@@ -72,9 +74,11 @@ class _DimensionField:
         probe: FreeCAD.DocumentObject | None,
         on_size: Callable[[float], None],
         on_error: Callable[[str], None],
+        on_expression_done: Callable[[], None],
     ) -> None:
         self._on_size = on_size
         self._on_error = on_error
+        self._on_expression_done = on_expression_done
         loader_type = cast(
             "Callable[[], _UiLoader] | None", getattr(FreeCADGui, "UiLoader", None)
         )
@@ -122,12 +126,13 @@ class _DimensionField:
     def _formula_dialog_toggled(self, shown: bool) -> None:
         if not shown:
             self._finished()
+            self._on_expression_done()
 
     def _finished(self) -> None:
         if self.quantity_widget is not None:
-            value = self.quantity_widget.property("rawValue")
-            if isinstance(value, float) and value != self._shown_mm:
-                self._on_size(value)
+            value_mm = self.quantity_widget.property("rawValue")
+            if isinstance(value_mm, float) and value_mm != self._shown_mm:
+                self._on_size(value_mm)
             return
         text = self.line_edit.text()
         if text == self._shown_text:
@@ -149,8 +154,8 @@ class _DimensionField:
                 self.quantity_widget.setProperty("rawValue", value_mm)
                 # Read back rather than kept: the widget may round what it
                 # stores, and _finished compares against its own value.
-                shown = self.quantity_widget.property("rawValue")
-                self._shown_mm = shown if isinstance(shown, float) else value_mm
+                shown_mm = self.quantity_widget.property("rawValue")
+                self._shown_mm = shown_mm if isinstance(shown_mm, float) else value_mm
             else:
                 self._shown_mm = None
         else:
@@ -161,8 +166,9 @@ class _DimensionField:
 
 class _EditorView(QtWidgets.QGraphicsView):
     """A ``QGraphicsView`` that reports the scene position of every press to
-    ``on_click``, every move with the left button held to ``on_drag``, and
-    every release to ``on_release``."""
+    ``on_click``, every move with the left button held to ``on_drag`` once
+    the pointer has travelled_px the platform's start-drag distance from the
+    press, and every release to ``on_release``."""
 
     def __init__(
         self,
@@ -174,6 +180,11 @@ class _EditorView(QtWidgets.QGraphicsView):
         self._on_click = on_click
         self._on_drag = on_drag
         self._on_release = on_release
+        # The viewport position of the current press, held until the pointer
+        # travels the start-drag distance; without it a click's jitter would
+        # resize the region below the clicked board.
+        self._press_pos: QtCore.QPoint | None = None
+        self._drag_started = False
         # Called once, with the paint's duration in ms, on the first paint of
         # the elevation; the Edit Unit run's debug_log timing ends there.
         self.on_first_paint: Callable[[float], None] | None = None
@@ -192,15 +203,28 @@ class _EditorView(QtWidgets.QGraphicsView):
         super().mousePressEvent(event)
         scene = self.scene()
         if scene is not None:
-            self._on_click(self.mapToScene(event.position().toPoint()))
+            self._press_pos = event.position().toPoint()
+            self._drag_started = False
+            self._on_click(self.mapToScene(self._press_pos))
 
     def mouseMoveEvent(self, event: QtGui.QMouseEvent) -> None:
         super().mouseMoveEvent(event)
-        if event.buttons() & QtCore.Qt.MouseButton.LeftButton:
-            self._on_drag(self.mapToScene(event.position().toPoint()))
+        if not event.buttons() & QtCore.Qt.MouseButton.LeftButton:
+            return
+        pos = event.position().toPoint()
+        if not self._drag_started:
+            if self._press_pos is None:
+                return
+            travelled_px = (pos - self._press_pos).manhattanLength()
+            if travelled_px < QtWidgets.QApplication.startDragDistance():
+                return
+            self._drag_started = True
+        self._on_drag(self.mapToScene(pos))
 
     def mouseReleaseEvent(self, event: QtGui.QMouseEvent) -> None:
         super().mouseReleaseEvent(event)
+        self._press_pos = None
+        self._drag_started = False
         self._on_release()
 
 
@@ -273,7 +297,10 @@ class EditUnitPanel:
         dimension_row = QtWidgets.QHBoxLayout()
         dimension_row.addWidget(QtWidgets.QLabel("Size"))
         self.size_field = _DimensionField(
-            self.session.probe, self._set_size, self._show_message
+            self.session.probe,
+            self._set_size,
+            self._show_message,
+            self._expression_done,
         )
         dimension_row.addWidget(self.size_field.widget)
         self.basis_combo = QtWidgets.QComboBox()
@@ -349,11 +376,16 @@ class EditUnitPanel:
     def _set_size(self, size_mm: float) -> None:
         self._show_result(self.session.set_size(size_mm))
 
+    def _expression_done(self) -> None:
+        self.session.clear_probe_expression()
+        self._refresh()
+
     def _set_basis(self, index: int) -> None:
         self._show_result(self.session.set_basis(_BASIS_CHOICES[index][1]))
 
-    def _remove_untagged(self) -> None:
-        names = [
+    def _checked_untagged(self) -> list[str]:
+        """The names of the untagged objects currently checked in the list."""
+        return [
             str(item.data(QtCore.Qt.ItemDataRole.UserRole))
             for item in (
                 self.untagged_list.item(row)
@@ -361,7 +393,9 @@ class EditUnitPanel:
             )
             if item is not None and item.checkState() == QtCore.Qt.CheckState.Checked
         ]
-        self._show_result(self.session.remove_untagged(names))
+
+    def _remove_untagged(self) -> None:
+        self._show_result(self.session.remove_untagged(self._checked_untagged()))
 
     def _show_message(self, message: str) -> None:
         self.message_label.setText(message)
@@ -401,6 +435,7 @@ class EditUnitPanel:
             self.readout_label.setText(readout)
         self.basis_combo.blockSignals(False)
 
+        checked = set(self._checked_untagged())
         self.untagged_list.clear()
         for entry in self.session.left_alone:
             item = QtWidgets.QListWidgetItem(
@@ -408,7 +443,11 @@ class EditUnitPanel:
             )
             item.setData(QtCore.Qt.ItemDataRole.UserRole, entry.name)
             item.setFlags(item.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
-            item.setCheckState(QtCore.Qt.CheckState.Unchecked)
+            item.setCheckState(
+                QtCore.Qt.CheckState.Checked
+                if entry.name in checked
+                else QtCore.Qt.CheckState.Unchecked
+            )
             self.untagged_list.addItem(item)
         self.untagged_box.setVisible(bool(self.session.left_alone))
 

@@ -56,7 +56,9 @@ own collection or `freecadcmd`'s internal FreeCAD imports run.
 - the `pixi.lock` path guard;
 - the workflow-hardening lint over `.github/workflows/` (see
   [`docs/github-actions-hardening.md`](docs/github-actions-hardening.md));
-- a headless `freecadcmd` workbench import smoke.
+- a headless `freecadcmd` workbench import smoke;
+- an elevation-editor panel smoke under the full `freecad` GUI on Qt's
+  offscreen platform, since the panel's quantity field exists only there.
 
 It runs inside the pixi environment, which supplies every tool including
 FreeCAD. To run only the workflow lint, use `bash tools/lint-workflows.sh` from

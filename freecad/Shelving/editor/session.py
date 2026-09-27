@@ -43,7 +43,7 @@ from freecad.Shelving.core.edit import (
     set_size,
     split_region,
 )
-from freecad.Shelving.core.geometry import AxisIndex, Space, Vec3
+from freecad.Shelving.core.geometry import Space, Vec3
 from freecad.Shelving.core.layout import (
     Axis,
     Basis,
@@ -61,15 +61,9 @@ from freecad.Shelving.debug_log import Stopwatch
 
 SplitDirection = Literal["horizontal", "vertical"]
 
-_AXIS_INDEX: Mapping[Axis, AxisIndex] = {Axis.X: 0, Axis.Y: 1, Axis.Z: 2}
-
 
 class _Labelled(Protocol):
     Label: str
-
-
-def _component_mm(v: Vec3, axis_index: AxisIndex) -> float:
-    return (v.x_mm, v.y_mm, v.z_mm)[axis_index]
 
 
 # The Length property on the session's probe object that the panel's
@@ -352,6 +346,13 @@ class Session:
             return EditFailure(str(err), err.node_id)
         return self._apply(candidate)
 
+    def clear_probe_expression(self) -> None:
+        """Remove any expression the dimension field's f(x) dialog bound to
+        the probe. The rule already holds the resolved number, and while
+        the expression stays the field is read-only for every region."""
+        if self.probe is not None:
+            self.probe.setExpression(PROBE_PROPERTY, None)
+
     def selected_measurement(self) -> Measurement | None:
         """The selected region's :class:`~freecad.Shelving.core.edit.Measurement`,
         or ``None`` when the selection is nothing, a board, or the whole
@@ -402,9 +403,12 @@ class Session:
             axis = run_axis(self.unit, board_id)
         except EditError as err:
             return EditFailure(str(err), err.node_id)
-        axis_index = _AXIS_INDEX[axis]
-        low_mm = self.spaces[board_id].origin_mm(axis_index)
-        self._drag = (board_id, axis, _component_mm(grab_mm, axis_index) - low_mm)
+        low_mm = self.spaces[board_id].origin_mm(axis.component_index)
+        self._drag = (
+            board_id,
+            axis,
+            grab_mm.component_mm(axis.component_index) - low_mm,
+        )
         return None
 
     def drag_to(self, pointer_mm: Vec3) -> EditFailure | None:
@@ -417,7 +421,7 @@ class Session:
         if self._drag is None:
             return EditFailure("no board is being dragged", None)
         board_id, axis, grab_offset_mm = self._drag
-        low_face_mm = _component_mm(pointer_mm, _AXIS_INDEX[axis]) - grab_offset_mm
+        low_face_mm = pointer_mm.component_mm(axis.component_index) - grab_offset_mm
         try:
             region_id = region_before(self.unit, board_id)
             candidate = move_board(self.unit, board_id, low_face_mm, self.catalog)

@@ -845,7 +845,7 @@ def _check_dimensions_drag_basis_stock_and_untagged() -> None:
         snapshot_open = _board_snapshot(container)
         hand_added_before = _board_snapshot_by_name(container)["HandAdded"]
         stock = _catalog_entry(doc, DEFAULT_MATERIAL_ID)
-        stock_thickness_before = float(stock.Thickness)
+        stock_thickness_before_mm = float(stock.Thickness)
 
         session = Session(container)
         session.open()
@@ -902,8 +902,8 @@ def _check_dimensions_drag_basis_stock_and_untagged() -> None:
 
             # A drag changes the number and never the basis.
             shelf_z_mm = _z_mm(container, left_shelf_id)
-            grab = Vec3(100.0, 0.0, shelf_z_mm + 5.0)
-            assert session.begin_drag(left_shelf_id, grab) is None
+            grab_mm = Vec3(100.0, 0.0, shelf_z_mm + 5.0)
+            assert session.begin_drag(left_shelf_id, grab_mm) is None
             assert session.drag_to(Vec3(100.0, 0.0, shelf_z_mm + 30.0)) is None
             assert session.drag_to(Vec3(100.0, 0.0, shelf_z_mm + 55.0)) is None
             session.end_drag()
@@ -917,8 +917,8 @@ def _check_dimensions_drag_basis_stock_and_untagged() -> None:
             _assert_session_matches_document(session)
 
             # A drag with no region before the board, or no drag at all.
-            assert isinstance(session.begin_drag("bottom", grab), EditFailure)
-            assert isinstance(session.drag_to(grab), EditFailure)
+            assert isinstance(session.begin_drag("bottom", grab_mm), EditFailure)
+            assert isinstance(session.drag_to(grab_mm), EditFailure)
 
             session.select(right_lower_id)
             assert session.set_size(282.0) is None
@@ -960,7 +960,7 @@ def _check_dimensions_drag_basis_stock_and_untagged() -> None:
             doc.recompute()
             assert _board_snapshot(container) == snapshot_open
             assert doc.getObject(probe_name) is None
-            assert float(stock.Thickness) == stock_thickness_before
+            assert float(stock.Thickness) == stock_thickness_before_mm
         finally:
             if not cancelled:
                 session.cancel()

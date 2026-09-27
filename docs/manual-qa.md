@@ -556,6 +556,12 @@ follows to 280 mm. While the panel is open a `Shelving dimension
 **Cancel** it is gone. Changing `VarSet.Len` afterwards does not move the
 shelf: the unit stores the resolved size, not the expression.
 
+3. Click the upper bay, click the lower bay again, type `250` and press
+   Return.
+
+Expected: the field shows no f(x) marker and accepts the typing; the lower
+bay becomes 250 mm.
+
 ### 13. Drag a board and confirm the readout keeps its basis
 
 1. Select the lower bay, set **Size** to `300`, and choose **Spacing

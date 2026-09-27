@@ -223,7 +223,8 @@ script.py`, which is how the following was verified against FreeCAD
   including inside a sum: `1 + 1/2"` resolves to 13.70 mm (1 mm plus
   12.70 mm), where `FreeCAD.Units.parseQuantity` gives 38.10 mm for the same
   text. `1" + 1/2"` resolves to 38.10 mm, `1-1/2"` to -11.70 mm, and
-  `12 1/2"` is not acceptable input.
+  `12 1/2"` is not acceptable input. `parseQuantity` itself rejects
+  `1" + 1/2"` with "invalid unit expression".
 - An expression naming a document object, such as `VarSet.Len - 2 * 18 mm`,
   resolves only once the widget is bound to a property of an object in
   that document:

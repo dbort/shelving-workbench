@@ -274,15 +274,15 @@ def _dimension_line(scene: QtWidgets.QGraphicsScene, region_id: str) -> QtCore.Q
     return item.line()
 
 
-def _witness_xs(scene: QtWidgets.QGraphicsScene, region_id: str) -> list[float]:
-    xs: list[float] = []
+def _witness_xs_mm(scene: QtWidgets.QGraphicsScene, region_id: str) -> list[float]:
+    xs_mm: list[float] = []
     for item in _dimension_parts(scene, region_id, "witness"):
         assert isinstance(item, QtWidgets.QGraphicsLineItem)
         line = item.line()
         # A witness line lies on the face it measures: vertical, here.
         assert line.x1() == pytest.approx(line.x2())
-        xs.append(line.x1())
-    return sorted(xs)
+        xs_mm.append(line.x1())
+    return sorted(xs_mm)
 
 
 def _simple_text(scene: QtWidgets.QGraphicsScene, region_id: str, part: str) -> str:
@@ -312,7 +312,7 @@ def test_a_clear_dimension_spans_the_void_between_the_faces(
     line = _dimension_line(scene, "bay1")
     assert sorted((line.x1(), line.x2())) == pytest.approx([0.0, 441.0])
     # 0 is the unit's left edge, 441 the divider's near face.
-    assert _witness_xs(scene, "bay1") == pytest.approx([0.0, 441.0])
+    assert _witness_xs_mm(scene, "bay1") == pytest.approx([0.0, 441.0])
     assert _simple_text(scene, "bay1", "label") == "441"
     assert _simple_text(scene, "bay1", "readout") == "spacing 459"
 
@@ -325,7 +325,7 @@ def test_a_spacing_dimension_crosses_the_next_board(
     assert sorted((line.x1(), line.x2())) == pytest.approx([0.0, 459.0])
     # 459 is the divider's far face, so the line runs through the whole of
     # board1 ([441, 459]).
-    assert _witness_xs(scene, "bay1") == pytest.approx([0.0, 459.0])
+    assert _witness_xs_mm(scene, "bay1") == pytest.approx([0.0, 459.0])
     assert _simple_text(scene, "bay1", "label") == "459"
     assert _simple_text(scene, "bay1", "readout") == "clear 441"
 

@@ -22,6 +22,10 @@ class Vec3:
     y_mm: float
     z_mm: float
 
+    def component_mm(self, axis_index: AxisIndex) -> float:
+        """This vector's component along the axis at ``axis_index``."""
+        return (self.x_mm, self.y_mm, self.z_mm)[axis_index]
+
 
 @dataclass(frozen=True)
 class Space:
@@ -36,7 +40,7 @@ class Space:
 
     def origin_mm(self, axis_index: AxisIndex) -> float:
         """This box's minimum coordinate along the axis at ``axis_index``."""
-        return (self.origin.x_mm, self.origin.y_mm, self.origin.z_mm)[axis_index]
+        return self.origin.component_mm(axis_index)
 
     def max_corner(self) -> Vec3:
         """This box's maximum corner: ``origin`` plus ``size`` on each axis."""

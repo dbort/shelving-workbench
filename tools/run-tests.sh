@@ -92,3 +92,14 @@ if ! grep -q "shelving editor OK" "$editor_smoke_log"; then
 	exit 1
 fi
 rm -f "$editor_smoke_log"
+
+# The panel's quantity field exists only in the full GUI, so this smoke runs
+# under `freecad` on Qt's offscreen platform rather than `freecadcmd`. It
+# ends in os._exit with its own status, so the exit code is trustworthy.
+printf '== %s\n' freecad_panel_smoke.py
+panel_smoke_status=0
+QT_QPA_PLATFORM=offscreen freecad tools/freecad_panel_smoke.py || panel_smoke_status=$?
+if [ "$panel_smoke_status" -ne 0 ]; then
+	echo "ERROR: freecad_panel_smoke.py failed (see output above)." >&2
+	exit 1
+fi
