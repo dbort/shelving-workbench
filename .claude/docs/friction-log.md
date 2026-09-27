@@ -1,5 +1,5 @@
 ---
-next_id: friction-022
+next_id: friction-023
 ---
 
 # Friction log
@@ -262,3 +262,12 @@ Sweeping the log is a human-triggered act, like task sign-off: the user asks for
   `tools/run-tests.sh` (or the smokes themselves) suppressed or filtered
   FreeCAD's console progress indicator so the harness output shows only the
   check headers and results.
+- `friction-022` - **a way to run doc-hygiene's embedded workflow script
+  outside a real sweep**: merging its content and style passes changed the JS
+  inside `.claude/skills/doc-hygiene/SKILL.md`, and nothing in the repo can
+  parse or dry-run that script; the environment has no JS runtime. The
+  workaround was extracting the fenced block with an ad hoc Python snippet,
+  stubbing `agent`/`pipeline`, and running it under `pixi exec -s nodejs
+  node` to confirm every prompt rendered. Simpler if: a check in `pixi run
+  tests` extracted the block, stubbed the workflow API, and dry-ran it in
+  both full-tree and diff-scoped modes.

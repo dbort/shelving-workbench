@@ -30,6 +30,7 @@ from tools.task_status import (
     layered_topological_order,
     main,
     parse_frontmatter,
+    pending_questions,
     read_authoritative_task_text,
     render_human_report,
     report_to_json,
@@ -454,7 +455,7 @@ def test_build_report_malformed_task_becomes_an_error_entry(tmp_path: Path) -> N
 
 def test_build_report_skips_review_file_alongside_its_task(tmp_path: Path) -> None:
     # The rejection loop (`.claude/docs/pipeline.md` § The rejection loop)
-    # leaves both `sh-XXX-<slug>.md` and `sh-XXX-REVIEW.md` in `tasks/active/`
+    # leaves both `sh-XXX-<slug>.md` and `sh-XXX-REVIEW-rN.md` in `tasks/active/`
     # on the task's own `sh-XXX` branch; `REVIEW` sorts before every real
     # slug in `git ls-tree` order, so this also pins that the authoritative
     # branch read finds the real task file rather than the review file.
@@ -462,7 +463,7 @@ def test_build_report_skips_review_file_alongside_its_task(tmp_path: Path) -> No
     _write_task(repo, "active", "sh-005", "five", current_phase="implementation")
     _commit_all(repo, "add sh-005")
     _git(repo, "checkout", "-q", "-b", "sh-005")
-    (repo / "tasks" / "active" / "sh-005-REVIEW.md").write_text(
+    (repo / "tasks" / "active" / "sh-005-REVIEW-r1.md").write_text(
         "# sh-005 Review — Round 1\n\n**Verdict:** REJECTED\n"
     )
     _commit_all(repo, "reject sh-005, round 1")
@@ -723,6 +724,80 @@ def test_render_human_report_includes_error_entries_without_crashing(
 
 
 # ---------------------------------------------------------------------------
+# pending_questions
+# ---------------------------------------------------------------------------
+
+
+def test_pending_questions_returns_only_unanswered_log_entries_in_order() -> None:
+    text = (
+        "## Frontier Advice\n"
+        "- Q: not in the log. A: pending\n"
+        "\n"
+        "## Decisions log\n"
+        "- Q (2026-09-20, Step 1): metric or imperial? A (2026-09-20): metric\n"
+        "- Q (2026-09-26, Step 3): keep the old flag? Recommended: no. A: pending\n"
+        "- Q (2026-09-26, Step 4): rename it? A: pending\n"
+    )
+    assert pending_questions(text) == [
+        "Q (2026-09-26, Step 3): keep the old flag? Recommended: no.",
+        "Q (2026-09-26, Step 4): rename it?",
+    ]
+
+
+def test_pending_questions_stops_at_the_next_section() -> None:
+    text = "## Decisions log\n- Q: first? A: yes\n\n## Notes\n- Q: later? A: pending\n"
+    assert pending_questions(text) == []
+
+
+def test_pending_questions_without_a_log_section_is_empty() -> None:
+    assert pending_questions("## Frontier Advice\nNothing here.\n") == []
+
+
+def test_build_report_reads_pending_questions_from_the_task_branch(
+    tmp_path: Path,
+) -> None:
+    # The Implementer commits its question on the task's own branch
+    # (`.claude/docs/pipeline.md` § Implementer questions), so the report must
+    # surface it from that branch even while `main` is checked out.
+    repo = _init_repo(tmp_path)
+    path = _write_task(repo, "active", "sh-007", "seven")
+    _commit_all(repo, "add sh-007")
+    _git(repo, "checkout", "-q", "-b", "sh-007")
+    path.write_text(
+        path.read_text()
+        + "\n## Decisions log\n- Q (2026-09-26, Step 2): which unit? A: pending\n"
+    )
+    _commit_all(repo, "sh-007: ask about units")
+    _git(repo, "checkout", "-q", "main")
+
+    report = build_report(repo)
+
+    (entry,) = [e for e in report.tasks if e.id == "sh-007"]
+    assert isinstance(entry, NormalTaskReportEntry)
+    assert entry.source == "branch:sh-007"
+    assert entry.pending_questions == ["Q (2026-09-26, Step 2): which unit?"]
+    assert "awaiting your answer: Q (2026-09-26, Step 2): which unit?" in (
+        render_human_report(report)
+    )
+
+
+def test_review_files_in_completed_do_not_count_as_task_ids(tmp_path: Path) -> None:
+    # `approve-task` moves a task's review files into `tasks/completed/` with
+    # it; they must not be read as a second task sharing the id.
+    repo = _init_repo(tmp_path)
+    _write_task(repo, "completed", "sh-003", "three", current_phase="done")
+    (repo / "tasks" / "completed" / "sh-003-REVIEW-r1.md").write_text(
+        "# sh-003 Review\n"
+    )
+    (repo / "tasks" / "completed" / "sh-003-REVIEW-r2.md").write_text(
+        "# sh-003 Review\n"
+    )
+    _commit_all(repo, "complete sh-003")
+
+    assert sorted(gather_next_id_input(repo)) == ["sh-003"]
+
+
+# ---------------------------------------------------------------------------
 # report_to_json
 # ---------------------------------------------------------------------------
 
@@ -746,6 +821,7 @@ def test_report_to_json_normal_entry_full_key_set() -> None:
         in_progress=True,
         branch_exists=True,
         source="branch:sh-002",
+        pending_questions=["Q (2026-09-26, Step 2): which unit?"],
     )
     report = Report(
         next_id="sh-003",
@@ -769,6 +845,7 @@ def test_report_to_json_normal_entry_full_key_set() -> None:
             "in_progress": True,
             "branch_exists": True,
             "source": "branch:sh-002",
+            "pending_questions": ["Q (2026-09-26, Step 2): which unit?"],
         }
     ]
     assert json_report["errors"] == []

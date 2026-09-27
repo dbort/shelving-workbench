@@ -1,3 +1,8 @@
+---
+name: dispatch-tasks
+description: Advance one named sh-XXX task through planning approval, implementation, and review until it reaches a human gate. Use when the user or a /loop prompt names a task to dispatch.
+---
+
 # Skill: Task Dispatcher
 
 ## Purpose
@@ -21,7 +26,7 @@ Tell these apart from how you were triggered this turn, not from the task files 
 ### Step 1: Locate the named task
 Run `python3 tools/task_status.py` (or `pixi run task-status`) and find the given id in its `tasks` array.
 
-- **Found:** read `current_phase`, `review_rejections`, `blocked`, `unmet_blockers`, `branch_exists`, and `source` straight from that entry. The tool already performs the authoritative-read sequence — working tree vs. a `branch:sh-XXX` read straight from that branch's own tip, `tasks/active/` falling back to `tasks/completed/` for a task whose `approve-task` run finished finalizing but hasn't merged yet (`pipeline.md` § Git branching) — and already resolves `blocked_by` against `tasks/completed/`'s ids (`pipeline.md` § Task dependencies). Don't re-derive any of this by hand with `git show`/`git rev-parse`.
+- **Found:** read `current_phase`, `review_rejections`, `blocked`, `unmet_blockers`, `branch_exists`, `source`, and `pending_questions` straight from that entry. The tool already performs the authoritative-read sequence — working tree vs. a `branch:sh-XXX` read straight from that branch's own tip, `tasks/active/` falling back to `tasks/completed/` for a task whose `approve-task` run finished finalizing but hasn't merged yet (`pipeline.md` § Git branching) — and already resolves `blocked_by` against `tasks/completed/`'s ids (`pipeline.md` § Task dependencies). Don't re-derive any of this by hand with `git show`/`git rev-parse`.
 - **Not found in the `tasks` array:** the id isn't in `tasks/active/` (the tool only reports that directory). Check `tasks/completed/sh-XXX-*.md` and `tasks/abandoned/sh-XXX-*.md` directly to give a specific reason ("sh-XXX is already done" / "sh-XXX was abandoned"); if it's in neither, report "no such task" and stop — don't fall back to scanning or picking a different task.
 
 Between successive dispatches within the same tick (see "Automated phase chaining" below), re-run the tool rather than reading the task file's frontmatter directly — it reflects whatever the last subagent call just committed.
@@ -34,7 +39,7 @@ Act according to the unblocked task's `current_phase`:
 | `current_phase` | Action |
 |---|---|
 | `planning` | Naming this task is the user's approval (`pipeline.md` § Phase transitions) — the interview already happened when `new-task` generated this file, so there's nothing left to auto-dispatch, only a phase flip to record. Set `current_phase: implementation`, `current_agent: implementer`, check off `Planning` in `## Status`, and commit that change directly to `main` (no `sh-XXX` branch exists yet at this point — same pre-branch pattern the Planner agent itself uses when the user confirms mid-interview). Then immediately proceed to the `implementation` row below for this same task, in this same tick. |
-| `implementation` | Invoke the `implementer` subagent (Agent tool) with a prompt naming this exact task file path. |
+| `implementation` | If `pending_questions` is non-empty, answer them first (§ Relaying Implementer questions below); never dispatch the Implementer over an open question. Then invoke the `implementer` subagent (Agent tool) with a prompt naming this exact task file path. |
 | `review` | Invoke the `reviewer` subagent (Agent tool) with a prompt naming this exact task file path. Run no `doc-hygiene` pass on approval: that happens once, in `approve-task`, right before the merge (`pipeline.md` § Dispatch semantics). |
 | `user_signoff` | Skip. Report it as "awaiting user sign-off." |
 | `blocked_needs_human` | Skip. Report it as "blocked — needs human input," and include the `review_rejections` count. |
@@ -46,14 +51,22 @@ Only ever the named task is touched — there's no scan across `tasks/active/` a
 Don't stop after a single subagent call just because the named task landed in another automated phase. Immediately dispatch the next matching action for that SAME task, in this same invocation, and keep going until the task reaches a phase that requires a human, or leaves `tasks/active/` entirely. Concretely:
 - `planning` (unblocked) → auto-approval flip runs → task now at `implementation` → immediately dispatch the Implementer for it, same as if it had started there.
 - `implementation` → Implementer runs → task now at `review` → immediately dispatch the Reviewer for it. No separate invocation, and no need to check with the user first.
+- `implementation` → Implementer stops with a question (task still at `implementation`, `pending_questions` non-empty) → relay it (below), then dispatch the Implementer again.
 - `review` → Reviewer bounces it back to `implementation` and `review_rejections` is still below the cap (3) → immediately dispatch the Implementer again for it.
 - `review` → Reviewer approves → task now at `user_signoff` → stop chaining this task. `user_signoff` requires the user.
 - `review` → the rejection that just happened pushed `review_rejections` to the cap → task now at `blocked_needs_human` → stop chaining. This also requires the user.
 
 This applies in both one-shot and loop mode: the named task's own planning-approval-through-review-fix-review cycle runs to completion — or to whichever human gate it hits first — without pausing for approval at each phase transition. Only the pipeline's existing human-gated phases (`planning` when blocked, `user_signoff`, `blocked_needs_human`) pause it; nothing here changes what those gates require.
 
+#### Relaying Implementer questions
+The Implementer asks through the task file (`pipeline.md` § Implementer questions): its question is an `A: pending` entry in `## Decisions log`, committed on the `sh-XXX` branch. For each entry in `pending_questions`:
+- Ask the user with AskUserQuestion: the question, its options, and the Implementer's recommendation marked `(Recommended)` as the first option. The Implementer's closing report carries its reasoning; include it when you have it.
+- On the `sh-XXX` branch, replace that entry's `A: pending` with `A (YYYY-MM-DD): <answer>` and commit it (`sh-XXX: answer <short question>`). Change nothing else in the task file.
+
+Then continue with the `implementation` row. This applies in loop mode too: an open question parks the task at your prompt until the user answers, and because the entry is committed, a question left unanswered when a session ends is asked again by whichever tick next reaches the task.
+
 ### Step 3: Report
-Give a one-line status summary for the named task: phase before this tick, phase after (or "unchanged"). If it chained through more than one phase this tick, show the full path rather than just the endpoints (e.g. "sh-022: planning → implementation → review → user_signoff", or "sh-012: review → implementation → review → blocked_needs_human (rejection cap reached)") so a rejection round — or the planning auto-approval — is visible, not collapsed away. If the task was skipped due to `blocked_by`, say so explicitly and name every unmet id (e.g. "sh-007: blocked — waiting on sh-005"), and note if that blocked it out of the planning auto-approval specifically. If Step 1 had to read the task's state from its own branch because the working tree's copy was stale, say so plainly (e.g. "sh-013: user_signoff — read from branch sh-013, the copy in the current working tree is stale") rather than silently reporting the corrected phase as if it came from the obvious place. If the id didn't resolve to a task in `tasks/active/` at all, report that instead (per Step 1) and stop — there's nothing further to do this tick.
+Give a one-line status summary for the named task: phase before this tick, phase after (or "unchanged"). If it chained through more than one phase this tick, show the full path rather than just the endpoints (e.g. "sh-022: planning → implementation → review → user_signoff", or "sh-012: review → implementation → review → blocked_needs_human (rejection cap reached)") so a rejection round — or the planning auto-approval — is visible, not collapsed away. If an Implementer question was relayed this tick, show it and the user's answer in one line. If the task was skipped due to `blocked_by`, say so explicitly and name every unmet id (e.g. "sh-007: blocked — waiting on sh-005"), and note if that blocked it out of the planning auto-approval specifically. If Step 1 had to read the task's state from its own branch because the working tree's copy was stale, say so plainly (e.g. "sh-013: user_signoff — read from branch sh-013, the copy in the current working tree is stale") rather than silently reporting the corrected phase as if it came from the obvious place. If the id didn't resolve to a task in `tasks/active/` at all, report that instead (per Step 1) and stop — there's nothing further to do this tick.
 
 ### Step 4: Decide the next wake-up (loop mode only)
 Skip this step entirely in one-shot mode — just stop after Step 3's report. Do not call `ScheduleWakeup` at all when not in loop mode; scheduling one unprompted leaves a recurring wake-up running that the user never asked for.

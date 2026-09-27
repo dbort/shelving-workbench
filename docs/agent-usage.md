@@ -12,8 +12,8 @@ covers what *you* do at each point.
    ask directly for the `new-task` skill / `planner` agent.
 2. It runs an in-depth interview — expect it to keep asking until the task
    is genuinely unambiguous, with a recommended answer attached to each
-   question. Be concrete: vague answers here become the Implementer's
-   problem later, since it can't ask follow-ups.
+   question. Be concrete: anything left vague here comes back later as an
+   Implementer question that stops its run until you answer.
 3. Review the generated `tasks/active/sh-XXX-[slug].md`. Check
    in particular:
    - `## Must Have`: are these machine-checkable, and do they capture what
@@ -40,6 +40,12 @@ Two ways to invoke it:
 - **Autonomous:** run `/loop invoke the dispatch-tasks skill
   sh-XXX` and let it self-pace against that same task. It stops
   once the task leaves `tasks/active/` (done or abandoned).
+
+If the Implementer hits a decision the task file doesn't settle, it
+stops and the dispatcher asks you, with its recommended answer first.
+Your answer is recorded in the task file's `## Decisions log` and the
+Implementer resumes. A question you leave unanswered stays open in that
+log; the next dispatch of the task asks it again.
 
 You don't need to babysit the loop. It skips the task entirely if it has an
 unmet `blocked_by`, and reports whatever human-gated phase it's sitting
@@ -80,8 +86,10 @@ The Reviewer approved the diff. Before marking this done:
    note in the task file about what's wrong.
 
 ### `blocked_needs_human`
-The Reviewer bounced this task 3 times and gave up. Read
-`tasks/active/sh-XXX-REVIEW.md` for what it kept rejecting.
+The Reviewer bounced this task 3 times and gave up. Read the
+`tasks/active/sh-XXX-REVIEW-r*.md` files, one per round, for what it kept
+rejecting. They move to `tasks/completed/` with the task when it merges,
+so a finished task keeps its review history.
 Your options:
 - Fix the underlying issue yourself on the `sh-XXX` branch,
   then move the task to whatever phase reflects reality (usually back to

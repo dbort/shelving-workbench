@@ -1,3 +1,9 @@
+---
+name: approve-task
+description: Human sign-off for a task at user_signoff: doc-hygiene sweep, finalize the task file, verified merge into main. Run only when the user invokes /approve-task sh-XXX.
+disable-model-invocation: true
+---
+
 # Skill: Approve & Merge a Task
 
 ## Purpose
@@ -38,12 +44,12 @@ This is the task's one `doc-hygiene` pass (`pipeline.md` § Dispatch semantics: 
 - Reflect this merge in `docs/roadmap.md` if a milestone references this id, then `git add docs/roadmap.md` so it rides along in this step's commit (skip cleanly if nothing mentions the id). The roadmap convention puts this flip here, at merge, not in the task's own steps.
   - Single-task milestone whose **Status** line reads `Task sh-XXX`: change it to `Done sh-XXX`.
   - Split milestone with a task checklist (`docs/roadmap.md` § Milestones split across several tasks): tick this id's `- [ ]` box to `- [x]`. If that was the last unticked box, also change the rollup **Status** from `Tasks sh-…` to `Done sh-…`; otherwise leave the **Status** line as-is.
-- If `tasks/active/sh-XXX-REVIEW.md` exists, delete it. This normally shouldn't be necessary — the Reviewer already removes it on approval (`pipeline.md` § The rejection loop) — but check anyway rather than assume.
-- **Stage the edit before moving the file — do not skip this.** `git add tasks/active/sh-XXX-*.md` first. `git mv` moves whatever blob the index currently has for that path; if the frontmatter edit above is still unstaged when `git mv` runs, it silently moves the STALE pre-edit content instead of what's actually on disk, and the commit that follows records a task as `done` while its own file still says `user_signoff`. This is a real failure mode, not a hypothetical — the staging step exists because it happened.
+- Any `tasks/active/sh-XXX-REVIEW-r*.md` review files move to `tasks/completed/` with the task file; they are part of its record (`pipeline.md` § The rejection loop). The `sh-XXX-*.md` globs below match them along with the task file, which is what moves them.
+- **Stage the edit before moving the file — do not skip this.** `git add tasks/active/sh-XXX-*.md` first. `git mv` moves whatever blob the index currently has for that path; if the frontmatter edit above is still unstaged when `git mv` runs, it silently moves the STALE pre-edit content instead of what's actually on disk, and the commit that follows records a task as `done` while its own file still says `user_signoff`.
 - `git mv tasks/active/sh-XXX-*.md tasks/completed/`.
-- Before committing, confirm the staged content is actually correct: `git diff --cached -- tasks/completed/sh-XXX-*.md` (the file already shows at its new path in the index at this point) and check it shows `current_phase: done` and the checked-off box, not the old values. If it still shows the stale content despite staging first, something is wrong — stop and investigate rather than committing it.
+- Before committing, confirm the staged content is actually correct: `git diff --cached -- tasks/completed/sh-XXX-<slug>.md`, naming the task file itself rather than the glob so review files don't crowd the output (the file already shows at its new path in the index at this point) and check it shows `current_phase: done` and the checked-off box, not the old values. If it still shows the stale content despite staging first, something is wrong — stop and investigate rather than committing it.
 - Commit: `sh-XXX: mark task done, move to tasks/completed/`, body `Confirmed by user sign-off.`
-- Verify the commit itself landed correctly, not just the staged diff: `git show HEAD:tasks/completed/sh-XXX-*.md | head -16` and confirm `current_phase: done` and the checked box are really there. Don't skip this because the pre-commit check above passed — verify the actual commit, since that's the artifact Step 4 merges.
+- Verify the commit itself landed correctly, not just the staged diff: `git show HEAD:tasks/completed/sh-XXX-<slug>.md | head -16` and confirm `current_phase: done` and the checked box are really there. Don't skip this because the pre-commit check above passed — verify the actual commit, since that's the artifact Step 4 merges.
 
 ### Step 4: Merge into main, verified before it's real
 - `git checkout main`. (Never `git fetch`/`git pull` first — this skill is local-only; syncing with any remote is a separate, explicit action for the human.)

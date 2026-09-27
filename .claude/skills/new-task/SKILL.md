@@ -1,28 +1,24 @@
+---
+name: new-task
+description: Interview the user about a new unit of work and write its tasks/active/sh-XXX task file for the Implementer. Use when the user starts a new task or asks to plan one.
+---
+
 # Skill: Task Discovery & File Generator
 
 ## Purpose
-To interview the human user about a new task request, refine the requirements, and generate a clean, machine-optimized task file inside `tasks/active/` for a simpler implementation model to execute.
+To interview the human user about a new task request, refine the requirements, and generate a clean, machine-optimized task file inside `tasks/active/` for the Implementer agent to execute. The Implementer reaches the user only through a question relay that halts its run (`.claude/docs/pipeline.md` § Implementer questions), so settle every decision the user owns here.
 
 ## Execution Protocol
 
 
 ### Step 1: The In-Depth Interview
-Interview the user relentlessly about the task request until reaching a shared understanding — do not stop after a couple of questions. Walk down each branch of the decision tree, resolving ambiguities and the dependencies between decisions one by one, and keep following up within a branch until it's fully resolved before moving to the next. Don't confine the interview to a fixed checklist — probe whatever is genuinely ambiguous or unstated in *this* request, whatever category it falls into. Depending on the task, that might include things like:
-- Edge cases or error conditions (e.g., "What happens if the API times out?").
-- User-facing surface mechanics (CLI flags, UI affordances, API shapes — whatever this repo exposes).
-- Target data/resources involved (schemas, external service contracts, file formats).
-- Build, test, or deploy tooling (scripts, containers, CI, test harnesses).
-- Configuration, environment variables, or local/prod parity concerns.
-- Networking, infra, or deployment-environment quirks.
-- Localization/i18n or other cross-cutting plumbing.
-
-These are illustrative, not exhaustive — follow the task's actual shape rather than this list.
+Interview the user relentlessly about the task request until reaching a shared understanding — do not stop after a couple of questions. Walk down each branch of the decision tree, resolving ambiguities and the dependencies between decisions one by one, and keep following up within a branch until it's fully resolved before moving to the next. Probe whatever is ambiguous or unstated in *this* request rather than working through a fixed checklist. Spend the questions on what only the user can decide: intended behavior, edge cases, the Must Haves, tradeoffs they care about. Leave file-by-file mechanics to the Implementer, which can work those out from the codebase.
 
 If a question can be answered by exploring the codebase instead of asking the user, explore the codebase first. For each question you do ask, provide your own recommended answer so the user can confirm or correct it rather than starting from a blank page.
 
 ### Step 2: File Generation Rules
 Once the user provides answers, output the final file. You must follow these machine-routing constraints:
-1. **Agent-Optimized Language:** Do *not* write descriptive, human-friendly tutorial prose in `## Frontier Advice` or `## Execution Plan`. Instead, write dense, imperative, constraint-focused prompts designed for an LLM (e.g., instead of "Make sure to handle errors neatly," write "CRITICAL: Wrap all network JSON decoding in explicit null and error-type guards. Return the module's sentinel internal-error value on fallback.").
+1. **Agent-directed language:** `## Frontier Advice` and `## Execution Plan` are read by the Implementer, not a human skimmer: dense and specific, no tutorial prose. State each constraint plainly with its reason (e.g., instead of "Make sure to handle errors neatly," write "Wrap network JSON decoding in null and error-type guards and return the module's sentinel internal-error value, because callers branch on that sentinel."). Record current decisions, not how the plan reached them: superseded designs and review-round history stay in git and in completed task files.
 2. **Strict Step Isolation:** Break the code generation into separate files. Prefer steps where step $N$ does not depend on uncompleted files in step $N+1$. When a change is atomic across files (an interface rename, widening a type/lint gate) and a clean split is impossible, group those steps and place one deferred checkpoint line after the last of them (`.claude/docs/pipeline.md` § Deferred verification) rather than forcing a false split.
 3. **Phase Structuring:** Set `current_phase: planning`. Let the user explicitly verify your output before updating the state to `implementation`.
 4. **Task ID Allocation:** run `python3 tools/task_status.py` (or `pixi run task-status`) and use its `next_id` field verbatim as this task's `id` — it already scans `tasks/active/`, `tasks/completed/`, and `tasks/abandoned/` (including every local branch's own copy of those directories, so an id already claimed on another branch is never reissued) and zero-pads to match the existing width. Never reuse an id (`.claude/docs/pipeline.md` § Task files and directories).
@@ -62,8 +58,12 @@ review_rejections: 0
 - [ ] [Strict machine-checkable condition 2]
 
 ## Frontier Advice
-[Dense context injector for the simple model. Include strict architectural constraints, library-specific method choices, error-handling requirements, and anti-hallucination guardrails.]
+[Decisions and constraints the Implementer must honor, each with its reason: architectural constraints, library/method choices, error-handling requirements, and codebase facts it would otherwise have to rediscover.]
 
 ## Execution Plan
-- [ ] **Step 1** (`path/to/...`): [Imperative prompt to the simple model detailing exactly what interfaces/types to build or alter. No conversational fluff.]
+- [ ] **Step 1** (`path/to/...`): [What this step changes and the interfaces/types involved: the outcome, not a keystroke script.]
+
+## Decisions log
 ```
+
+`## Decisions log` starts empty. It is append-only and filled after planning, by Implementer questions and the user's answers (`.claude/docs/pipeline.md` § Implementer questions).

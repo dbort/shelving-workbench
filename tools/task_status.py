@@ -156,6 +156,29 @@ def parse_frontmatter(text: str) -> TaskFrontmatter:
 _ID_NUMERAL_RE = re.compile(r"^sh-(\d+)$")
 
 
+_DECISIONS_LOG_HEADING = "## Decisions log"
+
+
+def pending_questions(text: str) -> list[str]:
+    """The `A: pending` entries in a task file's `## Decisions log`, in order.
+
+    Each item is the entry's text with the leading `- ` and trailing
+    `A: pending` stripped. Entries outside that section, and answered ones,
+    are ignored; a file with no `## Decisions log` section yields `[]`
+    (`.claude/docs/pipeline.md` § Implementer questions).
+    """
+    in_log = False
+    pending: list[str] = []
+    for line in text.splitlines():
+        if line.startswith("## "):
+            in_log = line.strip() == _DECISIONS_LOG_HEADING
+            continue
+        stripped = line.strip()
+        if in_log and stripped.startswith("- ") and stripped.endswith("A: pending"):
+            pending.append(stripped[2 : -len("A: pending")].rstrip())
+    return pending
+
+
 def compute_next_id(existing_ids: Sequence[str]) -> str:
     """The next unused `sh-NNN` id, one past the highest id in `existing_ids`.
 
@@ -235,17 +258,18 @@ def layered_topological_order(
 # ---------------------------------------------------------------------------
 
 _PATH_ID_RE = re.compile(r"(?:^|/)(sh-\d+)-[^/]+\.md$")
-_REVIEW_FILENAME_RE = re.compile(r"^sh-\d+-REVIEW\.md$")
+_REVIEW_FILENAME_RE = re.compile(r"^sh-\d+-REVIEW-r\d+\.md$")
 
 _TASK_SUBDIRS = ("active", "completed", "abandoned")
 
 
 def _is_review_filename(name: str) -> bool:
-    """Whether `name` is a `sh-XXX-REVIEW.md` rejection-round review file.
+    """Whether `name` is a `sh-XXX-REVIEW-rN.md` rejection-round review file.
 
     The rejection loop (`.claude/docs/pipeline.md` § The rejection loop)
-    writes this file alongside the real `sh-XXX-<slug>.md` task file in
-    `tasks/active/` on every rejected round. Its name matches the same
+    writes one per rejected round alongside the real `sh-XXX-<slug>.md` task
+    file, and `approve-task` moves them to `tasks/completed/` with it. Its
+    name matches the same
     `sh-NNN-<slug>.md` shape as a real task file, so every id/path lookup
     below must reject it explicitly rather than treating it as a second
     task entry sharing that id.
@@ -256,7 +280,7 @@ def _is_review_filename(name: str) -> bool:
 def _task_id_from_path(path: str) -> str | None:
     """The `sh-NNN` id a `tasks/*/sh-NNN-slug.md`-shaped path names, if any.
 
-    A `sh-XXX-REVIEW.md` path yields `None`; it is never a task file even
+    A `sh-XXX-REVIEW-rN.md` path yields `None`; it is never a task file even
     though its name matches the same pattern (`_is_review_filename`).
     """
     name = path.rsplit("/", 1)[-1]
@@ -436,6 +460,7 @@ class NormalTaskReportEntry:
     in_progress: bool
     branch_exists: bool
     source: str
+    pending_questions: list[str]
 
 
 @dataclass(frozen=True)
@@ -471,7 +496,7 @@ def build_report(repo_root: Path) -> Report:
     Iterates `tasks/active/`'s working-directory listing in `ls` order
     (never `tasks/completed/`/`tasks/abandoned/` themselves, which are
     consulted only to resolve `unmet_blockers` and `next_id`), skipping any
-    `sh-XXX-REVIEW.md` rejection-round review file (`_is_review_filename`);
+    `sh-XXX-REVIEW-rN.md` rejection-round review file (`_is_review_filename`);
     a task whose frontmatter fails to parse or whose id disagrees with its
     filename becomes an `ErrorTaskReportEntry` instead of aborting the whole
     report.
@@ -531,6 +556,7 @@ def build_report(repo_root: Path) -> Report:
             in_progress=parsed.current_phase != "planning",
             branch_exists=local_branch_exists(repo_root, expected_id),
             source=source,
+            pending_questions=pending_questions(text),
         )
         entries.append(entry)
         blocked_by_by_id[expected_id] = list(parsed.blocked_by)
@@ -562,6 +588,7 @@ class JsonNormalTaskEntry(TypedDict):
     in_progress: bool
     branch_exists: bool
     source: str
+    pending_questions: list[str]
 
 
 class JsonErrorTaskEntry(TypedDict):
@@ -600,6 +627,7 @@ def _entry_to_json(entry: TaskReportEntry) -> JsonTaskEntry:
         "in_progress": entry.in_progress,
         "branch_exists": entry.branch_exists,
         "source": entry.source,
+        "pending_questions": list(entry.pending_questions),
     }
 
 
@@ -628,6 +656,7 @@ def _render_task_bullet(
             ", ".join(entry.unmet_blockers) if entry.unmet_blockers else "(none)"
         )
         lines.append(f"  - blocked by: {blocked_by_text}")
+    lines.extend(f"  - awaiting your answer: {q}" for q in entry.pending_questions)
     return lines
 
 

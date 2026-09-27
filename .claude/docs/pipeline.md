@@ -110,22 +110,25 @@ instructions to whichever agent happens to be looking at them.
 
 ### The rejection loop
 
-On rejection, the Reviewer writes findings to
-`tasks/active/sh-XXX-REVIEW.md` (same id as the task file, so
-concurrent tasks can't collide) and increments `review_rejections`:
+On rejection, the Reviewer increments `review_rejections` and writes
+that round's findings to `tasks/active/sh-XXX-REVIEW-rN.md`, where `N` is
+the new `review_rejections` value (same id as the task file, so concurrent
+tasks can't collide):
 
 - **Below the cap (3):** demote to `current_phase: implementation`,
   `current_agent: implementer`. The Implementer resumes on the same
   `sh-XXX` branch.
 - **At the cap:** set `current_phase: blocked_needs_human` instead of
-  looping again. Append a note to `sh-XXX-REVIEW.md` saying the
+  looping again. Append a note to that round's review file saying the
   cap was hit.
 
-On approval, the Reviewer removes any stale `sh-XXX-REVIEW.md`
-— a clean approval leaves no rejection notes behind. (`approve-task`
-double-checks this at sign-off anyway.)
+Review files are part of the task's decision record: nothing deletes
+them. They stay in `tasks/active/` through the rejection loop, and
+`approve-task` moves them to `tasks/completed/` alongside the task file.
+The Implementer reads every round's file when it resumes, not only the
+latest.
 
-#### `sh-XXX-REVIEW.md` format
+#### `sh-XXX-REVIEW-rN.md` format
 
 Use this template rather than inventing a structure per round or
 searching prior tasks for precedent:
@@ -157,6 +160,33 @@ human can clarify the task's requirements, fix the code directly, or
 reset review_rejections to 0 and demote to implementation for another
 round.
 ```
+
+### Implementer questions
+
+The Implementer cannot reach the user directly. When a step needs a
+decision the task file does not cover (a product or behavior choice, not
+a codebase fact it can look up), it does not guess:
+
+1. It commits its in-progress work on the `sh-XXX` branch, so the tree is
+   clean while the question is open.
+2. It appends a pending entry to the task file's `## Decisions log` and
+   commits that too:
+
+       - Q (YYYY-MM-DD, Step N): <question>. Options: <a>; <b>. Recommended: <a>, because <reason>. A: pending
+
+3. It ends its run with the same question as its report, leaving
+   `current_phase: implementation`.
+
+`dispatch-tasks` never dispatches the Implementer while the log holds an
+`A: pending` entry. It asks the user instead, replaces `pending` with the
+answer (dated), commits that on the branch, and then dispatches the
+Implementer again. The pending entry is committed state, so a question
+survives the session that raised it: whichever tick next looks at the task
+asks it.
+
+Answered log entries bind the Implementer and the Reviewer the same way
+`## Frontier Advice` does. The log is append-only; a later decision that
+reverses an earlier one is a new entry, never an edit.
 
 ### Phase transitions go through skills, not direct agent calls
 
@@ -294,6 +324,10 @@ auto-advanced out of `planning` by `dispatch-tasks`.
   (planner/implementer/reviewer/user), `current_phase` (see § Phases),
   `review_rejections` (see the rejection loop), optional `blocked_by`
   (see § Task dependencies).
+- **Body sections:** `## Frontier Advice` holds the decisions currently in
+  force, not the history of how they were reached; superseded designs live
+  in git, the review files, and `## Decisions log` (§ Implementer
+  questions), the append-only record of questions answered after planning.
 
 Not every commit needs a task. The pipeline is for real units of work; a
 one-line fix or an interactive session can commit directly (on a branch —
