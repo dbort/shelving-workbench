@@ -156,40 +156,71 @@ def parse_frontmatter(text: str) -> TaskFrontmatter:
 _ID_NUMERAL_RE = re.compile(r"^sh-(\d+)$")
 
 
-_PENDING_ANSWER_RE = re.compile(r"\s*\bA:\s*pending\W*$", re.IGNORECASE)
+# The optional `[-*]` swallows the bullet of a nested `- A: pending` answer
+# so it doesn't survive into the question text.
+_PENDING_ANSWER_RE = re.compile(
+    r"(?:(?:^|\s+)[-*])?\s*\bA:\s*pending\W*$", re.IGNORECASE
+)
 _SECTION_HEADING_RE = re.compile(r"^#{1,2}\s+(.*?)\s*#*\s*$")
+_FENCE_RE = re.compile(r"^\s{0,3}(`{3,}|~{3,})(.*)$")
 
 
-def _decisions_log_entries(text: str) -> list[str]:
-    """Each top-level `- `/`* ` bullet under `## Decisions log`, as one string.
+@dataclass(frozen=True)
+class _LogLine:
+    text: str
+    in_code: bool
 
-    A bullet's continuation lines are joined with single spaces: indented
-    lines (nested bullets included) at any point, and unindented prose only
-    until the first blank line, the Markdown lazy-continuation rule. After a
-    blank line, unindented prose closes the entry. Only a level-1 or level-2
-    heading outside a code fence ends the section, and the heading match
-    ignores case, so `### Step 3` subheadings and `#` lines in fenced code
-    stay inside it. An unindented code fence closes the open entry and its
-    contents join no entry; an indented fence is part of its entry.
+
+def _closes_fence(line: str, opener: str) -> bool:
+    """Whether `line` closes a fence opened by `opener` (e.g. "````").
+
+    A closing fence uses the opener's character at least as many times and
+    carries nothing else but whitespace, so a ``` line inside a ```` block,
+    or a ~~~ line inside a ``` block, is fence content.
+    """
+    match = _FENCE_RE.match(line)
+    if match is None or match.group(2).strip():
+        return False
+    fence = match.group(1)
+    return fence[0] == opener[0] and len(fence) >= len(opener)
+
+
+def _decisions_log_entries(text: str) -> list[list[_LogLine]]:
+    """The physical lines of each top-level bullet under `## Decisions log`.
+
+    An entry's first line has its `- `/`* ` bullet removed. Indented lines
+    (nested bullets included) always belong to the open entry; unindented
+    prose does only until the first blank line, the Markdown
+    lazy-continuation rule. A fence closes the open entry when unindented;
+    when indented, its lines belong to the entry marked `in_code`. Only a
+    level-1 or level-2 heading outside a fence ends the section, matched
+    without regard to case.
     """
     in_log = False
-    in_fence = False
-    entries: list[str] = []
+    fence: str | None = None
+    fence_indented = False
+    entries: list[list[_LogLine]] = []
     open_entry = False
     after_blank = False
     for line in text.splitlines():
         stripped = line.strip()
         indented = line[:1] in (" ", "\t")
-        if stripped.startswith(("```", "~~~")):
-            in_fence = not in_fence
-            if not indented:
-                # An unindented fence interrupts the bullet above it, and
-                # nothing inside it belongs to an entry.
-                open_entry = False
-                continue
-        if in_fence and not indented:
+        if fence is not None:
+            closing = _closes_fence(line, fence)
+            if closing:
+                fence = None
+            if in_log and fence_indented and open_entry:
+                entries[-1].append(_LogLine(stripped, in_code=True))
             continue
-        heading = None if in_fence else _SECTION_HEADING_RE.match(line)
+        opener = _FENCE_RE.match(line)
+        if opener is not None:
+            fence, fence_indented = opener.group(1), indented
+            if in_log and indented and open_entry:
+                entries[-1].append(_LogLine(stripped, in_code=True))
+            else:
+                open_entry = False
+            continue
+        heading = _SECTION_HEADING_RE.match(line)
         if heading is not None:
             in_log = heading.group(1).lower() == "decisions log"
             open_entry = False
@@ -200,10 +231,10 @@ def _decisions_log_entries(text: str) -> list[str]:
             after_blank = True
             continue
         if not indented and stripped.startswith(("- ", "* ")):
-            entries.append(stripped[2:].strip())
+            entries.append([_LogLine(stripped[2:].strip(), in_code=False)])
             open_entry = True
         elif open_entry and (indented or not after_blank):
-            entries[-1] = f"{entries[-1]} {stripped}"
+            entries[-1].append(_LogLine(stripped, in_code=False))
         else:
             open_entry = False
         after_blank = False
@@ -213,19 +244,29 @@ def _decisions_log_entries(text: str) -> list[str]:
 def pending_questions(text: str) -> list[str]:
     """The unanswered entries in a task file's `## Decisions log`, in order.
 
-    An entry is unanswered when it ends in `A: pending`, matched without
-    regard to case, spacing, or trailing punctuation. Each item is the
-    entry's text with that marker (and the bullet of a nested `- A: pending`
-    answer) removed and wrapped lines joined by single spaces. Entries
-    outside the section, and answered ones, are ignored; a file with no
-    `## Decisions log` section yields `[]` (`.claude/docs/pipeline.md` §
+    An entry is unanswered when any of its lines outside a code block ends
+    in `A: pending`, matched without regard to case, spacing, or trailing
+    punctuation, so a note continuing the entry below the marker doesn't
+    hide it. Each item is the entry's lines joined by single spaces with
+    the marker, and the bullet of a nested `- A: pending` answer, removed.
+    Entries outside the section, and answered ones, are ignored; a file with
+    no `## Decisions log` section yields `[]` (`.claude/docs/pipeline.md` §
     Implementer questions).
     """
-    return [
-        _PENDING_ANSWER_RE.sub("", entry).rstrip(" -*")
-        for entry in _decisions_log_entries(text)
-        if _PENDING_ANSWER_RE.search(entry)
-    ]
+    questions: list[str] = []
+    for entry in _decisions_log_entries(text):
+        marked = [
+            not line.in_code and _PENDING_ANSWER_RE.search(line.text) is not None
+            for line in entry
+        ]
+        if not any(marked):
+            continue
+        parts = [
+            _PENDING_ANSWER_RE.sub("", line.text) if is_marked else line.text
+            for line, is_marked in zip(entry, marked, strict=True)
+        ]
+        questions.append(" ".join(part for part in parts if part))
+    return questions
 
 
 def compute_next_id(existing_ids: Sequence[str]) -> str:

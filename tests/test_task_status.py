@@ -835,9 +835,38 @@ def test_pending_questions_subheadings_and_fenced_hashes_stay_in_the_log() -> No
 
 
 def test_pending_questions_needs_a_word_boundary_before_the_marker() -> None:
-    text = "## Decisions log\n- Q: keep the DATA: pending flag? A (2026-09-27): yes\n"
-    text += "- Q: rename DATA: pending\n"
-    assert pending_questions(text) == []
+    # Without the boundary, `DATA: pending` would end the first entry in a
+    # false match; the second entry shows detection still works.
+    text = "## Decisions log\n- Q: set DATA: pending\n- Q: x? A: pending\n"
+    assert pending_questions(text) == ["Q: x?"]
+
+
+def test_pending_questions_note_directly_under_the_marker_keeps_it_pending() -> None:
+    text = "## Decisions log\n- Q: x? A: pending\nNote: revisit.\n"
+    assert pending_questions(text) == ["Q: x? Note: revisit."]
+
+
+@pytest.mark.parametrize(
+    ("opener", "inner", "closer"),
+    [("```", "~~~", "```"), ("````", "```", "````")],
+)
+def test_pending_questions_only_a_matching_fence_closes_a_block(
+    opener: str, inner: str, closer: str
+) -> None:
+    text = (
+        f"## Decisions log\n- Q: x? A (2026-09-27): yes\n\n{opener}\n{inner}\n"
+        f"A: pending\n{closer}\n- Q: y? A: pending\n"
+    )
+    assert pending_questions(text) == ["Q: y?"]
+
+
+def test_pending_questions_keeps_dashes_and_stars_that_belong_to_the_question() -> None:
+    text = (
+        "## Decisions log\n"
+        "- Q: keep **old flag** A: pending\n"
+        "- Q: use the x- A: pending\n"
+    )
+    assert pending_questions(text) == ["Q: keep **old flag**", "Q: use the x-"]
 
 
 def test_pending_questions_nested_answer_bullet_keeps_the_question_text() -> None:
