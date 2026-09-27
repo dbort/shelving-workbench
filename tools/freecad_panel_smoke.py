@@ -19,8 +19,9 @@ import sys
 # than an exception the GUI swallows while it keeps running forever. The
 # environment variable stops pytest's own reimport of this file from
 # recursing (docs/freecadcmd-notes.md). The GUI routes sys.stdout to its
-# Report view and survives sys.exit, so the report goes to the process's
-# own streams and the run ends in os._exit.
+# Report view, so the report goes to the process's own streams, and once a
+# document has been opened sys.exit reports 1 whatever its argument, so the
+# run ends in os._exit with pytest's status.
 if os.environ.get("_FREECAD_PANEL_SMOKE_RUNNING") != "1":
     os.environ["_FREECAD_PANEL_SMOKE_RUNNING"] = "1"
     _exit_code = 1

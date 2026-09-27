@@ -16,7 +16,7 @@ from collections.abc import Mapping
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from freecad.Shelving.core.geometry import AxisIndex, Space, Vec3
+from freecad.Shelving.core.geometry import Space, Vec3
 from freecad.Shelving.core.layout import (
     Axis,
     Basis,
@@ -61,20 +61,6 @@ _DIMENSION_Z = 1000.0
 # label's height, both in scene millimetres.
 _WITNESS_HALF_MM = 12.0
 _LABEL_PIXEL_SIZE = 16
-
-
-def _axis_index(axis: Axis) -> AxisIndex:
-    match axis:
-        case Axis.X:
-            return 0
-        case Axis.Y:
-            return 1
-        case Axis.Z:
-            return 2
-
-
-def _component_mm(v: Vec3, axis_index: AxisIndex) -> float:
-    return (v.x_mm, v.y_mm, v.z_mm)[axis_index]
 
 
 def _apply_insets(axis: Axis, space: Space, insets: Insets) -> Space:
@@ -130,12 +116,12 @@ def _rect_for(
 ) -> QtCore.QRectF:
     """``space`` projected onto ``horizontal``/``vertical``, vertical flipped
     so the scene's Y axis (down in Qt) reads as up in the elevation."""
-    h_index = _axis_index(horizontal)
-    v_index = _axis_index(vertical)
+    h_index = horizontal.component_index
+    v_index = vertical.component_index
     width_mm = space.extent_mm(h_index)
     height_mm = space.extent_mm(v_index)
-    x_mm = _component_mm(space.origin, h_index)
-    y_mm = unit_vertical_mm - _component_mm(space.origin, v_index) - height_mm
+    x_mm = space.origin.component_mm(h_index)
+    y_mm = unit_vertical_mm - space.origin.component_mm(v_index) - height_mm
     return QtCore.QRectF(x_mm, y_mm, width_mm, height_mm)
 
 
@@ -225,8 +211,8 @@ def _add_region_dimensions(
     if division.axis not in (horizontal, vertical):
         return
     run_is_horizontal = division.axis == horizontal
-    along_index = _axis_index(division.axis)
-    across_index = _axis_index(vertical if run_is_horizontal else horizontal)
+    along_index = division.axis.component_index
+    across_index = (vertical if run_is_horizontal else horizontal).component_index
     for index, item in enumerate(division.items):
         if isinstance(item, Board):
             continue
@@ -283,10 +269,10 @@ def elevation_point_mm(unit: Unit, point: QtCore.QPointF) -> Vec3:
     if unit.depth_axis is None:
         raise ValueError(f"unit {unit.id!r} has no depth_axis to draw an elevation on")
     horizontal, vertical = elevation_axes(unit.depth_axis)
-    unit_vertical_mm = _component_mm(unit.size_mm, _axis_index(vertical))
+    unit_vertical_mm = unit.size_mm.component_mm(vertical.component_index)
     components = [0.0, 0.0, 0.0]
-    components[_axis_index(horizontal)] = point.x()
-    components[_axis_index(vertical)] = unit_vertical_mm - point.y()
+    components[horizontal.component_index] = point.x()
+    components[vertical.component_index] = unit_vertical_mm - point.y()
     return Vec3(*components)
 
 
@@ -308,8 +294,8 @@ def build_scene(
     if unit.depth_axis is None:
         raise ValueError(f"unit {unit.id!r} has no depth_axis to draw an elevation on")
     horizontal, vertical = elevation_axes(unit.depth_axis)
-    unit_vertical_mm = _component_mm(unit.size_mm, _axis_index(vertical))
-    unit_horizontal_mm = _component_mm(unit.size_mm, _axis_index(horizontal))
+    unit_vertical_mm = unit.size_mm.component_mm(vertical.component_index)
+    unit_horizontal_mm = unit.size_mm.component_mm(horizontal.component_index)
 
     scene = QtWidgets.QGraphicsScene()
     scene.setSceneRect(0.0, 0.0, unit_horizontal_mm, unit_vertical_mm)

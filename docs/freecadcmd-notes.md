@@ -207,10 +207,11 @@ for `Label`, which is ordinary `DocumentObject` state and unaffected).
 `FreeCADGui.UiLoader` does not exist under `freecadcmd`, but the full GUI
 binary runs headless with `QT_QPA_PLATFORM=offscreen pixi run freecad
 script.py`, which is how the following was verified against FreeCAD
-1.0.0. The GUI keeps running after the script returns, raises, or calls
-`sys.exit`, so a script must end in `os._exit(status)`; an exception
-raised before that point hangs the process. The GUI also routes
-`sys.stdout` to its Report view. `tools/freecad_panel_smoke.py` handles all
+1.0.0. The GUI keeps running after a script returns or raises, so the
+process hangs. `sys.exit(N)` does end it, but once the script has opened a
+document the process exits 1 whatever `N` is (a bare `sys.exit(3)` with
+no document exits 3). A script must therefore end in `os._exit(status)`.
+The GUI also routes `sys.stdout` to its Report view. `tools/freecad_panel_smoke.py` handles all
 three: it self-invokes pytest before importing anything from FreeCAD, points
 `sys.stdout`/`sys.stderr` back at `sys.__stdout__`/`sys.__stderr__`, and
 ends in `os._exit` with pytest's status from a `finally`.

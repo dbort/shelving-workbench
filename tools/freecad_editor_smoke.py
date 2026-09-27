@@ -4,8 +4,8 @@ Drives :class:`freecad.Shelving.editor.session.Session` directly rather than
 :class:`freecad.Shelving.editor.panel.EditUnitPanel`: ``FreeCADGui.Control``,
 which the panel needs to show itself, does not exist under ``freecadcmd``
 (``docs/freecadcmd-notes.md``). The panel's own wiring is covered by
-``tools/freecad_panel_smoke.py`` under the offscreen GUI. A self-invoking
-pytest module like ``tools/freecad_scan_smoke.py``.
+``tools/freecad_panel_smoke.py`` under the offscreen GUI. This is a
+self-invoking pytest module, as ``tools/freecad_scan_smoke.py`` is.
 """
 
 import os
