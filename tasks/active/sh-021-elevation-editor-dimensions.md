@@ -199,3 +199,9 @@ DECISIONS MADE DURING `/work` (2026-09-27):
 - **N4: Round-1 N2 is only partly adopted** (`freecad/Shelving/core/edit.py:537`, `freecad/Shelving/core/edit.py:592`, `freecad/Shelving/core/edit.py:636`, `freecad/Shelving/editor/scene.py:286-289`): the new code in `edit.py` and `scene.py` still uses the local `_axis_index`/`_component_mm` copies instead of `Axis.component_index`/`Vec3.component_mm`.
 - **N5: Pixel offset without a unit suffix** (`tools/freecad_panel_smoke.py:179`): `step` should be `step_px`.
 - **N6: friction-002 may now be fixable** (`.claude/docs/friction-log.md:31`): the offscreen `freecad` harness is the test mode it asks for; consider a follow-up task.
+
+### Round 3: REJECTED
+- **F1: The new freecadcmd-notes entry records a false fact about `sys.exit` under the GUI** (`docs/freecadcmd-notes.md:210-212`, `tools/freecad_panel_smoke.py:21-23`): `sys.exit` does end the GUI process. A bare `sys.exit(3)` exits 3, but once a document exists `sys.exit(N)` exits 1 whatever `N` is. A script that returns or raises hangs. `os._exit` is still right; restate both passages with the real reason.
+- **N1: Round-2 N4 is still only partly adopted** (`freecad/Shelving/editor/scene.py:66`, `freecad/Shelving/editor/scene.py:76`): `scene.py` still defines and uses `_axis_index`/`_component_mm`.
+- **N2: The other three freecadcmd smokes still self-invoke at the bottom of the file** (`tools/freecad_scan_smoke.py:486`, `tools/freecad_write_smoke.py:613`, `tools/freecad_catalog_smoke.py:534`): an import-time exception passes silently under freecadcmd. This predates the task; a follow-up should move each self-invoke to the top.
+- **N3: Sentence fragment in the editor smoke docstring** (`tools/freecad_editor_smoke.py:8`).
