@@ -386,7 +386,7 @@ All** again with `ShelvingMaterial` left at `oak6` reproduces the same
 result rather than drifting, since the stored id, not thickness matching,
 is what a rescan resolves it by.
 
-## M9 — The elevation editor: structure
+## M9 — The elevation editor
 
 Prerequisite: a FreeCAD 1.0 install with this workbench on its addon path,
 **View → Panels → Report view** open, a document holding one unit (**Create
@@ -501,3 +501,117 @@ Expected: at every step the elevation and the 3D view show only the new
 board moving; neither shelf added on the left in steps 2-3 shifts when the
 shelf on the right is added in step 5, and re-opening **Edit Unit** after
 step 6 still shows both left-hand shelves exactly where steps 2-3 put them.
+
+Cases 10-17 cover dimensions. Start each from a fresh **Create Unit** with
+one **Add Shelf** already made in its bay, unless the case says otherwise,
+and add a `VarSet` to the document for case 12 (**Part** workbench, or
+`doc.addObject("App::VarSet", "VarSet")` in the Python console, then add a
+Length property named `Len` set to `300 mm`).
+
+### 10. Type an exact opening and watch the rest redistribute
+
+1. Open **Edit Unit** and click the lower bay.
+
+Expected: the **Size** field shows the bay's current clear height, the
+readout below it shows both `clear` and `spacing` values (spacing being 18
+mm more, the shelf's thickness), and notes that the bay shares the leftover
+space. A dimension is drawn over each bay: a line with a short witness line
+at each end, labelled with its value, the other value beside it in grey.
+
+2. Type `300` in **Size** and press Return.
+
+Expected: the shelf moves so the lower bay's dimension reads `300`; the upper
+bay's dimension grows or shrinks by the difference, the 3D view follows, and
+the lower bay stays selected.
+
+### 11. Type an inch expression and confirm the readout resolves it
+
+1. With the lower bay selected, type `1" + 1/2"` and press Return.
+
+Expected: the field and the dimension resolve it to 38.10 mm.
+
+2. Type `1 + 1/2"` (no unit on the `1`) and press Return.
+
+Expected: 13.70 mm. FreeCAD's length fields read a bare number as
+millimetres even inside a sum, so this is 1 mm plus 12.70 mm; the workbench
+passes the text to FreeCAD untouched and shows what FreeCAD made of it.
+
+3. Type `12 1/2"`.
+
+Expected: the field marks the text invalid and Return does nothing; the
+layout does not change.
+
+### 12. Bind the field to a VarSet and confirm it follows
+
+1. With the lower bay selected, type `VarSet.Len` and press Return.
+
+Expected: the lower bay becomes 300 mm clear.
+
+2. Click in **Size**, type `=`, enter `VarSet.Len - 20 mm` in the f(x) dialog
+   and accept it.
+
+Expected: the field shows the f(x) marker and 280 mm, and the lower bay
+follows to 280 mm. While the panel is open a `Shelving dimension
+(temporary)` object appears at the top of the tree; after **OK** or
+**Cancel** it is gone. Changing `VarSet.Len` afterwards does not move the
+shelf: the unit stores the resolved size, not the expression.
+
+### 13. Drag a board and confirm the readout keeps its basis
+
+1. Select the lower bay, set **Size** to `300`, and choose **Spacing
+   (through the next board)**.
+
+Expected: nothing moves; the dimension now runs from the bottom board's top
+face through the shelf to the shelf's top face and reads `318`, with
+`clear 300` beside it.
+
+2. Drag the shelf up by a few centimetres and release.
+
+Expected: the shelf follows the pointer, the lower bay becomes selected,
+its dimension still spans through the shelf, and the basis control still
+reads **Spacing**: only the number changed. Dragging the shelf down past the
+bottom board shows a refusal on the message line and leaves the shelf at
+its last good position.
+
+### 14. Switch a dimension to spacing and confirm nothing moves
+
+1. Select the upper bay and toggle between **Clear opening** and
+   **Spacing** several times.
+
+Expected: no board moves in the elevation or the 3D view; only the drawn
+dimension changes between spanning the bay and spanning the bay plus the
+top board. For a region with no board after it, the basis control is
+disabled.
+
+### 15. Change the stock thickness and confirm spacings hold and clears move
+
+1. Run **Add Divider** on the unit's bay before adding shelves, then add a
+   shelf in each half. Give the left lower bay a **Spacing** of `300` and
+   the right lower bay a **Clear opening** of `282`. Click **OK**.
+2. In the catalog, change the default stock's `Thickness` from 18 mm to 25
+   mm, then run **Reflow All**.
+
+Expected: the left shelf stays exactly where it was; the right shelf rises
+by 7 mm, following the thicker bottom board.
+
+### 16. Confirm the untagged-object list appears with nothing checked
+
+1. Add a **Part → Cube** inside the unit's container, resize it to 400 × 5 ×
+   400 mm (thin front to back), and open **Edit Unit**.
+
+Expected: a box titled **Objects this workbench did not create** lists the
+cube with the reason it is not part of the layout, its checkbox unchecked,
+and text saying the workbench leaves such objects alone unless they are
+selected. Make any edit: the cube stays where it is.
+
+2. Check the cube and click **Remove Selected**, then **Cancel**.
+
+Expected: the cube disappears on **Remove Selected** and returns on
+**Cancel**. With nothing checked, **OK** keeps it.
+
+### 17. An unsolvable size leaves the last good state
+
+1. Select the lower bay and type `5000`.
+
+Expected: the message line explains the layout does not fit; the elevation
+and 3D view stay exactly as before the attempt, and the panel stays usable.

@@ -1,5 +1,5 @@
 ---
-next_id: friction-023
+next_id: friction-024
 ---
 
 # Friction log
@@ -227,3 +227,14 @@ fixes a papercut records the papercut and its fix and deletes the entry.
   node` to confirm every prompt rendered. Simpler if: a check in `pixi run
   tests` extracted the block, stubbed the workflow API, and dry-ran it in
   both full-tree and diff-scoped modes.
+- `friction-023` - **no merge-gate coverage for the editor panel's wiring**:
+  sh-021's panel logic (the quantity field reporting only a changed value,
+  applying on the f(x) dialog closing, drag press/move/release, the
+  untagged-object checkboxes) could only be exercised by one-off scripts
+  run under `QT_QPA_PLATFORM=offscreen pixi run freecad script.py`, which
+  also caught two real defects (an f(x) expression never reaching the
+  layout, a focus-out fixing a Fill region). Those scripts lived in the
+  session scratchpad and are gone. Simpler if: `pixi run tests` ran a GUI
+  smoke under that offscreen `freecad` invocation
+  (`docs/freecadcmd-notes.md`, "GUI-only widget access"), which would also
+  answer `friction-002`.

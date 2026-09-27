@@ -102,18 +102,38 @@ class _DimensionField:
         else:
             self.line_edit = QtWidgets.QLineEdit()
             self.widget = self.line_edit
+        # What show_mm last displayed. editingFinished also fires when the
+        # field merely loses focus, and reporting an unchanged value would
+        # quietly fix a region that shares leftover space.
+        self._shown_mm: float | None = None
+        self._shown_text = ""
         # The spin box blocks Return on text it cannot resolve, so this fires
         # only for input it accepted.
         self.line_edit.editingFinished.connect(self._finished)
+        if spin is not None:
+            # Accepting the f(x) dialog changes the value without any
+            # editingFinished; the dialog closing is the only signal.
+            QtCore.QObject.connect(
+                spin,
+                QtCore.SIGNAL("showFormulaDialog(bool)"),
+                self._formula_dialog_toggled,
+            )
+
+    def _formula_dialog_toggled(self, shown: bool) -> None:
+        if not shown:
+            self._finished()
 
     def _finished(self) -> None:
         if self.quantity_widget is not None:
             value = self.quantity_widget.property("rawValue")
-            if isinstance(value, float):
+            if isinstance(value, float) and value != self._shown_mm:
                 self._on_size(value)
             return
+        text = self.line_edit.text()
+        if text == self._shown_text:
+            return
         try:
-            quantity = FreeCAD.Units.parseQuantity(self.line_edit.text())
+            quantity = FreeCAD.Units.parseQuantity(text)
         except Exception as err:  # noqa: BLE001 - its message is the report
             self._on_error(str(err))
             return
@@ -127,8 +147,15 @@ class _DimensionField:
         if self.quantity_widget is not None:
             if value_mm is not None:
                 self.quantity_widget.setProperty("rawValue", value_mm)
+                # Read back rather than kept: the widget may round what it
+                # stores, and _finished compares against its own value.
+                shown = self.quantity_widget.property("rawValue")
+                self._shown_mm = shown if isinstance(shown, float) else value_mm
+            else:
+                self._shown_mm = None
         else:
-            self.line_edit.setText("" if value_mm is None else f"{value_mm:g} mm")
+            self._shown_text = "" if value_mm is None else f"{value_mm:g} mm"
+            self.line_edit.setText(self._shown_text)
         self.widget.blockSignals(False)
 
 
