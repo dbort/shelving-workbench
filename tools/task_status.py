@@ -156,27 +156,47 @@ def parse_frontmatter(text: str) -> TaskFrontmatter:
 _ID_NUMERAL_RE = re.compile(r"^sh-(\d+)$")
 
 
-_DECISIONS_LOG_HEADING = "## Decisions log"
+_PENDING_ANSWER_RE = re.compile(r"\s*A:\s*pending\W*$", re.IGNORECASE)
+
+
+def _decisions_log_entries(text: str) -> list[str]:
+    """Each `- ` bullet under `## Decisions log`, continuation lines joined.
+
+    An indented or otherwise non-bullet line inside the section continues the
+    previous entry, so a hard-wrapped entry reads as one string. The heading
+    match ignores case and surrounding whitespace.
+    """
+    in_log = False
+    entries: list[str] = []
+    for line in text.splitlines():
+        if line.startswith("#"):
+            in_log = line.lstrip("#").strip().lower() == "decisions log"
+            continue
+        if not in_log:
+            continue
+        stripped = line.strip()
+        if stripped.startswith(("- ", "* ")):
+            entries.append(stripped[2:].strip())
+        elif stripped and entries:
+            entries[-1] = f"{entries[-1]} {stripped}"
+    return entries
 
 
 def pending_questions(text: str) -> list[str]:
-    """The `A: pending` entries in a task file's `## Decisions log`, in order.
+    """The unanswered entries in a task file's `## Decisions log`, in order.
 
-    Each item is the entry's text with the leading `- ` and trailing
-    `A: pending` stripped. Entries outside that section, and answered ones,
-    are ignored; a file with no `## Decisions log` section yields `[]`
+    An entry is unanswered when it ends in `A: pending`, matched without
+    regard to case, spacing, or trailing punctuation. Each item is the
+    entry's text with that marker removed and wrapped lines joined by single
+    spaces. Entries outside the section, and answered ones, are ignored; a
+    file with no `## Decisions log` section yields `[]`
     (`.claude/docs/pipeline.md` § Implementer questions).
     """
-    in_log = False
-    pending: list[str] = []
-    for line in text.splitlines():
-        if line.startswith("## "):
-            in_log = line.strip() == _DECISIONS_LOG_HEADING
-            continue
-        stripped = line.strip()
-        if in_log and stripped.startswith("- ") and stripped.endswith("A: pending"):
-            pending.append(stripped[2 : -len("A: pending")].rstrip())
-    return pending
+    return [
+        _PENDING_ANSWER_RE.sub("", entry)
+        for entry in _decisions_log_entries(text)
+        if _PENDING_ANSWER_RE.search(entry)
+    ]
 
 
 def compute_next_id(existing_ids: Sequence[str]) -> str:

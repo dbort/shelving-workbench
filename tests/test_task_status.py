@@ -781,20 +781,67 @@ def test_build_report_reads_pending_questions_from_the_task_branch(
     )
 
 
-def test_review_files_in_completed_do_not_count_as_task_ids(tmp_path: Path) -> None:
-    # `approve-task` moves a task's review files into `tasks/completed/` with
-    # it; they must not be read as a second task sharing the id.
-    repo = _init_repo(tmp_path)
-    _write_task(repo, "completed", "sh-003", "three", current_phase="done")
-    (repo / "tasks" / "completed" / "sh-003-REVIEW-r1.md").write_text(
-        "# sh-003 Review\n"
+def test_pending_questions_joins_a_hard_wrapped_entry() -> None:
+    text = (
+        "## Decisions log\n"
+        "- Q (2026-09-26, Step 3): keep the old flag? Options: keep; drop.\n"
+        "  Recommended: drop, because nothing reads it. A: pending\n"
     )
-    (repo / "tasks" / "completed" / "sh-003-REVIEW-r2.md").write_text(
-        "# sh-003 Review\n"
-    )
-    _commit_all(repo, "complete sh-003")
+    assert pending_questions(text) == [
+        "Q (2026-09-26, Step 3): keep the old flag? Options: keep; drop. "
+        "Recommended: drop, because nothing reads it."
+    ]
 
-    assert sorted(gather_next_id_input(repo)) == ["sh-003"]
+
+def test_pending_questions_tolerates_punctuation_and_case() -> None:
+    text = "## decisions LOG\n- Q: one? A: pending.\n* Q: two? a:Pending\n"
+    assert pending_questions(text) == ["Q: one?", "Q: two?"]
+
+
+def test_pending_questions_ignores_a_wrapped_answered_entry() -> None:
+    text = (
+        "## Decisions log\n"
+        "- Q (2026-09-20, Step 1): was pending once?\n"
+        "  A (2026-09-21): no, answered\n"
+    )
+    assert pending_questions(text) == []
+
+
+def test_build_report_branch_fallback_to_completed_skips_review_files(
+    tmp_path: Path,
+) -> None:
+    # `approve-task` moves the task file and its review files into
+    # `tasks/completed/` on the task branch before merging. `REVIEW-r1`
+    # sorts ahead of the lowercase slug in `git ls-tree`, so the branch
+    # read must skip it rather than parse it as the task.
+    repo = _init_repo(tmp_path)
+    _write_task(repo, "active", "sh-005", "five", current_phase="user_signoff")
+    _commit_all(repo, "add sh-005")
+    _git(repo, "checkout", "-q", "-b", "sh-005")
+    for round_number in (1, 2):
+        review = repo / "tasks" / "active" / f"sh-005-REVIEW-r{round_number}.md"
+        review.write_text(f"# sh-005 Review, Round {round_number}\n")
+    _commit_all(repo, "rejections")
+    _write_task(repo, "active", "sh-005", "five", current_phase="done")
+    _git(repo, "add", "-A")
+    _git(
+        repo,
+        "mv",
+        "tasks/active/sh-005-REVIEW-r1.md",
+        "tasks/active/sh-005-REVIEW-r2.md",
+        "tasks/active/sh-005-five.md",
+        "tasks/completed/",
+    )
+    _commit_all(repo, "sh-005: mark task done, move to tasks/completed/")
+    _git(repo, "checkout", "-q", "main")
+
+    report = build_report(repo)
+
+    (entry,) = [e for e in report.tasks if e.id == "sh-005"]
+    assert isinstance(entry, NormalTaskReportEntry)
+    assert entry.source == "branch:sh-005"
+    assert entry.current_phase == "done"
+    assert report.errors == []
 
 
 # ---------------------------------------------------------------------------

@@ -18,7 +18,7 @@ authoritative full ruleset and the after-the-fact net. Keep the two in
 sync when editing either.
 
 ### License note
-The Style Rules section below is adapted from the **stop-slop** skill (MIT License, Copyright (c) 2025 Hardik Pandya, <https://github.com/hardikpandya/stop-slop>). See `NOTICE-stop-slop-LICENSE.md` in this directory for the full license text and attribution detail.
+The STYLE RULES block inside `editPrompt` in the Step 3 script is adapted from the **stop-slop** skill (MIT License, Copyright (c) 2025 Hardik Pandya, <https://github.com/hardikpandya/stop-slop>). See `NOTICE-stop-slop-LICENSE.md` in this directory for the full license text and attribution detail.
 
 ---
 
@@ -136,7 +136,7 @@ ${files.map(f => '- ' + f).join('\n')}
 `
 }
 
-function contentAuditPrompt(files, diffBase) {
+function editPrompt(files, diffBase) {
   return `You are cleaning up code comments and/or markdown docs in two layers: CONTENT rules first, then STYLE rules, applied in one editing pass per file. Edit files directly with the Edit tool where changes are needed. Only touch comments and markdown prose — never executable code, config-file directives, command syntax, or markdown structure (headings, links, code fences) beyond what these rules require.
 
 ${scopeBoundary(files)}
@@ -190,7 +190,7 @@ const diffBase = DIFF_BASE_PLACEHOLDER
 
 const results = await pipeline(
   groups,
-  group => agent(contentAuditPrompt(group, diffBase), { phase: 'Edit', label: `edit:${group[0]}` })
+  group => agent(editPrompt(group, diffBase), { phase: 'Edit', label: `edit:${group[0]}` })
     .then(editReport => ({ editReport })),
   (r, group) => agent(verifyPrompt(group, r.editReport, diffBase), { phase: 'Verify', label: `verify:${group[0]}` })
     .then(verifyReport => ({ ...r, verifyReport }))

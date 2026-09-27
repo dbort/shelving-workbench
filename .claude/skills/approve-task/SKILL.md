@@ -1,6 +1,6 @@
 ---
 name: approve-task
-description: Human sign-off for a task at user_signoff: doc-hygiene sweep, finalize the task file, verified merge into main. Run only when the user invokes /approve-task sh-XXX.
+description: "Human sign-off for a task at user_signoff: doc-hygiene sweep, finalize the task file, verified merge into main. Run only when the user invokes /approve-task sh-XXX."
 disable-model-invocation: true
 ---
 
@@ -20,9 +20,9 @@ Invoking this skill against a specific task IS the human sign-off act. There is 
 - If no `sh-XXX` argument was given, stop and ask for one.
 - `git status --porcelain` must be empty. If it isn't, stop and tell the human to commit or stash first — don't operate on a dirty tree.
 - Check for an in-progress merge or rebase (`.git/MERGE_HEAD`, `.git/rebase-merge`, `.git/rebase-apply`). If any exist, stop — something else is mid-operation and resolving it isn't this skill's job.
-- Locate the task file and branch by that location:
-  - Found at `tasks/active/sh-XXX-*.md`: `current_phase` must be `user_signoff` to proceed (Step 2). Anything else found here is either a task not yet ready (`planning`, `implementation`, `review`, `blocked_needs_human` — stop, report the actual phase) or anomalous (`done` sitting in `tasks/active/` means an earlier run didn't finish Step 3's move — stop, flag it, don't guess).
-  - Found at `tasks/completed/sh-XXX-*.md`: `current_phase` should be `done`; anything else here is anomalous (stop, flag it). With `done` confirmed, check whether the `sh-XXX` branch ref still exists — `git rev-parse --verify --quiet refs/heads/sh-XXX` — **before** touching `--is-ancestor`, since that check needs a valid ref on both sides and errors outright (not a clean pass/fail) against one that's gone:
+- Locate the task file, `sh-XXX-<slug>.md`, and branch by that location. Review files (`sh-XXX-REVIEW-rN.md`) sit beside the task file in both directories and are never the task file:
+  - Found at `tasks/active/sh-XXX-<slug>.md`: `current_phase` must be `user_signoff` to proceed (Step 2). Anything else found here is either a task not yet ready (`planning`, `implementation`, `review`, `blocked_needs_human` — stop, report the actual phase) or anomalous (`done` sitting in `tasks/active/` means an earlier run didn't finish Step 3's move — stop, flag it, don't guess).
+  - Found at `tasks/completed/sh-XXX-<slug>.md`: `current_phase` should be `done`; anything else here is anomalous (stop, flag it). With `done` confirmed, check whether the `sh-XXX` branch ref still exists — `git rev-parse --verify --quiet refs/heads/sh-XXX` — **before** touching `--is-ancestor`, since that check needs a valid ref on both sides and errors outright (not a clean pass/fail) against one that's gone:
     - Branch **doesn't exist**: the only way it gets deleted is Step 4's success path, so this task is already fully closed out. Report that and stop — nothing to do.
     - Branch **exists**, and `git merge-base --is-ancestor sh-XXX main` **succeeds**: already merged, but the branch itself wasn't cleaned up (e.g. a prior run got interrupted between the merge commit and the `git branch -d`, or someone recreated it). Finish the leftover cleanup — `git branch -d sh-XXX` — and report that this run just tidied up an already-merged branch.
     - Branch **exists**, and `git merge-base --is-ancestor sh-XXX main` **fails**: genuinely not yet merged — a retry after a prior failed merge attempt (Step 4 aborted last time). Skip directly to Step 4.

@@ -83,7 +83,7 @@ full cycle:
 | `current_phase` | Owner | What happens |
 |---|---|---|
 | `planning` | Planner + human | The Planner (via the `new-task` skill) interviews the user in depth and generates the task file. Human-gated: the user approves the generated file either by confirming it to the Planner or by running `dispatch-tasks sh-XXX` on it (§ Phase transitions); nothing else sets `current_phase: implementation`. |
-| `implementation` | Implementer | Executes the task file's `## Execution Plan` steps in order on the task's `sh-XXX` branch, then hands off to `review`. |
+| `implementation` | Implementer | Executes the task file's `## Execution Plan` steps in order on the task's `sh-XXX` branch, then hands off to `review`. A run can also end still at `implementation` with an `A: pending` question in `## Decisions log`; the task waits there for the user's answer (§ Implementer questions). |
 | `review` | Reviewer | Diffs the branch against `main`, runs the checks itself via Bash (§ Verification commands), and either approves (→ `user_signoff`) or rejects (see the rejection loop below). |
 | `user_signoff` | Human | The user tests the branch manually, then runs `/approve-task sh-XXX` — invoking that skill against a task IS the sign-off act. It sweeps the branch with `doc-hygiene`, finalizes the task file, and merges into `main` only after the merged result passes the checks. |
 | `blocked_needs_human` | Human | Dead end for the automated pipeline: the rejection cap was hit. The user fixes the code, clarifies the task file, or resets `review_rejections: 0` and demotes to `implementation` for another run. |
@@ -112,8 +112,11 @@ instructions to whichever agent happens to be looking at them.
 
 On rejection, the Reviewer increments `review_rejections` and writes
 that round's findings to `tasks/active/sh-XXX-REVIEW-rN.md`, where `N` is
-the new `review_rejections` value (same id as the task file, so concurrent
-tasks can't collide):
+one more than the highest round already on the branch (1 when there is
+none). Round numbers come from the files, not from `review_rejections`,
+because a human may reset that counter (§ Phases, `blocked_needs_human`)
+and a reused number would overwrite an earlier round. The shared id keeps
+concurrent tasks from colliding:
 
 - **Below the cap (3):** demote to `current_phase: implementation`,
   `current_agent: implementer`. The Implementer resumes on the same
@@ -149,8 +152,7 @@ searching prior tasks for precedent:
   blocking findings.
 ```
 
-`Round N` is this task's current rejection count *after* incrementing (the
-first rejection is Round 1). Omit `## Non-blocking notes` when there are
+`Round N` matches the file's `rN` (the first rejection is Round 1). Omit `## Non-blocking notes` when there are
 none. At the cap, append a final section:
 
 ```markdown
@@ -275,7 +277,7 @@ not new work.
 - A task's phase-transition commits live on its `sh-XXX`
   branch, not `main`. The working tree's copy of a task file is stale for
   any task whose branch isn't currently checked out; read authoritative
-  state via `git show sh-XXX:tasks/active/sh-XXX-*.md`
+  state via `git show sh-XXX:tasks/active/sh-XXX-<slug>.md`
   (details in `dispatch-tasks`'s Step 1). `tools/task_status.py` performs
   this read for every task in `tasks/active/` and reports which source it
   used (`working_tree` or `branch:sh-XXX`) as each entry's `source` field;
@@ -303,7 +305,9 @@ auto-advanced out of `planning` by `dispatch-tasks`.
 ## Task files and directories
 
 - **`tasks/active/`** — open tasks, one `sh-XXX-[slug].md`
-  each, created by the `new-task` skill (its `SKILL.md` holds the file
+  each (the task file; any `sh-XXX-REVIEW-rN.md` beside it is a review
+  file, never the task file, so a `sh-XXX-*.md` glob is not a way to find
+  it), created by the `new-task` skill (its `SKILL.md` holds the file
   blueprint and writing rules).
 - **`tasks/completed/`** — tasks that reached `done`, moved here by
   `approve-task`.
