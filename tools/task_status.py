@@ -156,29 +156,57 @@ def parse_frontmatter(text: str) -> TaskFrontmatter:
 _ID_NUMERAL_RE = re.compile(r"^sh-(\d+)$")
 
 
-_PENDING_ANSWER_RE = re.compile(r"\s*A:\s*pending\W*$", re.IGNORECASE)
+_PENDING_ANSWER_RE = re.compile(r"\s*\bA:\s*pending\W*$", re.IGNORECASE)
+_SECTION_HEADING_RE = re.compile(r"^#{1,2}\s+(.*?)\s*#*\s*$")
 
 
 def _decisions_log_entries(text: str) -> list[str]:
-    """Each `- ` bullet under `## Decisions log`, continuation lines joined.
+    """Each top-level `- `/`* ` bullet under `## Decisions log`, as one string.
 
-    An indented or otherwise non-bullet line inside the section continues the
-    previous entry, so a hard-wrapped entry reads as one string. The heading
-    match ignores case and surrounding whitespace.
+    A bullet's continuation lines are joined with single spaces: indented
+    lines (nested bullets included) at any point, and unindented prose only
+    until the first blank line, the Markdown lazy-continuation rule. After a
+    blank line, unindented prose closes the entry. Only a level-1 or level-2
+    heading outside a code fence ends the section, and the heading match
+    ignores case, so `### Step 3` subheadings and `#` lines in fenced code
+    stay inside it. An unindented code fence closes the open entry and its
+    contents join no entry; an indented fence is part of its entry.
     """
     in_log = False
+    in_fence = False
     entries: list[str] = []
+    open_entry = False
+    after_blank = False
     for line in text.splitlines():
-        if line.startswith("#"):
-            in_log = line.lstrip("#").strip().lower() == "decisions log"
+        stripped = line.strip()
+        indented = line[:1] in (" ", "\t")
+        if stripped.startswith(("```", "~~~")):
+            in_fence = not in_fence
+            if not indented:
+                # An unindented fence interrupts the bullet above it, and
+                # nothing inside it belongs to an entry.
+                open_entry = False
+                continue
+        if in_fence and not indented:
+            continue
+        heading = None if in_fence else _SECTION_HEADING_RE.match(line)
+        if heading is not None:
+            in_log = heading.group(1).lower() == "decisions log"
+            open_entry = False
             continue
         if not in_log:
             continue
-        stripped = line.strip()
-        if stripped.startswith(("- ", "* ")):
+        if not stripped:
+            after_blank = True
+            continue
+        if not indented and stripped.startswith(("- ", "* ")):
             entries.append(stripped[2:].strip())
-        elif stripped and entries:
+            open_entry = True
+        elif open_entry and (indented or not after_blank):
             entries[-1] = f"{entries[-1]} {stripped}"
+        else:
+            open_entry = False
+        after_blank = False
     return entries
 
 
@@ -187,13 +215,14 @@ def pending_questions(text: str) -> list[str]:
 
     An entry is unanswered when it ends in `A: pending`, matched without
     regard to case, spacing, or trailing punctuation. Each item is the
-    entry's text with that marker removed and wrapped lines joined by single
-    spaces. Entries outside the section, and answered ones, are ignored; a
-    file with no `## Decisions log` section yields `[]`
-    (`.claude/docs/pipeline.md` § Implementer questions).
+    entry's text with that marker (and the bullet of a nested `- A: pending`
+    answer) removed and wrapped lines joined by single spaces. Entries
+    outside the section, and answered ones, are ignored; a file with no
+    `## Decisions log` section yields `[]` (`.claude/docs/pipeline.md` §
+    Implementer questions).
     """
     return [
-        _PENDING_ANSWER_RE.sub("", entry)
+        _PENDING_ANSWER_RE.sub("", entry).rstrip(" -*")
         for entry in _decisions_log_entries(text)
         if _PENDING_ANSWER_RE.search(entry)
     ]
@@ -289,10 +318,9 @@ def _is_review_filename(name: str) -> bool:
     The rejection loop (`.claude/docs/pipeline.md` § The rejection loop)
     writes one per rejected round alongside the real `sh-XXX-<slug>.md` task
     file, and `approve-task` moves them to `tasks/completed/` with it. Its
-    name matches the same
-    `sh-NNN-<slug>.md` shape as a real task file, so every id/path lookup
-    below must reject it explicitly rather than treating it as a second
-    task entry sharing that id.
+    name matches the same `sh-NNN-<slug>.md` shape as a real task file, so
+    every id/path lookup below must reject it explicitly rather than
+    treating it as a second task entry sharing that id.
     """
     return bool(_REVIEW_FILENAME_RE.match(name))
 

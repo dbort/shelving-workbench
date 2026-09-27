@@ -807,6 +807,44 @@ def test_pending_questions_ignores_a_wrapped_answered_entry() -> None:
     assert pending_questions(text) == []
 
 
+def test_pending_questions_prose_after_a_blank_line_closes_the_entry() -> None:
+    # The log is the last section in the task template, so free-form notes
+    # written under the list must not swallow an open question's marker.
+    text = "## Decisions log\n- Q: x? A: pending\n\nNotes: revisit after sh-030.\n"
+    assert pending_questions(text) == ["Q: x?"]
+
+
+def test_pending_questions_indented_lines_after_a_blank_line_continue() -> None:
+    text = "## Decisions log\n- Q: x? Options: a; b.\n\n  Recommended: a. A: pending\n"
+    assert pending_questions(text) == ["Q: x? Options: a; b. Recommended: a."]
+
+
+def test_pending_questions_subheadings_and_fenced_hashes_stay_in_the_log() -> None:
+    text = (
+        "## Decisions log\n"
+        "### Step 3\n"
+        "- Q: first? A: pending\n"
+        "```sh\n"
+        "# not a heading\n"
+        "```\n"
+        "- Q: second? A: pending\n"
+        "## Next section\n"
+        "- Q: outside? A: pending\n"
+    )
+    assert pending_questions(text) == ["Q: first?", "Q: second?"]
+
+
+def test_pending_questions_needs_a_word_boundary_before_the_marker() -> None:
+    text = "## Decisions log\n- Q: keep the DATA: pending flag? A (2026-09-27): yes\n"
+    text += "- Q: rename DATA: pending\n"
+    assert pending_questions(text) == []
+
+
+def test_pending_questions_nested_answer_bullet_keeps_the_question_text() -> None:
+    text = "## Decisions log\n- Q (2026-09-27, Step 1): which unit?\n  - A: pending\n"
+    assert pending_questions(text) == ["Q (2026-09-27, Step 1): which unit?"]
+
+
 def test_build_report_branch_fallback_to_completed_skips_review_files(
     tmp_path: Path,
 ) -> None:

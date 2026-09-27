@@ -152,8 +152,9 @@ searching prior tasks for precedent:
   blocking findings.
 ```
 
-`Round N` matches the file's `rN` (the first rejection is Round 1). Omit `## Non-blocking notes` when there are
-none. At the cap, append a final section:
+`Round N` matches the file's `rN` (the first rejection is Round 1).
+Omit `## Non-blocking notes` when there are none. At the cap, append a
+final section:
 
 ```markdown
 ## Cap reached
