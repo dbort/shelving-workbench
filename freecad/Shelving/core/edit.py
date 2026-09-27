@@ -539,6 +539,39 @@ def set_basis(unit: Unit, region_id: str, basis: Basis, catalog: Catalog) -> Uni
     return set_size(unit, region_id, size_mm, basis)
 
 
+def run_axis(unit: Unit, node_id: str) -> Axis:
+    """The axis of the run holding the node named ``node_id``: the axis its
+    size or thickness is measured along. Raises :class:`EditError` naming
+    ``node_id`` when it names the root or nothing in ``unit``."""
+    found = _locate(unit.root, node_id)
+    if found is None:
+        raise EditError(node_id, f"no item with id {node_id!r} inside the unit")
+    return found[0].axis
+
+
+def _board_and_region_before(unit: Unit, board_id: str) -> tuple[Division, int]:
+    """The run holding ``board_id`` and the index of the region immediately
+    before it. Raises :class:`EditError` naming ``board_id`` when it names
+    no board, or a board with no region immediately before it."""
+    found = _locate(unit.root, board_id)
+    if found is None or not isinstance(found[0].items[found[1]], Board):
+        raise EditError(board_id, f"no board with id {board_id!r}")
+    parent, index = found
+    if index == 0 or isinstance(parent.items[index - 1], Board):
+        raise EditError(
+            board_id, f"board {board_id!r} has no region before it to resize"
+        )
+    return parent, index - 1
+
+
+def region_before(unit: Unit, board_id: str) -> str:
+    """The id of the region a drag of ``board_id`` resizes: the one
+    immediately before it in its run. Raises :class:`EditError` on the same
+    terms as :func:`move_board`'s board checks."""
+    parent, index = _board_and_region_before(unit, board_id)
+    return parent.items[index].id
+
+
 def move_board(unit: Unit, board_id: str, low_face_mm: float, catalog: Catalog) -> Unit:
     """``unit`` with the board named ``board_id`` dragged so its low face
     along its run's axis sits at ``low_face_mm`` (a unit-frame coordinate).
@@ -553,18 +586,10 @@ def move_board(unit: Unit, board_id: str, low_face_mm: float, catalog: Catalog) 
     it names no board, or a board with no region immediately before it, and
     naming that region when the drag would leave it no positive size.
     """
-    found = _locate(unit.root, board_id)
-    if found is None or not isinstance(found[0].items[found[1]], Board):
-        raise EditError(board_id, f"no board with id {board_id!r}")
-    parent, index = found
-    if index == 0 or isinstance(parent.items[index - 1], Board):
-        raise EditError(
-            board_id, f"board {board_id!r} has no region before it to resize"
-        )
-    region = parent.items[index - 1]
-    axis_index = _axis_index(parent.axis)
+    parent, index = _board_and_region_before(unit, board_id)
+    region = parent.items[index]
     spaces = solve(unit, catalog)
-    region_low_mm = spaces[region.id].origin_mm(axis_index)
+    region_low_mm = spaces[region.id].origin_mm(_axis_index(parent.axis))
     clear_mm = low_face_mm - region_low_mm
     if clear_mm <= 0:
         raise EditError(
@@ -572,5 +597,50 @@ def move_board(unit: Unit, board_id: str, low_face_mm: float, catalog: Catalog) 
             f"the drag would leave {region.id!r} no room: {clear_mm:g}mm",
         )
     basis = region.rule.basis if isinstance(region.rule, Fixed) else Basis.CLEAR
-    size_mm = _size_in_basis_mm(unit, parent, index - 1, clear_mm, basis, catalog)
+    size_mm = _size_in_basis_mm(unit, parent, index, clear_mm, basis, catalog)
     return set_size(unit, region.id, size_mm, basis)
+
+
+@dataclasses.dataclass(frozen=True)
+class Measurement:
+    """A region's size as the editor shows it."""
+
+    # What the region's size measures: its Fixed rule's basis, or
+    # Basis.CLEAR for a Weighted or Fill region, which is what a typed size
+    # or a drag would fix it in.
+    basis: Basis
+    # Whether the region's rule is Fixed; False means it shares slack.
+    fixed: bool
+    clear_mm: float
+    # clear_mm plus the next board's catalog thickness, the number a
+    # Basis.WITH_NEXT rule stores; None when no board follows the region.
+    spacing_mm: float | None
+
+    @property
+    def size_mm(self) -> float:
+        """The size in :attr:`basis`: the number a field shows for it."""
+        if self.basis is Basis.WITH_NEXT and self.spacing_mm is not None:
+            return self.spacing_mm
+        return self.clear_mm
+
+
+def measure(
+    unit: Unit, region_id: str, spaces: Mapping[str, Space], catalog: Catalog
+) -> Measurement:
+    """The :class:`Measurement` of the region named ``region_id``, read from
+    ``spaces`` (``unit`` solved against ``catalog``). Raises
+    :class:`EditError` when ``region_id`` names the root, a board, or
+    nothing, the regions :func:`set_size` refuses."""
+    parent, index = _locate_region(unit, region_id)
+    region = parent.items[index]
+    clear_mm = spaces[region_id].extent_mm(_axis_index(parent.axis))
+    spacing_mm: float | None = None
+    if index + 1 < len(parent.items) and isinstance(parent.items[index + 1], Board):
+        spacing_mm = _size_in_basis_mm(
+            unit, parent, index, clear_mm, Basis.WITH_NEXT, catalog
+        )
+    fixed = isinstance(region.rule, Fixed)
+    basis = region.rule.basis if isinstance(region.rule, Fixed) else Basis.CLEAR
+    return Measurement(
+        basis=basis, fixed=fixed, clear_mm=clear_mm, spacing_mm=spacing_mm
+    )

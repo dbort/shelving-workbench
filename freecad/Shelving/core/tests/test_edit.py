@@ -9,8 +9,12 @@ import pytest
 
 from freecad.Shelving.core.edit import (
     EditError,
+    Measurement,
+    measure,
     merge_at,
     move_board,
+    region_before,
+    run_axis,
     set_basis,
     set_size,
     split_region,
@@ -1149,3 +1153,42 @@ def test_move_board_refuses_a_drag_past_the_region_below() -> None:
     with pytest.raises(EditError) as err:
         move_board(_column_unit(Fill()), "shelf", 10.0, CATALOG)
     assert err.value.node_id == "lower"
+
+
+def test_measure_reports_both_numbers_and_the_basis_a_size_would_use() -> None:
+    fill = _column_unit(Fill())
+    measured = measure(fill, "lower", solve(fill, CATALOG), CATALOG)
+    assert measured.basis is Basis.CLEAR
+    assert measured.fixed is False
+    assert measured.spacing_mm == pytest.approx(measured.clear_mm + 18.0)
+    spacing = _column_unit(Fixed(300.0, Basis.WITH_NEXT))
+    assert measure(spacing, "lower", solve(spacing, CATALOG), CATALOG) == Measurement(
+        basis=Basis.WITH_NEXT, fixed=True, clear_mm=282.0, spacing_mm=300.0
+    )
+    assert measure(
+        spacing, "lower", solve(spacing, CATALOG), CATALOG
+    ).size_mm == pytest.approx(300.0)
+
+
+def test_measure_has_no_spacing_without_a_board_after_the_region() -> None:
+    unit = _region_before_region_unit()
+    measured = measure(unit, "bay", solve(unit, CATALOG), CATALOG)
+    assert measured.spacing_mm is None
+    assert measured.size_mm == measured.clear_mm
+
+
+@pytest.mark.parametrize("node_id", ["shelf", "column", "no-such-id"])
+def test_measure_refuses_what_set_size_refuses(node_id: str) -> None:
+    unit = _column_unit(Fill())
+    with pytest.raises(EditError):
+        measure(unit, node_id, solve(unit, CATALOG), CATALOG)
+
+
+def test_region_before_and_run_axis() -> None:
+    unit = _column_unit(Fill())
+    assert region_before(unit, "shelf") == "lower"
+    assert run_axis(unit, "shelf") is Axis.Z
+    with pytest.raises(EditError):
+        region_before(unit, "bottom")
+    with pytest.raises(EditError):
+        run_axis(unit, "column")
