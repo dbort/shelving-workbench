@@ -25,7 +25,7 @@ task uses:
   delivered it.
 
 Set **Task sh-XXX** in the same change that creates the task file. The
-flip to **Done sh-XXX** is made by `approve-task` when the branch merges
+flip to **Done sh-XXX** is made by `/ship` when the branch merges
 to `main`, never by the task's own implementation or review steps.
 
 ### Milestones split across several tasks
@@ -51,10 +51,10 @@ applies:
 
 `new-task` writes this block when it creates a task file for the
 milestone: it adds the checklist, converting a single-task milestone if
-needed, and keeps the **Status** id list in sync. `approve-task` ticks a
+needed, and keeps the **Status** id list in sync. `/ship` ticks a
 task's box when its branch merges and flips the rollup to **Done …** as
 it ticks the last box. The human-gate rule is unchanged: no agent ticks a
-box or edits the **Status** line outside `approve-task`, or `new-task` at
+box or edits the **Status** line outside `/ship`, or `new-task` at
 task creation.
 
 ## M0 — Scaffold

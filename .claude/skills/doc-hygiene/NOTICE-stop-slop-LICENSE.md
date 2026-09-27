@@ -1,6 +1,7 @@
 # Third-party notice
 
-The "Style Rules" section of `SKILL.md` in this directory is adapted from
+The style rules in the repo root's `CLAUDE.md` § Writing style by
+destination, which this directory's `SKILL.md` applies, are adapted from
 the **stop-slop** skill by Hardik Pandya
 (<https://github.com/hardikpandya/stop-slop>), used and modified under the
 MIT License reproduced below. The adaptation trims and rephrases the
