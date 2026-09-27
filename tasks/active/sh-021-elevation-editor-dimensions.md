@@ -1,9 +1,6 @@
 ---
 id: sh-021
 title: "The elevation editor: dimensions"
-current_agent: implementer
-current_phase: planning
-review_rejections: 0
 blocked_by: [sh-020]
 ---
 
@@ -18,12 +15,6 @@ interactive choice M7 deferred here, since a panel has somewhere to put the
 question. The dimension field is FreeCAD's own quantity input, so an expression
 naming a variable works and this workbench inspects nothing a user types.
 Milestone M9, part 2 of 2.
-
-## Status
-- [ ] Planning
-- [ ] Implementation
-- [ ] Review
-- [ ] User sign-off
 
 ## Must Have
 - [ ] `pixi run tests` green.
@@ -58,7 +49,7 @@ Milestone M9, part 2 of 2.
 - [ ] `docs/manual-qa.md`'s M9 section gains the dimension cases.
 - [ ] `mypy --strict` clean.
 
-## Frontier Advice
+## Advice
 
 DRAGGING CHANGES THE NUMBER, NEVER WHAT IT MEASURES. This is the rule the whole
 task hangs on. A region's `Basis` is set explicitly and persists; a drag
@@ -138,7 +129,7 @@ stays simple does not apply; this task adds no shell.
 
 Every length identifier carries `_mm`.
 
-## Execution Plan
+## Plan
 
 - [ ] **Step 1** (spike, no committed code): Before writing the panel, open a real FreeCAD GUI session and confirm `FreeCADGui.UiLoader().createWidget("Gui::QuantitySpinBox")` returns a usable widget, that it accepts `1 + 1/2"` and an expression naming a `VarSet`, and that it exposes the resolved quantity to Python. Record the answer in `docs/freecadcmd-notes.md` under a heading for GUI-only widget access, including the exact widget name that worked. If none works, record that and use a plain field with `FreeCAD.Units.parseQuantity` for the rest of this task.
 
@@ -153,3 +144,5 @@ Every length identifier carries `_mm`.
 - [ ] **Step 6** (`tools/freecad_editor_smoke.py`): Extend the headless check, driving the session. Assert: a set size fixes that region and redistributes its siblings; a drag changes the number and leaves the region's basis as it was; toggling basis leaves every board's placement identical; changing the catalog thickness afterwards holds board positions for a `WITH_NEXT` region and moves them for a `CLEAR` one in the same document; an untagged box is listed as left alone and survives unless selected, and is removed inside the transaction when it is; and cancel after all of the above restores the document exactly.
 
 - [ ] **Step 7** (`docs/manual-qa.md`, `README.md`): Extend the `## M9` section with the dimension cases: type an exact opening and watch the rest redistribute; type `1 + 1/2"` and confirm the field resolves it to 38.10 mm in the readout; bind the field to a `VarSet` property with the f(x) button and confirm it follows; drag a board and confirm the readout shows the basis it already had; switch a dimension to spacing and confirm nothing moves; change the stock thickness and confirm the spacing-based shelves hold while the clear-based ones move; and confirm the untagged-object list appears with nothing checked. Extend the README glossary with measurement basis and the drag rule.
+
+## Review log

@@ -1,9 +1,6 @@
 ---
 id: sh-026
 title: "Reconcile a board's catalog-resolved thickness with its raw measured width"
-current_agent: implementer
-current_phase: implementation
-review_rejections: 0
 blocked_by: [sh-025]
 ---
 
@@ -21,12 +18,6 @@ numbers differ, even by a fraction of a millimetre, a division with no
 already resolves every board's material before building the tree
 (`ctx.materials_by_name`); it just never uses that to keep sibling sizes
 consistent with it.
-
-## Status
-- [x] Planning
-- [ ] Implementation
-- [ ] Review
-- [ ] User sign-off
 
 ## Must Have
 - [ ] `pixi run tests` green.
@@ -77,7 +68,7 @@ consistent with it.
       Do not touch it.
 - [ ] `mypy --strict` clean over every changed file.
 
-## Frontier Advice
+## Advice
 
 sh-025 HAS MERGED; `blocked_by` STAYS FOR THE RECORD, NOT AS A LIVE GATE.
 `sh-025` (fixed scan's divider-height stretching, in `tasks/completed/`)
@@ -181,17 +172,16 @@ STANDING OBLIGATIONS (`CLAUDE.md`). Typed Python already governs this
 codebase throughout; no new bare `Any` or bare containers. `mypy --strict`
 clean. Shell stays simple does not apply; this task adds no shell.
 
-## Execution Plan
+## Plan
 
 - [ ] **Step 1** (`freecad/Shelving/core/scan.py`): Thread catalog/material
       resolution into `_finalize_items` and implement the single-absorber
-      and ambiguous-error cases per Frontier Advice.
+      and ambiguous-error cases per Advice.
 - [ ] **Step 2** (`freecad/Shelving/core/tests/test_scan.py`): Add the two new
       hand-built tests (single absorber succeeds; ambiguous case raises
       `ScanError`), and remove `snap_mm=0.1` from
       `test_real_stair_step_whole_tree`'s `scan` call, confirming it still
-      passes at the true default. Steps 1-2 are one deferred-verification
-      unit (`pipeline.md` § Deferred verification): step 1 alone does not
+      passes at the true default. Steps 1-2 are one unit: step 1 alone does not
       make step 2's still-`snap_mm=0.1`-pinned assertions meaningful, so
       `pixi run tests` is only required green once, after step 2.
 - [ ] **Step 3** (`freecad/Shelving/core/tests/test_svg.py`): Remove `snap_mm=0.1`
@@ -208,3 +198,5 @@ clean. Shell stays simple does not apply; this task adds no shell.
       sign-off found `real_two_units` fails to solve on `main` today.
       Depends on step 1's fix landing first; run `pixi run tests` green
       after this step.
+
+## Review log

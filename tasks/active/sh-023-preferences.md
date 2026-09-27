@@ -1,9 +1,6 @@
 ---
 id: sh-023
 title: "The preferences page"
-current_agent: implementer
-current_phase: planning
-review_rejections: 0
 blocked_by: [sh-021]
 ---
 
@@ -15,12 +12,6 @@ starter unit's width, height, depth and default material, and the snap and
 joint-clearance tolerances scanning uses. The tolerances matter because they are
 what someone diagnosing a refusal needs to reach, and editing the source is not
 a reasonable answer. Milestone M10, part 2 of 3.
-
-## Status
-- [ ] Planning
-- [ ] Implementation
-- [ ] Review
-- [ ] User sign-off
 
 ## Must Have
 - [ ] `pixi run tests` green.
@@ -49,7 +40,7 @@ a reasonable answer. Milestone M10, part 2 of 3.
       take effect.
 - [ ] `mypy --strict` clean.
 
-## Frontier Advice
+## Advice
 
 SIX VALUES, NO MORE. The page holds what a user changes often and what someone
 diagnosing a refusal needs: the starter unit's four values and the two
@@ -102,7 +93,7 @@ simple applies: the only shell edit is adding a smoke block to
 
 Every length identifier carries `_mm`.
 
-## Execution Plan
+## Plan
 
 - [ ] **Step 1** (`freecad/Shelving/preferences.py`, tests): Create the module with an injected parameter source. A `Protocol` with typed getters for a float and a string. One reader per value, each carrying its documented default as a module constant imported from the core where one exists, validating and falling back. `read_tolerances()` returning both together and falling back to both defaults when the snap is at or above the clearance. A reporting hook the caller supplies, so the module itself does not import FreeCAD. Tests over an injected mapping covering: each value read cleanly; each missing, each malformed, each out of range; the tolerance cross-validation; and an assertion that every default equals the core constant it replaces.
 
@@ -113,3 +104,5 @@ Every length identifier carries `_mm`.
 - [ ] **Step 4** (`freecad/Shelving/resources/preferences.ui`, `freecad/Shelving/init_gui.py`): Create the page with FreeCAD's own preference widgets bound to the six parameter paths, grouped as starter unit and tolerances, each with a tooltip saying what it affects and, for the tolerances, what a refusal looks like when they are wrong. Register it from `init_gui` with `FreeCADGui.addPreferencePage` behind the headless-safe guard.
 
 - [ ] **Step 5** (`tools/freecad_prefs_smoke.py`, `tools/run-tests.sh`, `docs/manual-qa.md`): The headless check. Assert: the readers bound to FreeCAD's parameter store return the documented defaults on a clean profile; writing a value through `ParamGet` changes what Create Unit produces; writing a bad value leaves behaviour at the default and reports; the tolerance cross-validation fires when both are written incompatibly; and registering the page does not raise when the GUI is absent. Print `shelving prefs OK` and add a matching block to `tools/run-tests.sh`. Add a manual case for opening the page, changing the starter width, and creating a unit at the new size.
+
+## Review log

@@ -27,9 +27,8 @@ types-pyyaml = ">=6.0.12.20260906,<7"
 # tools/run-tests.sh, which chains static analysis, the layout core unit
 # suite, the repository-consistency checks, the workflow-hardening lint, and the
 # headless FreeCAD import smoke. `demo` renders a sample solved layout.
-# `task-status` reports tasks/active/'s pipeline state deterministically
-# (`tools/task_status.py`); it is not part of the `tests` gate itself
-# (`.claude/docs/pipeline.md` § Verification commands).
+# `task-status` lists the tasks/active/ backlog and the next free task id
+# (`.claude/docs/pipeline.md` § Status); it is not part of the `tests` gate.
 [tasks]
 tests = "tools/run-tests.sh"
 demo = "python tools/layout_demo.py"
