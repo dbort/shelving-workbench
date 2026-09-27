@@ -1,9 +1,6 @@
 ---
 id: sh-024
 title: "User documentation and the v1 release"
-current_agent: implementer
-current_phase: planning
-review_rejections: 0
 blocked_by: [sh-022, sh-023]
 ---
 
@@ -15,12 +12,6 @@ covering both ways in, adopting geometry you already have and starting from
 nothing, and what a refusal means; a finalised `package.xml`; and the release
 check of installing from the repository on a clean profile. Milestone M10, part
 3 of 3, and the last task before v1.
-
-## Status
-- [ ] Planning
-- [ ] Implementation
-- [ ] Review
-- [ ] User sign-off
 
 ## Must Have
 - [ ] `pixi run tests` green.
@@ -52,7 +43,7 @@ check of installing from the repository on a clean profile. Milestone M10, part
       by a check over the documents naming code identifiers.
 - [ ] `mypy --strict` clean.
 
-## Frontier Advice
+## Advice
 
 AUDIENCE: a FreeCAD user who has not seen this project. They know FreeCAD, they
 want shelving, and they have not read the scope document. Write for them.
@@ -107,7 +98,7 @@ not as a shell pipeline.
 The writing-style rules in `CLAUDE.md` § Writing style by destination apply in
 full to every document this task writes, and `doc-hygiene` is the authority.
 
-## Execution Plan
+## Plan
 
 - [ ] **Step 1** (`docs/user-guide.md`): Write the guide. Open with a paragraph on what the workbench does and who it is for. Then, in order: scanning a unit you already modelled, including what a container is and why one is required; creating a unit from nothing; editing in the panel, covering selection, split, merge, typed sizes, dragging, and what the measurement basis means with the thickness-change example; the material catalog and how a thickness change reaches boards; working alongside other tools, naming what Woodworking's cut list and drilling do with the output and that a document opens without this workbench installed. Use the vocabulary the README glossary defines and no other.
 
@@ -120,3 +111,5 @@ full to every document this task writes, and `doc-hygiene` is the authority.
 - [ ] **Step 5** (`docs/architecture.md`, repository-wide): Delete `docs/architecture.md`. First grep every document, task file and source comment for links or references to it and repoint each at `docs/scope-and-design.md`, or delete the reference where it only marked the supersession. Confirm nothing references the file afterwards.
 
 - [ ] **Step 6** (`docs/manual-qa.md`): Add a release section: install from the repository through the Addon Manager on a clean profile with no development symlink; create a unit; scan a unit modelled by hand; move a finished unit into a second document with an ordinary placement and confirm it is intact; and walk the user guide's steps exactly as written, confirming each does what it says. State that this section is the pre-release gate and is run once per release rather than per task.
+
+## Review log

@@ -1,9 +1,6 @@
 ---
 id: sh-022
 title: "Appearance and error surfacing"
-current_agent: implementer
-current_phase: planning
-review_rejections: 0
 blocked_by: [sh-021]
 ---
 
@@ -16,12 +13,6 @@ is never rewritten, so a user's own choices survive. Two commands take the
 workbench's opinion back on request, one for colour and one for labels. Makes
 every refusal across the workbench say the same kind of thing: what failed,
 which objects, and what to do. Milestone M10, part 1 of 3.
-
-## Status
-- [ ] Planning
-- [ ] Implementation
-- [ ] Review
-- [ ] User sign-off
 
 ## Must Have
 - [ ] `pixi run tests` green.
@@ -50,7 +41,7 @@ which objects, and what to do. Milestone M10, part 1 of 3.
       appearance.
 - [ ] `mypy --strict` clean.
 
-## Frontier Advice
+## Advice
 
 THE OWNERSHIP RULE, and everything here follows from it. The workbench states an
 opinion when it CREATES something and never again. A board gets a colour and a
@@ -104,7 +95,7 @@ stays simple does not apply; this task adds no shell.
 
 Every length identifier carries `_mm`.
 
-## Execution Plan
+## Plan
 
 - [ ] **Step 1** (`freecad/Shelving/core/appearance.py`, `freecad/Shelving/core/tests/test_appearance.py`): Create the deterministic colour mapping in the core, so it is testable without FreeCAD and the SVG renderer can share it. `colour_for(material_id) -> tuple[float, float, float]` hashing the id into a fixed palette of distinguishable colours, documented as chosen for distinguishability rather than realism. Tests: the same id maps to the same colour across calls; distinct ids in a realistic catalog map to distinct colours; every component is within range.
 
@@ -117,3 +108,5 @@ Every length identifier carries `_mm`.
 - [ ] **Step 5** (`freecad/Shelving/commands/`, `freecad/Shelving/init_gui.py`): Add `Shelving_RecolourUnit` and `Shelving_RelabelUnit` in the established shape, each requiring exactly one selected container, each opening one transaction, calling its `unit_ops` function, committing, and reporting the count changed. Add both ids to `init_gui`'s `command_ids`.
 
 - [ ] **Step 6** (`tools/freecad_write_smoke.py`, `docs/manual-qa.md`): Extend the write smoke: a created board's `ShapeColor` matches `colour_for` its material when a `ViewObject` exists and the path is skipped without raising when it does not; recolouring one board by hand and resizing leaves that colour; `recolour_unit` restores it and reports one changed; a board renamed by hand keeps its name through a resize and `relabel_unit` overwrites it and reports one changed; `relabel_unit` produces neutral side names with no facing set and left and right names after setting `ShelvingFacing`; and a refused operation leaves every board's size and placement unchanged. Add M10 cases to `docs/manual-qa.md` for colour appearing on a new unit, a hand colour surviving a resize, recolour taking it back, and a refusal showing its summary, objects and suggestion while selecting the objects in the 3D view.
+
+## Review log
