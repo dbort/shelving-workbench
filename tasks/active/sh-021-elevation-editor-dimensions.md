@@ -185,3 +185,11 @@ DECISIONS MADE DURING `/work` (2026-09-27):
 - **F4: Millimetre quantities without the `_mm` suffix** (`freecad/Shelving/editor/panel.py:128`, `freecad/Shelving/editor/panel.py:152`, `tools/freecad_editor_smoke.py:848`, `tools/freecad_editor_smoke.py:905`, `tests/test_editor_scene.py:277`): `value`, `shown`, `stock_thickness_before`, `grab`, and `_witness_xs`/`xs` need the `_mm` suffix.
 - **N1: Untagged checkboxes reset on every refresh** (`freecad/Shelving/editor/panel.py:404`): keep the check state of names still listed.
 - **N2: Axis-index helpers duplicated** (`freecad/Shelving/editor/session.py:64`, `freecad/Shelving/editor/session.py:71`): a shared `Vec3` component accessor in `core/geometry.py` would remove the copies.
+
+### Round 2: APPROVED
+- **N1: An exception before `main()` hangs the merge gate instead of failing it** (`tools/freecad_panel_smoke.py:27`, `tools/run-tests.sh:120`): an import-time exception leaves the offscreen GUI running with no timeout (verified: killed by `timeout 90`, exit 124). It can never pass falsely, but it contradicts the "exit code is trustworthy" comment. Guard the imports inside `main()` or a module-wide `try/finally: os._exit(...)`, or add a `timeout`.
+- **N2: Stale claims that the panel has no tested logic and no coverage** (`freecad/Shelving/editor/panel.py:6-10`, `README.md:196`): the panel smoke now drives this module, and the panel holds the start-drag threshold, unchanged-value suppression, and check-state preservation. Restate both passages.
+- **N3: `sed` artifact in the `_EditorView` docstring** (`freecad/Shelving/editor/panel.py:170`): "travelled_px" should read "travelled".
+- **N4: Round-1 N2 is only partly adopted** (`freecad/Shelving/core/edit.py:537`, `freecad/Shelving/core/edit.py:592`, `freecad/Shelving/core/edit.py:636`, `freecad/Shelving/editor/scene.py:286-289`): the new code in `edit.py` and `scene.py` still uses the local `_axis_index`/`_component_mm` copies instead of `Axis.component_index`/`Vec3.component_mm`.
+- **N5: Pixel offset without a unit suffix** (`tools/freecad_panel_smoke.py:179`): `step` should be `step_px`.
+- **N6: friction-002 may now be fixable** (`.claude/docs/friction-log.md:31`): the offscreen `freecad` harness is the test mode it asks for; consider a follow-up task.
