@@ -1,13 +1,10 @@
 """Offscreen-GUI check for the elevation editor's task panel.
 
+A self-invoking pytest module, like ``tools/freecad_scan_smoke.py``, but run
+under ``QT_QPA_PLATFORM=offscreen freecad`` rather than ``freecadcmd``:
 ``FreeCADGui.UiLoader``, and with it the ``Gui::QuantitySpinBox`` the
-dimension field is built from, exists only in the full GUI, so
-``tools/run-tests.sh`` runs this under ``QT_QPA_PLATFORM=offscreen freecad``
-rather than ``freecadcmd`` (``docs/freecadcmd-notes.md``, "GUI-only widget
-access"). The GUI keeps running after a script returns, so this ends in
-``os._exit`` with the pass/fail status. It reports on ``sys.__stderr__``,
-the process's own stream, since the GUI may route ``sys.stdout`` to its
-Report view.
+dimension field is built from, exists only in the full GUI
+(``docs/freecadcmd-notes.md``, "GUI-only widget access").
 
 ``EditUnitPanel`` is built directly rather than through
 ``FreeCADGui.Control.showDialog``: the task dialog machinery adds nothing
@@ -16,9 +13,31 @@ this check asserts.
 
 import os
 import sys
-import traceback
-from collections.abc import Callable
-from typing import cast
+
+# The self-invocation comes before any FreeCAD import, so a module that
+# fails to import is a pytest collection error with a failing status rather
+# than an exception the GUI swallows while it keeps running forever. The
+# environment variable stops pytest's own reimport of this file from
+# recursing (docs/freecadcmd-notes.md). The GUI routes sys.stdout to its
+# Report view and survives sys.exit, so the report goes to the process's
+# own streams and the run ends in os._exit.
+if os.environ.get("_FREECAD_PANEL_SMOKE_RUNNING") != "1":
+    os.environ["_FREECAD_PANEL_SMOKE_RUNNING"] = "1"
+    _exit_code = 1
+    try:
+        import pytest
+
+        if sys.__stdout__ is not None and sys.__stderr__ is not None:
+            sys.stdout = sys.__stdout__
+            sys.stderr = sys.__stderr__
+        _exit_code = pytest.main([__file__, "-v"])
+    finally:
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(_exit_code)
+
+from collections.abc import Iterator  # noqa: E402
+from typing import cast  # noqa: E402
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _REPO_ROOT not in sys.path:
@@ -26,6 +45,7 @@ if _REPO_ROOT not in sys.path:
 
 import FreeCAD  # noqa: E402
 import FreeCADGui  # noqa: E402
+import pytest  # noqa: E402
 from PySide6 import QtCore, QtGui, QtTest, QtWidgets  # noqa: E402
 
 from freecad.Shelving.core.layout import (  # noqa: E402
@@ -128,6 +148,17 @@ class _Fixture:
         FreeCAD.closeDocument(self.doc.Name)
 
 
+@pytest.fixture
+def unit_panel(request: pytest.FixtureRequest) -> Iterator[_Fixture]:
+    """A :class:`_Fixture` in a document named after the test, closed after
+    it, pass or fail."""
+    fixture = _Fixture(request.node.name)
+    try:
+        yield fixture
+    finally:
+        fixture.close()
+
+
 def _shelf_run(region: Region) -> Division:
     """The ``Division`` the fixture's one shelf sits in."""
     assert isinstance(region, Division)
@@ -176,8 +207,10 @@ def _press_move_release(fixture: _Fixture, dy_px: int) -> None:
     held = QtCore.Qt.MouseButton.LeftButton
     _mouse(view, QtCore.QEvent.Type.MouseButtonPress, start, held)
     # Two steps, so the second is a move after the drag has begun.
-    for step in (dy_px // 2, dy_px):
-        _mouse(view, QtCore.QEvent.Type.MouseMove, start + QtCore.QPoint(0, step), held)
+    for step_px in (dy_px // 2, dy_px):
+        _mouse(
+            view, QtCore.QEvent.Type.MouseMove, start + QtCore.QPoint(0, step_px), held
+        )
     _mouse(
         view,
         QtCore.QEvent.Type.MouseButtonRelease,
@@ -186,39 +219,27 @@ def _press_move_release(fixture: _Fixture, dy_px: int) -> None:
     )
 
 
-def check_the_field_is_freecads_quantity_widget() -> None:
-    fixture = _Fixture("panel_smoke_widget")
-    try:
-        widget = fixture.panel.size_field.quantity_widget
-        assert widget is not None
-        assert widget.inherits("Gui::QuantitySpinBox")
-    finally:
-        fixture.close()
+def test_the_field_is_freecads_quantity_widget(unit_panel: _Fixture) -> None:
+    widget = unit_panel.panel.size_field.quantity_widget
+    assert widget is not None
+    assert widget.inherits("Gui::QuantitySpinBox")
 
 
-def check_a_typed_size_and_a_varset_expression() -> None:
-    fixture = _Fixture("panel_smoke_typed")
-    try:
-        fixture.select(fixture.lower)
-        fixture.type_size("250")
-        assert fixture.rule(fixture.lower) == Fixed(250.0), fixture.rule(fixture.lower)
-        fixture.type_size("VarSet.Len - 20 mm")
-        assert fixture.rule(fixture.lower) == Fixed(280.0), fixture.rule(fixture.lower)
-        assert fixture.panel.message_label.text() == ""
-    finally:
-        fixture.close()
+def test_a_typed_size_and_a_varset_expression(unit_panel: _Fixture) -> None:
+    unit_panel.select(unit_panel.lower)
+    unit_panel.type_size("250")
+    assert unit_panel.rule(unit_panel.lower) == Fixed(250.0)
+    unit_panel.type_size("VarSet.Len - 20 mm")
+    assert unit_panel.rule(unit_panel.lower) == Fixed(280.0)
+    assert unit_panel.panel.message_label.text() == ""
 
 
-def check_an_unchanged_focus_out_leaves_a_fill_region() -> None:
-    fixture = _Fixture("panel_smoke_focus_out")
-    try:
-        fixture.select(fixture.upper)
-        assert fixture.rule(fixture.upper) == Fill()
-        fixture.panel.size_field.line_edit.editingFinished.emit()
-        _process_events()
-        assert fixture.rule(fixture.upper) == Fill(), fixture.rule(fixture.upper)
-    finally:
-        fixture.close()
+def test_an_unchanged_focus_out_leaves_a_fill_region(unit_panel: _Fixture) -> None:
+    unit_panel.select(unit_panel.upper)
+    assert unit_panel.rule(unit_panel.upper) == Fill()
+    unit_panel.panel.size_field.line_edit.editingFinished.emit()
+    _process_events()
+    assert unit_panel.rule(unit_panel.upper) == Fill()
 
 
 def _accept_formula_dialog(expression: str) -> None:
@@ -241,64 +262,54 @@ def _accept_formula_dialog(expression: str) -> None:
     _process_events()
 
 
-def check_an_fx_binding_applies_then_leaves_the_field_editable() -> None:
-    fixture = _Fixture("panel_smoke_fx")
-    try:
-        fixture.select(fixture.lower)
-        widget = fixture.panel.size_field.quantity_widget
-        assert widget is not None
-        widget.setFocus()
-        QtTest.QTest.keyClick(widget, QtCore.Qt.Key.Key_Equal)
-        _process_events()
-        _accept_formula_dialog("VarSet.Len - 20 mm")
-        assert fixture.rule(fixture.lower) == Fixed(280.0), fixture.rule(fixture.lower)
-        probe = fixture.session.probe
-        assert probe is not None
-        assert not any(path == PROBE_PROPERTY for path, _expr in probe.ExpressionEngine)
-        assert not fixture.panel.size_field.line_edit.isReadOnly()
-        # Typing still works after the selection moves away and back. (Upper
-        # cannot take a typed size here: with lower fixed it is the run's
-        # only slack absorber.)
-        fixture.select(fixture.upper)
-        fixture.select(fixture.lower)
-        fixture.type_size("250")
-        assert fixture.rule(fixture.lower) == Fixed(250.0), fixture.rule(fixture.lower)
-    finally:
-        fixture.close()
+def test_an_fx_binding_applies_then_leaves_the_field_editable(
+    unit_panel: _Fixture,
+) -> None:
+    unit_panel.select(unit_panel.lower)
+    widget = unit_panel.panel.size_field.quantity_widget
+    assert widget is not None
+    widget.setFocus()
+    QtTest.QTest.keyClick(widget, QtCore.Qt.Key.Key_Equal)
+    _process_events()
+    _accept_formula_dialog("VarSet.Len - 20 mm")
+    assert unit_panel.rule(unit_panel.lower) == Fixed(280.0)
+    probe = unit_panel.session.probe
+    assert probe is not None
+    assert not any(path == PROBE_PROPERTY for path, _expr in probe.ExpressionEngine)
+    assert not unit_panel.panel.size_field.line_edit.isReadOnly()
+    # Typing still works after the selection moves away and back. (Upper
+    # cannot take a typed size here: with lower fixed it is the run's only
+    # slack absorber.)
+    unit_panel.select(unit_panel.upper)
+    unit_panel.select(unit_panel.lower)
+    unit_panel.type_size("250")
+    assert unit_panel.rule(unit_panel.lower) == Fixed(250.0)
 
 
-def check_a_jittered_click_does_not_drag() -> None:
-    fixture = _Fixture("panel_smoke_jitter")
-    try:
-        jitter_px = QtWidgets.QApplication.startDragDistance() - 1
-        _press_move_release(fixture, -jitter_px)
-        assert fixture.rule(fixture.lower) == Fill(), fixture.rule(fixture.lower)
-        assert fixture.session.selected_id == fixture.shelf
-        assert fixture.panel.delete_button.isEnabled()
-    finally:
-        fixture.close()
+def test_a_jittered_click_does_not_drag(unit_panel: _Fixture) -> None:
+    jitter_px = QtWidgets.QApplication.startDragDistance() - 1
+    _press_move_release(unit_panel, -jitter_px)
+    assert unit_panel.rule(unit_panel.lower) == Fill()
+    assert unit_panel.session.selected_id == unit_panel.shelf
+    assert unit_panel.panel.delete_button.isEnabled()
 
 
-def check_a_drag_keeps_the_basis() -> None:
-    fixture = _Fixture("panel_smoke_drag")
-    try:
-        fixture.select(fixture.lower)
-        fixture.type_size("300")
-        fixture.panel.basis_combo.setCurrentIndex(1)
-        _process_events()
-        assert fixture.rule(fixture.lower) == Fixed(318.0, Basis.WITH_NEXT)
-        _press_move_release(fixture, -40)
-        rule = fixture.rule(fixture.lower)
-        assert isinstance(rule, Fixed), rule
-        assert rule.basis is Basis.WITH_NEXT, rule
-        assert rule.size_mm > 318.0 + _TOL_MM, rule
-        assert fixture.session.selected_id == fixture.lower
-        assert fixture.panel.basis_combo.currentIndex() == 1
-    finally:
-        fixture.close()
+def test_a_drag_keeps_the_basis(unit_panel: _Fixture) -> None:
+    unit_panel.select(unit_panel.lower)
+    unit_panel.type_size("300")
+    unit_panel.panel.basis_combo.setCurrentIndex(1)
+    _process_events()
+    assert unit_panel.rule(unit_panel.lower) == Fixed(318.0, Basis.WITH_NEXT)
+    _press_move_release(unit_panel, -40)
+    rule = unit_panel.rule(unit_panel.lower)
+    assert isinstance(rule, Fixed)
+    assert rule.basis is Basis.WITH_NEXT
+    assert rule.size_mm > 318.0 + _TOL_MM
+    assert unit_panel.session.selected_id == unit_panel.lower
+    assert unit_panel.panel.basis_combo.currentIndex() == 1
 
 
-def check_untagged_objects_are_kept_unless_removed() -> None:
+def test_untagged_objects_are_kept_unless_removed() -> None:
     doc = FreeCAD.newDocument("panel_smoke_untagged")
     try:
         container = create_unit(doc)
@@ -332,16 +343,12 @@ def check_untagged_objects_are_kept_unless_removed() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
-def check_the_plain_field_fallback() -> None:
+def test_the_plain_field_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
     """With no ``UiLoader`` the field is a plain line edit whose text goes
     to ``parseQuantity`` untouched, and a parse error reaches the message
     line."""
-    loader = getattr(FreeCADGui, "UiLoader")  # noqa: B009 - restored below
-    setattr(FreeCADGui, "UiLoader", None)  # noqa: B010 - restored below
-    try:
-        fixture = _Fixture("panel_smoke_fallback")
-    finally:
-        setattr(FreeCADGui, "UiLoader", loader)  # noqa: B010
+    monkeypatch.setattr(FreeCADGui, "UiLoader", None, raising=False)
+    fixture = _Fixture("panel_smoke_fallback")
     try:
         assert fixture.panel.size_field.quantity_widget is None
         fixture.select(fixture.lower)
@@ -349,44 +356,10 @@ def check_the_plain_field_fallback() -> None:
         # reads the bare 1 as millimetres (docs/freecadcmd-notes.md).
         fixture.type_size('1 + 1/2"')
         rule = fixture.rule(fixture.lower)
-        assert isinstance(rule, Fixed), rule
-        assert abs(rule.size_mm - 38.1) < _TOL_MM, rule
+        assert isinstance(rule, Fixed)
+        assert abs(rule.size_mm - 38.1) < _TOL_MM
         fixture.type_size('12 1/2"')
         assert fixture.panel.message_label.text() != ""
         assert fixture.rule(fixture.lower) == rule
     finally:
         fixture.close()
-
-
-_CHECKS: tuple[Callable[[], None], ...] = (
-    check_the_field_is_freecads_quantity_widget,
-    check_a_typed_size_and_a_varset_expression,
-    check_an_unchanged_focus_out_leaves_a_fill_region,
-    check_an_fx_binding_applies_then_leaves_the_field_editable,
-    check_a_jittered_click_does_not_drag,
-    check_a_drag_keeps_the_basis,
-    check_untagged_objects_are_kept_unless_removed,
-    check_the_plain_field_fallback,
-)
-
-
-def main() -> int:
-    report = sys.__stderr__
-    assert report is not None
-    failed = 0
-    for check in _CHECKS:
-        try:
-            check()
-        except Exception:  # noqa: BLE001 - reported, then the next check runs
-            failed += 1
-            print(f"FAIL {check.__name__}", file=report)
-            traceback.print_exc(file=report)
-        else:
-            print(f"ok   {check.__name__}", file=report)
-    if failed == 0:
-        print("shelving panel OK", file=report)
-    report.flush()
-    return 1 if failed else 0
-
-
-os._exit(main())

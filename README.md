@@ -193,7 +193,8 @@ The layout vocabulary and how each term maps onto the code in
 - **the session/panel layer**: `freecad.Shelving.editor.session` and
   `panel.py`. The session owns the document, the one transaction the whole
   editing session shares, and the write path; the panel is the Qt task
-  dialog wiring buttons to it and holds no logic of its own worth testing.
+  dialog wiring controls to it, holding only input handling, which
+  `tools/freecad_panel_smoke.py` covers under the offscreen GUI.
 - **Session**: `freecad.Shelving.editor.session.Session`. Reads a container
   once, then answers `can_split`/`can_merge` for the current selection and
   applies `split`/`merge`, `set_size`/`set_basis`, and a drag

@@ -159,6 +159,12 @@ DECISIONS MADE DURING `/work` (2026-09-27):
   jumping the board by up to half its thickness on the first move. The
   drag's position-to-size conversion is `core.edit.move_board`, which calls
   `set_size`, keeping that decision in the fast-tested core.
+- SMOKE TESTS ARE PYTEST MODULES (user instruction, after round 2). Every
+  smoke under `tools/` is a self-invoking pytest module, never a hand-rolled
+  runner or marker line, unless there is a strong stated reason.
+  `freecad_panel_smoke.py` and `freecad_editor_smoke.py` both self-invoke
+  before any FreeCAD import, so an import failure fails the run instead of
+  passing (`freecadcmd`) or hanging (the GUI).
 
 ## Plan
 

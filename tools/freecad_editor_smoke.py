@@ -3,17 +3,30 @@
 Drives :class:`freecad.Shelving.editor.session.Session` directly rather than
 :class:`freecad.Shelving.editor.panel.EditUnitPanel`: ``FreeCADGui.Control``,
 which the panel needs to show itself, does not exist under ``freecadcmd``
-(``docs/freecadcmd-notes.md``), so the panel's own wiring is a
-``docs/manual-qa.md`` case instead. Unlike ``tools/freecad_scan_smoke.py``,
-this is a plain script, not a self-invoking ``pytest`` module: ``freecadcmd``
-exits 0 on an uncaught exception, so it prints ``shelving editor OK`` as its
-last line only when every assertion held, and ``tools/run-tests.sh`` greps
-the captured output for that line.
+(``docs/freecadcmd-notes.md``). The panel's own wiring is covered by
+``tools/freecad_panel_smoke.py`` under the offscreen GUI. A self-invoking
+pytest module like ``tools/freecad_scan_smoke.py``.
 """
 
 import os
 import sys
-from typing import Protocol, cast
+
+# The self-invocation comes before any FreeCAD or workbench import:
+# freecadcmd exits 0 on an uncaught exception (docs/freecadcmd-notes.md), so
+# an import failure at the top level would pass silently, whereas inside
+# pytest's collection it is an error with a failing status. The environment
+# variable stops pytest's own reimport of this file from recursing.
+if os.environ.get("_FREECAD_EDITOR_SMOKE_RUNNING") != "1":
+    os.environ["_FREECAD_EDITOR_SMOKE_RUNNING"] = "1"
+    import pytest
+
+    _exit_code = pytest.main([__file__, "-v"])
+    # freecadcmd's teardown does not flush stdout, which would lose pytest's
+    # FAILURES section.
+    sys.stdout.flush()
+    sys.exit(_exit_code)
+
+from typing import Protocol, cast  # noqa: E402
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _REPO_ROOT not in sys.path:
@@ -253,7 +266,7 @@ def _assert_session_matches_document(session: Session) -> None:
         assert abs(float(obj.Height) - space.size.z_mm) <= tol_mm, (board_id, "size.z")
 
 
-def _check_an_editor_layout_survives_a_rescan() -> None:
+def test_an_editor_layout_survives_a_rescan() -> None:
     """bug-006 end to end: build the layout through one ``Session``, commit,
     and confirm a *fresh* ``Session`` (a real rescan, not the same in-memory
     tree) reads every board back at its just-written placement and size;
@@ -313,7 +326,7 @@ def _check_an_editor_layout_survives_a_rescan() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
-def _check_deleting_a_divider_reaches_the_merge_collapse_splice() -> None:
+def test_deleting_a_divider_reaches_the_merge_collapse_splice() -> None:
     """The collapse-then-splice path ``_splice_collapsed_child`` implements
     is reachable from a real ``Session`` edit, not only a hand-built core
     fixture. On the default unit: add a shelf, a divider in the bay below
@@ -381,7 +394,7 @@ def _check_deleting_a_divider_reaches_the_merge_collapse_splice() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
-def _check_split_created_board_keeps_its_name_across_edits() -> None:
+def test_split_created_board_keeps_its_name_across_edits() -> None:
     """bug-008: a board a split creates carries a fresh ``new_id()``, not a
     document object ``Name``, until ``write_container`` creates its object;
     ``Session._apply`` must adopt that real ``Name`` immediately so a
@@ -479,55 +492,59 @@ def _rotated_default_unit() -> Unit:
     )
 
 
-def _check_selection_permissions_and_split(doc: FreeCAD.Document) -> None:
+def test_selection_permissions_and_split() -> None:
     """Selecting a bay permits split and not merge; splitting writes one new
     board and two bays; selecting that board permits merge; merging removes
     it and restores the original board count and names. Also covers the
     "nothing selected" refusal both buttons can hit: no id was named to
     refuse, so ``EditFailure.node_id`` is ``None`` rather than an id string."""
-    container = create_unit(doc)
-    doc.recompute()
-    names_before = _board_names(container)
-
-    session = Session(container)
-    session.open()
+    doc = FreeCAD.newDocument("editor_smoke")
     try:
-        assert session.selected_id is None
-        no_selection_split = session.split("horizontal")
-        assert isinstance(no_selection_split, EditFailure), no_selection_split
-        assert no_selection_split.node_id is None, no_selection_split
-        no_selection_merge = session.merge()
-        assert isinstance(no_selection_merge, EditFailure), no_selection_merge
-        assert no_selection_merge.node_id is None, no_selection_merge
-
-        bay_id = _find_bay_id(session.unit.root)
-        bay_count_before = _bay_count(session.unit.root)
-        session.select(bay_id)
-        assert session.can_split() is True
-        assert session.can_merge() is False
-
-        unit_before_split = session.unit
-        result = session.split("horizontal")
-        assert result is None, result
+        container = create_unit(doc)
         doc.recompute()
-        assert _bay_count(session.unit.root) == bay_count_before + 1
-        names_after_split = _board_names(container)
-        assert len(names_after_split) == len(names_before) + 1, names_after_split
+        names_before = _board_names(container)
 
-        new_board_id = _find_new_board_id(unit_before_split.root, session.unit.root)
-        session.select(new_board_id)
-        assert session.can_split() is False
-        assert session.can_merge() is True
+        session = Session(container)
+        session.open()
+        try:
+            assert session.selected_id is None
+            no_selection_split = session.split("horizontal")
+            assert isinstance(no_selection_split, EditFailure), no_selection_split
+            assert no_selection_split.node_id is None, no_selection_split
+            no_selection_merge = session.merge()
+            assert isinstance(no_selection_merge, EditFailure), no_selection_merge
+            assert no_selection_merge.node_id is None, no_selection_merge
 
-        result = session.merge()
-        assert result is None, result
-        doc.recompute()
-        assert _board_names(container) == names_before
+            bay_id = _find_bay_id(session.unit.root)
+            bay_count_before = _bay_count(session.unit.root)
+            session.select(bay_id)
+            assert session.can_split() is True
+            assert session.can_merge() is False
+
+            unit_before_split = session.unit
+            result = session.split("horizontal")
+            assert result is None, result
+            doc.recompute()
+            assert _bay_count(session.unit.root) == bay_count_before + 1
+            names_after_split = _board_names(container)
+            assert len(names_after_split) == len(names_before) + 1, names_after_split
+
+            new_board_id = _find_new_board_id(unit_before_split.root, session.unit.root)
+            session.select(new_board_id)
+            assert session.can_split() is False
+            assert session.can_merge() is True
+
+            result = session.merge()
+            assert result is None, result
+            doc.recompute()
+            assert _board_names(container) == names_before
+        finally:
+            session.cancel()
     finally:
-        session.cancel()
+        FreeCAD.closeDocument(doc.Name)
 
 
-def _check_a_structurally_refused_edit_changes_nothing() -> None:
+def test_a_structurally_refused_edit_changes_nothing() -> None:
     """One refusal reason a session edit returns rather than raises: the core
     edit layer's own ``EditError``, here a merge on a board with no
     neighbour on one side (the edge of a run). Leaves board count, names,
@@ -558,7 +575,7 @@ def _check_a_structurally_refused_edit_changes_nothing() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
-def _check_an_unsolvable_edit_changes_nothing() -> None:
+def test_an_unsolvable_edit_changes_nothing() -> None:
     """The other refusal reason a session edit returns rather than raises:
     the re-solve's own ``LayoutSolveError``, here a split that would not
     physically fit. Leaves board count, names, sizes and placements
@@ -592,7 +609,7 @@ def _check_an_unsolvable_edit_changes_nothing() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
-def _check_cancel_restores_the_opening_state() -> None:
+def test_cancel_restores_the_opening_state() -> None:
     """Cancel after several edits restores the document to its opening state
     exactly."""
     doc = FreeCAD.newDocument("editor_smoke_cancel")
@@ -626,7 +643,7 @@ def _check_cancel_restores_the_opening_state() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
-def _check_commit_then_one_undo_reverses_the_session() -> None:
+def test_commit_then_one_undo_reverses_the_session() -> None:
     """Commit after the same edits leaves them in place and one undo reverses
     the lot. The probe object the session made for the dimension field is
     gone after the commit and does not come back with the undo."""
@@ -660,7 +677,7 @@ def _check_commit_then_one_undo_reverses_the_session() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
-def _check_a_refused_edit_after_an_accepted_edit_changes_nothing() -> None:
+def test_a_refused_edit_after_an_accepted_edit_changes_nothing() -> None:
     """A refused edit leaves the document at the last state that solved,
     not necessarily the session's opening state. Split once (an accepted
     edit) before attempting the structurally impossible merge, then assert
@@ -696,7 +713,7 @@ def _check_a_refused_edit_after_an_accepted_edit_changes_nothing() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
-def _check_split_direction_follows_the_units_depth_axis() -> None:
+def test_split_direction_follows_the_units_depth_axis() -> None:
     """A unit whose depth axis is X, not Y. Add Divider and Add Shelf
     must resolve their model axis from
     ``elevation_axes(unit.depth_axis)`` rather than a hardcoded model axis,
@@ -741,7 +758,7 @@ def _check_split_direction_follows_the_units_depth_axis() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
-def _check_selection_maps_to_its_unit() -> None:
+def test_selection_maps_to_its_unit() -> None:
     """Boards inside one unit, alone or together with the unit's container
     or a nested group, name that unit; objects from two units, or from
     outside any unit, name nothing."""
@@ -823,7 +840,7 @@ def _split_bay(session: Session, bay_id: str, direction: SplitDirection) -> str:
     return _find_new_board_id(unit_before.root, session.unit.root)
 
 
-def _check_dimensions_drag_basis_stock_and_untagged() -> None:
+def test_dimensions_drag_basis_stock_and_untagged() -> None:
     """The dimension operations end to end on one document, all inside one
     session: a set size fixes its region and the sibling redistributes;
     toggling the basis moves no board; a drag changes the number and keeps
@@ -966,27 +983,3 @@ def _check_dimensions_drag_basis_stock_and_untagged() -> None:
                 session.cancel()
     finally:
         FreeCAD.closeDocument(doc.Name)
-
-
-def main() -> None:
-    doc = FreeCAD.newDocument("editor_smoke")
-    try:
-        _check_selection_permissions_and_split(doc)
-    finally:
-        FreeCAD.closeDocument(doc.Name)
-    _check_a_structurally_refused_edit_changes_nothing()
-    _check_an_unsolvable_edit_changes_nothing()
-    _check_a_refused_edit_after_an_accepted_edit_changes_nothing()
-    _check_split_direction_follows_the_units_depth_axis()
-    _check_selection_maps_to_its_unit()
-    _check_cancel_restores_the_opening_state()
-    _check_commit_then_one_undo_reverses_the_session()
-    _check_an_editor_layout_survives_a_rescan()
-    _check_deleting_a_divider_reaches_the_merge_collapse_splice()
-    _check_split_created_board_keeps_its_name_across_edits()
-    _check_dimensions_drag_basis_stock_and_untagged()
-    print("shelving editor OK")
-    sys.stdout.flush()
-
-
-main()

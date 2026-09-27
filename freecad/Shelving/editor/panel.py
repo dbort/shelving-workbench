@@ -4,10 +4,11 @@
 ``FreeCADGui.Control.showDialog`` expects: a ``form`` attribute (the
 ``QWidget`` shown in the task panel), ``getStandardButtons``, ``accept``,
 ``reject``. Every control calls a ``Session`` method and redraws from what it
-returns, so no decision worth a unit test lives here. That matters because
-``FreeCADGui.Control`` does not exist under ``freecadcmd``: the headless
-coverage in :mod:`tools.freecad_editor_smoke` drives ``Session`` directly
-and never reaches this module.
+returns; the decisions left here are input handling (the start-drag
+threshold, reporting only a changed size, keeping checked items across a
+redraw). ``FreeCADGui.Control`` does not exist under ``freecadcmd``, so
+:mod:`tools.freecad_panel_smoke` exercises this module under the offscreen
+GUI instead.
 
 The dimension field is FreeCAD's own ``Gui::QuantitySpinBox``, so it
 accepts, resolves, and displays exactly what every other length field in
@@ -167,7 +168,7 @@ class _DimensionField:
 class _EditorView(QtWidgets.QGraphicsView):
     """A ``QGraphicsView`` that reports the scene position of every press to
     ``on_click``, every move with the left button held to ``on_drag`` once
-    the pointer has travelled_px the platform's start-drag distance from the
+    the pointer has travelled the platform's start-drag distance from the
     press, and every release to ``on_release``."""
 
     def __init__(

@@ -207,7 +207,13 @@ for `Label`, which is ordinary `DocumentObject` state and unaffected).
 `FreeCADGui.UiLoader` does not exist under `freecadcmd`, but the full GUI
 binary runs headless with `QT_QPA_PLATFORM=offscreen pixi run freecad
 script.py`, which is how the following was verified against FreeCAD
-1.0.0. The script must end with `os._exit(0)`, or the GUI keeps running.
+1.0.0. The GUI keeps running after the script returns, raises, or calls
+`sys.exit`, so a script must end in `os._exit(status)`; an exception
+raised before that point hangs the process. The GUI also routes
+`sys.stdout` to its Report view. `tools/freecad_panel_smoke.py` handles all
+three: it self-invokes pytest before importing anything from FreeCAD, points
+`sys.stdout`/`sys.stderr` back at `sys.__stdout__`/`sys.__stderr__`, and
+ends in `os._exit` with pytest's status from a `finally`.
 
 - `FreeCADGui.UiLoader().createWidget("Gui::QuantitySpinBox")` returns a
   working widget. PySide6 sees it as a `QAbstractSpinBox`, so its

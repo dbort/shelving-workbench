@@ -75,27 +75,18 @@ if [ "$catalog_smoke_status" -ne 0 ]; then
 	exit 1
 fi
 
-# freecad_editor_smoke.py is a plain script, not a self-invoking pytest
-# module, so an assertion failure inside it is an uncaught exception that
-# freecadcmd reports but still exits 0 for (docs/freecadcmd-notes.md); its
-# exit code alone would silently pass a failed run. It prints
-# "shelving editor OK" as its last line only when every assertion held, so
-# this greps the captured output for that line instead of trusting the
-# exit code the way the three smokes above do.
 printf '== %s\n' freecad_editor_smoke.py
-editor_smoke_log="$(mktemp)"
-freecadcmd tools/freecad_editor_smoke.py 2>&1 | tee "$editor_smoke_log"
+editor_smoke_status=0
+freecadcmd tools/freecad_editor_smoke.py || editor_smoke_status=$?
 printf '\n'
-if ! grep -q "shelving editor OK" "$editor_smoke_log"; then
-	echo "ERROR: freecad_editor_smoke.py did not print 'shelving editor OK' (see output above)." >&2
-	rm -f "$editor_smoke_log"
+if [ "$editor_smoke_status" -ne 0 ]; then
+	echo "ERROR: freecad_editor_smoke.py failed (see output above)." >&2
 	exit 1
 fi
-rm -f "$editor_smoke_log"
 
 # The panel's quantity field exists only in the full GUI, so this smoke runs
-# under `freecad` on Qt's offscreen platform rather than `freecadcmd`. It
-# ends in os._exit with its own status, so the exit code is trustworthy.
+# under `freecad` on Qt's offscreen platform rather than `freecadcmd`; it
+# ends in os._exit with pytest's status.
 printf '== %s\n' freecad_panel_smoke.py
 panel_smoke_status=0
 QT_QPA_PLATFORM=offscreen freecad tools/freecad_panel_smoke.py || panel_smoke_status=$?
