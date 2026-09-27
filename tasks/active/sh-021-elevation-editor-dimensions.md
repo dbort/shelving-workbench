@@ -205,3 +205,8 @@ DECISIONS MADE DURING `/work` (2026-09-27):
 - **N1: Round-2 N4 is still only partly adopted** (`freecad/Shelving/editor/scene.py:66`, `freecad/Shelving/editor/scene.py:76`): `scene.py` still defines and uses `_axis_index`/`_component_mm`.
 - **N2: The other three freecadcmd smokes still self-invoke at the bottom of the file** (`tools/freecad_scan_smoke.py:486`, `tools/freecad_write_smoke.py:613`, `tools/freecad_catalog_smoke.py:534`): an import-time exception passes silently under freecadcmd. This predates the task; a follow-up should move each self-invoke to the top.
 - **N3: Sentence fragment in the editor smoke docstring** (`tools/freecad_editor_smoke.py:8`).
+
+### Round 4: APPROVED
+- **N1: Round-3 N2 has no recorded follow-up** (`tools/freecad_scan_smoke.py:486`, `tools/freecad_write_smoke.py:613`, `tools/freecad_catalog_smoke.py:534`): the three older freecadcmd smokes still self-invoke at the bottom, so an import-time exception passes silently; file a task for it.
+- **N2: Round-2 N4 is still only partly adopted** (`freecad/Shelving/core/edit.py:537`, `freecad/Shelving/core/edit.py:592`, `freecad/Shelving/core/edit.py:636`): the new `edit.py` call sites still use the file's local `_axis_index`. Consistency only.
+- **N3: Overlong line in the rewrapped notes paragraph** (`docs/freecadcmd-notes.md:214`): runs to about 100 columns where the rest wraps at about 76.
