@@ -151,6 +151,14 @@ DECISIONS MADE DURING `/work` (2026-09-27):
   widget reads a bare number as millimetres even inside a sum, so `1 +
   1/2"` resolves to 13.70 mm, not 38.10 mm (`1" + 1/2"` is 38.10 mm). The
   manual QA case checks both readouts. Recorded in `docs/freecadcmd-notes.md`.
+- SIGNATURES THE PLAN ABBREVIATED. `set_basis(unit, region_id, basis,
+  catalog)` takes the catalog, as `split_region` and `merge_at` do: restating
+  the number needs the solved extent and the next board's catalog thickness.
+  `Session.begin_drag(board_id, grab_mm)` takes the unit-frame grab point so
+  each `drag_to(pointer_mm)` keeps that point under the pointer instead of
+  jumping the board by up to half its thickness on the first move. The
+  drag's position-to-size conversion is `core.edit.move_board`, which calls
+  `set_size`, keeping that decision in the fast-tested core.
 
 ## Plan
 
