@@ -1,15 +1,16 @@
-"""Tree-rewriting edits for the elevation editor: split a bay, merge a board.
+"""Tree-rewriting edits for the elevation editor: split a bay, merge a board,
+size a region, change what a size measures, drag a board.
 
-``split_region`` and ``merge_at`` are each other's exact inverse. Neither
-mutates the argument ``Unit``: untouched subtrees are shared by reference
-with the result, so the argument must stay unmodified for the result to
-stay valid. Neither re-solves its own result; a caller does that and treats
-a :class:`~freecad.Shelving.core.solver.LayoutSolveError` from it as its
-own kind of refusal, distinct from :class:`EditError`. Both solve the
-argument ``unit`` once to read every node's pre-edit size: a
-geometry-preserving rule needs the region's *actual* solved extent, not
-only its rule object, since a rule can be ``Basis.WITH_NEXT`` or weighted
-against siblings.
+``split_region`` and ``merge_at`` are each other's exact inverse. No edit
+here mutates the argument ``Unit``: untouched subtrees are shared by
+reference with the result, so the argument must stay unmodified for the
+result to stay valid. No edit re-solves its own result; a caller does that
+and treats a :class:`~freecad.Shelving.core.solver.LayoutSolveError` from it
+as its own kind of refusal, distinct from :class:`EditError`. An edit that
+preserves geometry solves the argument ``unit`` once to read every node's
+pre-edit size: it needs the region's *actual* solved extent, not only its
+rule object, since a rule can be ``Basis.WITH_NEXT`` or weighted against
+siblings.
 
 Imports no Qt and no FreeCAD, so the fast suite exercises every edit
 directly, the same way :mod:`freecad.Shelving.core.solver` does.
@@ -406,3 +407,170 @@ def _merged_rule(
         return Fill()
     anchor_weight, anchor_size_mm = anchor
     return Weighted(weight=target_mm * anchor_weight / anchor_size_mm)
+
+
+def _locate(region: Region, node_id: str) -> tuple[Division, int] | None:
+    """The ``Division`` whose ``items`` hold the node named ``node_id`` in
+    ``region``'s subtree, and its index there, or ``None`` when no item
+    matches (``region`` itself included, since it has no parent here)."""
+    if not isinstance(region, Division):
+        return None
+    for index, item in enumerate(region.items):
+        if item.id == node_id:
+            return region, index
+    for item in region.items:
+        if isinstance(item, Board):
+            continue
+        found = _locate(item, node_id)
+        if found is not None:
+            return found
+    return None
+
+
+def _locate_region(unit: Unit, region_id: str) -> tuple[Division, int]:
+    """:func:`_locate` for a region a size edit may act on. Raises
+    :class:`EditError` naming ``region_id`` when it is the tree's root (its
+    extent is the unit's own size, never a rule), a board, or absent."""
+    if unit.root.id == region_id:
+        raise EditError(
+            region_id,
+            f"{region_id!r} is the whole unit: resize the unit to change its size",
+        )
+    found = _locate(unit.root, region_id)
+    if found is None:
+        raise EditError(region_id, f"no region with id {region_id!r}")
+    parent, index = found
+    if isinstance(parent.items[index], Board):
+        raise EditError(region_id, f"{region_id!r} is a board, not a region")
+    return found
+
+
+def _next_board(parent: Division, index: int, basis: Basis) -> Board | None:
+    """The board a ``basis`` size at ``parent.items[index]`` measures across:
+    ``None`` for ``Basis.CLEAR``. Raises :class:`EditError` for
+    ``Basis.WITH_NEXT`` when the next item is missing or is not a board,
+    which the solver could not resolve."""
+    if basis is Basis.CLEAR:
+        return None
+    region_id = parent.items[index].id
+    if index + 1 < len(parent.items):
+        after = parent.items[index + 1]
+        if isinstance(after, Board):
+            return after
+    raise EditError(
+        region_id,
+        f"{region_id!r} has no board after it, so it has no spacing to measure",
+    )
+
+
+def _with_rule(region: Region, region_id: str, rule: SizeRule) -> Region:
+    """``region`` with the rule of the region named ``region_id`` replaced,
+    copying only the path down to it."""
+    if region.id == region_id:
+        return dataclasses.replace(region, rule=rule)
+    if not isinstance(region, Division):
+        return region
+    new_items: list[Item] = []
+    changed = False
+    for item in region.items:
+        if isinstance(item, Board):
+            new_items.append(item)
+            continue
+        new_item = _with_rule(item, region_id, rule)
+        changed = changed or new_item is not item
+        new_items.append(new_item)
+    return dataclasses.replace(region, items=new_items) if changed else region
+
+
+def set_size(unit: Unit, region_id: str, size_mm: float, basis: Basis) -> Unit:
+    """``unit`` with the region named ``region_id`` given the rule
+    ``Fixed(size_mm, basis)``; every other rule is left as it was, so driven
+    siblings take up the difference when the result is solved.
+
+    Raises :class:`EditError` naming ``region_id`` when ``size_mm`` is not
+    positive, when ``basis`` is ``Basis.WITH_NEXT`` and the next item in the
+    region's run is not a board, or when ``region_id`` names the root, a
+    board, or nothing in ``unit``.
+    """
+    parent, index = _locate_region(unit, region_id)
+    if size_mm <= 0:
+        raise EditError(region_id, f"a size must be positive, got {size_mm:g}mm")
+    _next_board(parent, index, basis)
+    rule = Fixed(size_mm=size_mm, basis=basis)
+    return dataclasses.replace(unit, root=_with_rule(unit.root, region_id, rule))
+
+
+def _size_in_basis_mm(
+    unit: Unit,
+    parent: Division,
+    index: int,
+    clear_mm: float,
+    basis: Basis,
+    catalog: Catalog,
+) -> float:
+    """``clear_mm`` restated in ``basis`` for ``parent.items[index]``.
+
+    A spacing adds the next board's catalog thickness rather than its solved
+    extent, because that is what the solver subtracts when it resolves
+    ``Basis.WITH_NEXT``; the two differ for a board carrying its own rule.
+    """
+    board = _next_board(parent, index, basis)
+    if board is None:
+        return clear_mm
+    return clear_mm + catalog[board.material or unit.default_material].thickness_mm
+
+
+def set_basis(unit: Unit, region_id: str, basis: Basis, catalog: Catalog) -> Unit:
+    """``unit`` with the region named ``region_id`` measured in ``basis``,
+    its stored size recomputed so ``solve`` places every node exactly where
+    it did before.
+
+    The region's rule becomes ``Fixed`` whatever it was: a ``Weighted`` or
+    ``Fill`` region is fixed at its current solved size, and from then on no
+    longer shares slack. Raises :class:`EditError` on the same terms as
+    :func:`set_size`; raises
+    :class:`~freecad.Shelving.core.solver.LayoutSolveError` when ``unit``
+    itself does not solve.
+    """
+    parent, index = _locate_region(unit, region_id)
+    spaces = solve(unit, catalog)
+    clear_mm = spaces[region_id].extent_mm(_axis_index(parent.axis))
+    size_mm = _size_in_basis_mm(unit, parent, index, clear_mm, basis, catalog)
+    return set_size(unit, region_id, size_mm, basis)
+
+
+def move_board(unit: Unit, board_id: str, low_face_mm: float, catalog: Catalog) -> Unit:
+    """``unit`` with the board named ``board_id`` dragged so its low face
+    along its run's axis sits at ``low_face_mm`` (a unit-frame coordinate).
+
+    Only the region immediately before the board changes: it is fixed at
+    the clear size that puts the board there, restated in the basis that
+    region already had (``Basis.CLEAR`` when it was ``Weighted`` or
+    ``Fill``), so a drag never changes what a size measures. The board lands
+    exactly at ``low_face_mm`` only when nothing before that region is
+    driven; otherwise the solve shares the changed slack among those
+    earlier siblings too. Raises :class:`EditError` naming ``board_id`` when
+    it names no board, or a board with no region immediately before it, and
+    naming that region when the drag would leave it no positive size.
+    """
+    found = _locate(unit.root, board_id)
+    if found is None or not isinstance(found[0].items[found[1]], Board):
+        raise EditError(board_id, f"no board with id {board_id!r}")
+    parent, index = found
+    if index == 0 or isinstance(parent.items[index - 1], Board):
+        raise EditError(
+            board_id, f"board {board_id!r} has no region before it to resize"
+        )
+    region = parent.items[index - 1]
+    axis_index = _axis_index(parent.axis)
+    spaces = solve(unit, catalog)
+    region_low_mm = spaces[region.id].origin_mm(axis_index)
+    clear_mm = low_face_mm - region_low_mm
+    if clear_mm <= 0:
+        raise EditError(
+            region.id,
+            f"the drag would leave {region.id!r} no room: {clear_mm:g}mm",
+        )
+    basis = region.rule.basis if isinstance(region.rule, Fixed) else Basis.CLEAR
+    size_mm = _size_in_basis_mm(unit, parent, index - 1, clear_mm, basis, catalog)
+    return set_size(unit, region.id, size_mm, basis)

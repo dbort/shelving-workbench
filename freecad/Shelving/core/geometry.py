@@ -34,6 +34,10 @@ class Space:
         """This box's extent along the axis at ``axis_index`` (0=x, 1=y, 2=z)."""
         return (self.size.x_mm, self.size.y_mm, self.size.z_mm)[axis_index]
 
+    def origin_mm(self, axis_index: AxisIndex) -> float:
+        """This box's minimum coordinate along the axis at ``axis_index``."""
+        return (self.origin.x_mm, self.origin.y_mm, self.origin.z_mm)[axis_index]
+
     def max_corner(self) -> Vec3:
         """This box's maximum corner: ``origin`` plus ``size`` on each axis."""
         return Vec3(

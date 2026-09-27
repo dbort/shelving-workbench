@@ -201,3 +201,46 @@ Consequence: a headless `freecadcmd` pytest module cannot assert that a
 colour survives an operation; that case has to stay in `docs/manual-qa.md`
 instead (`tools/freecad_write_smoke.py`'s resize test does the same check
 for `Label`, which is ordinary `DocumentObject` state and unaffected).
+
+## GUI-only widget access: `Gui::QuantitySpinBox`
+
+`FreeCADGui.UiLoader` does not exist under `freecadcmd`, but the full GUI
+binary runs headless with `QT_QPA_PLATFORM=offscreen pixi run freecad
+script.py`, which is how the following was verified against FreeCAD
+1.0.0. The script must end with `os._exit(0)`, or the GUI keeps running.
+
+- `FreeCADGui.UiLoader().createWidget("Gui::QuantitySpinBox")` returns a
+  working widget. PySide6 sees it as a `QAbstractSpinBox`, so its
+  FreeCAD-specific API is reached through Qt properties and string
+  signatures, never Python attributes. `Gui::InputField` is also
+  available.
+- The resolved value, in millimetres for a length, is
+  `widget.property("rawValue")`. `widget.property("value")` raises: PySide6
+  has no converter for `Base::Quantity`. The `valueChanged(double)` signal
+  is only reachable as
+  `QtCore.QObject.connect(widget, QtCore.SIGNAL("valueChanged(double)"), slot)`.
+- With `widget.setProperty("unit", "mm")`, a bare number is millimetres,
+  including inside a sum: `1 + 1/2"` resolves to 13.70 mm (1 mm plus
+  12.70 mm), where `FreeCAD.Units.parseQuantity` gives 38.10 mm for the same
+  text. `1" + 1/2"` resolves to 38.10 mm, `1-1/2"` to -11.70 mm, and
+  `12 1/2"` is not acceptable input.
+- An expression naming a document object, such as `VarSet.Len - 2 * 18 mm`,
+  resolves only once the widget is bound to a property of an object in
+  that document:
+  `FreeCADGui.ExpressionBinding(widget).bind(obj, "PropertyName")`. Unbound,
+  the same text is not acceptable input. A bound widget accepts it typed
+  directly, with no leading `=`.
+- Typing `=` into a bound widget opens its f(x) dialog
+  (`Gui::Dialog::DlgExpressionInput`, with the expression in the child
+  `QLineEdit` named `expression`). Accepting it writes the expression
+  straight into the bound property's `ExpressionEngine`, even with
+  `autoApply()` false, inside whatever document transaction is already
+  open; `abortTransaction` reverts it. The widget does not refresh when the
+  referenced `VarSet` later changes.
+- Unacceptable text blocks Return, so `editingFinished` fires only for
+  input the widget resolved.
+
+`freecad/Shelving/editor/panel.py` binds its dimension field to a temporary
+probe object the session creates for exactly this reason: a region's size
+is not itself a document property, so without the probe the field could
+not resolve a `VarSet` name.
