@@ -308,3 +308,45 @@ def solve(unit: Unit, catalog: Catalog) -> dict[str, Space]:
     root_space = Space(origin=Vec3(0.0, 0.0, 0.0), size=unit.size_mm)
     _place(unit.root, root_space, unit, catalog, out)
     return out
+
+
+def describe_solve_error(err: LayoutSolveError) -> str:
+    """``err`` as one or two sentences for a person editing the layout.
+
+    Names no node id, since region ids are opaque UUIDs; the editor shows
+    which region the failure is about by other means. Lengths are rounded
+    to 0.1 mm.
+    """
+    detail = err.detail
+    match err.reason:
+        case "overflow" if "dividers_total_mm" in detail:
+            return (
+                f"The boards alone take {detail['dividers_total_mm']:.1f} mm, more "
+                f"than the {detail['axis_span_mm']:.1f} mm they have to fit in."
+            )
+        case "overflow":
+            return (
+                f"The fixed sizes add up to {-detail['slack_mm']:.1f} mm more than "
+                "the space available."
+            )
+        case "no_slack_absorber":
+            return (
+                "Every opening in this row or column has a fixed size, leaving "
+                f"{detail['slack_mm']:.1f} mm with nowhere to go. Change a size, "
+                "or leave one opening free to take up the rest."
+            )
+        case "nonpositive_opening":
+            return (
+                "That would leave an opening with no room in it "
+                f"({detail['size_mm']:.1f} mm)."
+            )
+        case "unresolvable_basis":
+            return (
+                "A spacing is measured through the board after an opening, but "
+                "this opening has no board after it."
+            )
+        case "pinned_mismatch":
+            return (
+                "A board this workbench cannot reshape would have to change size "
+                "to fit."
+            )

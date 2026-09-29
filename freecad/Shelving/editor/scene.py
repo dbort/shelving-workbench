@@ -35,6 +35,7 @@ from freecad.Shelving.core.scan import elevation_axes
 # keys custom data by int, and any value works.
 _ID_DATA_ROLE = 0
 # The key a dimension's items carry their part under: "line", "witness",
+# "arrow",
 # "label" or "readout". Rect items carry nothing here.
 _DIMENSION_DATA_ROLE = 1
 
@@ -60,6 +61,10 @@ _DIMENSION_Z = 1000.0
 # How far each witness line runs either side of its dimension line, and the
 # label's height, both in scene millimetres.
 _WITNESS_HALF_MM = 12.0
+# Arrowhead length and half-width. A short dimension gets shorter heads, at
+# most a third of its span each, so the two never meet.
+_ARROW_LENGTH_MM = 10.0
+_ARROW_HALF_WIDTH_MM = 3.5
 _LABEL_PIXEL_SIZE = 16
 
 
@@ -151,7 +156,8 @@ def _add_dimension(
     """Draw one dimension from ``low_mm`` to ``high_mm`` along the run's
     axis, with its dimension line at ``cross_mm`` on the other elevation axis
     (both unit-frame millimetres), and a witness line lying on each face it
-    measures."""
+    measures, each end of the dimension line an arrowhead whose tip touches
+    that witness line."""
 
     def to_scene(along_mm: float, across_mm: float) -> QtCore.QPointF:
         if run_is_horizontal:
@@ -169,6 +175,17 @@ def _add_dimension(
         QtCore.QLineF(to_scene(low_mm, cross_mm), to_scene(high_mm, cross_mm)), pen
     )
     tag(line, "line")
+    arrow_mm = min(_ARROW_LENGTH_MM, abs(high_mm - low_mm) / 3)
+    for tip_mm, base_mm in ((low_mm, low_mm + arrow_mm), (high_mm, high_mm - arrow_mm)):
+        head = QtGui.QPolygonF(
+            [
+                to_scene(tip_mm, cross_mm),
+                to_scene(base_mm, cross_mm - _ARROW_HALF_WIDTH_MM),
+                to_scene(base_mm, cross_mm + _ARROW_HALF_WIDTH_MM),
+            ]
+        )
+        arrow = scene.addPolygon(head, pen, QtGui.QBrush(pen.color()))
+        tag(arrow, "arrow")
     for face_mm in (low_mm, high_mm):
         witness = scene.addLine(
             QtCore.QLineF(
@@ -346,11 +363,11 @@ def hit_test(scene: QtWidgets.QGraphicsScene, point: QtCore.QPointF) -> str | No
     ``QGraphicsScene.items`` already orders by stacking order, topmost
     first, so the id belongs to whichever item's Z-value is greatest among
     those covering ``point``: a dimension's label or readout over any rect,
-    else the deepest rect. A dimension's lines are never hit: a spacing
+    else the deepest rect. A dimension's lines and arrows are never hit: a spacing
     line crosses a board, and a press there must still grab the board.
     """
     for item in scene.items(point):
-        if item.data(_DIMENSION_DATA_ROLE) in ("line", "witness"):
+        if item.data(_DIMENSION_DATA_ROLE) in ("line", "witness", "arrow"):
             continue
         node_id = item.data(_ID_DATA_ROLE)
         if isinstance(node_id, str):

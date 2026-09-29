@@ -365,3 +365,31 @@ def test_elevation_point_inverts_the_projection(
     assert elevation_point_mm(_ROTATED_UNIT, QtCore.QPointF(450.0, 100.0)) == Vec3(
         0.0, 450.0, 500.0
     )
+
+
+def test_each_dimension_end_has_an_arrowhead_on_its_face(
+    qapp: QtWidgets.QApplication,
+) -> None:
+    scene = build_scene(_SPACING_UNIT, solve(_SPACING_UNIT, CATALOG))
+    arrows = _dimension_parts(scene, "bay1", "arrow")
+    assert len(arrows) == 2
+    tips_x_mm: list[float] = []
+    for arrow in arrows:
+        assert isinstance(arrow, QtWidgets.QGraphicsPolygonItem)
+        polygon = arrow.polygon()
+        assert polygon.count() == 3
+        tip = polygon.at(0)
+        base_x_mm = (polygon.at(1).x() + polygon.at(2).x()) / 2
+        # The tip points outward, away from the dimension's middle.
+        assert abs(tip.x() - 229.5) > abs(base_x_mm - 229.5)
+        tips_x_mm.append(tip.x())
+    assert sorted(tips_x_mm) == pytest.approx([0.0, 459.0])
+
+
+def test_a_press_on_an_arrowhead_still_hits_what_is_under_it(
+    qapp: QtWidgets.QApplication,
+) -> None:
+    scene = build_scene(_SPACING_UNIT, solve(_SPACING_UNIT, CATALOG))
+    line = _dimension_line(scene, "bay1")
+    # The far arrowhead lies over board1's last few millimetres.
+    assert hit_test(scene, QtCore.QPointF(457.0, line.y1())) == "board1"

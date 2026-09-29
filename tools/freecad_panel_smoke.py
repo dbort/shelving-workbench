@@ -323,16 +323,18 @@ def test_untagged_objects_are_kept_unless_removed() -> None:
         panel.form.show()
         _process_events()
         assert panel.untagged_box.isVisible()
-        assert panel.untagged_list.count() == 1
-        item = panel.untagged_list.item(0)
-        assert item is not None
-        assert item.checkState() == QtCore.Qt.CheckState.Unchecked
-        item.setCheckState(QtCore.Qt.CheckState.Checked)
+        assert list(panel.untagged_checks) == ["HandAdded"]
+        box = panel.untagged_checks["HandAdded"]
+        assert not box.isChecked()
+        # The reason wraps instead of widening the panel.
+        labels = panel.untagged_box.findChildren(QtWidgets.QLabel)
+        reason_labels = [label for label in labels if "HandAdded" in label.text()]
+        assert len(reason_labels) == 1
+        assert reason_labels[0].wordWrap()
+        box.setChecked(True)
         # A refresh keeps the check.
         panel._refresh()
-        item = panel.untagged_list.item(0)
-        assert item is not None
-        assert item.checkState() == QtCore.Qt.CheckState.Checked
+        assert panel.untagged_checks["HandAdded"].isChecked()
         panel.remove_untagged_button.click()
         _process_events()
         assert doc.getObject("HandAdded") is None
@@ -364,3 +366,62 @@ def test_the_plain_field_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
         assert fixture.rule(fixture.lower) == rule
     finally:
         fixture.close()
+
+
+class _KeyRecorder(QtWidgets.QWidget):
+    """A parent that counts the Return presses reaching it: what FreeCAD's
+    task view would treat as OK."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.returns = 0
+
+    def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
+        if event.key() in (QtCore.Qt.Key.Key_Return, QtCore.Qt.Key.Key_Enter):
+            self.returns += 1
+        super().keyPressEvent(event)
+
+
+def test_unreadable_text_is_flagged_never_applied_and_keeps_return(
+    unit_panel: _Fixture,
+) -> None:
+    recorder = _KeyRecorder()
+    QtWidgets.QVBoxLayout(recorder).addWidget(unit_panel.panel.form)
+    recorder.show()
+    _process_events()
+    unit_panel.select(unit_panel.lower)
+    status = unit_panel.panel.size_field.status_label
+    assert not status.isVisible()
+
+    unit_panel.type_size('12 1/2"')
+    assert status.isVisible()
+    assert status.text() != ""
+    assert unit_panel.rule(unit_panel.lower) == Fill()
+    assert recorder.returns == 0
+
+    # Leaving the field with the text still unreadable applies nothing and
+    # puts the last shown value back.
+    field = unit_panel.panel.size_field
+    assert field.quantity_widget is not None
+    shown_text = f"{unit_panel.session.spaces[unit_panel.lower].size.z_mm:.2f}"
+    QtWidgets.QApplication.sendEvent(
+        field.quantity_widget, QtGui.QFocusEvent(QtCore.QEvent.Type.FocusOut)
+    )
+    _process_events()
+    assert unit_panel.rule(unit_panel.lower) == Fill()
+    assert field.line_edit.text().startswith(shown_text), field.line_edit.text()
+    assert not status.isVisible()
+
+    unit_panel.type_size("300")
+    assert unit_panel.rule(unit_panel.lower) == Fixed(300.0)
+    assert not status.isVisible()
+    assert recorder.returns == 0
+
+
+def test_an_unsolvable_size_explains_itself_without_ids(unit_panel: _Fixture) -> None:
+    unit_panel.select(unit_panel.lower)
+    unit_panel.type_size("5000")
+    message = unit_panel.panel.message_label.text()
+    assert message.startswith("The fixed sizes add up to"), message
+    assert unit_panel.lower not in message
+    assert unit_panel.rule(unit_panel.lower) == Fill()

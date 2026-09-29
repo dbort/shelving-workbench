@@ -434,14 +434,14 @@ def _locate_region(unit: Unit, region_id: str) -> tuple[Division, int]:
     if unit.root.id == region_id:
         raise EditError(
             region_id,
-            f"{region_id!r} is the whole unit: resize the unit to change its size",
+            "That is the whole unit: resize the unit to change its size.",
         )
     found = _locate(unit.root, region_id)
     if found is None:
         raise EditError(region_id, f"no region with id {region_id!r}")
     parent, index = found
     if isinstance(parent.items[index], Board):
-        raise EditError(region_id, f"{region_id!r} is a board, not a region")
+        raise EditError(region_id, "That is a board; select an opening to size.")
     return found
 
 
@@ -459,7 +459,7 @@ def _next_board(parent: Division, index: int, basis: Basis) -> Board | None:
             return after
     raise EditError(
         region_id,
-        f"{region_id!r} has no board after it, so it has no spacing to measure",
+        "This opening has no board after it, so it has no spacing to measure.",
     )
 
 
@@ -494,7 +494,9 @@ def set_size(unit: Unit, region_id: str, size_mm: float, basis: Basis) -> Unit:
     """
     parent, index = _locate_region(unit, region_id)
     if size_mm <= 0:
-        raise EditError(region_id, f"a size must be positive, got {size_mm:g}mm")
+        raise EditError(
+            region_id, f"A size must be more than zero; got {size_mm:.1f} mm."
+        )
     _next_board(parent, index, basis)
     rule = Fixed(size_mm=size_mm, basis=basis)
     return dataclasses.replace(unit, root=_with_rule(unit.root, region_id, rule))
@@ -559,7 +561,8 @@ def _board_and_region_before(unit: Unit, board_id: str) -> tuple[Division, int]:
     parent, index = found
     if index == 0 or isinstance(parent.items[index - 1], Board):
         raise EditError(
-            board_id, f"board {board_id!r} has no region before it to resize"
+            board_id,
+            "This board has no opening below or left of it for a drag to resize.",
         )
     return parent, index - 1
 
@@ -594,7 +597,7 @@ def move_board(unit: Unit, board_id: str, low_face_mm: float, catalog: Catalog) 
     if clear_mm <= 0:
         raise EditError(
             region.id,
-            f"the drag would leave {region.id!r} no room: {clear_mm:g}mm",
+            "The board cannot move past the far side of the opening it resizes.",
         )
     basis = region.rule.basis if isinstance(region.rule, Fixed) else Basis.CLEAR
     size_mm = _size_in_basis_mm(unit, parent, index, clear_mm, basis, catalog)

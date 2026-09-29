@@ -59,10 +59,45 @@ def _format_mm(value_mm: float) -> str:
     return f"{value_mm:.2f} mm"
 
 
+class _FieldEventFilter(QtCore.QObject):
+    """Consumes every Return and Enter key press on the widgets it is
+    installed on, calling ``on_return`` instead, and calls ``on_focus_out``
+    before the widget itself sees a focus-out. Unconsumed, a Return the
+    quantity widget rejects reaches the task panel, which treats it as OK
+    and closes the editor."""
+
+    def __init__(
+        self,
+        parent: QtCore.QObject,
+        on_return: Callable[[], None],
+        on_focus_out: Callable[[], None],
+    ) -> None:
+        super().__init__(parent)
+        self._on_return = on_return
+        self._on_focus_out = on_focus_out
+
+    def eventFilter(self, watched: QtCore.QObject, event: QtCore.QEvent) -> bool:
+        if event.type() == QtCore.QEvent.Type.FocusOut:
+            self._on_focus_out()
+            return False
+        if event.type() != QtCore.QEvent.Type.KeyPress:
+            return False
+        key = cast("QtGui.QKeyEvent", event).key()
+        if key not in (QtCore.Qt.Key.Key_Return, QtCore.Qt.Key.Key_Enter):
+            return False
+        self._on_return()
+        return True
+
+
 class _DimensionField:
     """The size input: FreeCAD's quantity widget bound to the session's
     probe object, or, when the GUI cannot supply that widget, a plain line
     edit whose text goes to ``FreeCAD.Units.parseQuantity`` verbatim.
+
+    Text the quantity widget cannot resolve is never applied: the field
+    says so in ``status_label`` and leaves the size as it was. Whether the
+    text resolves is the widget's own verdict, read from its
+    ``acceptableInput``; this class never looks at the text itself.
 
     ``on_size`` receives the resolved millimetres; ``on_error`` receives
     ``parseQuantity``'s own message, from the fallback only;
@@ -107,13 +142,22 @@ class _DimensionField:
         else:
             self.line_edit = QtWidgets.QLineEdit()
             self.widget = self.line_edit
+        self.status_label = QtWidgets.QLabel("")
+        self.status_label.setWordWrap(True)
+        self.status_label.setStyleSheet("color: #c0392b;")
+        self.status_label.setVisible(False)
+        self._event_filter = _FieldEventFilter(
+            self.widget, self._finished, self._discard_unreadable
+        )
+        self.widget.installEventFilter(self._event_filter)
+        if self.line_edit is not self.widget:
+            self.line_edit.installEventFilter(self._event_filter)
+        self.line_edit.textChanged.connect(self._show_validity)
         # What show_mm last displayed. editingFinished also fires when the
         # field merely loses focus, and reporting an unchanged value would
         # quietly fix a region that shares leftover space.
         self._shown_mm: float | None = None
         self._shown_text = ""
-        # The spin box blocks Return on text it cannot resolve, so this fires
-        # only for input it accepted.
         self.line_edit.editingFinished.connect(self._finished)
         if spin is not None:
             # Accepting the f(x) dialog changes the value without any
@@ -129,8 +173,35 @@ class _DimensionField:
             self._finished()
             self._on_expression_done()
 
+    def _acceptable(self) -> bool:
+        """The quantity widget's verdict on its current text; always
+        ``True`` for the fallback field, which learns only by parsing."""
+        if self.quantity_widget is None:
+            return True
+        return bool(self.quantity_widget.property("acceptableInput"))
+
+    def _show_validity(self) -> None:
+        self.status_label.setText(
+            ""
+            if self._acceptable()
+            else "FreeCAD cannot read this as a length. The size is unchanged."
+        )
+        self.status_label.setVisible(not self._acceptable())
+
+    def _discard_unreadable(self) -> None:
+        """Put the last shown value back before the widget handles a
+        focus-out. Left alone, the widget settles on whatever a prefix of the
+        unreadable text resolved to and reports that as a finished edit."""
+        if not self._acceptable():
+            self.show_mm(self._shown_mm)
+
     def _finished(self) -> None:
         if self.quantity_widget is not None:
+            # While the text is unacceptable, rawValue still holds the last
+            # value some prefix of it resolved to (12 mm for 12 1/2").
+            if not self._acceptable():
+                self._show_validity()
+                return
             value_mm = self.quantity_widget.property("rawValue")
             if isinstance(value_mm, float) and value_mm != self._shown_mm:
                 self._on_size(value_mm)
@@ -163,6 +234,7 @@ class _DimensionField:
             self._shown_text = "" if value_mm is None else f"{value_mm:g} mm"
             self.line_edit.setText(self._shown_text)
         self.widget.blockSignals(False)
+        self._show_validity()
 
 
 class _EditorView(QtWidgets.QGraphicsView):
@@ -309,6 +381,7 @@ class EditUnitPanel:
             self.basis_combo.addItem(text)
         dimension_row.addWidget(self.basis_combo)
         layout.addLayout(dimension_row)
+        layout.addWidget(self.size_field.status_label)
         self.readout_label = QtWidgets.QLabel("")
         layout.addWidget(self.readout_label)
 
@@ -325,8 +398,13 @@ class EditUnitPanel:
         )
         explanation.setWordWrap(True)
         untagged_layout.addWidget(explanation)
-        self.untagged_list = QtWidgets.QListWidget()
-        untagged_layout.addWidget(self.untagged_list)
+        # One row per object: a checkbox beside a wrapping label, since
+        # neither a QCheckBox's own text nor a QListWidget item wraps, and a
+        # long reason would otherwise scroll the task panel sideways.
+        self.untagged_rows = QtWidgets.QVBoxLayout()
+        untagged_layout.addLayout(self.untagged_rows)
+        # Keyed by object Name, in the order session.left_alone lists them.
+        self.untagged_checks: dict[str, QtWidgets.QCheckBox] = {}
         self.remove_untagged_button = QtWidgets.QPushButton("Remove Selected")
         untagged_layout.addWidget(self.remove_untagged_button)
         layout.addWidget(self.untagged_box)
@@ -386,14 +464,37 @@ class EditUnitPanel:
 
     def _checked_untagged(self) -> list[str]:
         """The names of the untagged objects currently checked in the list."""
-        return [
-            str(item.data(QtCore.Qt.ItemDataRole.UserRole))
-            for item in (
-                self.untagged_list.item(row)
-                for row in range(self.untagged_list.count())
-            )
-            if item is not None and item.checkState() == QtCore.Qt.CheckState.Checked
-        ]
+        return [name for name, box in self.untagged_checks.items() if box.isChecked()]
+
+    def _rebuild_untagged_rows(self) -> None:
+        """Recreate the rows when the listed objects changed, keeping the
+        check of every object still listed; otherwise leave them alone, so a
+        redraw during a drag does not rebuild widgets."""
+        names = [entry.name for entry in self.session.left_alone]
+        if names == list(self.untagged_checks):
+            return
+        checked = set(self._checked_untagged())
+        while self.untagged_rows.count():
+            item = self.untagged_rows.takeAt(0)
+            row_widget = item.widget() if item is not None else None
+            if row_widget is not None:
+                row_widget.deleteLater()
+        self.untagged_checks = {}
+        for entry in self.session.left_alone:
+            text = f"{entry.label} ({entry.name}): {entry.reason}"
+            row = QtWidgets.QWidget()
+            row_layout = QtWidgets.QHBoxLayout(row)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            box = QtWidgets.QCheckBox()
+            box.setChecked(entry.name in checked)
+            box.setAccessibleName(text)
+            label = QtWidgets.QLabel(text)
+            label.setWordWrap(True)
+            label.setBuddy(box)
+            row_layout.addWidget(box, 0, QtCore.Qt.AlignmentFlag.AlignTop)
+            row_layout.addWidget(label, 1)
+            self.untagged_rows.addWidget(row)
+            self.untagged_checks[entry.name] = box
 
     def _remove_untagged(self) -> None:
         self._show_result(self.session.remove_untagged(self._checked_untagged()))
@@ -436,20 +537,7 @@ class EditUnitPanel:
             self.readout_label.setText(readout)
         self.basis_combo.blockSignals(False)
 
-        checked = set(self._checked_untagged())
-        self.untagged_list.clear()
-        for entry in self.session.left_alone:
-            item = QtWidgets.QListWidgetItem(
-                f"{entry.label} ({entry.name}): {entry.reason}"
-            )
-            item.setData(QtCore.Qt.ItemDataRole.UserRole, entry.name)
-            item.setFlags(item.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
-            item.setCheckState(
-                QtCore.Qt.CheckState.Checked
-                if entry.name in checked
-                else QtCore.Qt.CheckState.Unchecked
-            )
-            self.untagged_list.addItem(item)
+        self._rebuild_untagged_rows()
         self.untagged_box.setVisible(bool(self.session.left_alone))
 
     def getStandardButtons(self) -> int:

@@ -1,5 +1,5 @@
 ---
-next_id: bug-009
+next_id: bug-010
 ---
 
 # Bug log
@@ -158,3 +158,14 @@ the log happens only when the user asks.
   where geometry is ambiguous (the reason `Basis.WITH_NEXT` is stored).
   Choosing that tolerance and precedence is a design question for
   `new-task`.
+- `bug-009` - **elevation dimensions overlap each other and their labels**:
+  in the Edit Unit panel, dimensions for different regions draw on top of
+  one another, labels included, so some values are unreadable. Found in
+  sh-021's manual QA on FreeCAD 1.1.1. Root cause: `_add_region_dimensions`
+  in `freecad/Shelving/editor/scene.py` places each dimension line at a
+  fixed fraction of its region's cross extent (the centre for a bay or
+  void, a quarter for a nested division) with no awareness of the other
+  dimensions, so nested and neighbouring regions collide. Fix: `sh-XXX
+  task`, because choosing where dimensions go (offset lanes, drawing only
+  the selected region's, moving labels outside the unit) is a design
+  decision the user wants to make separately.

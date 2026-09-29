@@ -388,14 +388,28 @@ is what a rescan resolves it by.
 
 ## M9 — The elevation editor
 
-Prerequisite: a FreeCAD 1.0 install with this workbench on its addon path,
-**View → Panels → Report view** open, a document holding one unit (**Create
-Unit**, or any unit from an earlier milestone's cases).
+Prerequisite: a FreeCAD 1.0 or later install with this workbench on its
+addon path, and **View → Panels → Report view** open.
 
-### 1. Open the panel and confirm it docks and matches the 3D view
+Every case or group of cases opens with a **Start** line naming the state
+it expects. Cases grouped under one heading run in order in one sitting,
+each continuing from where the previous case left off. Two starting points
+recur:
 
-1. Select the unit's container (`ShelvingUnit`, or whatever it is named)
-   and run **Edit Unit** from the **Shelving** toolbar or menu.
+- **Fresh unit**: **File → New**, then **Create Unit** from the
+  **Shelving** toolbar. No panel is open.
+- **Shelf unit**: a fresh unit, then select its container (`ShelvingUnit`)
+  and run **Edit Unit**, click the open bay, and click **Add Shelf**. The
+  panel stays open showing a lower bay, a shelf, and an upper bay.
+
+### Cases 1-6: one editing session on a fresh unit
+
+**Start:** a fresh unit.
+
+#### 1. Open the panel and confirm it docks and matches the 3D view
+
+1. Select the unit's container (`ShelvingUnit`) and run **Edit Unit** from
+   the **Shelving** toolbar or menu.
 
 Expected: a task panel opens and docks in the Tasks tab (it does not float
 as a separate window), titled **Edit Unit**, showing a flat elevation of
@@ -405,7 +419,7 @@ view. **OK** and **Cancel** buttons are present; **Add Divider**, **Add
 Shelf**, and **Delete** are present but disabled, since nothing is selected
 yet.
 
-### 2. Click a compartment and confirm only the Add buttons enable
+#### 2. Click a compartment and confirm only the Add buttons enable
 
 1. Click the open bay in the elevation.
 
@@ -414,21 +428,21 @@ different outline), and stays that way until a different item is clicked.
 **Add Divider** and **Add Shelf** enable; **Delete** stays disabled, since
 a bay, not a board, is selected.
 
-### 3. Add a divider and confirm the elevation and the 3D view both follow
+#### 3. Add a divider and confirm the elevation and the 3D view both follow
 
 1. With the bay still selected, click **Add Divider**.
 
 Expected: the elevation redraws immediately with a new **vertical** divider
 board down the bay's middle, leaving two smaller bays side by side, both
 roughly equal in size; the message line stays blank. **Add Shelf** would
-instead divide the bay top and bottom with a **horizontal** shelf. Switching to the 3D view
-(without closing the panel) shows the same new board as a real, positioned
-box, not only a drawing. Each edit runs the workbench's real write path, so
-no separate preview exists that could disagree with it. Click the new divider board: **Delete**
-enables and both **Add** buttons disable, since a board, not a bay, is now
-selected.
+instead divide the bay top and bottom with a **horizontal** shelf.
+Switching to the 3D view (without closing the panel) shows the same new
+board as a real, positioned box, not only a drawing. Each edit runs the
+workbench's real write path, so no separate preview exists that could
+disagree with it. Click the new divider board: **Delete** enables and both
+**Add** buttons disable, since a board, not a bay, is now selected.
 
-### 4. Delete a board that cannot be merged and confirm the message line, not a crash
+#### 4. Delete a board that cannot be merged and confirm the message line, not a crash
 
 1. Click one of the unit's original outer boards (a side, the bottom, or
    the top) rather than the divider just created.
@@ -439,7 +453,7 @@ neighbour on at least one side is not an open compartment), the elevation
 is unchanged, and the panel stays open and usable; nothing in the Report
 view suggests a crash or an unhandled exception.
 
-### 5. Delete the divider and confirm the merge reverses the split
+#### 5. Delete the divider and confirm the merge reverses the split
 
 1. Click the divider board created in case 3 and click **Delete**.
 
@@ -447,19 +461,22 @@ Expected: the elevation redraws back to the single original bay, and the
 3D view shows the divider board gone, the two smaller bays merged back into
 one open compartment matching what case 1 started from.
 
-### 6. Cancel and confirm the whole session reverses
+#### 6. Cancel and confirm the whole session reverses
 
 1. Repeat case 3 (add the divider again).
 2. Click **Cancel**.
 
 Expected: the panel closes, and the document, in both the 3D view and a
-fresh **Edit Unit** re-opened afterward, is exactly as it was before case 6
-step 1: the new divider board is gone, board count and names match the
-document's state from before this whole M9 section started.
+fresh **Edit Unit** re-opened afterward, is exactly the fresh unit this
+group started from: the new divider board is gone, and board count and
+names match.
 
 ### 7. Commit and confirm one Undo reverses the whole session
 
-1. Run **Edit Unit** again and add a divider to the bay (case 3).
+**Start:** a fresh unit (the document cases 1-6 leave behind will do).
+
+1. Select the container, run **Edit Unit**, click the bay, and click **Add
+   Divider**.
 2. Click **OK**.
 
 Expected: the panel closes and the new board stays in the document (3D
@@ -474,8 +491,10 @@ commit, not only the divider's own edit.
 
 ### 8. Open the editor from a board selection
 
-1. With no panel open, click one of the unit's boards in the 3D view (or
-   in the tree), then Ctrl-click a second board of the same unit.
+**Start:** a fresh unit.
+
+1. Click one of the unit's boards in the 3D view (or in the tree), then
+   Ctrl-click a second board of the same unit.
 
 Expected: **Edit Unit** is enabled, and running it opens the panel on that
 unit, the same as selecting the container in case 1. Cancel the panel.
@@ -488,7 +507,10 @@ single unit.
 
 ### 9. An editor-built layout survives a rescan (bug-006)
 
-1. Run **Create Unit**, open **Edit Unit**, and add a divider (case 3).
+**Start:** a fresh unit.
+
+1. Select the container, run **Edit Unit**, click the bay, and click **Add
+   Divider**.
 2. Select the left-hand opening and click **Add Shelf**.
 3. Select the upper-left opening (the upper of the two equal halves the
    last shelf just made) and click **Add Shelf** again.
@@ -502,31 +524,48 @@ board moving; neither shelf added on the left in steps 2-3 shifts when the
 shelf on the right is added in step 5, and re-opening **Edit Unit** after
 step 6 still shows both left-hand shelves exactly where steps 2-3 put them.
 
-Cases 10-17 cover dimensions. Start each from a fresh **Create Unit** with
-one **Add Shelf** already made in its bay, unless the case says otherwise,
-and add a `VarSet` to the document for case 12 (**Part** workbench, or
-`doc.addObject("App::VarSet", "VarSet")` in the Python console, then add a
-Length property named `Len` set to `300 mm`).
+### Cases 10-14: dimensions in one editing session
 
-### 10. Type an exact opening and watch the rest redistribute
+**Start:**
 
-1. Open **Edit Unit** and click the lower bay.
+1. **File → New**.
+2. In the Python console, create a `VarSet` holding a length:
+
+   ```python
+   doc = App.ActiveDocument
+   varset = doc.addObject("App::VarSet", "VarSet")
+   varset.addProperty("App::PropertyLength", "Len")
+   varset.Len = "300 mm"
+   doc.recompute()
+   ```
+
+3. Run **Create Unit**, then continue as for a shelf unit: select the
+   container, run **Edit Unit**, click the open bay, and click **Add
+   Shelf**.
+
+Dimensions overlapping one another in a crowded elevation is a known
+defect (bug-009), not a failure of these cases.
+
+#### 10. Type an exact opening and watch the rest redistribute
+
+1. Click the lower bay.
 
 Expected: the **Size** field shows the bay's current clear height, the
 readout below it shows both `clear` and `spacing` values (spacing being 18
 mm more, the shelf's thickness), and notes that the bay shares the leftover
-space. A dimension is drawn over each bay: a line with a short witness line
-at each end, labelled with its value, the other value beside it in grey.
+space. A dimension is drawn over each bay: a line with an arrowhead at each
+end, each tip touching a short witness line, labelled with its value, the
+other value beside it in grey.
 
 2. Type `300` in **Size** and press Return.
 
 Expected: the shelf moves so the lower bay's dimension reads `300`; the upper
-bay's dimension grows or shrinks by the difference, the 3D view follows, and
-the lower bay stays selected.
+bay's dimension grows or shrinks by the difference, the 3D view follows,
+the lower bay stays selected, and the panel stays open.
 
-### 11. Type an inch expression and confirm the readout resolves it
+#### 11. Type an inch expression and confirm the readout resolves it
 
-1. With the lower bay selected, type `1" + 1/2"` and press Return.
+1. With the lower bay still selected, type `1" + 1/2"` and press Return.
 
 Expected: the field and the dimension resolve it to 38.10 mm.
 
@@ -536,25 +575,35 @@ Expected: 13.70 mm. FreeCAD's length fields read a bare number as
 millimetres even inside a sum, so this is 1 mm plus 12.70 mm; the workbench
 passes the text to FreeCAD untouched and shows what FreeCAD made of it.
 
-3. Type `12 1/2"`.
+3. Type `12 1/2"` and press nothing yet.
 
-Expected: the field marks the text invalid and Return does nothing; the
+Expected: a red line under the field reads **FreeCAD cannot read this as a
+length. The size is unchanged.**
+
+4. Press Return.
+
+Expected: nothing changes: the panel stays open, the red line stays, and
+the lower bay is still 13.70 mm.
+
+5. Press Tab.
+
+Expected: the field goes back to 13.70 mm, the red line disappears, and the
 layout does not change.
 
-### 12. Bind the field to a VarSet and confirm it follows
+#### 12. Bind the field to a VarSet and confirm it follows
 
-1. With the lower bay selected, type `VarSet.Len` and press Return.
+1. With the lower bay still selected, type `VarSet.Len` and press Return.
 
 Expected: the lower bay becomes 300 mm clear.
 
 2. Click in **Size**, type `=`, enter `VarSet.Len - 20 mm` in the f(x) dialog
    and accept it.
 
-Expected: the field shows the f(x) marker and 280 mm, and the lower bay
-follows to 280 mm. While the panel is open a `Shelving dimension
-(temporary)` object appears at the top of the tree; after **OK** or
-**Cancel** it is gone. Changing `VarSet.Len` afterwards does not move the
-shelf: the unit stores the resolved size, not the expression.
+Expected: the lower bay follows to 280 mm. While the panel is open a
+`Shelving dimension (temporary)` object appears at the top of the tree; it
+is gone once the panel closes at the end of case 14. Changing `VarSet.Len`
+afterwards does not move the shelf: the unit stores the resolved size, not
+the expression.
 
 3. Click the upper bay, click the lower bay again, type `250` and press
    Return.
@@ -562,10 +611,10 @@ shelf: the unit stores the resolved size, not the expression.
 Expected: the field shows no f(x) marker and accepts the typing; the lower
 bay becomes 250 mm.
 
-### 13. Drag a board and confirm the readout keeps its basis
+#### 13. Drag a board and confirm the readout keeps its basis
 
-1. Select the lower bay, set **Size** to `300`, and choose **Spacing
-   (through the next board)**.
+1. With the lower bay still selected, set **Size** to `300`, then choose
+   **Spacing (through the next board)**.
 
 Expected: nothing moves; the dimension now runs from the bottom board's top
 face through the shelf to the shelf's top face and reads `318`, with
@@ -575,49 +624,85 @@ face through the shelf to the shelf's top face and reads `318`, with
 
 Expected: the shelf follows the pointer, the lower bay becomes selected,
 its dimension still spans through the shelf, and the basis control still
-reads **Spacing**: only the number changed. Dragging the shelf down past the
-bottom board shows a refusal on the message line and leaves the shelf at
-its last good position.
+reads **Spacing**: only the number changed.
 
-### 14. Switch a dimension to spacing and confirm nothing moves
+3. Drag the shelf down past the bottom board.
 
-1. Select the upper bay and toggle between **Clear opening** and
+Expected: a refusal on the message line in plain words, and the shelf stays
+at its last good position.
+
+4. Click the shelf without moving the mouse.
+
+Expected: the shelf is selected and **Delete** enables; the lower bay's
+size does not change.
+
+#### 14. Switch a dimension's basis and confirm nothing moves
+
+1. Click the lower bay and switch between **Clear opening** and
    **Spacing** several times.
 
 Expected: no board moves in the elevation or the 3D view; only the drawn
-dimension changes between spanning the bay and spanning the bay plus the
-top board. For a region with no board after it, the basis control is
-disabled.
+dimension changes, between spanning the lower bay alone and spanning on
+through the shelf, with the two numbers trading places between label and
+readout.
+
+2. Click the upper bay.
+
+Expected: the basis control is disabled and the upper bay's dimension shows
+only its clear height. The board above it is the unit's top, which belongs
+to the outer frame rather than the upper bay's own column, so the upper bay
+has no board after it to measure a spacing through.
+
+3. Click **Cancel**.
+
+Expected: the panel closes, the unit is back to the fresh unit's single
+bay, and the temporary object is gone from the tree.
 
 ### 15. Change the stock thickness and confirm spacings hold and clears move
 
-1. Run **Add Divider** on the unit's bay before adding shelves, then add a
-   shelf in each half. Give the left lower bay a **Spacing** of `300` and
-   the right lower bay a **Clear opening** of `282`. Click **OK**.
-2. In the catalog, change the default stock's `Thickness` from 18 mm to 25
-   mm, then run **Reflow All**.
+**Start:** a fresh unit.
+
+1. Select the container, run **Edit Unit**, click the bay, and click **Add
+   Divider**. Click the left bay and click **Add Shelf**; click the right
+   bay and click **Add Shelf**.
+2. Click the left lower bay, choose **Spacing (through the next board)**,
+   then type `300` and press Return.
+3. Click the right lower bay, leave **Clear opening** chosen, type `282`,
+   and press Return. Both shelves now sit at the same height.
+4. Click **OK**.
+5. Change the default stock's `Thickness` from `18 mm` to `25 mm` as in M8
+   case 2, then run **Reflow All**.
 
 Expected: the left shelf stays exactly where it was; the right shelf rises
 by 7 mm, following the thicker bottom board.
 
 ### 16. Confirm the untagged-object list appears with nothing checked
 
-1. Add a **Part → Cube** inside the unit's container, resize it to 400 × 5 ×
-   400 mm (thin front to back), and open **Edit Unit**.
+**Start:** a fresh unit.
+
+1. Add a **Part → Cube**, set its `Length` to `400 mm`, `Width` to `5 mm`,
+   and `Height` to `400 mm` (thin front to back), then drag it onto the
+   unit's container in the tree.
+2. Select the container and run **Edit Unit**.
 
 Expected: a box titled **Objects this workbench did not create** lists the
 cube with the reason it is not part of the layout, its checkbox unchecked,
 and text saying the workbench leaves such objects alone unless they are
-selected. Make any edit: the cube stays where it is.
+selected. The reason wraps onto several lines rather than making the panel
+scroll sideways. Make any edit: the cube stays where it is.
 
-2. Check the cube and click **Remove Selected**, then **Cancel**.
+3. Check the cube and click **Remove Selected**, then **Cancel**.
 
 Expected: the cube disappears on **Remove Selected** and returns on
 **Cancel**. With nothing checked, **OK** keeps it.
 
 ### 17. An unsolvable size leaves the last good state
 
-1. Select the lower bay and type `5000`.
+**Start:** a shelf unit.
 
-Expected: the message line explains the layout does not fit; the elevation
-and 3D view stay exactly as before the attempt, and the panel stays usable.
+1. Click the lower bay, type `5000`, and press Return.
+
+Expected: the message line explains in plain words that the fixed sizes add
+up to more than the space available, naming how much more, with no internal
+ids; the elevation and 3D view stay exactly as before the attempt, and the
+panel stays open and usable.

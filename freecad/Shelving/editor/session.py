@@ -56,7 +56,7 @@ from freecad.Shelving.core.layout import (
 from freecad.Shelving.core.materials import Catalog, MaterialId
 from freecad.Shelving.core.record import rules_from_json, with_stored_rules
 from freecad.Shelving.core.scan import elevation_axes, scan
-from freecad.Shelving.core.solver import LayoutSolveError, solve
+from freecad.Shelving.core.solver import LayoutSolveError, describe_solve_error, solve
 from freecad.Shelving.debug_log import Stopwatch
 
 SplitDirection = Literal["horizontal", "vertical"]
@@ -280,7 +280,7 @@ class Session:
             # LayoutSolveError from either call means nothing was written.
             result = write_container(self.container, candidate, self.catalog)
         except LayoutSolveError as err:
-            return EditFailure(str(err), err.node_id)
+            return EditFailure(describe_solve_error(err), err.node_id)
         if result.id_renames:
             # A board split created carries a fresh new_id(), not yet a
             # document object Name; without adopting the real Name here,
@@ -388,8 +388,10 @@ class Session:
         region_id = self.selected_id
         try:
             candidate = set_basis(self.unit, region_id, basis, self.catalog)
-        except (EditError, LayoutSolveError) as err:
+        except EditError as err:
             return EditFailure(str(err), err.node_id)
+        except LayoutSolveError as err:
+            return EditFailure(describe_solve_error(err), err.node_id)
         return self._apply(candidate, select=region_id)
 
     def begin_drag(self, board_id: str, grab_mm: Vec3) -> EditFailure | None:

@@ -165,6 +165,17 @@ DECISIONS MADE DURING `/work` (2026-09-27):
   `freecad_panel_smoke.py` and `freecad_editor_smoke.py` both self-invoke
   before any FreeCAD import, so an import failure fails the run instead of
   passing (`freecadcmd`) or hanging (the GUI).
+- MANUAL-QA FOLLOW-UPS (2026-09-27, the user's QA on FreeCAD 1.1.1).
+  Text the quantity widget does not accept is never applied: the field
+  shows a red line saying so, a Return on it is consumed rather than
+  reaching the task panel as OK, and leaving the field puts the last shown
+  value back. The widget's own `acceptableInput` verdict decides, so this
+  still inspects no text. Dimension lines end in arrowheads. Refusals read
+  as plain sentences with no node ids (`describe_solve_error`). Overlapping
+  dimensions are bug-009, deferred to its own task. A last region in a
+  nested run (the upper bay under the unit's top) has no spacing basis,
+  since the solver's `WITH_NEXT` reaches only the next item in the same
+  run; the QA case says so rather than the model changing here.
 
 ## Plan
 
