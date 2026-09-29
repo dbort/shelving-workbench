@@ -68,10 +68,10 @@ wrong.
 ## Friction log and bug log
 
 A workaround forced while developing or testing this repo goes in
-`.claude/docs/friction-log.md`; the workbench misbehaving for a real user
-goes in `.claude/docs/bug-log.md`. Log it in the same session, even when
-the workaround succeeded or the bug is fixed at once. Each file defines
-its own format.
+`.claude/docs/friction-log.md`; a defect in the workbench on `main` goes in
+`.claude/docs/bug-log.md`. Log it in the same session, even when the
+workaround succeeded or the bug is fixed at once. Each file defines its
+own format and scope.
 
 ## Writing style by destination
 
