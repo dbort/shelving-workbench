@@ -1,5 +1,5 @@
 ---
-next_id: friction-024
+next_id: friction-025
 ---
 
 # Friction log
@@ -227,3 +227,15 @@ fixes a papercut records the papercut and its fix and deletes the entry.
   node` to confirm every prompt rendered. Simpler if: a check in `pixi run
   tests` extracted the block, stubbed the workflow API, and dry-ran it in
   both full-tree and diff-scoped modes.
+- `friction-024` - **a manual QA structure that survives edits**:
+  `docs/manual-qa.md` groups cases by milestone (M6, M7, ...), which only
+  records the order features were built. Chained cases are named by number
+  ranges in their headings ("Cases 1-6", "Cases 10-14"), so adding,
+  removing, or reordering one case means renumbering and rewording others.
+  In sh-021's QA the user could not tell which state each case expected.
+  The workaround was a **Start** line on every case plus grouping headings
+  that repeat those number ranges, which works but is fragile. Simpler if:
+  the file were organized by feature area under stable non-numeric section
+  names (EDITOR, CATALOG, ...), with scenarios that can hold compound steps
+  and cross-references like EDITOR-1.3 that do not shift when unrelated
+  cases change.
