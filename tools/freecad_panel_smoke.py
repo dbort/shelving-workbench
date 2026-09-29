@@ -382,7 +382,7 @@ class _KeyRecorder(QtWidgets.QWidget):
         super().keyPressEvent(event)
 
 
-def test_unreadable_text_is_flagged_never_applied_and_keeps_return(
+def test_unreadable_text_is_never_applied_and_keeps_return(
     unit_panel: _Fixture,
 ) -> None:
     recorder = _KeyRecorder()
@@ -390,14 +390,14 @@ def test_unreadable_text_is_flagged_never_applied_and_keeps_return(
     recorder.show()
     _process_events()
     unit_panel.select(unit_panel.lower)
-    status = unit_panel.panel.size_field.status_label
-    assert not status.isVisible()
+    form_height_px = unit_panel.panel.form.sizeHint().height()
 
     unit_panel.type_size('12 1/2"')
-    assert status.isVisible()
-    assert status.text() != ""
     assert unit_panel.rule(unit_panel.lower) == Fill()
     assert recorder.returns == 0
+    # Typing adds nothing to the panel: a widget appearing mid-edit changes
+    # the panel's height, which makes the task panel scroll.
+    assert unit_panel.panel.form.sizeHint().height() == form_height_px
 
     # Leaving the field with the text still unreadable applies nothing and
     # puts the last shown value back.
@@ -410,11 +410,9 @@ def test_unreadable_text_is_flagged_never_applied_and_keeps_return(
     _process_events()
     assert unit_panel.rule(unit_panel.lower) == Fill()
     assert field.line_edit.text().startswith(shown_text), field.line_edit.text()
-    assert not status.isVisible()
 
     unit_panel.type_size("300")
     assert unit_panel.rule(unit_panel.lower) == Fixed(300.0)
-    assert not status.isVisible()
     assert recorder.returns == 0
 
 

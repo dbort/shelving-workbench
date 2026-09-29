@@ -1,5 +1,5 @@
 ---
-next_id: bug-010
+next_id: bug-011
 ---
 
 # Bug log
@@ -170,3 +170,14 @@ the log happens only when the user asks.
   task`, because choosing where dimensions go (offset lanes, drawing only
   the selected region's, moving labels outside the unit) is a design
   decision the user wants to make separately.
+- `bug-010` - **a dimension set from an expression keeps only the resolved
+  number**: typing `VarSet.Len` or binding it with f(x) sizes the region
+  once, but the rule stores the millimetre value, so a later change to the
+  `VarSet` moves nothing. FreeCAD users expect a bound length to follow its
+  expression. Found in sh-021's manual QA. Root cause: a region's size lives
+  in the container's rule record (`freecad/Shelving/core/record.py`), which
+  holds numbers, not a document property that `ExpressionEngine` can drive;
+  the dimension field binds to a temporary probe object only so it can
+  resolve names. Fix: `sh-XXX task`, since storing and re-evaluating
+  expressions per region changes the rule record, reflow, and the editor,
+  and needs design decisions.

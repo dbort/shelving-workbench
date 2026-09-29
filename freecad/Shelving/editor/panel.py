@@ -94,9 +94,9 @@ class _DimensionField:
     probe object, or, when the GUI cannot supply that widget, a plain line
     edit whose text goes to ``FreeCAD.Units.parseQuantity`` verbatim.
 
-    Text the quantity widget cannot resolve is never applied: the field
-    says so in ``status_label`` and leaves the size as it was. Whether the
-    text resolves is the widget's own verdict, read from its
+    Text the quantity widget cannot resolve is never applied, and how the
+    field looks while it holds such text is the widget's own business.
+    Whether the text resolves is the widget's verdict, read from its
     ``acceptableInput``; this class never looks at the text itself.
 
     ``on_size`` receives the resolved millimetres; ``on_error`` receives
@@ -142,17 +142,12 @@ class _DimensionField:
         else:
             self.line_edit = QtWidgets.QLineEdit()
             self.widget = self.line_edit
-        self.status_label = QtWidgets.QLabel("")
-        self.status_label.setWordWrap(True)
-        self.status_label.setStyleSheet("color: #c0392b;")
-        self.status_label.setVisible(False)
         self._event_filter = _FieldEventFilter(
             self.widget, self._finished, self._discard_unreadable
         )
         self.widget.installEventFilter(self._event_filter)
         if self.line_edit is not self.widget:
             self.line_edit.installEventFilter(self._event_filter)
-        self.line_edit.textChanged.connect(self._show_validity)
         # What show_mm last displayed. editingFinished also fires when the
         # field merely loses focus, and reporting an unchanged value would
         # quietly fix a region that shares leftover space.
@@ -180,14 +175,6 @@ class _DimensionField:
             return True
         return bool(self.quantity_widget.property("acceptableInput"))
 
-    def _show_validity(self) -> None:
-        self.status_label.setText(
-            ""
-            if self._acceptable()
-            else "FreeCAD cannot read this as a length. The size is unchanged."
-        )
-        self.status_label.setVisible(not self._acceptable())
-
     def _discard_unreadable(self) -> None:
         """Put the last shown value back before the widget handles a
         focus-out. Left alone, the widget settles on whatever a prefix of the
@@ -200,7 +187,6 @@ class _DimensionField:
             # While the text is unacceptable, rawValue still holds the last
             # value some prefix of it resolved to (12 mm for 12 1/2").
             if not self._acceptable():
-                self._show_validity()
                 return
             value_mm = self.quantity_widget.property("rawValue")
             if isinstance(value_mm, float) and value_mm != self._shown_mm:
@@ -234,7 +220,6 @@ class _DimensionField:
             self._shown_text = "" if value_mm is None else f"{value_mm:g} mm"
             self.line_edit.setText(self._shown_text)
         self.widget.blockSignals(False)
-        self._show_validity()
 
 
 class _EditorView(QtWidgets.QGraphicsView):
@@ -381,7 +366,6 @@ class EditUnitPanel:
             self.basis_combo.addItem(text)
         dimension_row.addWidget(self.basis_combo)
         layout.addLayout(dimension_row)
-        layout.addWidget(self.size_field.status_label)
         self.readout_label = QtWidgets.QLabel("")
         layout.addWidget(self.readout_label)
 

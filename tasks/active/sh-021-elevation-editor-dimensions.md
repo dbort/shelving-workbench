@@ -166,11 +166,14 @@ DECISIONS MADE DURING `/work` (2026-09-27):
   before any FreeCAD import, so an import failure fails the run instead of
   passing (`freecadcmd`) or hanging (the GUI).
 - MANUAL-QA FOLLOW-UPS (2026-09-27, the user's QA on FreeCAD 1.1.1).
-  Text the quantity widget does not accept is never applied: the field
-  shows a red line saying so, a Return on it is consumed rather than
-  reaching the task panel as OK, and leaving the field puts the last shown
-  value back. The widget's own `acceptableInput` verdict decides, so this
-  still inspects no text. Dimension lines end in arrowheads. Refusals read
+  Text the quantity widget does not accept is never applied: a Return on it
+  is consumed rather than reaching the task panel as OK, and leaving the
+  field puts the last shown value back. The widget's own `acceptableInput`
+  verdict decides, so this inspects no text, and the panel adds no
+  as-you-type feedback of its own (2026-09-29: a live error line was
+  removed at the user's request as unlike FreeCAD, and its show/hide made
+  the task panel jump). Keeping only the resolved number is bug-010.
+  Dimension lines end in arrowheads. Refusals read
   as plain sentences with no node ids (`describe_solve_error`). Overlapping
   dimensions are bug-009, deferred to its own task. A last region in a
   nested run (the upper bay under the unit's top) has no spacing basis,

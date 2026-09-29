@@ -575,20 +575,20 @@ Expected: 13.70 mm. FreeCAD's length fields read a bare number as
 millimetres even inside a sum, so this is 1 mm plus 12.70 mm; the workbench
 passes the text to FreeCAD untouched and shows what FreeCAD made of it.
 
-3. Type `12 1/2"` and press nothing yet.
+3. Type `12 1/2"`.
 
-Expected: a red line under the field reads **FreeCAD cannot read this as a
-length. The size is unchanged.**
+Expected: the panel stays where it is (no scroll jump) and nothing else
+appears in it; the field behaves as any FreeCAD length field does with text
+it cannot read.
 
 4. Press Return.
 
-Expected: nothing changes: the panel stays open, the red line stays, and
-the lower bay is still 13.70 mm.
+Expected: nothing changes: the panel stays open and the lower bay is still
+13.70 mm.
 
 5. Press Tab.
 
-Expected: the field goes back to 13.70 mm, the red line disappears, and the
-layout does not change.
+Expected: the field goes back to 13.70 mm and the layout does not change.
 
 #### 12. Bind the field to a VarSet and confirm it follows
 
@@ -602,14 +602,14 @@ Expected: the lower bay becomes 300 mm clear.
 Expected: the lower bay follows to 280 mm. While the panel is open a
 `Shelving dimension (temporary)` object appears at the top of the tree; it
 is gone once the panel closes at the end of case 14. Changing `VarSet.Len`
-afterwards does not move the shelf: the unit stores the resolved size, not
-the expression.
+afterwards does not move the shelf, since the unit keeps only the resolved
+size (bug-010).
 
 3. Click the upper bay, click the lower bay again, type `250` and press
    Return.
 
-Expected: the field shows no f(x) marker and accepts the typing; the lower
-bay becomes 250 mm.
+Expected: the field's f(x) icon is white, meaning no expression is bound,
+and the field accepts the typing; the lower bay becomes 250 mm.
 
 #### 13. Drag a board and confirm the readout keeps its basis
 
@@ -670,8 +670,9 @@ bay, and the temporary object is gone from the tree.
 3. Click the right lower bay, leave **Clear opening** chosen, type `282`,
    and press Return. Both shelves now sit at the same height.
 4. Click **OK**.
-5. Change the default stock's `Thickness` from `18 mm` to `25 mm` as in M8
-   case 2, then run **Reflow All**.
+5. In the materials group, select the `ply18` entry (**18 mm birch
+   plywood**), change its `Thickness` from `18 mm` to `25 mm`, then run
+   **Reflow All**.
 
 Expected: the left shelf stays exactly where it was; the right shelf rises
 by 7 mm, following the thicker bottom board.
