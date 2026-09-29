@@ -4,10 +4,11 @@ next_id: bug-010
 
 # Bug log
 
-Functional defects in the shipped workbench: wrong output, a refusal that
+Functional defects in the workbench on `main`: wrong output, a refusal that
 should succeed, a crash, behavior that contradicts the design docs or a
-task's Must Haves. Log it in the same session, whether or not it is fixed
-at once. Friction in building the workbench goes in `friction-log.md`.
+task's Must Haves. Log it in the same session, even if fixed at once. A
+defect a task branch introduces and fixes never reaches `main` and gets no
+entry. Friction in building the workbench goes in `friction-log.md`.
 
 Format, oldest first:
 
