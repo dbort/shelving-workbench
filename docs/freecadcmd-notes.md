@@ -212,8 +212,10 @@ for `Label`, which is ordinary `DocumentObject` state and unaffected).
 
 `FreeCADGui.UiLoader` does not exist under `freecadcmd`, but the full GUI
 binary runs headless with `QT_QPA_PLATFORM=offscreen pixi run freecad
-script.py`, which is how the following was verified against FreeCAD
-1.0.0. The GUI keeps running after a script returns or raises, so the
+script.py`, which is how the following was verified against FreeCAD 1.0.0
+and again against 1.1.3. On 1.1 that command also needs the throwaway XDG
+directories and preferences that `tools/run-tests.sh` sets up, or startup
+never finishes (the next two sections). The GUI keeps running after a script returns or raises, so the
 process hangs. `sys.exit(N)` does end it, but once the script has opened a
 document the process exits 1 whatever `N` is (a bare `sys.exit(3)` with
 no document exits 3). A script must therefore end in `os._exit(status)`.
@@ -246,19 +248,49 @@ pytest before importing anything from FreeCAD, points `sys.stdout` and
   the same text is not acceptable input. A bound widget accepts it typed
   directly, with no leading `=`.
 - Typing `=` into a bound widget opens its f(x) dialog
-  (`Gui::Dialog::DlgExpressionInput`, with the expression in the child
-  `QLineEdit` named `expression`). Accepting it writes the expression
+  (`Gui::Dialog::DlgExpressionInput`, with the expression in a child named
+  `expression`: a `QLineEdit` in 1.0, a `Gui::ExpressionTextEdit`, which
+  is a `QPlainTextEdit`, in 1.1). Accepting it writes the expression
   straight into the bound property's `ExpressionEngine`, even with
   `autoApply()` false, inside whatever document transaction is already
   open; `abortTransaction` reverts it. The widget does not refresh when the
   referenced `VarSet` later changes.
 - Unacceptable text blocks Return, so `editingFinished` fires only for
-  input the widget resolved.
+  input the widget resolved. On Return, 1.1 replaces accepted text with the
+  resolved value (`1" + 1/2"` becomes `38.10 mm`); 1.0 kept the typed text.
 
 `freecad/Shelving/editor/panel.py` binds its dimension field to a temporary
 probe object the session creates for exactly this reason: a region's size
 is not itself a document property, so without the probe the field could
 not resolve a `VarSet` name.
+
+## FreeCAD 1.1 offers a settings migration at the first GUI start
+
+FreeCAD 1.1 keeps user settings in per-version directories under the XDG
+config, data and cache directories (`~/.config/FreeCAD/v1-1/` and so on).
+When it finds settings from an older version, the first GUI start opens a
+modal dialog offering to migrate them (`Gui::Dialog::DlgVersionMigrator`,
+from `StartupPostProcess::checkVersionMigration`), before any script runs.
+Headless, nothing answers it, so startup never finishes (verified on 1.1.3
+with a native stack). Starting with empty XDG directories avoids it:
+`XDG_CONFIG_HOME`, `XDG_DATA_HOME` and `XDG_CACHE_HOME` are enough, and
+`HOME` can stay as it is. `freecadcmd` shows no such dialog.
+
+## A headless notification popup deadlocks FreeCAD 1.1
+
+Under Qt's offscreen platform, any Qt warning (such as "This plugin does
+not support propagateSizeHints()") goes through FreeCAD's message handler
+into the Notification Area. Showing that notification's popup calls
+`QWidget::raise()`, which the offscreen platform answers with another
+warning, and that re-enters `Gui::NotificationArea::pushNotification`
+while `showInNotificationArea` still holds the area's mutex. The main
+thread then waits on that mutex forever (verified on 1.1.3 with `eu-stack`:
+the system and conda-forge `gdb` both fail on this VM with "Unable to fetch
+SVE/SSVE vector length"). The same happens under Xvfb. Setting
+`BaseApp/Preferences/NotificationArea/NonIntrusiveNotificationsEnabled` to
+false avoids it, which `tools/freecad-test-user.cfg` does for test runs;
+notifications still reach the Notification Area and the Report view, only
+without a popup.
 
 ## User-facing errors: the Notification Area
 

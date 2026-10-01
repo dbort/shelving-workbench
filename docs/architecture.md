@@ -8,7 +8,7 @@
 > several choices were made, not because the rest of the document still
 > matches the code. Where the two disagree, `scope-and-design.md` wins.
 
-A FreeCAD 1.0 workbench for parametric shelving. A unit is designed as a
+A FreeCAD 1.1 workbench for parametric shelving. A unit is designed as a
 flat front elevation (a "2.5D" view: 2D layout plus a depth value per
 element), and expands into individually editable 3D plank solids that live
 in the Part, Draft, and Woodworking workflows. Editing the elevation
@@ -91,7 +91,7 @@ form" the workbench produces.
 | 2.5D editor | Modal task panel, `QGraphicsView` elevation, live 3D preview, OK/Cancel wrapping one document transaction |
 | Coordinates | Front elevation on the XZ plane (X right, Z up); depth runs +Y away from the viewer. Unit origin at the front-bottom-left corner. One depth for the whole unit in v1; per-bay depth override reserved in the schema |
 | Units | Millimetres internally. Display follows the FreeCAD unit schema. The dimension field parses fractional-inch input (`3/4`, `12 1/2"`) |
-| Platform | FreeCAD 1.0 or later, PySide6, Python 3.11 or later. FreeCAD 0.21 is not supported |
+| Platform | FreeCAD 1.1 or later, PySide6, Python 3.11 or later. Earlier FreeCAD versions are not supported |
 | Repo | GitHub `shelving-workbench`. Monorepo; `shelving_core/` is pure Python with no FreeCAD imports; the workbench vendors it |
 | License | MIT |
 
@@ -276,7 +276,7 @@ tools/run-tests.sh          the check harness
 surface, and CI runs exactly that command from the first milestone. In one
 ordered pass it covers ruff, a strict type check, and pytest over
 `shelving_core`; the repository-consistency checks; the workflow-hardening
-lint; and, in a FreeCAD 1.0 environment, a headless `freecadcmd` import
+lint; and, in a FreeCAD 1.1 environment, a headless `freecadcmd` import
 smoke.
 
 The `freecadcmd` step runs full smoke tests: create a unit,

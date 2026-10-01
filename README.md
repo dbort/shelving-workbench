@@ -3,9 +3,9 @@
 [![CI](https://github.com/dbort/shelving-workbench/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/dbort/shelving-workbench/actions/workflows/ci.yml)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/dbort/shelving-workbench/badge)](https://scorecard.dev/viewer/?uri=github.com/dbort/shelving-workbench)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![FreeCAD 1.0](https://img.shields.io/badge/FreeCAD-1.0-blue.svg)](https://www.freecad.org)
+[![FreeCAD 1.1](https://img.shields.io/badge/FreeCAD-1.1-blue.svg)](https://www.freecad.org)
 
-A FreeCAD 1.0 workbench for parametric shelving. A unit is designed as a flat
+A FreeCAD 1.1 workbench for parametric shelving. A unit is designed as a flat
 front elevation and expands into individually editable 3D board solids; editing
 the elevation reflows the 3D. The layout math lives in a pure-Python core
 (`freecad.Shelving.core`) that never imports FreeCAD, so it is testable
@@ -30,7 +30,7 @@ tools/install-deps.sh
 ```
 
 The script is idempotent. It provisions the pixi environment: the dev toolchain
-plus FreeCAD 1.0, pinned by `pixi.lock`. If `pixi` is not already on `PATH`, the
+plus FreeCAD 1.1, pinned by `pixi.lock`. If `pixi` is not already on `PATH`, the
 script downloads a pinned release for the host architecture, verifies its
 published `.sha256`, installs it into `~/.local/bin`, and adds that directory to
 `~/.bashrc` and `~/.profile`. See the [pixi documentation](https://pixi.sh) for

@@ -267,12 +267,14 @@ def _accept_formula_dialog(expression: str) -> None:
     assert len(dialogs) == 1, dialogs
     dialog = dialogs[0]
     assert isinstance(dialog, QtWidgets.QDialog)
-    (line_edit,) = [
+    # FreeCAD 1.1's expression field is a Gui::ExpressionTextEdit, a
+    # QPlainTextEdit subclass.
+    (text_edit,) = [
         child
-        for child in dialog.findChildren(QtWidgets.QLineEdit)
+        for child in dialog.findChildren(QtWidgets.QPlainTextEdit)
         if child.objectName() == "expression"
     ]
-    line_edit.setText(expression)
+    text_edit.setPlainText(expression)
     _process_events()
     dialog.accept()
     _process_events()

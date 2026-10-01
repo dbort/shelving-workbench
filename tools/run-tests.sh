@@ -38,6 +38,18 @@ shellcheck tools/*.sh
 pytest freecad/Shelving/core tests
 bash tools/lint-workflows.sh
 
+# FreeCAD runs against throwaway XDG directories. With a developer's real
+# ones, FreeCAD 1.1 offers to migrate older settings in a modal dialog no
+# headless run can answer, and tests should not touch real settings
+# anyway. The v1-1 directory name follows FreeCAD's minor version.
+freecad_dirs="$(mktemp -d)"
+trap 'rm -rf "$freecad_dirs"' EXIT
+mkdir -p "$freecad_dirs/config/FreeCAD/v1-1"
+cp tools/freecad-test-user.cfg "$freecad_dirs/config/FreeCAD/v1-1/user.cfg"
+export XDG_CONFIG_HOME="$freecad_dirs/config"
+export XDG_DATA_HOME="$freecad_dirs/data"
+export XDG_CACHE_HOME="$freecad_dirs/cache"
+
 # freecad_scan_smoke.py is a real pytest module that calls sys.exit on its
 # own pass/fail status (docs/freecadcmd-notes.md), so its exit code is
 # trustworthy; no output-grepping needed. The header line separates it
