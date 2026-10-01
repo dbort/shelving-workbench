@@ -60,7 +60,7 @@ from freecad.Shelving.core.layout import (  # noqa: E402
     SizeRule,
 )
 from freecad.Shelving.editor import panel as panel_module  # noqa: E402
-from freecad.Shelving.editor.panel import EditUnitPanel  # noqa: E402
+from freecad.Shelving.editor.panel import AncestorWatch, EditUnitPanel  # noqa: E402
 from freecad.Shelving.editor.session import PROBE_PROPERTY, Session  # noqa: E402
 from freecad.Shelving.unit_ops import create_unit  # noqa: E402
 
@@ -470,3 +470,41 @@ def test_a_drag_past_its_limit_reports_once(
 def test_report_error_reaches_freecads_console() -> None:
     """The real call, unpatched: the two-argument form the stubs omit."""
     panel_module.report_error("panel smoke: report_error reached the console")
+
+
+def test_ancestor_watch_names_the_container_hiding_the_form() -> None:
+    """A form on a background tab: the snapshot shows which ancestor hides
+    it, bringing the tab forward reports the Show that reveals it, and once
+    the form has been shown nothing more is reported."""
+    tabs = QtWidgets.QTabWidget()
+    tabs.addTab(QtWidgets.QWidget(), "Model")
+    page = QtWidgets.QWidget()
+    form = QtWidgets.QWidget()
+    QtWidgets.QVBoxLayout(page).addWidget(form)
+    tabs.addTab(page, "Tasks")
+    tabs.show()
+    _process_events()
+    try:
+        lines: list[str] = []
+        watch = AncestorWatch(form, lines.append)
+        watch.snapshot("start")
+        assert any("not visible" in line for line in lines), lines
+        assert any("child on page 1, current page 0" in line for line in lines), lines
+        assert any("current tab 'Model'" in line for line in lines), lines
+
+        lines.clear()
+        tabs.setCurrentIndex(1)
+        _process_events()
+        assert any(
+            line.startswith("form shown: ") and "child on the current page" in line
+            for line in lines
+        ), lines
+
+        lines.clear()
+        tabs.setCurrentIndex(0)
+        tabs.setCurrentIndex(1)
+        _process_events()
+        watch.snapshot("after shown")
+        assert lines == []
+    finally:
+        tabs.close()

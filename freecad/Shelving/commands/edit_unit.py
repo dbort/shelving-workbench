@@ -92,7 +92,7 @@ class EditUnitCommand:
             run.end("refused")
             return
         run.lap("build panel")
-        from freecad.Shelving.editor.panel import FirstEvents
+        from freecad.Shelving.editor.panel import AncestorWatch, FirstEvents
 
         # These show and paint events arrive after showDialog returns, whenever
         # FreeCAD and Qt get round to them; wall-clock times make a gap
@@ -114,6 +114,9 @@ class EditUnitCommand:
             run.end()
 
         panel.view.on_first_paint = _elevation_painted
+        ancestors = AncestorWatch(
+            panel.form, lambda line: run.lap(f"{line} at {debug_log.timestamp()}")
+        )
         try:
             Gui.Control.showDialog(panel)
         except Exception as err:  # noqa: BLE001 - the transaction EditUnitPanel
@@ -125,13 +128,15 @@ class EditUnitCommand:
             run.end("refused")
             return
         run.lap("showDialog")
+        ancestors.snapshot("after showDialog")
 
-        QtCore.QTimer.singleShot(
-            0,
-            lambda: run.lap(
+        def _first_pass() -> None:
+            run.lap(
                 f"first event-loop pass after showDialog at {debug_log.timestamp()}"
-            ),
-        )
+            )
+            ancestors.snapshot("first event-loop pass")
+
+        QtCore.QTimer.singleShot(0, _first_pass)
         # A panel that is never painted (the Tasks pane hidden, say) would
         # otherwise leave the run open until the next Edit Unit abandons it.
         QtCore.QTimer.singleShot(

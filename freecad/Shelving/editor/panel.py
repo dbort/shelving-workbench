@@ -330,6 +330,102 @@ class FirstEvents(QtCore.QObject):
         return False
 
 
+def _describe(widget: QtWidgets.QWidget, child: QtWidgets.QWidget | None) -> str:
+    """``widget``'s type, name, and whether it lets ``child`` (the next
+    widget down toward the form, when known) be seen."""
+    # PySide6-stubs types className() as bytes; at runtime it is a str.
+    class_name: object = widget.metaObject().className()
+    parts = [class_name if isinstance(class_name, str) else repr(class_name)]
+    if widget.objectName():
+        parts.append(repr(widget.objectName()))
+    parts.append("visible" if widget.isVisible() else "not visible")
+    if widget.isHidden():
+        parts.append("hidden itself")
+    if isinstance(widget, QtWidgets.QStackedWidget) and child is not None:
+        current = widget.currentIndex()
+        page = widget.indexOf(child)
+        parts.append(
+            "child on the current page"
+            if page == current
+            else f"child on page {page}, current page {current}"
+        )
+    if isinstance(widget, QtWidgets.QTabWidget):
+        parts.append(f"current tab {widget.tabText(widget.currentIndex())!r}")
+    if isinstance(widget, QtWidgets.QDockWidget):
+        parts.append("floating" if widget.isFloating() else "docked")
+    return ", ".join(parts)
+
+
+class AncestorWatch(QtCore.QObject):
+    """Reports through ``on_line`` how each ancestor of ``form`` stands, and
+    every Show or Hide among them, until ``form`` is first shown; then
+    reports the ancestors once more and stops. Qt delivers a newly shown
+    ancestor's Show after its children's, so that last report, set against
+    an earlier :meth:`snapshot`, is what names the ancestor that revealed the
+    form.
+
+    Exists to name whichever container keeps a shown task dialog's form out
+    of sight (bug-011). Parented to ``form``, so it lives exactly as long as
+    the form.
+    """
+
+    def __init__(self, form: QtWidgets.QWidget, on_line: Callable[[str], None]) -> None:
+        super().__init__(form)
+        self._form = form
+        self._on_line = on_line
+        self._watched: list[QtWidgets.QWidget] = []
+        self._done = False
+        form.installEventFilter(self)
+
+    def snapshot(self, when: str) -> None:
+        """Report the form's ancestors as they are now, nearest first, and
+        start watching any not already watched. May be called again: the
+        task view can reparent the form after ``showDialog`` returns. Does
+        nothing once the form has been shown."""
+        if self._done:
+            return
+        self._report_chain(when, watch=True)
+
+    def _report_chain(self, when: str, *, watch: bool) -> None:
+        child: QtWidgets.QWidget = self._form
+        parent = child.parentWidget()
+        if parent is None:
+            self._on_line(f"{when}: form has no parent")
+        depth = 1
+        while parent is not None:
+            self._on_line(f"{when}: ancestor {depth}: {_describe(parent, child)}")
+            if watch and not any(watched is parent for watched in self._watched):
+                parent.installEventFilter(self)
+                self._watched.append(parent)
+            child, parent = parent, parent.parentWidget()
+            depth += 1
+
+    def eventFilter(self, watched: QtCore.QObject, event: QtCore.QEvent) -> bool:
+        kind = event.type()
+        if kind not in (QtCore.QEvent.Type.Show, QtCore.QEvent.Type.Hide):
+            return False
+        if watched is self._form:
+            if kind == QtCore.QEvent.Type.Show:
+                self._report_chain("form shown", watch=False)
+                self._stop()
+            return False
+        if isinstance(watched, QtWidgets.QWidget):
+            verb = "shown" if kind == QtCore.QEvent.Type.Show else "hidden"
+            self._on_line(f"{verb}: {_describe(watched, None)}")
+        return False
+
+    def _stop(self) -> None:
+        self._done = True
+        self._form.removeEventFilter(self)
+        for watched in self._watched:
+            try:
+                watched.removeEventFilter(self)
+            except RuntimeError:
+                # The ancestor was already deleted, taking its filters with it.
+                pass
+        self._watched = []
+
+
 class EditUnitPanel:
     """One elevation-editing task panel over ``container``.
 

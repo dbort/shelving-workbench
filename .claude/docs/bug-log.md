@@ -194,9 +194,12 @@ the log happens only when the user asks.
   whole Shelving menu was disabled, which FreeCAD does to commands while a
   task dialog is active, so the dialog was open but its form was not
   visible. Clicking around did not reveal it; it appeared on its own. Root
-  cause unknown: some ancestor of the form stayed hidden for 29 s. Fix:
-  `ad hoc`, provisionally: first extend the `debug_log` run to record each
-  of the form's ancestors (type, name, visibility, current tab) once
-  `showDialog` returns, and every Show and Hide among them until the form
-  is shown, which names the ancestor that held it back on the next
-  occurrence; the fix itself waits on what that shows.
+  cause unknown: some ancestor of the form stayed hidden for 29 s. The
+  `debug_log` run now records the form's ancestors right after
+  `showDialog` and again when the form is shown (`AncestorWatch` in
+  `freecad/Shelving/editor/panel.py`). In a normal run on FreeCAD 1.0.0,
+  the only hidden ancestor at that point is FreeCAD's own
+  `Gui::TaskView::TaskBox` (hidden itself), which shows the form about 5
+  ms later, so a stalled TaskBox show is the leading suspect. Fix: `ad
+  hoc`, provisionally: the fix waits on a slow run's log confirming which
+  ancestor held the form back.
