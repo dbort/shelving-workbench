@@ -17,37 +17,37 @@ naming a variable works and this workbench inspects nothing a user types.
 Milestone M9, part 2 of 2.
 
 ## Must Have
-- [ ] `pixi run tests` green.
-- [ ] `freecad/Shelving/core/edit.py` gains `set_size(unit, region_id, size_mm, basis)`
+- [x] `pixi run tests` green.
+- [x] `freecad/Shelving/core/edit.py` gains `set_size(unit, region_id, size_mm, basis)`
       returning a `Unit` with that region's rule replaced by a `Fixed` at that
       size and basis, leaving every sibling's rule untouched.
-- [ ] `set_basis(unit, region_id, basis)` changes only what a size measures,
+- [x] `set_basis(unit, region_id, basis)` changes only what a size measures,
       recomputing the stored number so the geometry is unchanged. A test asserts
       the solved layout before and after is identical.
-- [ ] The dimension field is FreeCAD's own quantity input, obtained through
+- [x] The dimension field is FreeCAD's own quantity input, obtained through
       `FreeCADGui.UiLoader().createWidget`, so it accepts exactly what every
       other length field in FreeCAD accepts, including expressions naming a
       `VarSet`, and shows the resolved value as the user types. No input is
       inspected, rewritten, or refused by this workbench.
-- [ ] If that widget proves unobtainable in the GUI, the fallback is a plain
+- [x] If that widget proves unobtainable in the GUI, the fallback is a plain
       field passed verbatim to `FreeCAD.Units.parseQuantity`, with the parse
       error surfaced. Still no inspection of the text.
-- [ ] Dragging a board sets the size of the region on one side, keeping that
+- [x] Dragging a board sets the size of the region on one side, keeping that
       region's existing basis. A test drives a drag through the session and
       asserts the basis is unchanged and only the number moved.
-- [ ] A dimension is drawn showing what it measures: a clear opening spans the
+- [x] A dimension is drawn showing what it measures: a clear opening spans the
       void, a spacing spans from one board's face to the next and visibly
       crosses a board. Asserted by item geometry, not pixels.
-- [ ] Changing a catalog thickness holds board positions for a region whose
+- [x] Changing a catalog thickness holds board positions for a region whose
       basis is spacing and moves them for one whose basis is clear. Asserted in
       the headless smoke against one document.
-- [ ] The panel lists objects the write path left alone, with the reason, and
+- [x] The panel lists objects the write path left alone, with the reason, and
       offers to remove them or keep them; keeping is the default and removal
       happens only inside the session's transaction.
-- [ ] An edit that will not solve returns the error and leaves the document at
+- [x] An edit that will not solve returns the error and leaves the document at
       the last state that solved, as in sh-020.
-- [ ] `docs/manual-qa.md`'s M9 section gains the dimension cases.
-- [ ] `mypy --strict` clean.
+- [x] `docs/manual-qa.md`'s M9 section gains the dimension cases.
+- [x] `mypy --strict` clean.
 
 ## Advice
 
