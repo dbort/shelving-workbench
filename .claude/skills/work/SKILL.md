@@ -26,10 +26,10 @@ Pipeline rules: `.claude/docs/pipeline.md`.
 5. **Review.** Run the `reviewer` subagent, naming the task file. Append
    its verdict and findings to `## Review log` as the next round, and
    commit.
-   - REJECTED, fewer than three rejections since the user's last
-     message: go to step 3.
-   - REJECTED for the third time since the user's last message: stop and
-     ask the user how to proceed.
+   - REJECTED, fewer than three in a row without hearing from the user:
+     go to step 3.
+   - REJECTED for the third time in a row without hearing from the user:
+     stop and ask the user how to proceed.
    - APPROVED: stop. Report that the task awaits `/ship sh-XXX`.
 
 Report the rounds this run took, one line each.

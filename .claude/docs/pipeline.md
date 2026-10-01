@@ -59,11 +59,11 @@ The `reviewer` subagent returns a verdict and findings; it edits nothing.
 ```
 
 Rounds number from 1 across the task's whole life and never reuse a
-number. After three REJECTED rounds since the user's last message,
-`/work` stops and asks the user how to proceed. Any user message resets
-the count, an answer or a request for another review included: the cap
-stops a runaway implement-review loop and does not limit a task's total
-rounds. The log is append-only: it is the task's review record.
+number. After three REJECTED rounds in a row without hearing from the
+user, `/work` stops and asks the user how to proceed. Hearing from the
+user, an answer or a request for another review included, starts the
+count again: the cap stops a runaway implement-review loop and does not
+limit a task's total rounds. The log is append-only: it is the task's review record.
 
 ## Task files
 
