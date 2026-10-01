@@ -237,3 +237,8 @@ DECISIONS MADE DURING `/work` (2026-09-27):
 - **N4: `sed`-style wrap artifact and an overlong docstring line** (`freecad/Shelving/editor/scene.py:37-39`, `freecad/Shelving/editor/scene.py:366`).
 - **N5: `report_error`'s docstring contrasts with the removed design** (`freecad/Shelving/editor/panel.py:244-246`).
 - **N6: `AncestorWatch` runs for every user, not only when debug logging is on** (`freecad/Shelving/commands/edit_unit.py:117-119`): gate it on `debug_log.is_enabled()`.
+
+### Round 6: APPROVED
+- **N1: The split refusal's article is wrong for the default board** (`freecad/Shelving/core/edit.py:231-232`): "too small to hold a 18.0 mm board" for the default 18 mm ply (also 8 mm and 11 mm stock). Avoid the article, e.g. "too small for a board 18.0 mm thick with room on both sides".
+- **N2: The fallback field gives no feedback when the same unreadable text is submitted again** (`freecad/Shelving/editor/panel.py:216`): `_rejected_text` clears only in `show_mm`, so resubmitting identical bad text shows nothing. Probably intended (one popup per edit); fallback path only.
+- **N3: Nothing tests the `debug_log` gate on `AncestorWatch`** (`freecad/Shelving/commands/edit_unit.py:124`): correct on reading; a one-line conditional in a command with no test harness.
