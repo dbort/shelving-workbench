@@ -15,7 +15,7 @@ import enum
 import uuid
 from dataclasses import dataclass, field
 
-from freecad.Shelving.core.geometry import Vec3
+from freecad.Shelving.core.geometry import AxisIndex, Vec3
 from freecad.Shelving.core.materials import MaterialId
 
 
@@ -30,6 +30,17 @@ class Axis(enum.StrEnum):
     X = "x"
     Y = "y"
     Z = "z"
+
+    @property
+    def component_index(self) -> AxisIndex:
+        """This axis's index into a ``Vec3``'s components (0=x, 1=y, 2=z)."""
+        match self:
+            case Axis.X:
+                return 0
+            case Axis.Y:
+                return 1
+            case Axis.Z:
+                return 2
 
 
 class Basis(enum.StrEnum):

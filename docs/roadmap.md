@@ -285,10 +285,10 @@ every board using it change while each unit's outside dimensions hold.
 
 ## M9 — The elevation editor
 
-**Status:** Tasks sh-020, sh-021
+**Status:** Done sh-020, sh-021
 
 - [x] sh-020 — the panel, the scene, selection, split and merge
-- [ ] sh-021 — dimensions, dragging, the measurement basis, and the
+- [x] sh-021 — dimensions, dragging, the measurement basis, and the
   untagged-object choice (blocked on sh-020)
 
 The modal task panel: an elevation rendered from the scanned layout, pick

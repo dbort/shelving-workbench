@@ -54,6 +54,12 @@ survives the reimport within the one process, so the second entry into
 that code path sees it already set and skips calling `pytest.main()`
 again.
 
+The block belongs above every FreeCAD and workbench import, not at the
+bottom of the file. `freecadcmd` exits 0 on an uncaught exception (see
+above), so an exception raised while importing before `pytest.main()` runs
+passes silently. Inside pytest's collection the same failure is a
+collection error with a nonzero status.
+
 ## `freecadcmd`'s own stdout buffering can hide a script's last output
 
 A `freecadcmd` script's process teardown does not flush Python's stdout
@@ -201,3 +207,66 @@ Consequence: a headless `freecadcmd` pytest module cannot assert that a
 colour survives an operation; that case has to stay in `docs/manual-qa.md`
 instead (`tools/freecad_write_smoke.py`'s resize test does the same check
 for `Label`, which is ordinary `DocumentObject` state and unaffected).
+
+## GUI-only widget access: `Gui::QuantitySpinBox`
+
+`FreeCADGui.UiLoader` does not exist under `freecadcmd`, but the full GUI
+binary runs headless with `QT_QPA_PLATFORM=offscreen pixi run freecad
+script.py`, which is how the following was verified against FreeCAD
+1.0.0. The GUI keeps running after a script returns or raises, so the
+process hangs. `sys.exit(N)` does end it, but once the script has opened a
+document the process exits 1 whatever `N` is (a bare `sys.exit(3)` with
+no document exits 3). A script must therefore end in `os._exit(status)`.
+The GUI also routes `sys.stdout` to its Report view.
+`tools/freecad_panel_smoke.py` handles all three problems: it self-invokes
+pytest before importing anything from FreeCAD, points `sys.stdout` and
+`sys.stderr` back at `sys.__stdout__` and `sys.__stderr__`, and ends in
+`os._exit` with pytest's status from a `finally`.
+
+- `FreeCADGui.UiLoader().createWidget("Gui::QuantitySpinBox")` returns a
+  working widget. PySide6 sees it as a `QAbstractSpinBox`, so its
+  FreeCAD-specific API is reached through Qt properties and string
+  signatures, never Python attributes. `Gui::InputField` is also
+  available.
+- The resolved value, in millimetres for a length, is
+  `widget.property("rawValue")`. `widget.property("value")` raises: PySide6
+  has no converter for `Base::Quantity`. The `valueChanged(double)` signal
+  is only reachable as
+  `QtCore.QObject.connect(widget, QtCore.SIGNAL("valueChanged(double)"), slot)`.
+- With `widget.setProperty("unit", "mm")`, a bare number is millimetres,
+  including inside a sum: `1 + 1/2"` resolves to 13.70 mm (1 mm plus
+  12.70 mm), where `FreeCAD.Units.parseQuantity` gives 38.10 mm for the same
+  text. `1" + 1/2"` resolves to 38.10 mm, `1-1/2"` to -11.70 mm, and
+  `12 1/2"` is not acceptable input. `parseQuantity` itself rejects
+  `1" + 1/2"` with "invalid unit expression".
+- An expression naming a document object, such as `VarSet.Len - 2 * 18 mm`,
+  resolves only once the widget is bound to a property of an object in
+  that document:
+  `FreeCADGui.ExpressionBinding(widget).bind(obj, "PropertyName")`. Unbound,
+  the same text is not acceptable input. A bound widget accepts it typed
+  directly, with no leading `=`.
+- Typing `=` into a bound widget opens its f(x) dialog
+  (`Gui::Dialog::DlgExpressionInput`, with the expression in the child
+  `QLineEdit` named `expression`). Accepting it writes the expression
+  straight into the bound property's `ExpressionEngine`, even with
+  `autoApply()` false, inside whatever document transaction is already
+  open; `abortTransaction` reverts it. The widget does not refresh when the
+  referenced `VarSet` later changes.
+- Unacceptable text blocks Return, so `editingFinished` fires only for
+  input the widget resolved.
+
+`freecad/Shelving/editor/panel.py` binds its dimension field to a temporary
+probe object the session creates for exactly this reason: a region's size
+is not itself a document property, so without the probe the field could
+not resolve a `VarSet` name.
+
+## User-facing errors: the Notification Area
+
+`FreeCAD.Console.PrintTranslatedUserError("Shelving", message)` pops the
+message up briefly from the status bar's Notification Area, labelled with
+the notifier `"Shelving"`, shows it in red in the status bar, and keeps it
+in the Report view. The user confirmed this in FreeCAD 1.1.1; 1.0.0 accepts
+the same call. freecad-stubs declares the function with one argument, so
+`freecad/Shelving/editor/panel.py`'s `report_error` casts it. An offscreen
+GUI records nothing in the Notification Area, so only a real display shows
+whether the popup appears.

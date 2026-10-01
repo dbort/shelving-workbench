@@ -1,5 +1,5 @@
-"""``split_region`` / ``merge_at``: refusals, round trips, and (bug-006) that
-every other board and region in an edited run keeps its solved geometry."""
+"""The core edits: refusals, round trips, and (bug-006) that every other
+board and region in an edited run keeps its solved geometry."""
 
 import copy
 import dataclasses
@@ -7,10 +7,22 @@ from collections.abc import Mapping
 
 import pytest
 
-from freecad.Shelving.core.edit import EditError, merge_at, split_region
+from freecad.Shelving.core.edit import (
+    EditError,
+    Measurement,
+    measure,
+    merge_at,
+    move_board,
+    region_before,
+    run_axis,
+    set_basis,
+    set_size,
+    split_region,
+)
 from freecad.Shelving.core.geometry import Space, Vec3
 from freecad.Shelving.core.layout import (
     Axis,
+    Basis,
     Bay,
     Board,
     Division,
@@ -348,31 +360,35 @@ def _assert_surviving_boards_unchanged(
 def test_split_region_refuses_a_void() -> None:
     void = Void()
     unit = Unit(size_mm=Vec3(600.0, 300.0, 900.0), default_material=PLY, root=void)
-    with pytest.raises(EditError, match=void.id) as exc_info:
+    with pytest.raises(EditError) as exc_info:
         split_region(unit, void.id, Axis.X, CATALOG)
     assert exc_info.value.node_id == void.id
+    assert void.id not in str(exc_info.value)
 
 
 def test_split_region_refuses_a_division() -> None:
     unit = _closed_box_unit()
     assert isinstance(unit.root, Division)
-    with pytest.raises(EditError, match=unit.root.id) as exc_info:
+    with pytest.raises(EditError) as exc_info:
         split_region(unit, unit.root.id, Axis.X, CATALOG)
     assert exc_info.value.node_id == unit.root.id
+    assert unit.root.id not in str(exc_info.value)
 
 
 def test_split_region_refuses_an_unknown_id() -> None:
     unit = _closed_box_unit()
-    with pytest.raises(EditError, match="no-such-id") as exc_info:
+    with pytest.raises(EditError) as exc_info:
         split_region(unit, "no-such-id", Axis.X, CATALOG)
     assert exc_info.value.node_id == "no-such-id"
+    assert "no-such-id" not in str(exc_info.value)
 
 
 def test_split_region_refuses_a_bay_too_small_for_the_divider() -> None:
     """A splice-case split (the bay's parent already runs along the split
     axis) whose opening cannot fit the new board and still leave two
     positive-sized halves is refused by the bay's own id, not left to a
-    downstream ``Fixed``/``Weighted`` construction to crash on."""
+    downstream ``Fixed``/``Weighted`` construction to crash on, in a message
+    that does not show that id."""
     bay = Bay(rule=Fixed(10.0))
     unit = Unit(
         size_mm=Vec3(46.0, 300.0, 900.0),
@@ -382,9 +398,10 @@ def test_split_region_refuses_a_bay_too_small_for_the_divider() -> None:
             items=[Board(role="left"), bay, Board(role="right")],
         ),
     )
-    with pytest.raises(EditError, match=bay.id) as exc_info:
+    with pytest.raises(EditError) as exc_info:
         split_region(unit, bay.id, Axis.X, CATALOG)
     assert exc_info.value.node_id == bay.id
+    assert bay.id not in str(exc_info.value)
 
 
 # --- merge_at refusals -------------------------------------------------------
@@ -392,9 +409,10 @@ def test_split_region_refuses_a_bay_too_small_for_the_divider() -> None:
 
 def test_merge_at_refuses_an_unknown_id() -> None:
     unit = _closed_box_unit()
-    with pytest.raises(EditError, match="no-such-id") as exc_info:
+    with pytest.raises(EditError) as exc_info:
         merge_at(unit, "no-such-id", CATALOG)
     assert exc_info.value.node_id == "no-such-id"
+    assert "no-such-id" not in str(exc_info.value)
 
 
 def test_merge_at_refuses_a_board_with_no_neighbour_on_one_side() -> None:
@@ -404,9 +422,10 @@ def test_merge_at_refuses_a_board_with_no_neighbour_on_one_side() -> None:
         default_material=PLY,
         root=Division(axis=Axis.X, items=[edge_board, Bay()]),
     )
-    with pytest.raises(EditError, match=edge_board.id) as exc_info:
+    with pytest.raises(EditError) as exc_info:
         merge_at(unit, edge_board.id, CATALOG)
     assert exc_info.value.node_id == edge_board.id
+    assert edge_board.id not in str(exc_info.value)
 
 
 def test_merge_at_refuses_a_board_flanked_by_another_board() -> None:
@@ -416,9 +435,10 @@ def test_merge_at_refuses_a_board_flanked_by_another_board() -> None:
         default_material=PLY,
         root=Division(axis=Axis.X, items=[Board(role="left"), middle_board, Bay()]),
     )
-    with pytest.raises(EditError, match=middle_board.id) as exc_info:
+    with pytest.raises(EditError) as exc_info:
         merge_at(unit, middle_board.id, CATALOG)
     assert exc_info.value.node_id == middle_board.id
+    assert middle_board.id not in str(exc_info.value)
 
 
 # --- split then merge round-trips the tree shape -----------------------------
@@ -952,3 +972,231 @@ def test_merge_collapse_with_no_other_driven_sibling_moves_no_board() -> None:
         after_space = spaces_after_merge[board_id]
         assert abs(before_space.origin.z_mm - after_space.origin.z_mm) <= 1e-6, board_id
         assert abs(before_space.size.z_mm - after_space.size.z_mm) <= 1e-6, board_id
+
+
+# --- set_size / set_basis / move_board ---------------------------------------
+
+
+def _column_unit(lower_rule: SizeRule) -> Unit:
+    """One vertical run: bottom, a lower bay ruled by ``lower_rule``, a
+    shelf, a ``Fill`` upper bay, a ``Weighted`` top bay, and a top. Every
+    node carries a fixed id so a test can name it."""
+    return Unit(
+        size_mm=Vec3(600.0, 300.0, 900.0),
+        default_material=PLY,
+        root=Division(
+            axis=Axis.Z,
+            items=[
+                Board(id="bottom"),
+                Bay(id="lower", rule=lower_rule),
+                Board(id="shelf"),
+                Bay(id="upper"),
+                Board(id="shelf2"),
+                Void(id="topmost", rule=Weighted(2.0)),
+                Board(id="top"),
+            ],
+            id="column",
+        ),
+        depth_axis=Axis.Y,
+    )
+
+
+def _rules_by_id(region: Region) -> dict[str, SizeRule]:
+    out = {region.id: region.rule}
+    if isinstance(region, Division):
+        for item in region.items:
+            if not isinstance(item, Board):
+                out.update(_rules_by_id(item))
+    return out
+
+
+def _assert_same_layout(before: Unit, after: Unit, catalog: Catalog) -> None:
+    spaces_before = solve(before, catalog)
+    spaces_after = solve(after, catalog)
+    assert spaces_before.keys() == spaces_after.keys()
+    for node_id, space in spaces_before.items():
+        assert _spaces_equal(space, spaces_after[node_id]), (node_id, space)
+
+
+def test_set_size_fixes_the_region_and_leaves_every_sibling_rule() -> None:
+    unit = _column_unit(Fill())
+    edited = set_size(unit, "upper", 250.0, Basis.WITH_NEXT)
+    rules_before = _rules_by_id(unit.root)
+    rules_after = _rules_by_id(edited.root)
+    assert rules_after.pop("upper") == Fixed(250.0, Basis.WITH_NEXT)
+    rules_before.pop("upper")
+    assert rules_after == rules_before
+    spaces = solve(edited, CATALOG)
+    # 250mm top face to top face: the upper bay plus the 18mm shelf2 above it.
+    assert spaces["upper"].size.z_mm + spaces["shelf2"].size.z_mm == pytest.approx(
+        250.0
+    )
+
+
+def test_set_size_leaves_the_argument_unit_unchanged() -> None:
+    unit = _column_unit(Fill())
+    snapshot = copy.deepcopy(unit)
+    set_size(unit, "lower", 300.0, Basis.CLEAR)
+    assert unit == snapshot
+
+
+@pytest.mark.parametrize("size_mm", [0.0, -12.7])
+def test_set_size_refuses_a_nonpositive_size(size_mm: float) -> None:
+    with pytest.raises(EditError) as err:
+        set_size(_column_unit(Fill()), "lower", size_mm, Basis.CLEAR)
+    assert err.value.node_id == "lower"
+
+
+@pytest.mark.parametrize("node_id", ["no-such-id", "shelf", "column"])
+def test_set_size_refuses_an_unknown_id_a_board_and_the_root(node_id: str) -> None:
+    with pytest.raises(EditError) as err:
+        set_size(_column_unit(Fill()), node_id, 300.0, Basis.CLEAR)
+    assert err.value.node_id == node_id
+
+
+def _region_before_region_unit() -> Unit:
+    """A bay followed directly by a void, with no board between them."""
+    return Unit(
+        size_mm=Vec3(600.0, 300.0, 900.0),
+        default_material=PLY,
+        root=Division(
+            axis=Axis.X,
+            items=[Bay(id="bay"), Void(id="void"), Board(id="side")],
+        ),
+        depth_axis=Axis.Y,
+    )
+
+
+def test_set_size_and_set_basis_refuse_a_spacing_with_no_board_after_it() -> None:
+    unit = _region_before_region_unit()
+    with pytest.raises(EditError) as err:
+        set_size(unit, "bay", 300.0, Basis.WITH_NEXT)
+    assert err.value.node_id == "bay"
+    with pytest.raises(EditError) as err:
+        set_basis(unit, "bay", Basis.WITH_NEXT, CATALOG)
+    assert err.value.node_id == "bay"
+
+
+@pytest.mark.parametrize(
+    ("lower_rule", "basis"),
+    [
+        (Fixed(282.0), Basis.WITH_NEXT),
+        (Fixed(300.0, Basis.WITH_NEXT), Basis.CLEAR),
+        (Fixed(300.0, Basis.WITH_NEXT), Basis.WITH_NEXT),
+        (Fill(), Basis.WITH_NEXT),
+        (Weighted(0.5), Basis.CLEAR),
+    ],
+)
+def test_set_basis_leaves_the_solved_layout_identical(
+    lower_rule: SizeRule, basis: Basis
+) -> None:
+    unit = _column_unit(lower_rule)
+    edited = set_basis(unit, "lower", basis, CATALOG)
+    _assert_same_layout(unit, edited, CATALOG)
+    new_rule = _rules_by_id(edited.root)["lower"]
+    assert isinstance(new_rule, Fixed)
+    assert new_rule.basis is basis
+
+
+def test_set_basis_restates_the_number_in_the_new_basis() -> None:
+    unit = _column_unit(Fixed(282.0))
+    spacing = set_basis(unit, "lower", Basis.WITH_NEXT, CATALOG)
+    assert _rules_by_id(spacing.root)["lower"] == Fixed(300.0, Basis.WITH_NEXT)
+    clear = set_basis(spacing, "lower", Basis.CLEAR, CATALOG)
+    assert _rules_by_id(clear.root)["lower"] == Fixed(282.0, Basis.CLEAR)
+
+
+def test_set_basis_uses_the_catalog_thickness_of_a_board_with_its_own_rule() -> None:
+    """The solver resolves ``WITH_NEXT`` by the next board's catalog
+    thickness, not its ruled extent, so the restated number must too or the
+    layout would move."""
+    unit = _column_unit(Fixed(282.0))
+    assert isinstance(unit.root, Division)
+    unit.root.items[2] = Board(id="shelf", rule=Fixed(30.0))
+    edited = set_basis(unit, "lower", Basis.WITH_NEXT, CATALOG)
+    _assert_same_layout(unit, edited, CATALOG)
+
+
+def test_a_spacing_holds_boards_and_a_clear_size_moves_them_across_catalogs() -> None:
+    """The reason basis exists: a thicker stock keeps a shelf's position
+    under a spacing, and pushes it up under a clear opening."""
+    thick = Catalog(entries={PLY: MaterialEntry(PLY, "ply 25", 25.0, "plywood")})
+    spacing_unit = _column_unit(Fixed(300.0, Basis.WITH_NEXT))
+    clear_unit = _column_unit(Fixed(282.0, Basis.CLEAR))
+    for unit in (spacing_unit, clear_unit):
+        assert solve(unit, CATALOG)["shelf"].origin.z_mm == pytest.approx(300.0)
+    assert solve(spacing_unit, thick)["shelf"].origin.z_mm == pytest.approx(300.0)
+    assert solve(clear_unit, thick)["shelf"].origin.z_mm == pytest.approx(307.0)
+
+
+@pytest.mark.parametrize(
+    ("lower_rule", "expected"),
+    [
+        (Fixed(282.0), Fixed(332.0, Basis.CLEAR)),
+        (Fixed(300.0, Basis.WITH_NEXT), Fixed(350.0, Basis.WITH_NEXT)),
+        (Fill(), Fixed(332.0, Basis.CLEAR)),
+    ],
+)
+def test_move_board_changes_the_number_and_never_the_basis(
+    lower_rule: SizeRule, expected: Fixed
+) -> None:
+    unit = _column_unit(lower_rule)
+    edited = move_board(unit, "shelf", 350.0, CATALOG)
+    assert _rules_by_id(edited.root)["lower"] == expected
+    assert solve(edited, CATALOG)["shelf"].origin.z_mm == pytest.approx(350.0)
+    rules_before = _rules_by_id(unit.root)
+    rules_after = _rules_by_id(edited.root)
+    del rules_before["lower"], rules_after["lower"]
+    assert rules_after == rules_before
+
+
+@pytest.mark.parametrize("board_id", ["bottom", "no-such-id", "lower"])
+def test_move_board_refuses_a_board_with_no_region_before_it(board_id: str) -> None:
+    with pytest.raises(EditError) as err:
+        move_board(_column_unit(Fill()), board_id, 350.0, CATALOG)
+    assert err.value.node_id == board_id
+
+
+def test_move_board_refuses_a_drag_past_the_region_below() -> None:
+    with pytest.raises(EditError) as err:
+        move_board(_column_unit(Fill()), "shelf", 10.0, CATALOG)
+    assert err.value.node_id == "lower"
+
+
+def test_measure_reports_both_numbers_and_the_basis_a_size_would_use() -> None:
+    fill = _column_unit(Fill())
+    measured = measure(fill, "lower", solve(fill, CATALOG), CATALOG)
+    assert measured.basis is Basis.CLEAR
+    assert measured.fixed is False
+    assert measured.spacing_mm == pytest.approx(measured.clear_mm + 18.0)
+    spacing = _column_unit(Fixed(300.0, Basis.WITH_NEXT))
+    assert measure(spacing, "lower", solve(spacing, CATALOG), CATALOG) == Measurement(
+        basis=Basis.WITH_NEXT, fixed=True, clear_mm=282.0, spacing_mm=300.0
+    )
+    assert measure(
+        spacing, "lower", solve(spacing, CATALOG), CATALOG
+    ).size_mm == pytest.approx(300.0)
+
+
+def test_measure_has_no_spacing_without_a_board_after_the_region() -> None:
+    unit = _region_before_region_unit()
+    measured = measure(unit, "bay", solve(unit, CATALOG), CATALOG)
+    assert measured.spacing_mm is None
+    assert measured.size_mm == measured.clear_mm
+
+
+@pytest.mark.parametrize("node_id", ["shelf", "column", "no-such-id"])
+def test_measure_refuses_what_set_size_refuses(node_id: str) -> None:
+    unit = _column_unit(Fill())
+    with pytest.raises(EditError):
+        measure(unit, node_id, solve(unit, CATALOG), CATALOG)
+
+
+def test_region_before_and_run_axis() -> None:
+    unit = _column_unit(Fill())
+    assert region_before(unit, "shelf") == "lower"
+    assert run_axis(unit, "shelf") is Axis.Z
+    with pytest.raises(EditError):
+        region_before(unit, "bottom")
+    with pytest.raises(EditError):
+        run_axis(unit, "column")

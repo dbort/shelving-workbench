@@ -16,7 +16,14 @@ from freecad.Shelving.core.layout import (
     Weighted,
 )
 from freecad.Shelving.core.materials import Catalog, MaterialEntry, MaterialId
-from freecad.Shelving.core.solver import EPS_MM, LayoutSolveError, distribute, solve
+from freecad.Shelving.core.solver import (
+    EPS_MM,
+    LayoutSolveError,
+    SolveErrorReason,
+    describe_solve_error,
+    distribute,
+    solve,
+)
 
 T10 = MaterialId("t10")
 T18 = MaterialId("t18")
@@ -342,3 +349,51 @@ def test_pinned_board_agreeing_within_eps_mm_does_not_raise() -> None:
     unit = _pinned_shelf_unit(200.0, Vec3(200.0 + EPS_MM / 2, 300.0, 18.0))
     spaces = solve(unit, CATALOG)
     _assert_space(spaces["fixed_shelf"], origin=(0, 0, 400), size=(200, 300, 18))
+
+
+@pytest.mark.parametrize(
+    ("reason", "detail", "expected"),
+    [
+        (
+            "overflow",
+            {"axis_span_mm": 30.0, "dividers_total_mm": 36.0},
+            "The boards alone take 36.0 mm, more than the 30.0 mm",
+        ),
+        (
+            "overflow",
+            {"slack_mm": -4136.0, "available_mm": 864.0},
+            "The fixed sizes add up to 4136.0 mm more than the space available.",
+        ),
+        (
+            "no_slack_absorber",
+            {"slack_mm": 316.0, "available_mm": 864.0},
+            "leaving 316.0 mm with nowhere to go",
+        ),
+        ("nonpositive_opening", {"size_mm": -2.5}, "no room in it (-2.5 mm)"),
+        ("unresolvable_basis", {}, "has no board after it"),
+        ("pinned_mismatch", {"derived_x_mm": 1.0}, "cannot reshape"),
+    ],
+)
+def test_describe_solve_error_reads_as_a_sentence_without_the_node_id(
+    reason: SolveErrorReason, detail: dict[str, float], expected: str
+) -> None:
+    node_id = "8d0c6f4e-1b2a-4c3d-9e8f-0a1b2c3d4e5f"
+    message = describe_solve_error(LayoutSolveError(node_id, reason, detail))
+    assert expected in message
+    assert node_id not in message
+    assert message.endswith(".")
+
+
+def test_describe_solve_error_on_a_real_overflow() -> None:
+    unit = Unit(
+        size_mm=Vec3(600.0, 300.0, 900.0),
+        default_material=T18,
+        root=Division(
+            axis=Axis.Z,
+            items=[Bay(rule=Fixed(5000.0)), Board(), Bay()],
+        ),
+        depth_axis=Axis.Y,
+    )
+    with pytest.raises(LayoutSolveError) as err:
+        solve(unit, CATALOG)
+    assert describe_solve_error(err.value).startswith("The fixed sizes add up to")

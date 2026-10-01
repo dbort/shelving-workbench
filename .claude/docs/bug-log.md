@@ -1,13 +1,14 @@
 ---
-next_id: bug-009
+next_id: bug-012
 ---
 
 # Bug log
 
-Functional defects in the shipped workbench: wrong output, a refusal that
+Functional defects in the workbench on `main`: wrong output, a refusal that
 should succeed, a crash, behavior that contradicts the design docs or a
-task's Must Haves. Log it in the same session, whether or not it is fixed
-at once. Friction in building the workbench goes in `friction-log.md`.
+task's Must Haves. Log it in the same session, even if fixed at once. A
+defect a task branch introduces and fixes never reaches `main` and gets no
+entry. Friction in building the workbench goes in `friction-log.md`.
 
 Format, oldest first:
 
@@ -158,3 +159,47 @@ the log happens only when the user asks.
   where geometry is ambiguous (the reason `Basis.WITH_NEXT` is stored).
   Choosing that tolerance and precedence is a design question for
   `new-task`.
+- `bug-009` - **elevation dimensions overlap each other and their labels**:
+  in the Edit Unit panel, dimensions for different regions draw on top of
+  one another, labels included, so some values are unreadable. Found in
+  sh-021's manual QA on FreeCAD 1.1.1. Root cause: `_add_region_dimensions`
+  in `freecad/Shelving/editor/scene.py` places each dimension line at a
+  fixed fraction of its region's cross extent (the centre for a bay or
+  void, a quarter for a nested division) with no awareness of the other
+  dimensions, so nested and neighbouring regions collide. Fix: `sh-XXX
+  task`, because choosing where dimensions go (offset lanes, drawing only
+  the selected region's, moving labels outside the unit) is a design
+  decision the user wants to make separately.
+- `bug-010` - **a dimension set from an expression keeps only the resolved
+  number**: typing `VarSet.Len` or binding it with f(x) sizes the region
+  once, but the rule stores the millimetre value, so a later change to the
+  `VarSet` moves nothing. FreeCAD users expect a bound length to follow its
+  expression. Found in sh-021's manual QA. Root cause: a region's size lives
+  in the container's rule record (`freecad/Shelving/core/record.py`), which
+  holds numbers, not a document property that `ExpressionEngine` can drive;
+  the dimension field binds to a temporary probe object only so it can
+  resolve names. Fix: `sh-XXX task`, since storing and re-evaluating
+  expressions per region changes the rule record, reflow, and the editor,
+  and needs design decisions.
+- `bug-011` - **Edit Unit sometimes takes many seconds to show its
+  panel**: after running Edit Unit, the task panel can take seconds to
+  appear, 29 s in one run during sh-021's manual QA on FreeCAD 1.1.1. It
+  happens only sometimes, and the user has never seen it with another
+  workbench. The `debug_log` timings for that run show every stage of this
+  workbench's code finishing within 25 ms of the command, and the event
+  loop running 13.5 ms after `showDialog`. The panel's first `Show` event
+  then arrived 29 s later, with its first paint 13 ms after that, so the
+  time is spent outside this workbench's code, before Qt shows the form.
+  During the wait FreeCAD stayed responsive (the 3D view panned), and the
+  whole Shelving menu was disabled, which FreeCAD does to commands while a
+  task dialog is active, so the dialog was open but its form was not
+  visible. Clicking around did not reveal it; it appeared on its own. Root
+  cause unknown: some ancestor of the form stayed hidden for 29 s. The
+  `debug_log` run now records the form's ancestors right after
+  `showDialog` and again when the form is shown (`AncestorWatch` in
+  `freecad/Shelving/editor/panel.py`). In a normal run on FreeCAD 1.0.0,
+  the only hidden ancestor at that point is FreeCAD's own
+  `Gui::TaskView::TaskBox` (hidden itself), which shows the form about 5
+  ms later, so a stalled TaskBox show is the leading suspect. Fix: `ad
+  hoc`, provisionally: the fix waits on a slow run's log confirming which
+  ancestor held the form back.

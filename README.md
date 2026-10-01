@@ -56,7 +56,9 @@ own collection or `freecadcmd`'s internal FreeCAD imports run.
 - the `pixi.lock` path guard;
 - the workflow-hardening lint over `.github/workflows/` (see
   [`docs/github-actions-hardening.md`](docs/github-actions-hardening.md));
-- a headless `freecadcmd` workbench import smoke.
+- a headless `freecadcmd` workbench import smoke;
+- an elevation-editor panel smoke under the full `freecad` GUI on Qt's
+  offscreen platform, since the panel's quantity field exists only there.
 
 It runs inside the pixi environment, which supplies every tool including
 FreeCAD. To run only the workflow lint, use `bash tools/lint-workflows.sh` from
@@ -166,25 +168,45 @@ The layout vocabulary and how each term maps onto the code in
   in one transaction; a unit that refuses does not stop the others. Nothing
   in this workbench recomputes on its own, so this is the only way a
   changed catalog entry reaches the boards using it.
-- **the core edit layer**: `freecad.Shelving.core.edit`. `split_region` and
-  `merge_at` rebuild a `Unit`'s tree, `Unit` in, `Unit` out, never mutating
-  the argument; `EditError` is the refusal either raises, carrying the
-  offending region or board id. No Qt, no FreeCAD, tested in the fast suite.
+- **the core edit layer**: `freecad.Shelving.core.edit`. `split_region`,
+  `merge_at`, `set_size`, `set_basis`, and `move_board` rebuild a `Unit`'s
+  tree, `Unit` in, `Unit` out, never mutating the argument; `EditError` is
+  the refusal each raises, carrying the offending region or board id.
+  `measure` reports a region's clear size, its spacing, and its basis for
+  display. No Qt, no FreeCAD, tested in the fast suite.
 - **the scene layer**: `freecad.Shelving.editor.scene`. `build_scene` draws a
   `QGraphicsScene` elevation from a `Unit` and its solved spaces, one item
-  per region and per board, each tagged with its id; `hit_test` answers
-  what is at a scene point. Knows nothing about documents or transactions.
+  per region and per board, each tagged with its id, plus a dimension per
+  region; `hit_test` answers what is at a scene point, and
+  `elevation_point_mm` maps a scene point back to the unit's frame. Knows
+  nothing about documents or transactions.
+- **measurement basis**: the editor's name for a `Fixed` rule's `Basis`,
+  chosen per dimension: **Clear opening** (`CLEAR`) or **Spacing** (`WITH_NEXT`,
+  through the next board). Changing it moves nothing: `set_basis` restates
+  the number so the layout solves identically. It matters when stock
+  thickness changes: a spacing holds the board after it in place, a clear
+  opening moves it. A dimension is drawn with witness lines on the faces its
+  basis measures, so a spacing visibly crosses its board.
+- **the drag rule**: dragging a board resizes the region immediately before
+  it in its run and changes only that region's number, never its basis. A
+  region that was sharing leftover space becomes a clear opening.
 - **the session/panel layer**: `freecad.Shelving.editor.session` and
   `panel.py`. The session owns the document, the one transaction the whole
   editing session shares, and the write path; the panel is the Qt task
-  dialog wiring buttons to it and holds no logic of its own worth testing.
+  dialog wiring controls to it, holding only input handling, which
+  `tools/freecad_panel_smoke.py` covers under the offscreen GUI.
 - **Session**: `freecad.Shelving.editor.session.Session`. Reads a container
   once, then answers `can_split`/`can_merge` for the current selection and
-  applies `split`/`merge` through the core edit layer, re-solving and
-  writing through the real write path on each accepted edit; `open`,
-  `commit`, and `cancel` bound the one transaction. A rejected edit returns
-  an `EditFailure` (a message and the offending id) rather than raising, and
-  changes nothing.
+  applies `split`/`merge`, `set_size`/`set_basis`, and a drag
+  (`begin_drag`/`drag_to`/`end_drag`) through the core edit layer,
+  re-solving and writing through the real write path on each accepted edit;
+  `open`, `commit`, and `cancel` bound the one transaction. `open` also
+  creates the temporary probe object the dimension field binds to so it can
+  resolve a `VarSet` name, and `commit` deletes it. `left_alone` lists the
+  container's objects this workbench did not write, each with its reason;
+  `remove_untagged` deletes named ones inside the transaction. A rejected
+  edit returns an `EditFailure` (a message and the offending id) rather than
+  raising, and changes nothing.
 - **Shelving_EditUnit**: the command id that opens the elevation editor task
   panel on the unit the selection names: the unit's container, or any
   objects inside it, all from the same unit. Disabled for any other

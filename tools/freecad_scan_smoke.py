@@ -36,8 +36,32 @@ on the path in the first place.
 import math
 import os
 import sys
-from collections.abc import Iterator
-from typing import Protocol, cast
+
+# Not an `if __name__ == "__main__":` guard: freecadcmd sets a run script's
+# __name__ to its filename stem, not "__main__" (verified directly), so that
+# guard would silently never fire and this file would exit 0 having checked
+# nothing. An unconditional call has a different problem: pytest.main() has
+# to import this same file again to collect it, and that reimport also
+# reaches this block, recursing (confirmed) and corrupting pytest's own
+# collection. The environment variable survives across that reimport within
+# the one process, so it is what breaks the recursion. The block sits above
+# every FreeCAD and workbench import because freecadcmd exits 0 on an
+# uncaught exception: an import failure here would pass silently, while
+# inside pytest's collection it is an error with a failing status.
+if os.environ.get("_FREECAD_SCAN_SMOKE_RUNNING") != "1":
+    os.environ["_FREECAD_SCAN_SMOKE_RUNNING"] = "1"
+    import pytest
+
+    _exit_code = pytest.main([__file__, "-v"])
+    # freecadcmd's process teardown does not flush Python's stdout the way a
+    # normal interpreter shutdown does, so pytest's own report (in
+    # particular the FAILURES section) is silently lost without an explicit
+    # flush before sys.exit: confirmed by testing with and without it.
+    sys.stdout.flush()
+    sys.exit(_exit_code)
+
+from collections.abc import Iterator  # noqa: E402
+from typing import Protocol, cast  # noqa: E402
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _REPO_ROOT not in sys.path:
@@ -472,24 +496,3 @@ def test_scan_uses_the_stored_depth_axis_on_a_deep_unit(doc: FreeCAD.Document) -
         depth_axis=record.depth_axis,
         front_at_min=record.front_at_min,
     )
-
-
-# Not an `if __name__ == "__main__":` guard: freecadcmd sets a run script's
-# __name__ to its filename stem, not "__main__" (verified directly), so
-# that guard would silently never fire here, and this file would define
-# its tests without ever running them, exiting 0 having checked nothing.
-# An unconditional call has a different problem: pytest.main() below has
-# to import this same file again to collect it, and that reimport also
-# reaches this line, recursing (confirmed). That corrupts pytest's own
-# collection. The environment variable survives across that reimport
-# within the one process, so it is what breaks the recursion.
-if os.environ.get("_FREECAD_SCAN_SMOKE_RUNNING") != "1":
-    os.environ["_FREECAD_SCAN_SMOKE_RUNNING"] = "1"
-    # freecadcmd's process teardown does not flush Python's stdout the way
-    # a normal interpreter shutdown does, so pytest's own report (in
-    # particular the FAILURES section) is silently lost without an
-    # explicit flush before sys.exit: confirmed by testing with and
-    # without it.
-    _exit_code = pytest.main([__file__, "-v"])
-    sys.stdout.flush()
-    sys.exit(_exit_code)

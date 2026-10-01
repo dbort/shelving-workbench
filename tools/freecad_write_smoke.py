@@ -20,10 +20,22 @@ document per scenario is to afford.
 
 import os
 import sys
-import zipfile
-from collections.abc import Iterator
-from pathlib import Path
-from typing import Protocol, cast
+
+# See tools/freecad_scan_smoke.py's matching block for why this is neither
+# an `if __name__ == "__main__":` guard nor an unconditional call, and why it
+# precedes every FreeCAD import.
+if os.environ.get("_FREECAD_WRITE_SMOKE_RUNNING") != "1":
+    os.environ["_FREECAD_WRITE_SMOKE_RUNNING"] = "1"
+    import pytest
+
+    _exit_code = pytest.main([__file__, "-v"])
+    sys.stdout.flush()
+    sys.exit(_exit_code)
+
+import zipfile  # noqa: E402
+from collections.abc import Iterator  # noqa: E402
+from pathlib import Path  # noqa: E402
+from typing import Protocol, cast  # noqa: E402
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _REPO_ROOT not in sys.path:
@@ -606,12 +618,3 @@ def test_document_reopens_without_the_workbench(tmp_path: Path) -> None:
         assert bottom_box.Height == pytest.approx(_THICKNESS_MM)
     finally:
         FreeCAD.closeDocument(reopened.Name)
-
-
-# See tools/freecad_scan_smoke.py's matching block for why this is neither
-# an `if __name__ == "__main__":` guard nor an unconditional call.
-if os.environ.get("_FREECAD_WRITE_SMOKE_RUNNING") != "1":
-    os.environ["_FREECAD_WRITE_SMOKE_RUNNING"] = "1"
-    _exit_code = pytest.main([__file__, "-v"])
-    sys.stdout.flush()
-    sys.exit(_exit_code)

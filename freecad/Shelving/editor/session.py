@@ -19,32 +19,68 @@ session never reads theirs.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Mapping
-from typing import Literal
+from collections.abc import Collection, Mapping
+from typing import Literal, Protocol, cast
 
 import FreeCAD
 
+from freecad.Shelving import properties
 from freecad.Shelving.catalog import ensure_catalog, read_usable_catalog
 from freecad.Shelving.container import (
     read_container,
     renamed_board_ids,
     write_container,
 )
-from freecad.Shelving.core.edit import EditError, merge_at, split_region
-from freecad.Shelving.core.geometry import Space
-from freecad.Shelving.core.layout import Axis, Bay, Board, Division, Region, Unit
+from freecad.Shelving.core.edit import (
+    EditError,
+    Measurement,
+    measure,
+    merge_at,
+    move_board,
+    region_before,
+    run_axis,
+    set_basis,
+    set_size,
+    split_region,
+)
+from freecad.Shelving.core.geometry import Space, Vec3
+from freecad.Shelving.core.layout import (
+    Axis,
+    Basis,
+    Bay,
+    Board,
+    Division,
+    Region,
+    Unit,
+)
 from freecad.Shelving.core.materials import Catalog, MaterialId
 from freecad.Shelving.core.record import rules_from_json, with_stored_rules
 from freecad.Shelving.core.scan import elevation_axes, scan
-from freecad.Shelving.core.solver import LayoutSolveError, solve
+from freecad.Shelving.core.solver import LayoutSolveError, describe_solve_error, solve
 from freecad.Shelving.debug_log import Stopwatch
 
 SplitDirection = Literal["horizontal", "vertical"]
 
 
+class _Labelled(Protocol):
+    Label: str
+
+
+# The Length property on the session's probe object that the panel's
+# dimension field binds to (docs/freecadcmd-notes.md, "GUI-only widget
+# access").
+PROBE_PROPERTY = "Dimension"
+
+_PANEL_REASON = (
+    "thin through the unit's depth, so it reads as a back or front panel, "
+    "which the layout does not place"
+)
+_UNPLACED_REASON = "not part of the layout"
+
+
 @dataclasses.dataclass(frozen=True)
 class EditFailure:
-    """A rejected :meth:`Session.split` or :meth:`Session.merge` call."""
+    """A rejected session edit."""
 
     message: str
     # Whatever EditError or LayoutSolveError named: the region or board the
@@ -84,9 +120,23 @@ def _renamed_spaces(
     return {renames.get(node_id, node_id): space for node_id, space in spaces.items()}
 
 
-def _read_unit(container: FreeCAD.DocumentObject, catalog: Catalog) -> Unit:
+@dataclasses.dataclass(frozen=True)
+class LeftAlone:
+    """An object in the container that this workbench did not write and
+    will not change or delete unless told to."""
+
+    name: str
+    label: str
+    # Why the layout does not use it, in words for the panel.
+    reason: str
+
+
+def _read_unit(
+    container: FreeCAD.DocumentObject, catalog: Catalog
+) -> tuple[Unit, Mapping[str, str]]:
     """``container`` read fresh, scanned against ``catalog``, with its stored
-    rules and unit id reapplied.
+    rules and unit id reapplied, and the reason each part the scan did not
+    place in the tree was set aside, keyed by ``Name``.
 
     Mirrors :func:`freecad.Shelving.unit_ops._rescanned_unit`; kept as its
     own copy here rather than imported, the way every other small
@@ -110,7 +160,9 @@ def _read_unit(container: FreeCAD.DocumentObject, catalog: Catalog) -> Unit:
     if record.unit_id is not None:
         unit = dataclasses.replace(unit, id=record.unit_id)
     watch.lap("stored rules")
-    return unit
+    reasons = {entry.name: entry.reason for entry in scan_result.skipped}
+    reasons.update((panel.name, _PANEL_REASON) for panel in scan_result.panels)
+    return unit, reasons
 
 
 class Session:
@@ -125,13 +177,30 @@ class Session:
         watch.lap("catalog")
         # unit and spaces are the current, already-solved state, replaced
         # wholesale by every accepted edit.
-        self.unit = _read_unit(container, self.catalog)
+        self.unit, self._set_aside_reasons = _read_unit(container, self.catalog)
         watch.lap("read unit")
         self.spaces: Mapping[str, Space] = solve(self.unit, self.catalog)
         watch.lap("solve")
-        # A region or board id. Every accepted edit clears it, since the id
-        # it just edited no longer names anything the caller can act on.
+        # A region or board id. A split or merge clears it, since the id it
+        # just edited no longer names anything the caller can act on.
         self.selected_id: str | None = None
+        # Untagged objects the layout does not place: what a write leaves
+        # alone. Before the first write that is every set-aside part
+        # carrying no board properties, since write_container deletes a
+        # tagged one; after it, exactly what the write reported.
+        doc = container.Document
+        self.left_alone: tuple[LeftAlone, ...] = tuple(
+            self._left_alone(name)
+            for name in sorted(self._set_aside_reasons)
+            if not properties.has_board_properties(doc.getObject(name))
+        )
+        # The object the panel's dimension field binds to, so it can resolve
+        # an expression naming a VarSet; exists only between open() and the
+        # end of the transaction.
+        self.probe: FreeCAD.DocumentObject | None = None
+        # The board being dragged and the pointer's offset from its low
+        # face along its run's axis, between begin_drag and end_drag.
+        self._drag: tuple[str, Axis, float] | None = None
 
     def open(self) -> None:
         """Start this session's one transaction. Call once, before any edit.
@@ -144,17 +213,32 @@ class Session:
         place. Setting it here makes cancel work regardless of how the
         document was created.
         """
-        self.container.Document.UndoMode = 1
-        self.container.Document.openTransaction(  # type: ignore[no-untyped-call]
-            "Edit Shelving Unit"
+        doc = self.container.Document
+        doc.UndoMode = 1
+        doc.openTransaction("Edit Shelving Unit")  # type: ignore[no-untyped-call]
+        # Created inside the transaction, so the abort in cancel() removes it
+        # and commit() only has to remove it before committing.
+        probe = cast(
+            "FreeCAD.DocumentObject",
+            doc.addObject("App::VarSet", "ShelvingDimensionProbe"),
         )
+        probe.addProperty("App::PropertyLength", PROBE_PROPERTY, "Shelving")
+        cast("_Labelled", probe).Label = "Shelving dimension (temporary)"
+        self.probe = probe
 
     def commit(self) -> None:
-        """End this session's transaction, keeping every edit made."""
-        self.container.Document.commitTransaction()  # type: ignore[no-untyped-call]
+        """End this session's transaction, keeping every edit made and
+        removing the probe object."""
+        doc = self.container.Document
+        if self.probe is not None:
+            doc.removeObject(self.probe.Name)
+            self.probe = None
+        doc.commitTransaction()  # type: ignore[no-untyped-call]
 
     def cancel(self) -> None:
-        """End this session's transaction, reverting every edit made."""
+        """End this session's transaction, reverting every edit made,
+        including the probe object's creation."""
+        self.probe = None
         self.container.Document.abortTransaction()  # type: ignore[no-untyped-call]
 
     def select(self, node_id: str | None) -> None:
@@ -178,9 +262,17 @@ class Session:
         node = _find_node(self.unit.root, self.selected_id)
         return isinstance(node, Board)
 
-    def _apply(self, candidate: Unit) -> EditFailure | None:
+    def _left_alone(self, name: str) -> LeftAlone:
+        obj = self.container.Document.getObject(name)
+        return LeftAlone(
+            name=name,
+            label=obj.Label if obj is not None else name,
+            reason=self._set_aside_reasons.get(name, _UNPLACED_REASON),
+        )
+
+    def _apply(self, candidate: Unit, select: str | None = None) -> EditFailure | None:
         """Adopt ``candidate`` as this session's state and write it to the
-        document, clearing the selection, or return an :class:`EditFailure`
+        document, selecting ``select``, or return an :class:`EditFailure`
         when it fails to solve, leaving the session and document untouched."""
         try:
             spaces: Mapping[str, Space] = solve(candidate, self.catalog)
@@ -188,7 +280,7 @@ class Session:
             # LayoutSolveError from either call means nothing was written.
             result = write_container(self.container, candidate, self.catalog)
         except LayoutSolveError as err:
-            return EditFailure(str(err), err.node_id)
+            return EditFailure(describe_solve_error(err), err.node_id)
         if result.id_renames:
             # A board split created carries a fresh new_id(), not yet a
             # document object Name; without adopting the real Name here,
@@ -201,7 +293,8 @@ class Session:
             spaces = _renamed_spaces(spaces, result.id_renames)
         self.unit = candidate
         self.spaces = spaces
-        self.selected_id = None
+        self.selected_id = select
+        self.left_alone = tuple(self._left_alone(name) for name in result.left_alone)
         return None
 
     def _elevation_axes(self) -> tuple[Axis, Axis]:
@@ -252,3 +345,107 @@ class Session:
         except EditError as err:
             return EditFailure(str(err), err.node_id)
         return self._apply(candidate)
+
+    def clear_probe_expression(self) -> None:
+        """Remove any expression the dimension field's f(x) dialog bound to
+        the probe. The rule already holds the resolved number, and while
+        the expression stays the field is read-only for every region."""
+        if self.probe is not None:
+            self.probe.setExpression(PROBE_PROPERTY, None)
+
+    def selected_measurement(self) -> Measurement | None:
+        """The selected region's :class:`~freecad.Shelving.core.edit.Measurement`,
+        or ``None`` when the selection is nothing, a board, or the whole
+        unit: nothing a size applies to."""
+        if self.selected_id is None:
+            return None
+        try:
+            return measure(self.unit, self.selected_id, self.spaces, self.catalog)
+        except EditError:
+            return None
+
+    def set_size(self, size_mm: float) -> EditFailure | None:
+        """Fix the selected region at ``size_mm``, a value FreeCAD's own
+        quantity widget already resolved, in the basis the region already
+        measures in. The selection is kept. Returns ``None`` on success or
+        an :class:`EditFailure` on refusal, which changes nothing."""
+        if self.selected_id is None:
+            return EditFailure("select a region to size", None)
+        region_id = self.selected_id
+        try:
+            basis = measure(self.unit, region_id, self.spaces, self.catalog).basis
+            candidate = set_size(self.unit, region_id, size_mm, basis)
+        except EditError as err:
+            return EditFailure(str(err), err.node_id)
+        return self._apply(candidate, select=region_id)
+
+    def set_basis(self, basis: Basis) -> EditFailure | None:
+        """Change what the selected region's size measures, moving nothing.
+        The selection is kept. Returns ``None`` on success or an
+        :class:`EditFailure` on refusal, which changes nothing."""
+        if self.selected_id is None:
+            return EditFailure("select a region to measure", None)
+        region_id = self.selected_id
+        try:
+            candidate = set_basis(self.unit, region_id, basis, self.catalog)
+        except EditError as err:
+            return EditFailure(str(err), err.node_id)
+        except LayoutSolveError as err:
+            return EditFailure(describe_solve_error(err), err.node_id)
+        return self._apply(candidate, select=region_id)
+
+    def begin_drag(self, board_id: str, grab_mm: Vec3) -> EditFailure | None:
+        """Start dragging ``board_id``, grabbed at the unit-frame point
+        ``grab_mm``; each :meth:`drag_to` keeps that point under the pointer.
+        Leaves the selection alone, so a press that never moves still
+        selects the board. Returns an :class:`EditFailure`, starting no
+        drag, when the board has no region before it."""
+        try:
+            region_before(self.unit, board_id)
+            axis = run_axis(self.unit, board_id)
+        except EditError as err:
+            return EditFailure(str(err), err.node_id)
+        low_mm = self.spaces[board_id].origin_mm(axis.component_index)
+        self._drag = (
+            board_id,
+            axis,
+            grab_mm.component_mm(axis.component_index) - low_mm,
+        )
+        return None
+
+    def drag_to(self, pointer_mm: Vec3) -> EditFailure | None:
+        """Move the dragged board so its grab point follows ``pointer_mm``
+        along its run's axis, re-solving and writing the boards, and select
+        the region before it: only that region's number changes, never its
+        basis. Returns an :class:`EditFailure`, leaving the last good state,
+        when this step would not solve or no drag is in progress."""
+        if self._drag is None:
+            return EditFailure("no board is being dragged", None)
+        board_id, axis, grab_offset_mm = self._drag
+        low_face_mm = pointer_mm.component_mm(axis.component_index) - grab_offset_mm
+        try:
+            region_id = region_before(self.unit, board_id)
+            candidate = move_board(self.unit, board_id, low_face_mm, self.catalog)
+        except EditError as err:
+            return EditFailure(str(err), err.node_id)
+        return self._apply(candidate, select=region_id)
+
+    def end_drag(self) -> None:
+        self._drag = None
+
+    def remove_untagged(self, names: Collection[str]) -> EditFailure | None:
+        """Delete the listed :attr:`left_alone` objects inside this
+        session's transaction, so :meth:`cancel` restores them. Refuses,
+        deleting nothing, when any name is not currently listed."""
+        listed = {entry.name for entry in self.left_alone}
+        unknown = sorted(set(names) - listed)
+        if unknown:
+            return EditFailure(
+                f"not an object this unit leaves alone: {', '.join(unknown)}",
+                unknown[0],
+            )
+        doc = self.container.Document
+        for name in names:
+            doc.removeObject(name)
+        self.left_alone = tuple(e for e in self.left_alone if e.name not in names)
+        return None
