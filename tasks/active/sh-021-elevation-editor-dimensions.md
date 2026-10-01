@@ -173,6 +173,10 @@ DECISIONS MADE DURING `/work` (2026-09-27):
   as-you-type feedback of its own (2026-09-29: a live error line was
   removed at the user's request as unlike FreeCAD, and its show/hide made
   the task panel jump). Keeping only the resolved number is bug-010.
+  Refusals go to FreeCAD's Notification Area through `report_error`
+  (`PrintTranslatedUserError` with notifier "Shelving") in place of a
+  message line in the panel (2026-10-01, the user confirmed the popups on
+  1.1.1); a drag reports only its first failure.
   Dimension lines end in arrowheads. Refusals read
   as plain sentences with no node ids (`describe_solve_error`). Overlapping
   dimensions are bug-009, deferred to its own task. A last region in a

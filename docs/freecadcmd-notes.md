@@ -258,3 +258,14 @@ ends in `os._exit` with pytest's status from a `finally`.
 probe object the session creates for exactly this reason: a region's size
 is not itself a document property, so without the probe the field could
 not resolve a `VarSet` name.
+
+## User-facing errors: the Notification Area
+
+`FreeCAD.Console.PrintTranslatedUserError("Shelving", message)` pops the
+message up briefly from the status bar's Notification Area, labelled with
+the notifier `"Shelving"`, shows it in red in the status bar, and keeps it
+in the Report view. The user confirmed this in FreeCAD 1.1.1; 1.0.0 accepts
+the same call. freecad-stubs declares the function with one argument, so
+`freecad/Shelving/editor/panel.py`'s `report_error` casts it. An offscreen
+GUI records nothing in the Notification Area, so only a real display shows
+whether the popup appears.

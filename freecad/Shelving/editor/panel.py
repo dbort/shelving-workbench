@@ -49,6 +49,21 @@ class _ExpressionBinding(Protocol):
     def bind(self, obj: FreeCAD.DocumentObject, property_name: str, /) -> None: ...
 
 
+# freecad-stubs declares PrintTranslatedUserError with one argument, but
+# FreeCAD 1.0 and 1.1 accept (notifier, message), and the notifier is what
+# labels the popup in the Notification Area.
+_print_user_error = cast(
+    "Callable[[str, str], None]", FreeCAD.Console.PrintTranslatedUserError
+)
+
+
+def report_error(message: str) -> None:
+    """Show ``message`` as a Shelving error in FreeCAD's Notification Area,
+    which pops it up briefly and keeps it in the Report view, rather than as
+    text that stays in the panel."""
+    _print_user_error("Shelving", message + "\n")
+
+
 _BASIS_CHOICES: tuple[tuple[str, Basis], ...] = (
     ("Clear opening", Basis.CLEAR),
     ("Spacing (through the next board)", Basis.WITH_NEXT),
@@ -339,6 +354,9 @@ class EditUnitPanel:
         )
         layout.addWidget(self.view)
         self._dragging = False
+        # A drag re-solves on every pointer move, so one held past a limit
+        # would otherwise raise a popup per move.
+        self._drag_failure_reported = False
 
         button_row = QtWidgets.QHBoxLayout()
         self.add_divider_button = QtWidgets.QPushButton("Add Divider")
@@ -357,7 +375,7 @@ class EditUnitPanel:
         self.size_field = _DimensionField(
             self.session.probe,
             self._set_size,
-            self._show_message,
+            report_error,
             self._expression_done,
         )
         dimension_row.addWidget(self.size_field.widget)
@@ -368,10 +386,6 @@ class EditUnitPanel:
         layout.addLayout(dimension_row)
         self.readout_label = QtWidgets.QLabel("")
         layout.addWidget(self.readout_label)
-
-        self.message_label = QtWidgets.QLabel("")
-        self.message_label.setWordWrap(True)
-        layout.addWidget(self.message_label)
 
         self.untagged_box = QtWidgets.QGroupBox("Objects this workbench did not create")
         untagged_layout = QtWidgets.QVBoxLayout(self.untagged_box)
@@ -417,13 +431,17 @@ class EditUnitPanel:
             )
             is None
         )
+        self._drag_failure_reported = False
         self._refresh()
 
     def _on_scene_drag(self, point: QtCore.QPointF) -> None:
-        if self._dragging:
-            self._show_result(
-                self.session.drag_to(elevation_point_mm(self.session.unit, point))
-            )
+        if not self._dragging:
+            return
+        failure = self.session.drag_to(elevation_point_mm(self.session.unit, point))
+        if failure is not None and not self._drag_failure_reported:
+            self._drag_failure_reported = True
+            report_error(failure.message)
+        self._refresh()
 
     def _on_scene_release(self) -> None:
         if self._dragging:
@@ -483,11 +501,9 @@ class EditUnitPanel:
     def _remove_untagged(self) -> None:
         self._show_result(self.session.remove_untagged(self._checked_untagged()))
 
-    def _show_message(self, message: str) -> None:
-        self.message_label.setText(message)
-
     def _show_result(self, failure: EditFailure | None) -> None:
-        self.message_label.setText("" if failure is None else failure.message)
+        if failure is not None:
+            report_error(failure.message)
         self._refresh()
 
     def _refresh(self) -> None:

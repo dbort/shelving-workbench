@@ -434,7 +434,7 @@ a bay, not a board, is selected.
 
 Expected: the elevation redraws immediately with a new **vertical** divider
 board down the bay's middle, leaving two smaller bays side by side, both
-roughly equal in size; the message line stays blank. **Add Shelf** would
+roughly equal in size; no error notification appears. **Add Shelf** would
 instead divide the bay top and bottom with a **horizontal** shelf.
 Switching to the 3D view (without closing the panel) shows the same new
 board as a real, positioned box, not only a drawing. Each edit runs the
@@ -442,16 +442,17 @@ workbench's real write path, so no separate preview exists that could
 disagree with it. Click the new divider board: **Delete** enables and both
 **Add** buttons disable, since a board, not a bay, is now selected.
 
-#### 4. Delete a board that cannot be merged and confirm the message line, not a crash
+#### 4. Delete a board that cannot be merged and confirm an error notification, not a crash
 
 1. Click one of the unit's original outer boards (a side, the bottom, or
    the top) rather than the divider just created.
 2. Click **Delete**.
 
-Expected: the message line reports a refusal naming that board (its
-neighbour on at least one side is not an open compartment), the elevation
-is unchanged, and the panel stays open and usable; nothing in the Report
-view suggests a crash or an unhandled exception.
+Expected: a **Shelving** error pops up from FreeCAD's Notification Area
+and shows in red in the status bar. It reports a refusal naming that board
+(its neighbour on at least one side is not an open compartment). The
+elevation is unchanged, the panel stays open and usable, and nothing in the
+Report view suggests a crash or an unhandled exception.
 
 #### 5. Delete the divider and confirm the merge reverses the split
 
@@ -628,8 +629,8 @@ reads **Spacing**: only the number changed.
 
 3. Drag the shelf down past the bottom board.
 
-Expected: a refusal on the message line in plain words, and the shelf stays
-at its last good position.
+Expected: one **Shelving** error notification in plain words, however far
+the drag goes, and the shelf stays at its last good position.
 
 4. Click the shelf without moving the mouse.
 
@@ -703,7 +704,7 @@ Expected: the cube disappears on **Remove Selected** and returns on
 
 1. Click the lower bay, type `5000`, and press Return.
 
-Expected: the message line explains in plain words that the fixed sizes add
-up to more than the space available, naming how much more, with no internal
-ids; the elevation and 3D view stay exactly as before the attempt, and the
-panel stays open and usable.
+Expected: a **Shelving** error notification explains in plain words that
+the fixed sizes add up to more than the space available, naming how much
+more, with no internal ids; the elevation and 3D view stay exactly as
+before the attempt, and the panel stays open and usable.

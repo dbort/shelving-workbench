@@ -59,6 +59,7 @@ from freecad.Shelving.core.layout import (  # noqa: E402
     Region,
     SizeRule,
 )
+from freecad.Shelving.editor import panel as panel_module  # noqa: E402
 from freecad.Shelving.editor.panel import EditUnitPanel  # noqa: E402
 from freecad.Shelving.editor.session import PROBE_PROPERTY, Session  # noqa: E402
 from freecad.Shelving.unit_ops import create_unit  # noqa: E402
@@ -150,7 +151,19 @@ class _Fixture:
 
 
 @pytest.fixture
-def unit_panel(request: pytest.FixtureRequest) -> Iterator[_Fixture]:
+def reported(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Every message the panel sends to FreeCAD's Notification Area, in
+    order, instead of sending it. Requested before the panel is built, since
+    the panel hands ``report_error`` to its size field at construction."""
+    messages: list[str] = []
+    monkeypatch.setattr(panel_module, "report_error", messages.append)
+    return messages
+
+
+@pytest.fixture
+def unit_panel(
+    request: pytest.FixtureRequest, reported: list[str]
+) -> Iterator[_Fixture]:
     """A :class:`_Fixture` in a document named after the test, closed after
     it, pass or fail."""
     fixture = _Fixture(request.node.name)
@@ -226,13 +239,15 @@ def test_the_field_is_freecads_quantity_widget(unit_panel: _Fixture) -> None:
     assert widget.inherits("Gui::QuantitySpinBox")
 
 
-def test_a_typed_size_and_a_varset_expression(unit_panel: _Fixture) -> None:
+def test_a_typed_size_and_a_varset_expression(
+    unit_panel: _Fixture, reported: list[str]
+) -> None:
     unit_panel.select(unit_panel.lower)
     unit_panel.type_size("250")
     assert unit_panel.rule(unit_panel.lower) == Fixed(250.0)
     unit_panel.type_size("VarSet.Len - 20 mm")
     assert unit_panel.rule(unit_panel.lower) == Fixed(280.0)
-    assert unit_panel.panel.message_label.text() == ""
+    assert reported == []
 
 
 def test_an_unchanged_focus_out_leaves_a_fill_region(unit_panel: _Fixture) -> None:
@@ -346,7 +361,9 @@ def test_untagged_objects_are_kept_unless_removed() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
-def test_the_plain_field_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_plain_field_fallback(
+    monkeypatch: pytest.MonkeyPatch, reported: list[str]
+) -> None:
     """With no ``UiLoader`` the field is a plain line edit whose text goes
     to ``parseQuantity`` untouched, and a parse error reaches the message
     line."""
@@ -362,7 +379,7 @@ def test_the_plain_field_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
         assert isinstance(rule, Fixed)
         assert abs(rule.size_mm - 38.1) < _TOL_MM
         fixture.type_size('12 1/2"')
-        assert fixture.panel.message_label.text() != ""
+        assert len(reported) == 1
         assert fixture.rule(fixture.lower) == rule
     finally:
         fixture.close()
@@ -416,10 +433,40 @@ def test_unreadable_text_is_never_applied_and_keeps_return(
     assert recorder.returns == 0
 
 
-def test_an_unsolvable_size_explains_itself_without_ids(unit_panel: _Fixture) -> None:
+def test_an_unsolvable_size_explains_itself_without_ids(
+    unit_panel: _Fixture, reported: list[str]
+) -> None:
     unit_panel.select(unit_panel.lower)
     unit_panel.type_size("5000")
-    message = unit_panel.panel.message_label.text()
+    (message,) = reported
     assert message.startswith("The fixed sizes add up to"), message
     assert unit_panel.lower not in message
     assert unit_panel.rule(unit_panel.lower) == Fill()
+
+
+def test_a_drag_past_its_limit_reports_once(
+    unit_panel: _Fixture, reported: list[str]
+) -> None:
+    view = unit_panel.panel.view
+    start = _shelf_viewport_pos(unit_panel)
+    held = QtCore.Qt.MouseButton.LeftButton
+    # Each of these moves is far enough down to pass the bottom board.
+    beyond_px = int(unit_panel.session.spaces[unit_panel.shelf].origin.z_mm) + 100
+    _mouse(view, QtCore.QEvent.Type.MouseButtonPress, start, held)
+    for step_px in (beyond_px, beyond_px + 20, beyond_px + 40):
+        _mouse(
+            view, QtCore.QEvent.Type.MouseMove, start + QtCore.QPoint(0, step_px), held
+        )
+    _mouse(
+        view,
+        QtCore.QEvent.Type.MouseButtonRelease,
+        start + QtCore.QPoint(0, beyond_px + 40),
+        QtCore.Qt.MouseButton.NoButton,
+    )
+    (message,) = reported
+    assert "cannot move past" in message, message
+
+
+def test_report_error_reaches_freecads_console() -> None:
+    """The real call, unpatched: the two-argument form the stubs omit."""
+    panel_module.report_error("panel smoke: report_error reached the console")
