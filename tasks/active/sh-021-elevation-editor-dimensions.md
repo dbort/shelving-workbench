@@ -228,3 +228,12 @@ DECISIONS MADE DURING `/work` (2026-09-27):
 - **N1: Round-3 N2 has no recorded follow-up** (`tools/freecad_scan_smoke.py:486`, `tools/freecad_write_smoke.py:613`, `tools/freecad_catalog_smoke.py:534`): the three older freecadcmd smokes still self-invoke at the bottom, so an import-time exception passes silently; file a task for it.
 - **N2: Round-2 N4 is still only partly adopted** (`freecad/Shelving/core/edit.py:537`, `freecad/Shelving/core/edit.py:592`, `freecad/Shelving/core/edit.py:636`): the new `edit.py` call sites still use the file's local `_axis_index`. Consistency only.
 - **N3: Overlong line in the rewrapped notes paragraph** (`docs/freecadcmd-notes.md:214`): runs to about 100 columns where the rest wraps at about 76.
+
+### Round 5: REJECTED
+- **F1: The split refusal still shows a region's UUID, contradicting the binding decision that refusals contain no node ids** (`freecad/Shelving/core/edit.py:236-240`, `freecad/Shelving/editor/session.py:334`, `tasks/active/sh-021-elevation-editor-dimensions.md:180-181`): `_split_rules` raises `f"cannot split {bay.id!r}: ..."`, which `Session.split` passes to `report_error`, so a too-small bay (reachable from manual QA case 11) pops up a raw UUID. Reword the split refusals (also the "only a Bay can be split" pair at `edit.py:142` and `edit.py:179`) with a test asserting the id is absent, or narrow the Advice sentence.
+- **N1: Stale docstring for the fallback test** (`tools/freecad_panel_smoke.py:367-369`): it still says a parse error reaches the message line.
+- **N2: The panel module docstring's list of input-handling decisions is incomplete** (`freecad/Shelving/editor/panel.py:7-9`): it omits consuming Return, restoring the shown value on an unreadable focus-out, and reporting only a drag's first failure.
+- **N3: Fallback field probably reports one parse error twice** (`freecad/Shelving/editor/panel.py:157-160`, `freecad/Shelving/editor/panel.py:317`): a consumed Return calls `_finished`, and the next focus-out emits `editingFinished` for the same text. Not run; the fallback test sends Return only.
+- **N4: `sed`-style wrap artifact and an overlong docstring line** (`freecad/Shelving/editor/scene.py:37-39`, `freecad/Shelving/editor/scene.py:366`).
+- **N5: `report_error`'s docstring contrasts with the removed design** (`freecad/Shelving/editor/panel.py:244-246`).
+- **N6: `AncestorWatch` runs for every user, not only when debug logging is on** (`freecad/Shelving/commands/edit_unit.py:117-119`): gate it on `debug_log.is_enabled()`.
