@@ -20,8 +20,8 @@ Pipeline rules: `.claude/docs/pipeline.md`.
    that milestone's Status (or split checklist) as `docs/roadmap.md`
    § Status legend describes.
 5. **Commit** the task file and any roadmap edit to `main` (`sh-XXX: plan
-   <title>`), show the file to the user, and stop. The user starts the work
-   with `/work sh-XXX`.
+   <title>`), link the file for the user without pasting it, and stop. The
+   user starts the work with `/work sh-XXX`.
 
 Writing rules: `## Summary` is plain prose for a human skimmer and adds
 information beyond the title. `## Advice` and `## Plan` are dense and
