@@ -217,10 +217,11 @@ script.py`, which is how the following was verified against FreeCAD
 process hangs. `sys.exit(N)` does end it, but once the script has opened a
 document the process exits 1 whatever `N` is (a bare `sys.exit(3)` with
 no document exits 3). A script must therefore end in `os._exit(status)`.
-The GUI also routes `sys.stdout` to its Report view. `tools/freecad_panel_smoke.py` handles all
-three: it self-invokes pytest before importing anything from FreeCAD, points
-`sys.stdout`/`sys.stderr` back at `sys.__stdout__`/`sys.__stderr__`, and
-ends in `os._exit` with pytest's status from a `finally`.
+The GUI also routes `sys.stdout` to its Report view.
+`tools/freecad_panel_smoke.py` handles all three problems: it self-invokes
+pytest before importing anything from FreeCAD, points `sys.stdout` and
+`sys.stderr` back at `sys.__stdout__` and `sys.__stderr__`, and ends in
+`os._exit` with pytest's status from a `finally`.
 
 - `FreeCADGui.UiLoader().createWidget("Gui::QuantitySpinBox")` returns a
   working widget. PySide6 sees it as a `QAbstractSpinBox`, so its

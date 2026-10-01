@@ -57,13 +57,14 @@ _READOUT_BRUSH = QtGui.QBrush(QtGui.QColor(0x66, 0x66, 0x66))
 # Above every rect, whatever its nesting depth, so a dimension stays visible
 # and clickable over the regions it annotates.
 _DIMENSION_Z = 1000.0
-# How far each witness line runs either side of its dimension line, and the
-# label's height, both in scene millimetres.
+# How far each witness line runs either side of its dimension line.
 _WITNESS_HALF_MM = 12.0
 # Arrowhead length and half-width. A short dimension gets shorter heads, at
 # most a third of its span each, so the two never meet.
 _ARROW_LENGTH_MM = 10.0
 _ARROW_HALF_WIDTH_MM = 3.5
+# The labels' height. QFont.setPixelSize sizes a scene item's text in item
+# coordinates, so this is scene millimetres whatever the view's zoom.
 _LABEL_PIXEL_SIZE = 16
 
 

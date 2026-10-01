@@ -415,11 +415,10 @@ class Session:
 
     def drag_to(self, pointer_mm: Vec3) -> EditFailure | None:
         """Move the dragged board so its grab point follows ``pointer_mm``
-        along its run's axis, re-solving and writing the boards, and selects
+        along its run's axis, re-solving and writing the boards, and select
         the region before it: only that region's number changes, never its
-        basis. Returns an
-        :class:`EditFailure`, leaving the last good state, when this step
-        would not solve or no drag is in progress."""
+        basis. Returns an :class:`EditFailure`, leaving the last good state,
+        when this step would not solve or no drag is in progress."""
         if self._drag is None:
             return EditFailure("no board is being dragged", None)
         board_id, axis, grab_offset_mm = self._drag
