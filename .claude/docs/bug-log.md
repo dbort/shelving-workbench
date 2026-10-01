@@ -190,10 +190,13 @@ the log happens only when the user asks.
   loop running 13.5 ms after `showDialog`. The panel's first `Show` event
   then arrived 29 s later, with its first paint 13 ms after that, so the
   time is spent outside this workbench's code, before Qt shows the form.
-  Root cause unknown. Two candidates: the Tasks pane was not visible
-  (hidden, behind another tab, or auto-hidden) until something brought it
-  forward, or FreeCAD blocked the event loop after `showDialog`. Fix: `ad
-  hoc`, provisionally: first extend the `debug_log` run with a periodic
-  heartbeat and the form's ancestor visibility until it is shown, which
-  tells the two apart on the next occurrence; the fix itself waits on what
-  that shows.
+  During the wait FreeCAD stayed responsive (the 3D view panned), and the
+  whole Shelving menu was disabled, which FreeCAD does to commands while a
+  task dialog is active, so the dialog was open but its form was not
+  visible. Clicking around did not reveal it; it appeared on its own. Root
+  cause unknown: some ancestor of the form stayed hidden for 29 s. Fix:
+  `ad hoc`, provisionally: first extend the `debug_log` run to record each
+  of the form's ancestors (type, name, visibility, current tab) once
+  `showDialog` returns, and every Show and Hide among them until the form
+  is shown, which names the ancestor that held it back on the next
+  occurrence; the fix itself waits on what that shows.
