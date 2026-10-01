@@ -1,5 +1,5 @@
 ---
-next_id: bug-011
+next_id: bug-012
 ---
 
 # Bug log
@@ -181,3 +181,19 @@ the log happens only when the user asks.
   resolve names. Fix: `sh-XXX task`, since storing and re-evaluating
   expressions per region changes the rule record, reflow, and the editor,
   and needs design decisions.
+- `bug-011` - **Edit Unit sometimes takes many seconds to show its
+  panel**: after running Edit Unit, the task panel can take seconds to
+  appear, 29 s in one run during sh-021's manual QA on FreeCAD 1.1.1. It
+  happens only sometimes, and the user has never seen it with another
+  workbench. The `debug_log` timings for that run show every stage of this
+  workbench's code finishing within 25 ms of the command, and the event
+  loop running 13.5 ms after `showDialog`. The panel's first `Show` event
+  then arrived 29 s later, with its first paint 13 ms after that, so the
+  time is spent outside this workbench's code, before Qt shows the form.
+  Root cause unknown. Two candidates: the Tasks pane was not visible
+  (hidden, behind another tab, or auto-hidden) until something brought it
+  forward, or FreeCAD blocked the event loop after `showDialog`. Fix: `ad
+  hoc`, provisionally: first extend the `debug_log` run with a periodic
+  heartbeat and the form's ancestor visibility until it is shown, which
+  tells the two apart on the next occurrence; the fix itself waits on what
+  that shows.
