@@ -21,24 +21,24 @@ The cases below need FreeCAD to load the workbench from your working copy rather
 than from an Addon Manager release. FreeCAD discovers a workbench by scanning `Mod`
 directories at startup, so symlink the repo into the user `Mod` directory.
 
-Find the FreeCAD user directory. Its default for FreeCAD 1.0 is
-`~/.local/share/FreeCAD/` on Linux and
-`~/Library/Application Support/FreeCAD/` on macOS; the FreeCAD Python console
-prints the exact path with `App.getUserAppDataDir()`. `Mod/` sits directly
-under it.
+Find the FreeCAD user directory. FreeCAD 1.1 keeps one per version, by
+default `~/.local/share/FreeCAD/v1-1/` on Linux and
+`~/Library/Application Support/FreeCAD/v1-1/` on macOS; the FreeCAD Python
+console prints the exact path with `App.getUserAppDataDir()`. `Mod/` sits
+directly under it.
 
 From the repo root:
 
 ```sh
 # Linux
-mkdir -p ~/.local/share/FreeCAD/Mod
-ln -s "$(pwd)" ~/.local/share/FreeCAD/Mod/shelving-workbench
+mkdir -p ~/.local/share/FreeCAD/v1-1/Mod
+ln -s "$(pwd)" ~/.local/share/FreeCAD/v1-1/Mod/shelving-workbench
 ```
 
 ```sh
 # macOS
-mkdir -p ~/Library/Application\ Support/FreeCAD/Mod
-ln -s "$(pwd)" ~/Library/Application\ Support/FreeCAD/Mod/shelving-workbench
+mkdir -p ~/Library/Application\ Support/FreeCAD/v1-1/Mod
+ln -s "$(pwd)" ~/Library/Application\ Support/FreeCAD/v1-1/Mod/shelving-workbench
 ```
 
 Restart FreeCAD and pick **Shelving** in the workbench selector. To uninstall,
@@ -60,7 +60,7 @@ Notes:
 
 ## M6 — Read a container
 
-Prerequisite: a FreeCAD 1.0 install with this workbench on its addon path,
+Prerequisite: a FreeCAD 1.1 install with this workbench on its addon path,
 **View → Panels → Report view** open, and a document built to a known
 state so every run of these cases starts from the same geometry.
 `Shelving_Scan` and `Shelving_ExportBoxes` print their results to the
@@ -206,7 +206,7 @@ selected.
 
 ## M7 — Write a container
 
-Prerequisite: a FreeCAD 1.0 install with this workbench on its addon path,
+Prerequisite: a FreeCAD 1.1 install with this workbench on its addon path,
 **View → Panels → Report view** open, a new document (`Ctrl+N`).
 `Shelving_CreateUnit` and `Shelving_ResizeUnit` print their results to the
 Report view with `print()`, not to the Python console, so keep the Report
@@ -315,7 +315,7 @@ workbench.
 
 ## M8 — The material catalog as a document object
 
-Prerequisite: a FreeCAD 1.0 install with this workbench on its addon path,
+Prerequisite: a FreeCAD 1.1 install with this workbench on its addon path,
 **View → Panels → Report view** open, a new document (`Ctrl+N`).
 
 ### 1. Create a unit on an empty document and confirm a materials group appears
@@ -388,7 +388,7 @@ is what a rescan resolves it by.
 
 ## M9 — The elevation editor
 
-Prerequisite: a FreeCAD 1.0 or later install with this workbench on its
+Prerequisite: a FreeCAD 1.1 or later install with this workbench on its
 addon path, and **View → Panels → Report view** open.
 
 Every case or group of cases opens with a **Start** line naming the state
