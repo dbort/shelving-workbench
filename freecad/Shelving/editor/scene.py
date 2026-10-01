@@ -35,8 +35,7 @@ from freecad.Shelving.core.scan import elevation_axes
 # keys custom data by int, and any value works.
 _ID_DATA_ROLE = 0
 # The key a dimension's items carry their part under: "line", "witness",
-# "arrow",
-# "label" or "readout". Rect items carry nothing here.
+# "arrow", "label" or "readout". Rect items carry nothing here.
 _DIMENSION_DATA_ROLE = 1
 
 _BAY_BRUSH = QtGui.QBrush(QtGui.QColor(0xF2, 0xF2, 0xF2, 160))
@@ -363,8 +362,9 @@ def hit_test(scene: QtWidgets.QGraphicsScene, point: QtCore.QPointF) -> str | No
     ``QGraphicsScene.items`` already orders by stacking order, topmost
     first, so the id belongs to whichever item's Z-value is greatest among
     those covering ``point``: a dimension's label or readout over any rect,
-    else the deepest rect. A dimension's lines and arrows are never hit: a spacing
-    line crosses a board, and a press there must still grab the board.
+    else the deepest rect. A dimension's lines and arrows are never hit: a
+    spacing line crosses a board, and a press there must still grab the
+    board.
     """
     for item in scene.items(point):
         if item.data(_DIMENSION_DATA_ROLE) in ("line", "witness", "arrow"):

@@ -365,8 +365,8 @@ def test_the_plain_field_fallback(
     monkeypatch: pytest.MonkeyPatch, reported: list[str]
 ) -> None:
     """With no ``UiLoader`` the field is a plain line edit whose text goes
-    to ``parseQuantity`` untouched, and a parse error reaches the message
-    line."""
+    to ``parseQuantity`` untouched, and a parse error is reported once,
+    however the edit ends."""
     monkeypatch.setattr(FreeCADGui, "UiLoader", None, raising=False)
     fixture = _Fixture("panel_smoke_fallback")
     try:
@@ -380,6 +380,13 @@ def test_the_plain_field_fallback(
         assert abs(rule.size_mm - 38.1) < _TOL_MM
         fixture.type_size('12 1/2"')
         assert len(reported) == 1
+        # Leaving the field afterwards ends the same edit; no second popup.
+        QtWidgets.QApplication.sendEvent(
+            fixture.panel.size_field.line_edit,
+            QtGui.QFocusEvent(QtCore.QEvent.Type.FocusOut),
+        )
+        _process_events()
+        assert len(reported) == 1, reported
         assert fixture.rule(fixture.lower) == rule
     finally:
         fixture.close()
@@ -508,3 +515,16 @@ def test_ancestor_watch_names_the_container_hiding_the_form() -> None:
         assert lines == []
     finally:
         tabs.close()
+
+
+def test_a_split_refusal_names_no_region_id(
+    unit_panel: _Fixture, reported: list[str]
+) -> None:
+    unit_panel.select(unit_panel.lower)
+    unit_panel.type_size("10")
+    unit_panel.select(unit_panel.lower)
+    unit_panel.panel.add_shelf_button.click()
+    _process_events()
+    (message,) = reported
+    assert "too small" in message, message
+    assert unit_panel.lower not in message

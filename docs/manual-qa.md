@@ -449,8 +449,8 @@ disagree with it. Click the new divider board: **Delete** enables and both
 2. Click **Delete**.
 
 Expected: a **Shelving** error pops up from FreeCAD's Notification Area
-and shows in red in the status bar. It reports a refusal naming that board
-(its neighbour on at least one side is not an open compartment). The
+and shows in red in the status bar. It explains in plain words, with no
+internal ids, that removing that board would not join two openings. The
 elevation is unchanged, the panel stays open and usable, and nothing in the
 Report view suggests a crash or an unhandled exception.
 

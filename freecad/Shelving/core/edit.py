@@ -137,10 +137,7 @@ def split_region(
     """
     if unit.root.id == region_id:
         if not isinstance(unit.root, Bay):
-            kind = type(unit.root).__name__
-            raise EditError(
-                region_id, f"cannot split {kind} {region_id!r}: only a Bay can be split"
-            )
+            raise EditError(region_id, "Only an open compartment can be split.")
         new_root: Region = Division(
             axis=axis,
             items=[Bay(), Board(material=material), Bay()],
@@ -148,14 +145,14 @@ def split_region(
         )
         return dataclasses.replace(unit, root=new_root)
     if not isinstance(unit.root, Division):
-        raise EditError(region_id, f"no region with id {region_id!r}")
+        raise EditError(region_id, "That is not part of this unit.")
     spaces = solve(unit, catalog)
     thickness_mm = catalog[material or unit.default_material].thickness_mm
     replaced_root, found = _split_in_division(
         unit.root, region_id, axis, material, thickness_mm, spaces
     )
     if not found:
-        raise EditError(region_id, f"no region with id {region_id!r}")
+        raise EditError(region_id, "That is not part of this unit.")
     return dataclasses.replace(unit, root=replaced_root)
 
 
@@ -173,11 +170,7 @@ def _split_in_division(
             continue
         if item.id == region_id:
             if not isinstance(item, Bay):
-                kind = type(item).__name__
-                raise EditError(
-                    region_id,
-                    f"cannot split {kind} {region_id!r}: only a Bay can be split",
-                )
+                raise EditError(region_id, "Only an open compartment can be split.")
             replacement = _split_replacement(
                 item, division, index, axis, material, thickness_mm, spaces
             )
@@ -235,8 +228,8 @@ def _split_halves_rules(
     if half_mm <= 0:
         raise EditError(
             bay.id,
-            f"cannot split {bay.id!r}: its {size_before_mm:g}mm opening cannot "
-            f"hold a {thickness_mm:g}mm board and still leave two positive bays",
+            f"This {size_before_mm:.1f} mm opening is too small to hold a "
+            f"{thickness_mm:.1f} mm board with room on both sides.",
         )
     if isinstance(bay.rule, Fixed):
         fixed_rule: SizeRule = Fixed(size_mm=half_mm, basis=Basis.CLEAR)
@@ -290,7 +283,7 @@ def merge_at(unit: Unit, board_id: str, catalog: Catalog) -> Unit:
     spaces = solve(unit, catalog)
     new_root, found, _collapsed = _merge_at(unit.root, board_id, spaces)
     if not found:
-        raise EditError(board_id, f"no board with id {board_id!r}")
+        raise EditError(board_id, "That is not a board of this unit.")
     return dataclasses.replace(unit, root=new_root)
 
 
@@ -314,14 +307,15 @@ def _merge_at(
             if index == 0 or index == len(items) - 1:
                 raise EditError(
                     board_id,
-                    f"board {board_id!r} has no neighbour on one side and cannot "
-                    "be merged",
+                    "This board is at the end of its row or column, so removing "
+                    "it would not join two openings.",
                 )
             before, after = items[index - 1], items[index + 1]
             if isinstance(before, Board) or isinstance(after, Board):
                 raise EditError(
                     board_id,
-                    f"board {board_id!r}'s neighbours are not both regions",
+                    "This board has another board beside it, so removing it "
+                    "would not join two openings.",
                 )
             merged_rule = _merged_rule(
                 before, after, item, items, index, axis_index, spaces
@@ -438,7 +432,7 @@ def _locate_region(unit: Unit, region_id: str) -> tuple[Division, int]:
         )
     found = _locate(unit.root, region_id)
     if found is None:
-        raise EditError(region_id, f"no region with id {region_id!r}")
+        raise EditError(region_id, "That is not part of this unit.")
     parent, index = found
     if isinstance(parent.items[index], Board):
         raise EditError(region_id, "That is a board; select an opening to size.")
@@ -547,7 +541,7 @@ def run_axis(unit: Unit, node_id: str) -> Axis:
     ``node_id`` when it names the root or nothing in ``unit``."""
     found = _locate(unit.root, node_id)
     if found is None:
-        raise EditError(node_id, f"no item with id {node_id!r} inside the unit")
+        raise EditError(node_id, "That is not part of this unit.")
     return found[0].axis
 
 
@@ -557,7 +551,7 @@ def _board_and_region_before(unit: Unit, board_id: str) -> tuple[Division, int]:
     no board, or a board with no region immediately before it."""
     found = _locate(unit.root, board_id)
     if found is None or not isinstance(found[0].items[found[1]], Board):
-        raise EditError(board_id, f"no board with id {board_id!r}")
+        raise EditError(board_id, "That is not a board of this unit.")
     parent, index = found
     if index == 0 or isinstance(parent.items[index - 1], Board):
         raise EditError(

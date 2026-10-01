@@ -4,9 +4,11 @@
 ``FreeCADGui.Control.showDialog`` expects: a ``form`` attribute (the
 ``QWidget`` shown in the task panel), ``getStandardButtons``, ``accept``,
 ``reject``. Every control calls a ``Session`` method and redraws from what it
-returns; the decisions left here are input handling (the start-drag
-threshold, reporting only a changed size, keeping checked items across a
-redraw). ``FreeCADGui.Control`` does not exist under ``freecadcmd``, so
+returns; the decisions left here are input handling: the start-drag
+threshold, reporting only a changed size, never applying text the quantity
+widget rejects (consuming its Return, restoring the shown value when focus
+leaves), reporting only a drag's first failure, and keeping checked items
+across a redraw. ``FreeCADGui.Control`` does not exist under ``freecadcmd``, so
 :mod:`tools.freecad_panel_smoke` exercises this module under the offscreen
 GUI instead.
 
@@ -59,8 +61,7 @@ _print_user_error = cast(
 
 def report_error(message: str) -> None:
     """Show ``message`` as a Shelving error in FreeCAD's Notification Area,
-    which pops it up briefly and keeps it in the Report view, rather than as
-    text that stays in the panel."""
+    which pops it up briefly and keeps it in the Report view."""
     _print_user_error("Shelving", message + "\n")
 
 
@@ -168,6 +169,10 @@ class _DimensionField:
         # quietly fix a region that shares leftover space.
         self._shown_mm: float | None = None
         self._shown_text = ""
+        # The fallback text parseQuantity last refused. A consumed Return and
+        # the focus-out after it both finish the same edit, and the refusal
+        # is reported once.
+        self._rejected_text: str | None = None
         self.line_edit.editingFinished.connect(self._finished)
         if spin is not None:
             # Accepting the f(x) dialog changes the value without any
@@ -208,12 +213,13 @@ class _DimensionField:
                 self._on_size(value_mm)
             return
         text = self.line_edit.text()
-        if text == self._shown_text:
+        if text in (self._shown_text, self._rejected_text):
             return
         try:
             quantity = FreeCAD.Units.parseQuantity(text)
         except Exception as err:  # noqa: BLE001 - its message is the report
-            self._on_error(str(err))
+            self._rejected_text = text
+            self._on_error(str(err).strip())
             return
         self._on_size(float(quantity.Value))
 
@@ -233,6 +239,7 @@ class _DimensionField:
                 self._shown_mm = None
         else:
             self._shown_text = "" if value_mm is None else f"{value_mm:g} mm"
+            self._rejected_text = None
             self.line_edit.setText(self._shown_text)
         self.widget.blockSignals(False)
 

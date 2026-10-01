@@ -114,8 +114,15 @@ class EditUnitCommand:
             run.end()
 
         panel.view.on_first_paint = _elevation_painted
-        ancestors = AncestorWatch(
-            panel.form, lambda line: run.lap(f"{line} at {debug_log.timestamp()}")
+        # A diagnostic for bug-011: it filters events on FreeCAD's own widgets,
+        # so it runs only when its output would be printed.
+        ancestors = (
+            AncestorWatch(
+                panel.form,
+                lambda line: run.lap(f"{line} at {debug_log.timestamp()}"),
+            )
+            if debug_log.is_enabled()
+            else None
         )
         try:
             Gui.Control.showDialog(panel)
@@ -128,13 +135,15 @@ class EditUnitCommand:
             run.end("refused")
             return
         run.lap("showDialog")
-        ancestors.snapshot("after showDialog")
+        if ancestors is not None:
+            ancestors.snapshot("after showDialog")
 
         def _first_pass() -> None:
             run.lap(
                 f"first event-loop pass after showDialog at {debug_log.timestamp()}"
             )
-            ancestors.snapshot("first event-loop pass")
+            if ancestors is not None:
+                ancestors.snapshot("first event-loop pass")
 
         QtCore.QTimer.singleShot(0, _first_pass)
         # A panel that is never painted (the Tasks pane hidden, say) would

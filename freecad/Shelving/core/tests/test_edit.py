@@ -360,31 +360,35 @@ def _assert_surviving_boards_unchanged(
 def test_split_region_refuses_a_void() -> None:
     void = Void()
     unit = Unit(size_mm=Vec3(600.0, 300.0, 900.0), default_material=PLY, root=void)
-    with pytest.raises(EditError, match=void.id) as exc_info:
+    with pytest.raises(EditError) as exc_info:
         split_region(unit, void.id, Axis.X, CATALOG)
     assert exc_info.value.node_id == void.id
+    assert void.id not in str(exc_info.value)
 
 
 def test_split_region_refuses_a_division() -> None:
     unit = _closed_box_unit()
     assert isinstance(unit.root, Division)
-    with pytest.raises(EditError, match=unit.root.id) as exc_info:
+    with pytest.raises(EditError) as exc_info:
         split_region(unit, unit.root.id, Axis.X, CATALOG)
     assert exc_info.value.node_id == unit.root.id
+    assert unit.root.id not in str(exc_info.value)
 
 
 def test_split_region_refuses_an_unknown_id() -> None:
     unit = _closed_box_unit()
-    with pytest.raises(EditError, match="no-such-id") as exc_info:
+    with pytest.raises(EditError) as exc_info:
         split_region(unit, "no-such-id", Axis.X, CATALOG)
     assert exc_info.value.node_id == "no-such-id"
+    assert "no-such-id" not in str(exc_info.value)
 
 
 def test_split_region_refuses_a_bay_too_small_for_the_divider() -> None:
     """A splice-case split (the bay's parent already runs along the split
     axis) whose opening cannot fit the new board and still leave two
     positive-sized halves is refused by the bay's own id, not left to a
-    downstream ``Fixed``/``Weighted`` construction to crash on."""
+    downstream ``Fixed``/``Weighted`` construction to crash on, in a message
+    that does not show that id."""
     bay = Bay(rule=Fixed(10.0))
     unit = Unit(
         size_mm=Vec3(46.0, 300.0, 900.0),
@@ -394,9 +398,10 @@ def test_split_region_refuses_a_bay_too_small_for_the_divider() -> None:
             items=[Board(role="left"), bay, Board(role="right")],
         ),
     )
-    with pytest.raises(EditError, match=bay.id) as exc_info:
+    with pytest.raises(EditError) as exc_info:
         split_region(unit, bay.id, Axis.X, CATALOG)
     assert exc_info.value.node_id == bay.id
+    assert bay.id not in str(exc_info.value)
 
 
 # --- merge_at refusals -------------------------------------------------------
@@ -404,9 +409,10 @@ def test_split_region_refuses_a_bay_too_small_for_the_divider() -> None:
 
 def test_merge_at_refuses_an_unknown_id() -> None:
     unit = _closed_box_unit()
-    with pytest.raises(EditError, match="no-such-id") as exc_info:
+    with pytest.raises(EditError) as exc_info:
         merge_at(unit, "no-such-id", CATALOG)
     assert exc_info.value.node_id == "no-such-id"
+    assert "no-such-id" not in str(exc_info.value)
 
 
 def test_merge_at_refuses_a_board_with_no_neighbour_on_one_side() -> None:
@@ -416,9 +422,10 @@ def test_merge_at_refuses_a_board_with_no_neighbour_on_one_side() -> None:
         default_material=PLY,
         root=Division(axis=Axis.X, items=[edge_board, Bay()]),
     )
-    with pytest.raises(EditError, match=edge_board.id) as exc_info:
+    with pytest.raises(EditError) as exc_info:
         merge_at(unit, edge_board.id, CATALOG)
     assert exc_info.value.node_id == edge_board.id
+    assert edge_board.id not in str(exc_info.value)
 
 
 def test_merge_at_refuses_a_board_flanked_by_another_board() -> None:
@@ -428,9 +435,10 @@ def test_merge_at_refuses_a_board_flanked_by_another_board() -> None:
         default_material=PLY,
         root=Division(axis=Axis.X, items=[Board(role="left"), middle_board, Bay()]),
     )
-    with pytest.raises(EditError, match=middle_board.id) as exc_info:
+    with pytest.raises(EditError) as exc_info:
         merge_at(unit, middle_board.id, CATALOG)
     assert exc_info.value.node_id == middle_board.id
+    assert middle_board.id not in str(exc_info.value)
 
 
 # --- split then merge round-trips the tree shape -----------------------------
