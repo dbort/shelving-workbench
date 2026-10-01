@@ -42,6 +42,10 @@ startup path is still exercised.
       `.claude/docs/freecad-notes.md`. No file outside `tasks/completed/`
       refers to `docs/freecadcmd-notes.md` or to any of the five old smoke
       paths.
+- [ ] `QT_QPA_PLATFORM=offscreen pixi run pytest tests/freecad_gui`, run
+      directly rather than through `tools/run-tests.sh`, passes and exits on
+      its own within 60 s, and leaves the developer's real FreeCAD settings
+      directories untouched.
 - [ ] `mypy --strict` clean, including both new `conftest.py` files.
 
 ## Advice
@@ -50,8 +54,22 @@ BOOTSTRAP. `import freecad`, the conda-forge FreeCAD package's own Python
 package, loads FreeCAD's libraries so `import FreeCAD, Part` works from
 plain Python in the pixi environment. Verified on FreeCAD 1.0.0 with the
 four headless smokes: 47 passed in about 0.5 s under one plain `pytest`,
-with no `Recompute` lines. Each new directory's `conftest.py` does this
-before any test module imports FreeCAD.
+with no `Recompute` lines; re-check on 1.1, which the environment now
+pins. Each new directory's `conftest.py` does this before any test module
+imports FreeCAD.
+
+ISOLATED SETTINGS. Each conftest points FreeCAD at throwaway settings
+before importing it: a temporary directory set as `XDG_CONFIG_HOME`,
+`XDG_DATA_HOME` and `XDG_CACHE_HOME`, with `tools/freecad-test-user.cfg`
+copied to `config/FreeCAD/v1-1/user.cfg`, removed at session end. Without
+this, FreeCAD 1.1's GUI start blocks on a settings-migration dialog when
+older settings exist, and a notification popup deadlocks it headless
+(`docs/freecadcmd-notes.md`, the two FreeCAD 1.1 sections). Both conftests
+must do it, not only `tools/run-tests.sh`, so that a developer running
+`pytest tests/freecad_gui` directly gets the same safe start. Once both
+conftests do it, `tools/run-tests.sh` keeps its own XDG block only if the
+`freecadcmd` import check needs it; keep that check off the developer's
+real settings either way.
 
 TWO PROCESSES, NOT ONE. The headless and GUI tests run as separate pytest
 invocations, and neither shares a process with the core run. A running GUI
@@ -61,10 +79,12 @@ changes headless behaviour (`ViewObject` is no longer `None`, and
 
 GUI HOST. `tests/freecad_gui/conftest.py` creates the `QApplication` if
 none exists and calls `FreeCADGui.showMainWindow()` under
-`QT_QPA_PLATFORM=offscreen`. Verified with the panel smoke: 8/8 passed and
-the process exited cleanly, with no `os._exit`. If the process does not
-exit cleanly once all 14+ tests run there, fix it in the conftest (a
-session-scoped teardown), never with `os._exit` in a test module.
+`QT_QPA_PLATFORM=offscreen`, after the ISOLATED SETTINGS setup. Verified
+with the panel smoke on 1.0.0 (8/8 passed, clean exit). Not yet verified on
+1.1: without isolation, `showMainWindow()` hung in the migration dialog
+there. If the process does not exit cleanly once all 14+ tests run, fix it
+in the conftest (a session-scoped teardown), never with `os._exit` in a
+test module.
 
 ONE `freecadcmd` CHECK STAYS (user decision): a minimal script that imports
 the workbench and its GUI-registration module the way FreeCAD's startup
@@ -88,9 +108,10 @@ Delete the sections that only served the self-invoking pattern (exit
 status, `__name__`, the recursion guard, stdout flushing, the progress bar)
 unless the remaining `freecadcmd` check relies on one. Keep the FreeCAD
 behaviour facts (frozen namespace path, `FreeCADGui` stub, `UndoMode`,
-`ViewObject`, GUI widget access, the Notification Area). Add a short section
-on the `import freecad` bootstrap and the embedded GUI. Git history keeps
-what is deleted.
+`ViewObject`, GUI widget access, the Notification Area, and the two FreeCAD
+1.1 startup sections), pointing their "how tests avoid this" sentences at
+the conftests. Add a short section on the `import freecad` bootstrap and
+the embedded GUI. Git history keeps what is deleted.
 
 REFERENCES. Update every live reference to the old smoke paths and the
 notes path: code comments (`editor/panel.py`, `editor/session.py`,
@@ -109,8 +130,8 @@ simple: `tools/run-tests.sh` loses its per-smoke blocks and only gets
 simpler.
 
 ## Plan
-- [ ] **Step 1** (`tests/freecad/conftest.py`, `tests/freecad/test_*.py`): Move the scan, write, catalog and editor smokes' tests in as plain pytest modules, with the bootstrap in the conftest and every self-invoke block, guard and flush removed. They pass under `pixi run pytest tests/freecad`.
-- [ ] **Step 2** (`tests/freecad_gui/conftest.py`, `tests/freecad_gui/test_*.py`): Move the panel smoke in, with the embedded offscreen GUI in the conftest and the stdout redirect and `os._exit` removed. It passes under `QT_QPA_PLATFORM=offscreen pixi run pytest tests/freecad_gui` and exits cleanly.
+- [ ] **Step 1** (`tests/freecad/conftest.py`, `tests/freecad/test_*.py`): Move the scan, write, catalog and editor smokes' tests in as plain pytest modules, with the isolated settings and the bootstrap in the conftest and every self-invoke block, guard and flush removed. They pass under `pixi run pytest tests/freecad`.
+- [ ] **Step 2** (`tests/freecad_gui/conftest.py`, `tests/freecad_gui/test_*.py`): Move the panel smoke in, with the isolated settings and the embedded offscreen GUI in the conftest and the stdout redirect and `os._exit` removed. It passes under `QT_QPA_PLATFORM=offscreen pixi run pytest tests/freecad_gui`, run directly, and exits cleanly.
 - [ ] **Step 3** (`tools/`): Add the `freecadcmd` import check script and delete the five old smokes.
 - [ ] **Step 4** (`tools/run-tests.sh`): Run the core suite excluding the two new directories, then the import check, `pytest tests/freecad`, and the offscreen `pytest tests/freecad_gui`, each failing the run on a non-zero status. Verify the hand checks in Must Have (an import error fails fast, no `Recompute` lines).
 - [ ] **Step 5** (`.claude/docs/freecad-notes.md`, every referencing file): Move and trim the notes, update every live reference listed in Advice, and delete friction-021 (the progress-bar noise this task removes).
