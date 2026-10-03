@@ -171,3 +171,6 @@ simpler.
 - **N1: The docstring's reason for keeping the directories apart did not reproduce** (`tests/collection.py:6`): with both guards removed, a mixed run started the GUI after headless FreeCAD without hanging; what holds is the core FreeCAD-free test failing and the changed headless behaviour.
 - **N2: Ragged rewrap** (`.claude/docs/pipeline.md:32`).
 - **N3: The settings-tree comparison is not isolated** (`tests/test_collection_runs.py:83`, `tests/test_collection_runs.py:101`): it globs the shared temp dir; give the subprocess its own `TMPDIR`.
+
+### Round 4: REJECTED
+- **F1: The round-3 fix puts `pytest.main` back under `tests/`, which a Must Have forbids** (`tests/test_collection_runs.py:36`): the child-process driver string calls `pytest.main`, so `grep -rn pytest.main tests/` matches and the Must Have is unmet as written. Get the same post-run state without it, for example `python -m pytest -p <plugin>` with a plugin whose `pytest_unconfigure` writes `XDG_CONFIG_HOME` and `'FreeCADGui' in sys.modules` to a file in `tmp_path`; or the user narrows the Must Have and Advice records it.
