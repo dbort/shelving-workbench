@@ -16,38 +16,38 @@ from the test output. One small `freecadcmd` check stays so FreeCAD's own
 startup path is still exercised.
 
 ## Must Have
-- [ ] `pixi run tests` green.
-- [ ] `tools/freecad_scan_smoke.py`, `tools/freecad_write_smoke.py`,
+- [x] `pixi run tests` green.
+- [x] `tools/freecad_scan_smoke.py`, `tools/freecad_write_smoke.py`,
       `tools/freecad_catalog_smoke.py`, `tools/freecad_editor_smoke.py` and
       `tools/freecad_panel_smoke.py` no longer exist.
-- [ ] `pixi run pytest --collect-only -q tests/freecad` collects at least 47
+- [x] `pixi run pytest --collect-only -q tests/freecad` collects at least 47
       tests, and `QT_QPA_PLATFORM=offscreen pixi run pytest --collect-only -q
       tests/freecad_gui` at least 14. Those are the counts the five smokes
       have at planning time, so nothing is dropped in the move.
-- [ ] No test module under `tests/` runs pytest on itself
+- [x] No test module under `tests/` runs pytest on itself
       (`pytest.main([__file__` appears nowhere under `tests/`), and no file
       there contains `os._exit` or `_SMOKE_RUNNING`.
-- [ ] The core run in `tools/run-tests.sh` collects nothing from
+- [x] The core run in `tools/run-tests.sh` collects nothing from
       `tests/freecad/` or `tests/freecad_gui/`.
-- [ ] `tools/run-tests.sh` runs FreeCAD in exactly three ways: one
+- [x] `tools/run-tests.sh` runs FreeCAD in exactly three ways: one
       `freecadcmd` import check, `pytest tests/freecad`, and
       `QT_QPA_PLATFORM=offscreen pytest tests/freecad_gui`.
-- [ ] A test module under `tests/freecad/` or `tests/freecad_gui/` that
+- [x] A test module under `tests/freecad/` or `tests/freecad_gui/` that
       raises on import makes `pixi run tests` exit non-zero without hanging.
       Verified once by hand during `/work`, then reverted.
-- [ ] The `freecadcmd` import check exits non-zero when the workbench or its
+- [x] The `freecadcmd` import check exits non-zero when the workbench or its
       GUI module fails to import, verified once by hand the same way.
-- [ ] `pixi run tests` output contains no `Recompute` progress lines, and
+- [x] `pixi run tests` output contains no `Recompute` progress lines, and
       friction-021 is deleted from `.claude/docs/friction-log.md`.
-- [ ] `docs/freecadcmd-notes.md` no longer exists. Its trimmed content is at
+- [x] `docs/freecadcmd-notes.md` no longer exists. Its trimmed content is at
       `.claude/docs/freecad-notes.md`. No file outside `tasks/completed/`
       refers to `docs/freecadcmd-notes.md` or to any of the five old smoke
       paths.
-- [ ] `QT_QPA_PLATFORM=offscreen pixi run pytest tests/freecad_gui`, run
+- [x] `QT_QPA_PLATFORM=offscreen pixi run pytest tests/freecad_gui`, run
       directly rather than through `tools/run-tests.sh`, passes and exits on
       its own within 60 s, and leaves the developer's real FreeCAD settings
       directories untouched.
-- [ ] `mypy --strict` clean, including both new `conftest.py` files.
+- [x] `mypy --strict` clean, including both new `conftest.py` files.
 
 ## Advice
 
