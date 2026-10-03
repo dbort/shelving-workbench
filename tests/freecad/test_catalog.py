@@ -1,14 +1,6 @@
-"""Headless functional check for the material catalog: the document object
+"""The material catalog against a real FreeCAD document: the document object
 layer in ``freecad.Shelving.catalog`` and the reflow that makes a changed
 entry reach the boards using it.
-
-A real pytest module, not a hand-rolled assert-and-marker script, for the
-same reasons ``tools/freecad_scan_smoke.py`` is one; see that module's
-docstring for the ``freecadcmd`` mechanics rather than repeating them here:
-self-invoking ``pytest.main``, the recursion guard, the
-``sys.stdout.flush()`` before ``sys.exit``, and why
-``if __name__ == "__main__":`` does not work. ``docs/freecadcmd-notes.md``
-covers the underlying findings both modules rely on.
 
 Each test builds its own document, closed before the next one starts,
 except the milestone test (``test_reflow_all_rewrites_the_changed_material``),
@@ -17,32 +9,14 @@ wording ("a document holding two units").
 """
 
 import os
-import sys
+import tempfile
+import zipfile
+from typing import cast
 
-# See tools/freecad_scan_smoke.py's matching block for why this is neither
-# an `if __name__ == "__main__":` guard nor an unconditional call, and why it
-# precedes every FreeCAD import.
-if os.environ.get("_FREECAD_CATALOG_SMOKE_RUNNING") != "1":
-    os.environ["_FREECAD_CATALOG_SMOKE_RUNNING"] = "1"
-    import pytest
+import FreeCAD
 
-    _exit_code = pytest.main([__file__, "-v"])
-    sys.stdout.flush()
-    sys.exit(_exit_code)
-
-import tempfile  # noqa: E402
-import zipfile  # noqa: E402
-from typing import cast  # noqa: E402
-
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _REPO_ROOT not in sys.path:
-    sys.path.insert(0, _REPO_ROOT)
-
-import FreeCAD  # noqa: E402
-import pytest  # noqa: E402
-
-from freecad.Shelving import properties  # noqa: E402
-from freecad.Shelving.catalog import (  # noqa: E402
+from freecad.Shelving import properties
+from freecad.Shelving.catalog import (
     add_entry,
     ensure_catalog,
     find_catalog,
@@ -50,13 +24,13 @@ from freecad.Shelving.catalog import (  # noqa: E402
     read_usable_catalog,
     seed_catalog,
 )
-from freecad.Shelving.container import read_container, write_container  # noqa: E402
-from freecad.Shelving.core.geometry import Vec3  # noqa: E402
-from freecad.Shelving.core.layout import Axis, Bay, Board, Division, Unit  # noqa: E402
-from freecad.Shelving.core.materials import MaterialId  # noqa: E402
-from freecad.Shelving.core.scan import Box, ScanError, scan  # noqa: E402
-from freecad.Shelving.default_catalog import DEFAULT_CATALOG  # noqa: E402
-from freecad.Shelving.unit_ops import (  # noqa: E402
+from freecad.Shelving.container import read_container, write_container
+from freecad.Shelving.core.geometry import Vec3
+from freecad.Shelving.core.layout import Axis, Bay, Board, Division, Unit
+from freecad.Shelving.core.materials import MaterialId
+from freecad.Shelving.core.scan import Box, ScanError, scan
+from freecad.Shelving.default_catalog import DEFAULT_CATALOG
+from freecad.Shelving.unit_ops import (
     create_unit,
     reflow_all,
     resize_unit,

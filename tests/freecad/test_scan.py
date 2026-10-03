@@ -1,94 +1,39 @@
-"""Headless functional check for the workbench: import safety plus reading
-a container into the core scanner.
+"""Reading a container into the core scanner, against a real FreeCAD document.
 
-A real pytest module, not a hand-rolled assert-and-marker script: run via
-``freecadcmd tools/freecad_scan_smoke.py``, which (see the bottom of this
-file) turns around and invokes pytest against itself, so a failure gets a
-named test, a fixture-argument dump, and a full traceback instead of a bare
-``AssertionError`` somewhere in a linear script. Besides the container-walk
-and scan checks, it confirms the workbench package and its GUI-registration
-module import cleanly under ``freecadcmd`` (`test_init_gui_imports_cleanly`),
-since neither is exercised as a side effect of anything else here. The rest
-builds a closed unit in a real FreeCAD document, reads it with
-``read_container``, scans it, and asserts the geometry, the region tree,
-and the container's-own-frame and solid-classification rules a unit test
-cannot exercise without a FreeCAD interpreter.
-
-FreeCAD's own recompute progress bar ("Recompute......") writes through a
-channel that bypasses ordinary stdout/stderr redirection and Python-level
-buffering control alike (verified: neither ``os.dup2`` on fd 1/2 around
-``doc.recompute()``, nor ``sys.stdout.reconfigure(line_buffering=True)``,
-changes when it appears), so it cannot be made to interleave with this
-module's own output or be suppressed from here. It reliably appears after
-everything this module prints, in one block.
-
-The project's editable install (`pixi.toml`'s `[pypi-dependencies]`) puts
-the repo root on `sys.path` before `freecadcmd`'s own internal `import
-freecad` runs, which is what resolves `freecad.Shelving.core` here
-(verified directly: the imports below work under `freecadcmd` with no
-`sys.path` insert of any kind). The insert below is defensive against
-someone running this file outside `pixi run`/`pixi shell` (where the
-editable install is skipped), not the load-bearing mechanism; an installed
-workbench never needs it either, because FreeCAD's addon discovery puts it
-on the path in the first place.
+Also confirms the workbench package and its GUI-registration module import
+cleanly (`test_init_gui_imports_cleanly`), since nothing else here imports
+either as a side effect. The rest builds a closed unit in a real FreeCAD
+document, reads it with ``read_container``, scans it, and asserts the
+geometry, the region tree, and the container's-own-frame and
+solid-classification rules a unit test cannot exercise without FreeCAD.
 """
 
 import math
-import os
-import sys
+from collections.abc import Iterator
+from typing import Protocol, cast
 
-# Not an `if __name__ == "__main__":` guard: freecadcmd sets a run script's
-# __name__ to its filename stem, not "__main__" (verified directly), so that
-# guard would silently never fire and this file would exit 0 having checked
-# nothing. An unconditional call has a different problem: pytest.main() has
-# to import this same file again to collect it, and that reimport also
-# reaches this block, recursing (confirmed) and corrupting pytest's own
-# collection. The environment variable survives across that reimport within
-# the one process, so it is what breaks the recursion. The block sits above
-# every FreeCAD and workbench import because freecadcmd exits 0 on an
-# uncaught exception: an import failure here would pass silently, while
-# inside pytest's collection it is an error with a failing status.
-if os.environ.get("_FREECAD_SCAN_SMOKE_RUNNING") != "1":
-    os.environ["_FREECAD_SCAN_SMOKE_RUNNING"] = "1"
-    import pytest
+import FreeCAD
+import Part
+import pytest
 
-    _exit_code = pytest.main([__file__, "-v"])
-    # freecadcmd's process teardown does not flush Python's stdout the way a
-    # normal interpreter shutdown does, so pytest's own report (in
-    # particular the FAILURES section) is silently lost without an explicit
-    # flush before sys.exit: confirmed by testing with and without it.
-    sys.stdout.flush()
-    sys.exit(_exit_code)
-
-from collections.abc import Iterator  # noqa: E402
-from typing import Protocol, cast  # noqa: E402
-
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _REPO_ROOT not in sys.path:
-    sys.path.insert(0, _REPO_ROOT)
-
-import FreeCAD  # noqa: E402
-import Part  # noqa: E402
-import pytest  # noqa: E402
-
-from freecad.Shelving.commands.export_boxes import ExportBoxesCommand  # noqa: E402
-from freecad.Shelving.commands.scan import ScanCommand  # noqa: E402
-from freecad.Shelving.container import read_container  # noqa: E402
-from freecad.Shelving.core.geometry import Vec3  # noqa: E402
-from freecad.Shelving.core.layout import (  # noqa: E402
+from freecad.Shelving.commands.export_boxes import ExportBoxesCommand
+from freecad.Shelving.commands.scan import ScanCommand
+from freecad.Shelving.container import read_container
+from freecad.Shelving.core.geometry import Vec3
+from freecad.Shelving.core.layout import (
     Bay,
     Board,
     Division,
     Region,
 )
-from freecad.Shelving.core.scan import (  # noqa: E402
+from freecad.Shelving.core.scan import (
     Box,
     ScanError,
     detect_depth_axis,
     scan,
 )
-from freecad.Shelving.default_catalog import DEFAULT_CATALOG  # noqa: E402
-from freecad.Shelving.unit_ops import create_unit, resize_unit  # noqa: E402
+from freecad.Shelving.default_catalog import DEFAULT_CATALOG
+from freecad.Shelving.unit_ops import create_unit, resize_unit
 
 _TOL_MM = 1e-6
 _THICKNESS_MM = 18.0
@@ -271,10 +216,10 @@ def test_init_gui_imports_cleanly() -> None:
     nothing else here imports as a side effect: `commands.scan` and
     `commands.export_boxes` (imported at module level above) do not import
     it, and it does not import them except deferred inside `Initialize`,
-    which a headless run never calls. `import FreeCADGui` under
-    `freecadcmd` returns a stub without `Workbench`
-    (docs/freecadcmd-notes.md), so this also covers that the module's own
-    guard drops to a plain-`object` base instead of raising."""
+    which a headless run never calls. Without FreeCAD's GUI, `import
+    FreeCADGui` returns a stub without `Workbench`
+    (.claude/docs/freecad-notes.md), so this also covers that the module's
+    own guard drops to a plain-`object` base instead of raising."""
     import freecad.Shelving.init_gui  # noqa: F401
 
 

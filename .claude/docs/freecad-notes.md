@@ -1,9 +1,29 @@
-# Writing `freecadcmd` headless scripts
+# FreeCAD runtime notes
 
-`freecadcmd` runs a Python script inside a FreeCAD interpreter with no GUI.
-`pixi run tests` uses it for `tools/freecad_scan_smoke.py`. Several of its
-behaviors differ from a plain `python script.py` run; most are handled in
-the code cited below.
+FreeCAD behaviours this repo's tests and code depend on, each verified
+directly. The pytest suites in `tests/freecad/` and `tests/freecad_gui/`
+import FreeCAD as a library from plain Python (the next section);
+`freecadcmd` runs only `tools/freecadcmd_import_check.py`, which covers the
+startup path that library import skips.
+
+## Plain Python reaches FreeCAD through `import freecad`
+
+The conda-forge FreeCAD package ships its own `freecad` Python package.
+Importing it loads FreeCAD's libraries, after which `import FreeCAD`,
+`import Part` and `import FreeCADGui` work from plain Python in the pixi
+environment, with `FreeCAD.GuiUp` 0 (verified on 1.0.0 and 1.1.3). The
+FreeCAD tests run this way: each test directory's `conftest.py` imports it
+before any test module does, and the headless suites run in about half a
+second with none of `freecadcmd`'s console noise. For the GUI,
+`tests/freecad_gui/conftest.py` creates the `QApplication` and calls
+`FreeCADGui.showMainWindow()` under `QT_QPA_PLATFORM=offscreen`; the
+process then exits normally when pytest finishes. Either way FreeCAD must
+first be pointed at throwaway settings, because it reads their location
+only at startup (`tests/freecad_env.py`, and the two FreeCAD 1.1
+sections below).
+
+What this import does not do is FreeCAD's own startup: add-on discovery
+and the frozen `freecad` namespace path described below.
 
 ## Only an uncaught exception discards the exit status
 
@@ -13,11 +33,9 @@ failure code. Both `sys.exit(N)` and `os._exit(N)` are unaffected and
 propagate `N` as the real process exit status (verified directly: both
 were tested against this repo's pinned FreeCAD 1.0.0 build).
 
-`tools/freecad_scan_smoke.py` uses this directly: it is a real pytest
-module (see the next two sections) whose trailing
-`sys.exit(pytest.main([...]))` makes the process exit status itself the
-pass/fail signal, so `tools/run-tests.sh` checks that directly rather than
-grepping captured output for a marker line.
+`tools/freecadcmd_import_check.py` therefore catches every failure itself
+and ends in `sys.exit` with its own status, which `tools/run-tests.sh`
+checks directly.
 
 ## A run script's `__name__` is its filename stem, not `"__main__"`
 
@@ -29,68 +47,19 @@ script silently never fires: the guarded code never runs, and the script
 still exits 0, having done nothing past defining whatever came before the
 guard.
 
-Consequence for `tools/freecad_scan_smoke.py`, which self-invokes pytest
-(see the next section): its entry point runs unconditionally at module
-level, with no `__name__` guard of any kind, for exactly this reason.
-
-## A self-invoking pytest module must guard against collecting itself
-
-A `freecadcmd` script that turns around and calls
-`pytest.main([__file__, ...])` on itself, to get real pytest reporting
-instead of a hand-rolled assert-and-marker script, has to stop that call
-from running a second time: pytest's own collection re-imports the target
-file by path to find its `test_*` functions, and since that reimport
-executes the file's top level again, an unconditional `pytest.main(...)`
-call reached a second time inside that reimport starts a nested pytest
-session recursively (confirmed). The nested `sys.exit` corrupts the outer
-collection with an `INTERNALERROR`. An `if __name__ ==
-"__main__":` guard cannot fix this either, per the previous section, and
-would not help even if it worked: pytest's reimport does not reliably set
-`__name__` to a different value than the original run did.
-
-`tools/freecad_scan_smoke.py` breaks the cycle with an environment
-variable set just before the real `pytest.main()` call: the variable
-survives the reimport within the one process, so the second entry into
-that code path sees it already set and skips calling `pytest.main()`
-again.
-
-The block belongs above every FreeCAD and workbench import, not at the
-bottom of the file. `freecadcmd` exits 0 on an uncaught exception (see
-above), so an exception raised while importing before `pytest.main()` runs
-passes silently. Inside pytest's collection the same failure is a
-collection error with a nonzero status.
+Consequence for `tools/freecadcmd_import_check.py`: its call to `main()`
+and its `sys.exit` run unconditionally at module level, with no
+`__name__` guard.
 
 ## `freecadcmd`'s own stdout buffering can hide a script's last output
 
 A `freecadcmd` script's process teardown does not flush Python's stdout
 buffer the way a normal interpreter shutdown does. Output written just
-before the script's final `sys.exit(N)` can be silently lost, including an
-entire pytest `FAILURES` section with the actual traceback (confirmed:
+before the script's final `sys.exit(N)` can be silently lost, tracebacks
+included (confirmed:
 reproduced with and without an explicit flush). Call `sys.stdout.flush()`
 immediately before any exit call that ends a `freecadcmd` script, not just
 on the success path.
-
-## The recompute progress bar cannot be suppressed or made to interleave
-
-`doc.recompute()` writes `Recompute......` progress text through a channel
-that bypasses both Python-level and OS-level output control: neither
-`contextlib.redirect_stdout`, nor `os.dup2` on file descriptors 1 and 2
-around the call, nor `sys.stdout.reconfigure(line_buffering=True)` changes
-when or whether it appears (all confirmed directly). It reliably shows up
-in one block after a script's own output, not interleaved with it,
-regardless of how many separate `recompute()` calls happened. A script
-that wants to correlate a failure with which of several recompute-heavy
-steps was in progress has to rely on naming those steps in its own output
-(a pytest test name, in `tools/freecad_scan_smoke.py`'s case) rather than
-trying to align them against the progress bar's own position in the
-combined output.
-
-Its last write ends in a bare `\r` with no trailing `\n` (confirmed
-byte-for-byte), so the cursor sits at column 0 of that same line rather
-than moving to a new one. Whatever prints next, a shell prompt included,
-lands on top of it. This looks like output arriving after the process has
-already exited, but it is a cursor-position artifact from a missing final
-newline.
 
 ## FreeCAD freezes the `freecad` namespace package's `__path__`
 
@@ -126,7 +95,8 @@ that diagnostic; see its module docstring.
 
 ## `import FreeCADGui` returns a stub that lacks `Workbench`
 
-Under `freecadcmd` there is no GUI, but `import FreeCADGui` still succeeds.
+Under `freecadcmd`, or in plain Python with FreeCAD imported but no GUI
+started (verified on 1.1.3), `import FreeCADGui` still succeeds.
 It returns a stub module with no `ImportError` raised, and that stub does
 not define `Workbench`. An `except ImportError` guard alone is therefore
 not enough to protect GUI-only code: the import passes and the
@@ -137,8 +107,9 @@ not enough to protect GUI-only code: the import passes and the
 See `freecad/Shelving/init_gui.py`, which catches `ImportError` and, on the
 success path, drops `Gui` to `None` when `hasattr(Gui, "Workbench")` is
 false so the workbench base class and the `addWorkbench` call are skipped.
-`tools/freecad_scan_smoke.py`'s `test_init_gui_imports_cleanly` is what
-exercises this: nothing else imports `init_gui.py` as a side effect.
+`tools/freecadcmd_import_check.py` exercises this under `freecadcmd`, and
+`tests/freecad/test_scan.py`'s `test_init_gui_imports_cleanly` imports the
+module from plain Python too.
 
 ## `App::Part` does not call a Python `Proxy.execute`
 
@@ -197,33 +168,32 @@ does this for that reason.
 
 ## A `DocumentObject`'s `ViewObject` is `None`
 
-FreeCAD 1.0.0 under `freecadcmd` gives every `DocumentObject` a `ViewObject`
-attribute of `None` rather than omitting it or raising (verified directly on
-a freshly created `Part::Box`). There is no 3D view for a `ViewObjectPy` to
+Without the GUI, FreeCAD gives every `DocumentObject` a `ViewObject`
+attribute of `None` rather than omitting it or raising (verified on a
+freshly created `Part::Box`: on 1.0.0 under `freecadcmd`, and on 1.1.3 in
+plain Python). There is no 3D view for a `ViewObjectPy` to
 represent, so nothing headless can read or write view-only state such as
 `ShapeColor`.
 
-Consequence: a headless `freecadcmd` pytest module cannot assert that a
-colour survives an operation; that case has to stay in `docs/manual-qa.md`
-instead (`tools/freecad_write_smoke.py`'s resize test does the same check
-for `Label`, which is ordinary `DocumentObject` state and unaffected).
+Consequence: a headless test cannot assert that a colour survives an
+operation; that case has to stay in `docs/manual-qa.md` instead
+(`tests/freecad/test_write.py`'s resize test does the same check for
+`Label`, which is ordinary `DocumentObject` state and unaffected).
 
 ## GUI-only widget access: `Gui::QuantitySpinBox`
 
-`FreeCADGui.UiLoader` does not exist under `freecadcmd`, but the full GUI
-binary runs headless with `QT_QPA_PLATFORM=offscreen pixi run freecad
-script.py`, which is how the following was verified against FreeCAD 1.0.0
-and again against 1.1.3. On 1.1 that command also needs the throwaway XDG
-directories and preferences that `tools/run-tests.sh` sets up, or startup
-never finishes (the next two sections). The GUI keeps running after a script returns or raises, so the
-process hangs. `sys.exit(N)` does end it, but once the script has opened a
-document the process exits 1 whatever `N` is (a bare `sys.exit(3)` with
-no document exits 3). A script must therefore end in `os._exit(status)`.
-The GUI also routes `sys.stdout` to its Report view.
-`tools/freecad_panel_smoke.py` handles all three problems: it self-invokes
-pytest before importing anything from FreeCAD, points `sys.stdout` and
-`sys.stderr` back at `sys.__stdout__` and `sys.__stderr__`, and ends in
-`os._exit` with pytest's status from a `finally`.
+`FreeCADGui.UiLoader` exists only once the GUI is up: in tests, under
+`tests/freecad_gui/conftest.py` (the first section). The following was
+verified against FreeCAD 1.0.0 and again against 1.1.3.
+
+A one-off script can also run under the GUI binary, as
+`QT_QPA_PLATFORM=offscreen pixi run freecad script.py`, given the
+throwaway settings from the two FreeCAD 1.1 sections below. The GUI keeps
+running after such a script returns or raises, so the process hangs.
+`sys.exit(N)` does end it, but once the script has opened a document the
+process exits 1 whatever `N` is (a bare `sys.exit(3)` with no document
+exits 3), so the script must end in `os._exit(status)`. The GUI also routes
+`sys.stdout` to its Report view; write to `sys.__stderr__` to see output.
 
 - `FreeCADGui.UiLoader().createWidget("Gui::QuantitySpinBox")` returns a
   working widget. PySide6 sees it as a `QAbstractSpinBox`, so its
@@ -288,9 +258,10 @@ thread then waits on that mutex forever (verified on 1.1.3 with `eu-stack`:
 the system and conda-forge `gdb` both fail on this VM with "Unable to fetch
 SVE/SSVE vector length"). The same happens under Xvfb. Setting
 `BaseApp/Preferences/NotificationArea/NonIntrusiveNotificationsEnabled` to
-false avoids it, which `tools/freecad-test-user.cfg` does for test runs;
-notifications still reach the Notification Area and the Report view, only
-without a popup.
+false avoids it. `tools/freecad-test-user.cfg` sets it, and both
+`tests/freecad_env.py` and `tools/run-tests.sh` install that file into
+the throwaway settings every FreeCAD test run uses. Notifications still
+reach the Notification Area and the Report view, only without a popup.
 
 ## User-facing errors: the Notification Area
 

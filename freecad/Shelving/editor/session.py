@@ -67,7 +67,7 @@ class _Labelled(Protocol):
 
 
 # The Length property on the session's probe object that the panel's
-# dimension field binds to (docs/freecadcmd-notes.md, "GUI-only widget
+# dimension field binds to (.claude/docs/freecad-notes.md, "GUI-only widget
 # access").
 PROBE_PROPERTY = "Dimension"
 

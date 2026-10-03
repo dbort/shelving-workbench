@@ -89,7 +89,7 @@ the log happens only when the user asks.
   geometry; the underlying gap is untouched. Round 4 found that this
   narrowing also refuses the default `Shelving_CreateUnit` shape
   (`Bottom, Division[Left, Bay, Right], Top`) after a catalog thickness
-  edit, failing `tools/freecad_catalog_smoke.py`'s two reflow tests:
+  edit, failing `tests/freecad/test_catalog.py`'s two reflow tests:
   Bottom/Top's only sibling is the inner `Division`, with its `Bay` one
   level down. That shape has no same-axis descendant, so round 3's
   recursive freeze did pass there; adding a shelf to the default unit

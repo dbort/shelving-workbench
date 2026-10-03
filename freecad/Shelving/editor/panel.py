@@ -9,7 +9,7 @@ threshold, reporting only a changed size, never applying text the quantity
 widget rejects (consuming its Return, restoring the shown value when focus
 leaves), reporting only a drag's first failure, and keeping checked items
 across a redraw. ``FreeCADGui.Control`` does not exist under ``freecadcmd``, so
-:mod:`tools.freecad_panel_smoke` exercises this module under the offscreen
+:mod:`tests.freecad_gui.test_panel` exercises this module under the offscreen
 GUI instead.
 
 The dimension field is FreeCAD's own ``Gui::QuantitySpinBox``, so it
@@ -27,6 +27,7 @@ from typing import Protocol, cast
 import FreeCAD
 import FreeCADGui
 from PySide6 import QtCore, QtGui, QtWidgets
+from shiboken6 import Shiboken
 
 from freecad.Shelving.core.layout import Basis
 from freecad.Shelving.debug_log import Stopwatch
@@ -40,7 +41,7 @@ from freecad.Shelving.editor.session import (
 
 # freecad-stubs declares UiLoader.createWidget without parameters and
 # ExpressionBinding with no methods at all, so these Protocols state the
-# signatures docs/freecadcmd-notes.md verified.
+# signatures .claude/docs/freecad-notes.md verified.
 
 
 class _UiLoader(Protocol):
@@ -195,14 +196,23 @@ class _DimensionField:
             return True
         return bool(self.quantity_widget.property("acceptableInput"))
 
+    def _alive(self) -> bool:
+        """Whether the field's widget still exists. Qt sends focus-out and
+        ``editingFinished`` while it destroys the widget, when the panel
+        closes or the application exits, after the widget is already
+        unusable from Python."""
+        return Shiboken.isValid(self.widget) and Shiboken.isValid(self.line_edit)
+
     def _discard_unreadable(self) -> None:
         """Put the last shown value back before the widget handles a
         focus-out. Left alone, the widget settles on whatever a prefix of the
         unreadable text resolved to and reports that as a finished edit."""
-        if not self._acceptable():
+        if self._alive() and not self._acceptable():
             self.show_mm(self._shown_mm)
 
     def _finished(self) -> None:
+        if not self._alive():
+            return
         if self.quantity_widget is not None:
             # While the text is unacceptable, rawValue still holds the last
             # value some prefix of it resolved to (12 mm for 12 1/2").

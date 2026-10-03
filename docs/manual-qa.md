@@ -4,10 +4,11 @@ A living catalog of checks a human runs in the FreeCAD GUI. Some behavior has no
 headless assertion yet: property-editor reflow, toolbar and menu wiring, and
 tree presentation only exist once a real `FreeCADGui` is running.
 
-Every case here is a candidate for automation. When a headless path to a check
-becomes possible, move it into the relevant headless `freecadcmd` pytest
-module under `tools/` (run by `pixi run tests`) and delete it from this file.
-`tools/freecad_scan_smoke.py` is the module for scanning; other milestones
+Every case here is a candidate for automation. When an automated path to a
+check becomes possible, move it into the relevant pytest module under
+`tests/freecad/` (headless) or `tests/freecad_gui/` (GUI up), both run by
+`pixi run tests`, and delete it from this file.
+`tests/freecad/test_scan.py` is the module for scanning; other milestones
 add their own modules as they need them. The commit history keeps the
 record; this file tracks only what still needs a human.
 
@@ -83,7 +84,7 @@ def add_box(name, size_mm, corner_mm, angle_deg=0.0):
 
 
 # A closed 600 x 600 x 300 mm shell with one shelf, the same geometry
-# tools/freecad_scan_smoke.py's _build_shell builds and asserts against.
+# tests/freecad/test_scan.py's _build_shell builds and asserts against.
 add_box("Bottom", (600.0, 300.0, 18.0), (0.0, 0.0, 0.0))
 add_box("Top", (600.0, 300.0, 18.0), (0.0, 0.0, 582.0))
 add_box("LeftSide", (18.0, 300.0, 564.0), (0.0, 0.0, 18.0))
@@ -130,7 +131,7 @@ complete, enclosed unit on its own. This case exercises that path, not a
 refusal: case 4 below is the refusal.
 
 1. With **TestUnit** still selected in the tree, paste into the Python
-   console (the same "Skewed" part `tools/freecad_scan_smoke.py` asserts
+   console (the same "Skewed" part `tests/freecad/test_scan.py` asserts
    is skipped, so its expected reason is known ahead of time):
    ```python
    add_box("Skewed", (100.0, 50.0, 20.0), (0.0, 400.0, 0.0), angle_deg=30.0)
@@ -280,7 +281,7 @@ hand first: running Resize Unit (or Scan Unit) is what corrects it.
    whole scan rather than reading this one object as unrelated. Thinnest
    along `y` (this unit's depth axis) also keeps it out of thickness/material
    matching, the same way this case's automated counterpart
-   (`tools/freecad_write_smoke.py`'s `BackPanel`) does it:
+   (`tests/freecad/test_write.py`'s `BackPanel`) does it:
    ```python
    doc = App.ActiveDocument
    part = doc.getObject("ShelvingUnit")

@@ -1,15 +1,15 @@
 """Plain functions behind the create/resize/rescan/reflow commands.
 
 Kept out of the command classes, not merely called by them, so
-``tools/freecad_write_smoke.py`` can call each operation directly without
-going through ``Gui``: command modules are guarded from import under
-``freecadcmd`` (see ``freecad/Shelving/init_gui.py``), and testing the
-actual behavior through that guard would mean the smoke never runs
-headless. Each of ``create_unit``, ``resize_unit``, and ``rescan_unit``
-calls ``freecad.Shelving.container.write_container`` exactly once and
-returns its ``WriteResult`` so a caller (a command's ``Activated``, or a
-test) can report what happened; ``reflow_all`` calls ``rescan_unit`` once
-per tagged container and collects the results.
+``tests/freecad/test_write.py`` can call each operation directly without
+going through ``Gui``: the commands register only where FreeCAD's GUI does
+(see ``freecad/Shelving/init_gui.py``), and testing the behavior only
+through them would mean it is never tested headless. Each of
+``create_unit``, ``resize_unit``, and ``rescan_unit`` calls
+``freecad.Shelving.container.write_container`` exactly once and returns its
+``WriteResult`` so a caller (a command's ``Activated``, or a test) can
+report what happened; ``reflow_all`` calls ``rescan_unit`` once per tagged
+container and collects the results.
 
 ``resize_unit`` and ``rescan_unit`` never cache a model between calls: both
 start from :func:`_rescanned_unit`, which reads the container fresh and

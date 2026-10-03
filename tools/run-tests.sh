@@ -35,13 +35,13 @@ ruff check .
 ruff format --check .
 mypy
 shellcheck tools/*.sh
-pytest freecad/Shelving/core tests
+pytest freecad/Shelving/core tests --ignore=tests/freecad --ignore=tests/freecad_gui
 bash tools/lint-workflows.sh
 
-# FreeCAD runs against throwaway XDG directories. With a developer's real
-# ones, FreeCAD 1.1 offers to migrate older settings in a modal dialog no
-# headless run can answer, and tests should not touch real settings
-# anyway. The v1-1 directory name follows FreeCAD's minor version.
+# freecadcmd runs against throwaway XDG directories so it never touches a
+# developer's real FreeCAD settings; the two pytest directories below set up
+# their own the same way (tests/freecad_env.py). The v1-1 directory
+# name follows FreeCAD's minor version.
 freecad_dirs="$(mktemp -d)"
 trap 'rm -rf "$freecad_dirs"' EXIT
 mkdir -p "$freecad_dirs/config/FreeCAD/v1-1"
@@ -50,59 +50,11 @@ export XDG_CONFIG_HOME="$freecad_dirs/config"
 export XDG_DATA_HOME="$freecad_dirs/data"
 export XDG_CACHE_HOME="$freecad_dirs/cache"
 
-# freecad_scan_smoke.py is a real pytest module that calls sys.exit on its
-# own pass/fail status (docs/freecadcmd-notes.md), so its exit code is
-# trustworthy; no output-grepping needed. The header line separates it
-# from the checks above: freecadcmd's C++ banner and recompute progress
-# interleave with the script's own stdout, so without a header the
-# captured blobs are hard to tell apart.
-printf '== %s\n' freecad_scan_smoke.py
-scan_smoke_status=0
-freecadcmd tools/freecad_scan_smoke.py || scan_smoke_status=$?
-# The recompute progress bar's last write ends in a bare carriage return
-# with no newline (docs/freecadcmd-notes.md), so without this, whatever
-# prints next lands on the same line. Unconditional and before the status
-# check, so the failure message below never inherits it either.
-printf '\n'
-if [ "$scan_smoke_status" -ne 0 ]; then
-	echo "ERROR: freecad_scan_smoke.py failed (see output above)." >&2
-	exit 1
-fi
+printf '== %s\n' freecadcmd_import_check.py
+freecadcmd tools/freecadcmd_import_check.py
 
-printf '== %s\n' freecad_write_smoke.py
-write_smoke_status=0
-freecadcmd tools/freecad_write_smoke.py || write_smoke_status=$?
-printf '\n'
-if [ "$write_smoke_status" -ne 0 ]; then
-	echo "ERROR: freecad_write_smoke.py failed (see output above)." >&2
-	exit 1
-fi
-
-printf '== %s\n' freecad_catalog_smoke.py
-catalog_smoke_status=0
-freecadcmd tools/freecad_catalog_smoke.py || catalog_smoke_status=$?
-printf '\n'
-if [ "$catalog_smoke_status" -ne 0 ]; then
-	echo "ERROR: freecad_catalog_smoke.py failed (see output above)." >&2
-	exit 1
-fi
-
-printf '== %s\n' freecad_editor_smoke.py
-editor_smoke_status=0
-freecadcmd tools/freecad_editor_smoke.py || editor_smoke_status=$?
-printf '\n'
-if [ "$editor_smoke_status" -ne 0 ]; then
-	echo "ERROR: freecad_editor_smoke.py failed (see output above)." >&2
-	exit 1
-fi
-
-# The panel's quantity field exists only in the full GUI, so this smoke runs
-# under `freecad` on Qt's offscreen platform rather than `freecadcmd`; it
-# ends in os._exit with pytest's status.
-printf '== %s\n' freecad_panel_smoke.py
-panel_smoke_status=0
-QT_QPA_PLATFORM=offscreen freecad tools/freecad_panel_smoke.py || panel_smoke_status=$?
-if [ "$panel_smoke_status" -ne 0 ]; then
-	echo "ERROR: freecad_panel_smoke.py failed (see output above)." >&2
-	exit 1
-fi
+# Separate processes: a running GUI changes headless FreeCAD's behaviour.
+printf '== %s\n' tests/freecad
+pytest tests/freecad
+printf '== %s\n' tests/freecad_gui
+QT_QPA_PLATFORM=offscreen pytest tests/freecad_gui

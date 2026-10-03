@@ -1,55 +1,27 @@
-"""Offscreen-GUI check for the elevation editor's task panel.
+"""The elevation editor's task panel, with FreeCAD's GUI up.
 
-A self-invoking pytest module, like ``tools/freecad_scan_smoke.py``, but run
-under ``QT_QPA_PLATFORM=offscreen freecad`` rather than ``freecadcmd``:
 ``FreeCADGui.UiLoader``, and with it the ``Gui::QuantitySpinBox`` the
-dimension field is built from, exists only in the full GUI
-(``docs/freecadcmd-notes.md``, "GUI-only widget access").
+dimension field is built from, exists only once the GUI is running, which
+this directory's ``conftest.py`` arranges (``.claude/docs/freecad-notes.md``,
+"GUI-only widget access").
 
 ``EditUnitPanel`` is built directly rather than through
 ``FreeCADGui.Control.showDialog``: the task dialog machinery adds nothing
-this check asserts.
+these tests assert.
 """
 
-import os
 import sys
+from collections.abc import Iterator
+from types import TracebackType
+from typing import cast
 
-# The self-invocation comes before any FreeCAD import, so a module that
-# fails to import is a pytest collection error with a failing status rather
-# than an exception the GUI swallows while it keeps running forever. The
-# environment variable stops pytest's own reimport of this file from
-# recursing (docs/freecadcmd-notes.md). The GUI routes sys.stdout to its
-# Report view, so the report goes to the process's own streams, and once a
-# document has been opened sys.exit reports 1 whatever its argument, so the
-# run ends in os._exit with pytest's status.
-if os.environ.get("_FREECAD_PANEL_SMOKE_RUNNING") != "1":
-    os.environ["_FREECAD_PANEL_SMOKE_RUNNING"] = "1"
-    _exit_code = 1
-    try:
-        import pytest
+import FreeCAD
+import FreeCADGui
+import pytest
+from PySide6 import QtCore, QtGui, QtTest, QtWidgets
+from shiboken6 import Shiboken
 
-        if sys.__stdout__ is not None and sys.__stderr__ is not None:
-            sys.stdout = sys.__stdout__
-            sys.stderr = sys.__stderr__
-        _exit_code = pytest.main([__file__, "-v"])
-    finally:
-        sys.stdout.flush()
-        sys.stderr.flush()
-        os._exit(_exit_code)
-
-from collections.abc import Iterator  # noqa: E402
-from typing import cast  # noqa: E402
-
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _REPO_ROOT not in sys.path:
-    sys.path.insert(0, _REPO_ROOT)
-
-import FreeCAD  # noqa: E402
-import FreeCADGui  # noqa: E402
-import pytest  # noqa: E402
-from PySide6 import QtCore, QtGui, QtTest, QtWidgets  # noqa: E402
-
-from freecad.Shelving.core.layout import (  # noqa: E402
+from freecad.Shelving.core.layout import (
     Basis,
     Bay,
     Board,
@@ -59,10 +31,10 @@ from freecad.Shelving.core.layout import (  # noqa: E402
     Region,
     SizeRule,
 )
-from freecad.Shelving.editor import panel as panel_module  # noqa: E402
-from freecad.Shelving.editor.panel import AncestorWatch, EditUnitPanel  # noqa: E402
-from freecad.Shelving.editor.session import PROBE_PROPERTY, Session  # noqa: E402
-from freecad.Shelving.unit_ops import create_unit  # noqa: E402
+from freecad.Shelving.editor import panel as panel_module
+from freecad.Shelving.editor.panel import AncestorWatch, EditUnitPanel
+from freecad.Shelving.editor.session import PROBE_PROPERTY, Session
+from freecad.Shelving.unit_ops import create_unit
 
 _TOL_MM = 1e-6
 
@@ -375,7 +347,7 @@ def test_the_plain_field_fallback(
         assert fixture.panel.size_field.quantity_widget is None
         fixture.select(fixture.lower)
         # parseQuantity reads this as 38.10 mm, where the quantity widget
-        # reads the bare 1 as millimetres (docs/freecadcmd-notes.md).
+        # reads the bare 1 as millimetres (.claude/docs/freecad-notes.md).
         fixture.type_size('1 + 1/2"')
         rule = fixture.rule(fixture.lower)
         assert isinstance(rule, Fixed)
@@ -530,3 +502,41 @@ def test_a_split_refusal_names_no_region_id(
     (message,) = reported
     assert "too small" in message, message
     assert unit_panel.lower not in message
+
+
+def test_a_destroyed_field_ignores_late_events(
+    unit_panel: _Fixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Closing the task panel deletes its form, and Qt can still deliver a
+    focus-out or ``editingFinished`` to the size field's callbacks during or
+    after that. They must do nothing rather than touch the deleted widget,
+    whose errors PySide6 would report through ``sys.excepthook`` (or, from
+    a finalizer, ``sys.unraisablehook``)."""
+    errors: list[BaseException] = []
+
+    def record(
+        kind: type[BaseException],
+        value: BaseException,
+        traceback: TracebackType | None,
+    ) -> None:
+        errors.append(value)
+
+    def record_unraisable(unraisable: "sys.UnraisableHookArgs") -> None:
+        if unraisable.exc_value is not None:
+            errors.append(unraisable.exc_value)
+
+    monkeypatch.setattr(sys, "excepthook", record)
+    monkeypatch.setattr(sys, "unraisablehook", record_unraisable)
+    field = unit_panel.panel.size_field
+    unit_panel.select(unit_panel.lower)
+    field.line_edit.setFocus()
+    # Unreadable text, so a late focus-out would try to restore the value.
+    QtTest.QTest.keyClicks(field.line_edit, '12 1/2"')
+    Shiboken.delete(unit_panel.panel.form)
+    _process_events()
+    assert not Shiboken.isValid(field.widget)
+
+    field._discard_unreadable()
+    field._finished()
+    _process_events()
+    assert errors == []
