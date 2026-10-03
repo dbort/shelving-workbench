@@ -130,10 +130,10 @@ simple: `tools/run-tests.sh` loses its per-smoke blocks and only gets
 simpler.
 
 ## Plan
-- [ ] **Step 1** (`tests/freecad/conftest.py`, `tests/freecad/test_*.py`): Move the scan, write, catalog and editor smokes' tests in as plain pytest modules, with the isolated settings and the bootstrap in the conftest and every self-invoke block, guard and flush removed. They pass under `pixi run pytest tests/freecad`.
-- [ ] **Step 2** (`tests/freecad_gui/conftest.py`, `tests/freecad_gui/test_*.py`): Move the panel smoke in, with the isolated settings and the embedded offscreen GUI in the conftest and the stdout redirect and `os._exit` removed. It passes under `QT_QPA_PLATFORM=offscreen pixi run pytest tests/freecad_gui`, run directly, and exits cleanly.
-- [ ] **Step 3** (`tools/`): Add the `freecadcmd` import check script and delete the five old smokes.
-- [ ] **Step 4** (`tools/run-tests.sh`): Run the core suite excluding the two new directories, then the import check, `pytest tests/freecad`, and the offscreen `pytest tests/freecad_gui`, each failing the run on a non-zero status. Verify the hand checks in Must Have (an import error fails fast, no `Recompute` lines).
+- [x] **Step 1** (`tests/freecad/conftest.py`, `tests/freecad/test_*.py`): Move the scan, write, catalog and editor smokes' tests in as plain pytest modules, with the isolated settings and the bootstrap in the conftest and every self-invoke block, guard and flush removed. They pass under `pixi run pytest tests/freecad`.
+- [x] **Step 2** (`tests/freecad_gui/conftest.py`, `tests/freecad_gui/test_*.py`): Move the panel smoke in, with the isolated settings and the embedded offscreen GUI in the conftest and the stdout redirect and `os._exit` removed. It passes under `QT_QPA_PLATFORM=offscreen pixi run pytest tests/freecad_gui`, run directly, and exits cleanly.
+- [x] **Step 3** (`tools/`): Add the `freecadcmd` import check script and delete the five old smokes.
+- [x] **Step 4** (`tools/run-tests.sh`): Run the core suite excluding the two new directories, then the import check, `pytest tests/freecad`, and the offscreen `pytest tests/freecad_gui`, each failing the run on a non-zero status. Verify the hand checks in Must Have (an import error fails fast, no `Recompute` lines).
 - [ ] **Step 5** (`.claude/docs/freecad-notes.md`, every referencing file): Move and trim the notes, update every live reference listed in Advice, and delete friction-021 (the progress-bar noise this task removes).
 
 ## Review log

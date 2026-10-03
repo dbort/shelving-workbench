@@ -1,13 +1,6 @@
-"""Headless functional check for the write path: create, rescan, resize,
-and the identity/provenance/label rules that make repeated applies safe.
-
-A real pytest module, not a hand-rolled assert-and-marker script, for the
-same reasons ``tools/freecad_scan_smoke.py`` is one; see that module's
-docstring for the ``freecadcmd`` mechanics (self-invoking ``pytest.main``,
-the recursion guard, the ``sys.stdout.flush()`` before ``sys.exit``, why
-``if __name__ == "__main__":`` does not work here) rather than repeating
-them, and ``docs/freecadcmd-notes.md`` for the underlying findings both
-modules rely on.
+"""The write path against a real FreeCAD document: create, rescan, resize,
+and the identity, provenance and label rules that make repeated applies
+safe.
 
 Each scenario below builds its own document rather than sharing one across
 the whole file: the cases cover enough structurally different starting
@@ -18,39 +11,21 @@ side effects of every test before it, which is harder to read than one
 document per scenario is to afford.
 """
 
-import os
-import sys
+import zipfile
+from collections.abc import Iterator
+from pathlib import Path
+from typing import Protocol, cast
 
-# See tools/freecad_scan_smoke.py's matching block for why this is neither
-# an `if __name__ == "__main__":` guard nor an unconditional call, and why it
-# precedes every FreeCAD import.
-if os.environ.get("_FREECAD_WRITE_SMOKE_RUNNING") != "1":
-    os.environ["_FREECAD_WRITE_SMOKE_RUNNING"] = "1"
-    import pytest
+import FreeCAD
+import Part
+import pytest
 
-    _exit_code = pytest.main([__file__, "-v"])
-    sys.stdout.flush()
-    sys.exit(_exit_code)
-
-import zipfile  # noqa: E402
-from collections.abc import Iterator  # noqa: E402
-from pathlib import Path  # noqa: E402
-from typing import Protocol, cast  # noqa: E402
-
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _REPO_ROOT not in sys.path:
-    sys.path.insert(0, _REPO_ROOT)
-
-import FreeCAD  # noqa: E402
-import Part  # noqa: E402
-import pytest  # noqa: E402
-
-from freecad.Shelving import properties  # noqa: E402
-from freecad.Shelving.commands.create_unit import CreateUnitCommand  # noqa: E402
-from freecad.Shelving.commands.resize_unit import ResizeUnitCommand  # noqa: E402
-from freecad.Shelving.container import read_container, write_container  # noqa: E402
-from freecad.Shelving.core.geometry import Vec3  # noqa: E402
-from freecad.Shelving.core.layout import (  # noqa: E402
+from freecad.Shelving import properties
+from freecad.Shelving.commands.create_unit import CreateUnitCommand
+from freecad.Shelving.commands.resize_unit import ResizeUnitCommand
+from freecad.Shelving.container import read_container, write_container
+from freecad.Shelving.core.geometry import Vec3
+from freecad.Shelving.core.layout import (
     Axis,
     Bay,
     Board,
@@ -58,12 +33,12 @@ from freecad.Shelving.core.layout import (  # noqa: E402
     Fixed,
     Unit,
 )
-from freecad.Shelving.core.materials import MaterialId  # noqa: E402
-from freecad.Shelving.default_catalog import (  # noqa: E402
+from freecad.Shelving.core.materials import MaterialId
+from freecad.Shelving.default_catalog import (
     DEFAULT_CATALOG,
     DEFAULT_MATERIAL_ID,
 )
-from freecad.Shelving.unit_ops import (  # noqa: E402
+from freecad.Shelving.unit_ops import (
     create_unit,
     rescan_unit,
     resize_unit,

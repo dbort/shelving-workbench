@@ -1,48 +1,24 @@
-"""Headless functional check for the elevation editor's session.
+"""The elevation editor's session against a real FreeCAD document.
 
 Drives :class:`freecad.Shelving.editor.session.Session` directly rather than
-:class:`freecad.Shelving.editor.panel.EditUnitPanel`: ``FreeCADGui.Control``,
-which the panel needs to show itself, does not exist under ``freecadcmd``
-(``docs/freecadcmd-notes.md``). The panel's own wiring is covered by
-``tools/freecad_panel_smoke.py`` under the offscreen GUI. This is a
-self-invoking pytest module, as ``tools/freecad_scan_smoke.py`` is.
+:class:`freecad.Shelving.editor.panel.EditUnitPanel`, which needs the GUI;
+``tests/freecad_gui/test_panel.py`` covers the panel's own wiring with the
+GUI up.
 """
 
-import os
-import sys
+from typing import Protocol, cast
 
-# The self-invocation comes before any FreeCAD or workbench import:
-# freecadcmd exits 0 on an uncaught exception (docs/freecadcmd-notes.md), so
-# an import failure at the top level would pass silently, whereas inside
-# pytest's collection it is an error with a failing status. The environment
-# variable stops pytest's own reimport of this file from recursing.
-if os.environ.get("_FREECAD_EDITOR_SMOKE_RUNNING") != "1":
-    os.environ["_FREECAD_EDITOR_SMOKE_RUNNING"] = "1"
-    import pytest
+import FreeCAD
 
-    _exit_code = pytest.main([__file__, "-v"])
-    # freecadcmd's teardown does not flush stdout, which would lose pytest's
-    # FAILURES section.
-    sys.stdout.flush()
-    sys.exit(_exit_code)
-
-from typing import Protocol, cast  # noqa: E402
-
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _REPO_ROOT not in sys.path:
-    sys.path.insert(0, _REPO_ROOT)
-
-import FreeCAD  # noqa: E402
-
-from freecad.Shelving import properties  # noqa: E402
-from freecad.Shelving.catalog import ensure_catalog, read_catalog  # noqa: E402
-from freecad.Shelving.container import (  # noqa: E402
+from freecad.Shelving import properties
+from freecad.Shelving.catalog import ensure_catalog, read_catalog
+from freecad.Shelving.container import (
     read_container,
     unit_for_selection,
     write_container,
 )
-from freecad.Shelving.core.geometry import Vec3  # noqa: E402
-from freecad.Shelving.core.layout import (  # noqa: E402
+from freecad.Shelving.core.geometry import Vec3
+from freecad.Shelving.core.layout import (
     Axis,
     Basis,
     Bay,
@@ -53,18 +29,18 @@ from freecad.Shelving.core.layout import (  # noqa: E402
     SizeRule,
     Unit,
 )
-from freecad.Shelving.core.scan import elevation_axes  # noqa: E402
-from freecad.Shelving.default_catalog import (  # noqa: E402
+from freecad.Shelving.core.scan import elevation_axes
+from freecad.Shelving.default_catalog import (
     DEFAULT_CATALOG,
     DEFAULT_MATERIAL_ID,
 )
-from freecad.Shelving.editor.session import (  # noqa: E402
+from freecad.Shelving.editor.session import (
     PROBE_PROPERTY,
     EditFailure,
     Session,
     SplitDirection,
 )
-from freecad.Shelving.unit_ops import create_unit, reflow_all  # noqa: E402
+from freecad.Shelving.unit_ops import create_unit, reflow_all
 
 
 class _Placeable(Protocol):
