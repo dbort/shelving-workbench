@@ -165,3 +165,9 @@ simpler.
 - **N1: The `tests/collection.py` docstrings are inaccurate** (`tests/collection.py:3`, `tests/collection.py:81`): FreeCAD now starts in `pytest_sessionstart`, not when the conftest loads; the cited notes do not say a mixed run hangs or fails; and `skipped_freecad_dir` is not a hook.
 - **N2: The round-1 N1 fixes add over-long lines** (`.claude/docs/pipeline.md:30`, `pixi.toml:29`).
 - **N3: The new GUI test checks only `sys.excepthook`** (`tests/freecad_gui/test_panel.py:523`): patching `sys.unraisablehook` too is cheap.
+
+### Round 3: REJECTED
+- **F1: The new run tests do not cover the `pytest_sessionstart` guards, and the test's comment claims they do** (`tests/test_collection_runs.py:82`, `tests/freecad/conftest.py:27`, `tests/freecad_gui/conftest.py:34`): removing either or both guards still gives 6 passed, because each `pytest_sessionfinish` deletes the tree its `pytest_sessionstart` made, so the settings-tree comparison cannot see a FreeCAD start. Have the subprocess report whether FreeCAD loaded (for example print `'FreeCADGui' in sys.modules` after `pytest.main`), assert it for the mixed cases, and fix the comment.
+- **N1: The docstring's reason for keeping the directories apart did not reproduce** (`tests/collection.py:6`): with both guards removed, a mixed run started the GUI after headless FreeCAD without hanging; what holds is the core FreeCAD-free test failing and the changed headless behaviour.
+- **N2: Ragged rewrap** (`.claude/docs/pipeline.md:32`).
+- **N3: The settings-tree comparison is not isolated** (`tests/test_collection_runs.py:83`, `tests/test_collection_runs.py:101`): it globs the shared temp dir; give the subprocess its own `TMPDIR`.
