@@ -56,9 +56,16 @@ own collection or `freecadcmd`'s internal FreeCAD imports run.
 - the `pixi.lock` path guard;
 - the workflow-hardening lint over `.github/workflows/` (see
   [`docs/github-actions-hardening.md`](docs/github-actions-hardening.md));
-- a headless `freecadcmd` workbench import smoke;
-- an elevation-editor panel smoke under the full `freecad` GUI on Qt's
+- a `freecadcmd` check that the workbench imports through FreeCAD's own
+  startup;
+- the headless FreeCAD suite in `tests/freecad/`, with FreeCAD imported from
+  plain pytest;
+- the GUI suite in `tests/freecad_gui/`, with FreeCAD's GUI started on Qt's
   offscreen platform, since the panel's quantity field exists only there.
+
+Both FreeCAD suites run against throwaway FreeCAD settings, so they never
+read or change yours, and either can be run on its own, for example
+`pixi run pytest tests/freecad_gui -k drag`.
 
 It runs inside the pixi environment, which supplies every tool including
 FreeCAD. To run only the workflow lint, use `bash tools/lint-workflows.sh` from
@@ -194,7 +201,7 @@ The layout vocabulary and how each term maps onto the code in
   `panel.py`. The session owns the document, the one transaction the whole
   editing session shares, and the write path; the panel is the Qt task
   dialog wiring controls to it, holding only input handling, which
-  `tools/freecad_panel_smoke.py` covers under the offscreen GUI.
+  `tests/freecad_gui/test_panel.py` covers under the offscreen GUI.
 - **Session**: `freecad.Shelving.editor.session.Session`. Reads a container
   once, then answers `can_split`/`can_merge` for the current selection and
   applies `split`/`merge`, `set_size`/`set_basis`, and a drag

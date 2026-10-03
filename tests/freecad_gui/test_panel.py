@@ -344,7 +344,7 @@ def test_the_plain_field_fallback(
         assert fixture.panel.size_field.quantity_widget is None
         fixture.select(fixture.lower)
         # parseQuantity reads this as 38.10 mm, where the quantity widget
-        # reads the bare 1 as millimetres (docs/freecadcmd-notes.md).
+        # reads the bare 1 as millimetres (.claude/docs/freecad-notes.md).
         fixture.type_size('1 + 1/2"')
         rule = fixture.rule(fixture.lower)
         assert isinstance(rule, Fixed)

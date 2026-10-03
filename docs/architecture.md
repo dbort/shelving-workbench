@@ -177,7 +177,7 @@ create unit, edit layout, manage catalog.
 An `App::Part` holding one `App::FeaturePython` child named
 `ShelvingUnitDriver`. FreeCAD 1.0 dispatches no `Proxy.execute` on a
 recomputing `App::Part` (see
-[`freecadcmd-notes.md`](freecadcmd-notes.md)), so the work is split:
+[`freecad-notes.md`](../.claude/docs/freecad-notes.md)), so the work is split:
 
 - the `App::Part` keeps the single rigid-body `Placement` and parents the
   plank children, for `App::Link` and Assembly compatibility;
@@ -276,15 +276,15 @@ tools/run-tests.sh          the check harness
 surface, and CI runs exactly that command from the first milestone. In one
 ordered pass it covers ruff, a strict type check, and pytest over
 `shelving_core`; the repository-consistency checks; the workflow-hardening
-lint; and, in a FreeCAD 1.1 environment, a headless `freecadcmd` import
-smoke.
+lint; and, in a FreeCAD 1.1 environment, a `freecadcmd` import check plus
+the FreeCAD test suites in `tests/freecad/` and `tests/freecad_gui/`.
 
-The `freecadcmd` step runs full smoke tests: create a unit,
+The FreeCAD suites run full functional tests: create a unit,
 recompute, assert plank count and bounding boxes; edit a property,
 recompute, assert the reflow. Editing a catalog thickness and asserting
 that dependent planks change arrives with M4, when the catalog becomes a
-document object. See [`freecadcmd-notes.md`](freecadcmd-notes.md) for the
-headless `freecadcmd` behaviors these scripts work around.
+document object. See [`freecad-notes.md`](../.claude/docs/freecad-notes.md) for the
+FreeCAD behaviours these tests depend on.
 
 The core carries the load. Every geometric rule (solver distribution,
 lap-order effects, over-constraint failure, serialisation round-trips) is

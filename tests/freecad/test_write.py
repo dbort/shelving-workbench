@@ -126,7 +126,7 @@ def _add_notched_shelf(
     """A ``PartDesign::Body`` shaped like a board of ``footprint_mm`` with a
     rectangular notch cut from one corner, padded ``thickness_mm``, and
     moved to ``corner_mm``: the same box-minus-cutouts shape
-    ``tools/freecad_scan_smoke.py``'s ``_add_notched_body`` builds, sized
+    ``tests/freecad/test_scan.py``'s ``_add_notched_body`` builds, sized
     and positioned here to slot into a real bay rather than sit on its own.
     ``read_container`` reads it as an irregular ``Box``, never a plain one.
     """
@@ -197,9 +197,9 @@ def _closed_box_unit(front_at_min: bool | None) -> Unit:
 
 
 def test_init_gui_imports_cleanly() -> None:
-    """Both new commands import cleanly under ``freecadcmd``, where
+    """Both new commands import cleanly without FreeCAD's GUI, where
     ``FreeCADGui`` is a stub without ``addCommand``
-    (``docs/freecadcmd-notes.md``); nothing else here imports them as a
+    (``.claude/docs/freecad-notes.md``); nothing else here imports them as a
     side effect of anything but their own module-level registration guard."""
     import freecad.Shelving.commands.create_unit  # noqa: F401
     import freecad.Shelving.commands.resize_unit  # noqa: F401
@@ -310,8 +310,8 @@ def test_resize_updates_existing_boards_rather_than_recreating(
     """Resizing to a larger size updates the same document objects, checked
     by ``Name``, and a renamed board's ``Label`` survives it. Colour is the
     other survivor this task's Must Haves name, but ``ViewObject`` is
-    ``None`` under ``freecadcmd`` (no GUI, ``docs/freecadcmd-notes.md``), so
-    that half is a manual-qa.md case (M7 #2) instead."""
+    ``None`` without the GUI (``.claude/docs/freecad-notes.md``), so that
+    half is a manual-qa.md case (M7 #2) instead."""
     doc, container = create_unit_doc
     group = cast("FreeCAD.DocumentObjectGroup", container)
     names_before = {o.Name for o in group.Group}

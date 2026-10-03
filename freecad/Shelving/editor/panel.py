@@ -9,7 +9,7 @@ threshold, reporting only a changed size, never applying text the quantity
 widget rejects (consuming its Return, restoring the shown value when focus
 leaves), reporting only a drag's first failure, and keeping checked items
 across a redraw. ``FreeCADGui.Control`` does not exist under ``freecadcmd``, so
-:mod:`tools.freecad_panel_smoke` exercises this module under the offscreen
+:mod:`tests.freecad_gui.test_panel` exercises this module under the offscreen
 GUI instead.
 
 The dimension field is FreeCAD's own ``Gui::QuantitySpinBox``, so it
@@ -41,7 +41,7 @@ from freecad.Shelving.editor.session import (
 
 # freecad-stubs declares UiLoader.createWidget without parameters and
 # ExpressionBinding with no methods at all, so these Protocols state the
-# signatures docs/freecadcmd-notes.md verified.
+# signatures .claude/docs/freecad-notes.md verified.
 
 
 class _UiLoader(Protocol):

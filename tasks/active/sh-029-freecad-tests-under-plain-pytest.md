@@ -121,6 +121,11 @@ automated case), `docs/architecture.md`, `pixi.toml` comments,
 `.claude/docs/bug-log.md`, and the planned task `sh-022`. Leave
 `tasks/completed/` alone: it is history.
 
+THE TASK FILE ITSELF (2026-10-03, implementation note): this file names
+the old smoke and notes paths to describe the move, so until `/ship` moves
+it to `tasks/completed/` it is the one file outside that directory still
+naming them. The Must Have about live references holds once it ships.
+
 CI is the user's to watch. The x86_64 runners use the same conda-forge
 package, so the bootstrap should hold there, but only a push shows it.
 
@@ -134,6 +139,6 @@ simpler.
 - [x] **Step 2** (`tests/freecad_gui/conftest.py`, `tests/freecad_gui/test_*.py`): Move the panel smoke in, with the isolated settings and the embedded offscreen GUI in the conftest and the stdout redirect and `os._exit` removed. It passes under `QT_QPA_PLATFORM=offscreen pixi run pytest tests/freecad_gui`, run directly, and exits cleanly.
 - [x] **Step 3** (`tools/`): Add the `freecadcmd` import check script and delete the five old smokes.
 - [x] **Step 4** (`tools/run-tests.sh`): Run the core suite excluding the two new directories, then the import check, `pytest tests/freecad`, and the offscreen `pytest tests/freecad_gui`, each failing the run on a non-zero status. Verify the hand checks in Must Have (an import error fails fast, no `Recompute` lines).
-- [ ] **Step 5** (`.claude/docs/freecad-notes.md`, every referencing file): Move and trim the notes, update every live reference listed in Advice, and delete friction-021 (the progress-bar noise this task removes).
+- [x] **Step 5** (`.claude/docs/freecad-notes.md`, every referencing file): Move and trim the notes, update every live reference listed in Advice, and delete friction-021 (the progress-bar noise this task removes).
 
 ## Review log

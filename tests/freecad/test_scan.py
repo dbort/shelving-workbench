@@ -216,10 +216,10 @@ def test_init_gui_imports_cleanly() -> None:
     nothing else here imports as a side effect: `commands.scan` and
     `commands.export_boxes` (imported at module level above) do not import
     it, and it does not import them except deferred inside `Initialize`,
-    which a headless run never calls. `import FreeCADGui` under
-    `freecadcmd` returns a stub without `Workbench`
-    (docs/freecadcmd-notes.md), so this also covers that the module's own
-    guard drops to a plain-`object` base instead of raising."""
+    which a headless run never calls. Without FreeCAD's GUI, `import
+    FreeCADGui` returns a stub without `Workbench`
+    (.claude/docs/freecad-notes.md), so this also covers that the module's
+    own guard drops to a plain-`object` base instead of raising."""
     import freecad.Shelving.init_gui  # noqa: F401
 
 

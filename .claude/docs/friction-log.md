@@ -138,26 +138,26 @@ fixes a papercut records the papercut and its fix and deletes the entry.
   smoke-test run raised `AttributeError` the moment a plain
   `App::DocumentObjectGroup` entered the tree (used to prove the same object
   reachable by two paths still yields one record). Nothing in
-  `docs/freecadcmd-notes.md` or `freecad-stubs` flagged the gap; it only
+  `.claude/docs/freecad-notes.md` or `freecad-stubs` flagged the gap; it only
   surfaced by running real geometry through `freecadcmd`. Worked around by
   reading `Placement` with `getattr(obj, "Placement", None)` and skipping the
   compose step when it is absent. Simpler if: `freecad-stubs` distinguished
   the `GeoFeatureGroup`-derived container types (which carry `Placement`)
   from `App::DocumentObjectGroup` (which does not), or
-  `docs/freecadcmd-notes.md` carried this alongside its existing
+  `.claude/docs/freecad-notes.md` carried this alongside its existing
   container-behavior entries.
 
 - `friction-012` - **no documented recipe for building a `PartDesign::Body`
   headlessly**: sh-016's functional smoke test needed a real notched panel
   (a `PartDesign::Body` holding a `Sketcher::SketchObject` and a
   `PartDesign::Pad`) to exercise the box-minus-cutouts skip path, and neither
-  `docs/freecadcmd-notes.md` nor any surviving code showed the construction:
+  `.claude/docs/freecad-notes.md` nor any surviving code showed the construction:
   the tuple shape a sketch's `AttachmentSupport` needs, that a fresh
   `PartDesign::Body` auto-creates an `Origin` whose `XY_Plane` is reachable
   via `doc.getObject("XY_Plane")`, or that a body's own children come from
   `GroupExtension.newObject`, not `Document.addObject`. Reverse-engineered by
   trial against a real `freecadcmd` interpreter. Simpler if:
-  `docs/freecadcmd-notes.md` carried a short "building a PartDesign feature
+  `.claude/docs/freecad-notes.md` carried a short "building a PartDesign feature
   headlessly" recipe, since this task is unlikely to be the last one needing
   more than a bare `Part::Box`.
 
@@ -210,14 +210,6 @@ fixes a papercut records the papercut and its fix and deletes the entry.
   friction-007 already flagged for a deletion step's blast radius; a
   tree-shape change has the same "everything that renders this fixture" risk
   a signature-deletion change does.
-- `friction-021` - **readable `pixi run tests` output**: in sh-020's review,
-  the FreeCAD smokes printed `Recompute......` progress bars made of tabs and
-  percentages, which hid the pass/fail lines. The workaround was to
-  redirect the run to a file, record `$?` separately, and pipe the log through
-  `tr '\t' ' ' | grep -Ev 'Recompute|\([0-9]+ %\)'` to read it. Simpler if:
-  `tools/run-tests.sh` (or the smokes themselves) suppressed or filtered
-  FreeCAD's console progress indicator so the harness output shows only the
-  check headers and results.
 - `friction-022` - **a way to run doc-hygiene's embedded workflow script
   outside a real sweep**: merging its content and style passes changed the JS
   inside `.claude/skills/doc-hygiene/SKILL.md`, and nothing in the repo can

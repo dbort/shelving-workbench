@@ -1,9 +1,9 @@
 """The "Edit Unit" command: open the elevation editor on the selected container.
 
-``FreeCADGui.Control.showDialog`` does not exist under ``freecadcmd``, so the
-functional smoke drives :class:`freecad.Shelving.editor.session.Session`
-directly rather than this command's ``Activated``, the same way
-``tools/freecad_write_smoke.py`` calls ``unit_ops`` functions.
+``FreeCADGui.Control.showDialog`` needs FreeCAD's GUI, so the headless tests
+drive :class:`freecad.Shelving.editor.session.Session` directly rather than
+this command's ``Activated``, the same way ``tests/freecad/test_write.py``
+calls ``unit_ops`` functions.
 """
 
 import os
