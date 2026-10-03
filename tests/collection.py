@@ -3,9 +3,10 @@
 ``tests/freecad/`` starts FreeCAD headless and ``tests/freecad_gui/``
 starts its GUI, each from its ``conftest.py``'s ``pytest_sessionstart``.
 Neither can share a process with the other or with the FreeCAD-free core
-suite: starting the GUI after headless FreeCAD has loaded hangs, and core
-tests that check FreeCAD stays unloaded fail. So each is collected only by
-a run aimed entirely inside it; ``tests/conftest.py`` applies that rule.
+suite: the core tests that check ``FreeCADGui`` stays unloaded fail once
+either has started, and a running GUI changes the headless tests' FreeCAD
+(``ViewObject`` stops being ``None``). So each is collected only by a run
+aimed entirely inside it; ``tests/conftest.py`` applies that rule.
 """
 
 from collections.abc import Sequence
