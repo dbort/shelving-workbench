@@ -24,8 +24,9 @@ startup path is still exercised.
       tests, and `QT_QPA_PLATFORM=offscreen pixi run pytest --collect-only -q
       tests/freecad_gui` at least 14. Those are the counts the five smokes
       have at planning time, so nothing is dropped in the move.
-- [ ] No file under `tests/` contains `pytest.main`, `os._exit`, or
-      `_SMOKE_RUNNING`.
+- [ ] No test module under `tests/` runs pytest on itself
+      (`pytest.main([__file__` appears nowhere under `tests/`), and no file
+      there contains `os._exit` or `_SMOKE_RUNNING`.
 - [ ] The core run in `tools/run-tests.sh` collects nothing from
       `tests/freecad/` or `tests/freecad_gui/`.
 - [ ] `tools/run-tests.sh` runs FreeCAD in exactly three ways: one
@@ -130,6 +131,13 @@ the rule and `tests/conftest.py` applies it. FreeCAD starts in each
 directory's `pytest_sessionstart` under the same rule, because pytest
 imports the conftest of every directory named on its command line before
 any collection hook runs.
+
+SELF-INVOKING MODULES, NOT THE STRING (2026-10-03, user decision, after
+review round 4): the Must Have that banned the string `pytest.main` under
+`tests/` was aimed at test modules that run pytest on themselves.
+`tests/test_collection_runs.py` legitimately starts a child pytest through
+`pytest.main` in a driver script to report the child's post-run state, so
+the Must Have now bans self-invocation instead.
 
 THE TASK FILE ITSELF (2026-10-03, implementation note): this file names
 the old smoke and notes paths to describe the move, so until `/ship` moves
