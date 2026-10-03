@@ -142,3 +142,9 @@ simpler.
 - [x] **Step 5** (`.claude/docs/freecad-notes.md`, every referencing file): Move and trim the notes, update every live reference listed in Advice, and delete friction-021 (the progress-bar noise this task removes).
 
 ## Review log
+
+### Round 1: REJECTED
+- **F1: Running the core suite and the FreeCAD directories in one pytest process hangs with no output** (`tests/freecad_gui/conftest.py:31`): `pixi run pytest` with no arguments, and `pixi run pytest freecad/Shelving/core tests`, hang in collection at `FreeCADGui.showMainWindow()` and leave `/tmp/shelving-freecad-*` behind; mixing without the GUI conftest instead fails `test_importing_every_submodule_does_not_load_freecadgui`. "TWO PROCESSES, NOT ONE" is enforced only by `tools/run-tests.sh`, though the README invites running pytest directly. Add a collection guard that keeps the FreeCAD directories out unless they are the only targets, or a conftest check that stops a mixed session with a clear message, with a test of that decision.
+- **F2: The `_alive()` production fix has no test** (`freecad/Shelving/editor/panel.py:199`): with `_alive` forced to `True` the GUI suite still passes, the RuntimeErrors appearing only after pytest finishes. Add a test that destroys a field's widget, delivers focus-out and `editingFinished`, and asserts nothing reaches `sys.excepthook` or `sys.unraisablehook`; cover the panel-closing path the docstring names, or narrow the docstring.
+- **N1: pixi.toml comment still describes "the headless FreeCAD import smoke"** (`pixi.toml:29`); `.claude/docs/pipeline.md:30` ("a headless FreeCAD smoke") is stale the same way.
+- **N2: Over-long line in the cfg comment** (`tools/freecad-test-user.cfg:5`).
