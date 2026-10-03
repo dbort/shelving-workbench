@@ -1,10 +1,11 @@
 """Which pytest runs may collect the FreeCAD test directories.
 
-``tests/freecad/`` and ``tests/freecad_gui/`` each start FreeCAD in their
-own way when their ``conftest.py`` loads, and the two cannot share a
-process with each other or with the FreeCAD-free core suite: a run that
-mixes them hangs or fails (``.claude/docs/freecad-notes.md``). So each is
-collected only by a run aimed entirely inside it.
+``tests/freecad/`` starts FreeCAD headless and ``tests/freecad_gui/``
+starts its GUI, each from its ``conftest.py``'s ``pytest_sessionstart``.
+Neither can share a process with the other or with the FreeCAD-free core
+suite: starting the GUI after headless FreeCAD has loaded hangs, and core
+tests that check FreeCAD stays unloaded fail. So each is collected only by
+a run aimed entirely inside it; ``tests/conftest.py`` applies that rule.
 """
 
 from collections.abc import Sequence
@@ -73,9 +74,9 @@ def collectable_targets(
     """``targets`` minus any inside a FreeCAD directory that the run is not
     aimed entirely at, and those directories, in :data:`FREECAD_DIRS` order.
 
-    pytest never asks :func:`skipped_freecad_dir`'s collection hook about a
-    path named on its command line, so such a target has to be dropped here
-    instead.
+    pytest never consults the ``pytest_ignore_collect`` hook (which uses
+    :func:`skipped_freecad_dir`) about a path named on its command line, so
+    such a target has to be dropped from the targets instead.
     """
     kept = list(targets)
     dropped: list[Path] = []

@@ -510,7 +510,8 @@ def test_a_destroyed_field_ignores_late_events(
     """Closing the task panel deletes its form, and Qt can still deliver a
     focus-out or ``editingFinished`` to the size field's callbacks during or
     after that. They must do nothing rather than touch the deleted widget,
-    whose errors PySide6 would report through ``sys.excepthook``."""
+    whose errors PySide6 would report through ``sys.excepthook`` (or, from
+    a finalizer, ``sys.unraisablehook``)."""
     errors: list[BaseException] = []
 
     def record(
@@ -520,7 +521,12 @@ def test_a_destroyed_field_ignores_late_events(
     ) -> None:
         errors.append(value)
 
+    def record_unraisable(unraisable: "sys.UnraisableHookArgs") -> None:
+        if unraisable.exc_value is not None:
+            errors.append(unraisable.exc_value)
+
     monkeypatch.setattr(sys, "excepthook", record)
+    monkeypatch.setattr(sys, "unraisablehook", record_unraisable)
     field = unit_panel.panel.size_field
     unit_panel.select(unit_panel.lower)
     field.line_edit.setFocus()

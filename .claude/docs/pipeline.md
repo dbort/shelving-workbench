@@ -27,8 +27,9 @@ pixi run tests
 
 The repo's whole verification surface: static analysis, the core unit
 suite, the repository-consistency checks, the workflow lint, a
-`freecadcmd` import check, and the headless and GUI FreeCAD test suites. It must be green before every review and on the
-merged result before `/ship` commits the merge. A check that needs live
+`freecadcmd` import check, and the headless and GUI FreeCAD test suites.
+It must be green before every review and on the merged result before
+`/ship` commits the merge. A check that needs live
 infrastructure becomes a durable test inside `pixi run tests`, never a
 one-off command.
 

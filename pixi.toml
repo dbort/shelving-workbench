@@ -26,8 +26,9 @@ types-pyyaml = ">=6.0.12.20260906,<7"
 # `pixi run tests` is the repo's single authoritative check command: it runs
 # tools/run-tests.sh, which chains static analysis, the layout core unit
 # suite, the repository-consistency checks, the workflow-hardening lint, a
-# freecadcmd import check, and the headless and GUI FreeCAD test suites. `demo` renders a sample solved layout.
-# `task-status` lists the tasks/active/ backlog and the next free task id
+# freecadcmd import check, and the headless and GUI FreeCAD test suites.
+# `demo` renders a sample solved layout. `task-status` lists the
+# tasks/active/ backlog and the next free task id
 # (`.claude/docs/pipeline.md` § Status); it is not part of the `tests` gate.
 [tasks]
 tests = "tools/run-tests.sh"
