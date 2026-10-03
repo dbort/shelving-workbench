@@ -1,35 +1,54 @@
 """FreeCAD's GUI, started offscreen for the tests in this directory, against
 throwaway settings whose notification popups are off
 (``.claude/docs/freecad-notes.md``: a popup deadlocks FreeCAD 1.1 when
-offscreen)."""
+offscreen).
+
+The GUI starts in :func:`pytest_sessionstart`, not when this module is
+imported: pytest imports the conftest of every directory named on its
+command line before any collection decision, and a run that also names
+other tests must not start FreeCAD here (:mod:`tests.collection`).
+"""
 
 import os
+from pathlib import Path
 from typing import cast
 
 import pytest
+from PySide6 import QtWidgets
 
-from tests.freecad_settings import isolate_freecad_settings, remove_settings
+from tests.collection import runs_only_inside
+from tests.freecad_env import (
+    isolate_freecad_settings,
+    load_freecad,
+    remove_settings,
+)
 
-# A plain assignment, not setdefault: a developer's shell may export another
-# platform (wayland, xcb), and these tests must never open a real window.
-os.environ["QT_QPA_PLATFORM"] = "offscreen"
-# Before FreeCAD loads: it reads its settings location only at startup.
-_SETTINGS_ROOT = isolate_freecad_settings()
+_HERE = Path(__file__).resolve().parent
+_SETTINGS = pytest.StashKey[Path]()
+# The QApplication, held for the whole session: the GUI needs it alive.
+_APP = pytest.StashKey[QtWidgets.QApplication]()
 
-# The bootstrap above everything else FreeCAD: FreeCADGui is importable
-# only once it has run.
-import freecad  # noqa: E402, F401
 
-# isort: split
-import FreeCADGui  # noqa: E402
-from PySide6 import QtWidgets  # noqa: E402
+def pytest_sessionstart(session: pytest.Session) -> None:
+    config = session.config
+    if not runs_only_inside(_HERE, config.args, config.invocation_params.dir):
+        return
+    # A plain assignment, not setdefault: a developer's shell may export
+    # another platform (wayland, xcb), and these tests must never open a
+    # real window.
+    os.environ["QT_QPA_PLATFORM"] = "offscreen"
+    # Before FreeCAD loads: it reads its settings location only at startup.
+    config.stash[_SETTINGS] = isolate_freecad_settings()
+    load_freecad()
+    import FreeCADGui
 
-# Held for the whole session: the GUI needs its QApplication alive.
-_APP = cast(
-    "QtWidgets.QApplication | None", QtWidgets.QApplication.instance()
-) or QtWidgets.QApplication([])
-FreeCADGui.showMainWindow()
+    config.stash[_APP] = cast(
+        "QtWidgets.QApplication | None", QtWidgets.QApplication.instance()
+    ) or QtWidgets.QApplication([])
+    FreeCADGui.showMainWindow()
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
-    remove_settings(_SETTINGS_ROOT)
+    root = session.config.stash.get(_SETTINGS, None)
+    if root is not None:
+        remove_settings(root)

@@ -64,8 +64,9 @@ own collection or `freecadcmd`'s internal FreeCAD imports run.
   offscreen platform, since the panel's quantity field exists only there.
 
 Both FreeCAD suites run against throwaway FreeCAD settings, so they never
-read or change yours, and either can be run on its own, for example
-`pixi run pytest tests/freecad_gui -k drag`.
+read or change yours. Each needs a pytest run of its own, for example
+`pixi run pytest tests/freecad_gui -k drag`; any other run, a bare
+`pixi run pytest` included, skips them and says so in its summary.
 
 It runs inside the pixi environment, which supplies every tool including
 FreeCAD. To run only the workflow lint, use `bash tools/lint-workflows.sh` from

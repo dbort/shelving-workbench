@@ -1,9 +1,10 @@
-"""Throwaway FreeCAD user settings for test runs.
+"""Starting FreeCAD for test runs: throwaway user settings, then the
+library bootstrap.
 
 FreeCAD reads its settings location from the XDG directories once, at
-startup, so :func:`isolate_freecad_settings` has to run before anything
-imports FreeCAD. A developer's real settings would otherwise be read and
-written by every test run, and FreeCAD 1.1's GUI would stop at a modal
+startup, so :func:`isolate_freecad_settings` has to run before
+:func:`load_freecad`. A developer's real settings would otherwise be read
+and written by every test run, and FreeCAD 1.1's GUI would stop at a modal
 offer to migrate older settings (``.claude/docs/freecad-notes.md``).
 """
 
@@ -43,3 +44,10 @@ def remove_settings(root: Path) -> None:
     """Delete a tree :func:`isolate_freecad_settings` made; a missing one is
     not an error."""
     shutil.rmtree(root, ignore_errors=True)
+
+
+def load_freecad() -> None:
+    """Make ``FreeCAD``, ``Part`` and ``FreeCADGui`` importable from plain
+    Python: the conda-forge FreeCAD package's own ``freecad`` package loads
+    FreeCAD's libraries when imported. Idempotent."""
+    import freecad  # noqa: F401

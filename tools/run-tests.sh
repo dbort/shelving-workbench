@@ -40,7 +40,7 @@ bash tools/lint-workflows.sh
 
 # freecadcmd runs against throwaway XDG directories so it never touches a
 # developer's real FreeCAD settings; the two pytest directories below set up
-# their own the same way (tests/freecad_settings.py). The v1-1 directory
+# their own the same way (tests/freecad_env.py). The v1-1 directory
 # name follows FreeCAD's minor version.
 freecad_dirs="$(mktemp -d)"
 trap 'rm -rf "$freecad_dirs"' EXIT

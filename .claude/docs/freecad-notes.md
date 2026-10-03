@@ -19,7 +19,7 @@ second with none of `freecadcmd`'s console noise. For the GUI,
 `FreeCADGui.showMainWindow()` under `QT_QPA_PLATFORM=offscreen`; the
 process then exits normally when pytest finishes. Either way FreeCAD must
 first be pointed at throwaway settings, because it reads their location
-only at startup (`tests/freecad_settings.py`, and the two FreeCAD 1.1
+only at startup (`tests/freecad_env.py`, and the two FreeCAD 1.1
 sections below).
 
 What this import does not do is FreeCAD's own startup: add-on discovery
@@ -259,7 +259,7 @@ the system and conda-forge `gdb` both fail on this VM with "Unable to fetch
 SVE/SSVE vector length"). The same happens under Xvfb. Setting
 `BaseApp/Preferences/NotificationArea/NonIntrusiveNotificationsEnabled` to
 false avoids it. `tools/freecad-test-user.cfg` sets it, and both
-`tests/freecad_settings.py` and `tools/run-tests.sh` install that file into
+`tests/freecad_env.py` and `tools/run-tests.sh` install that file into
 the throwaway settings every FreeCAD test run uses. Notifications still
 reach the Notification Area and the Report view, only without a popup.
 

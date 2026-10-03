@@ -121,6 +121,16 @@ automated case), `docs/architecture.md`, `pixi.toml` comments,
 `.claude/docs/bug-log.md`, and the planned task `sh-022`. Leave
 `tasks/completed/` alone: it is history.
 
+MIXED RUNS SKIP THE FREECAD DIRECTORIES (2026-10-03, user decision, after
+review round 1): a pytest run collects `tests/freecad/` or
+`tests/freecad_gui/` only when every target lies inside that one
+directory. Any other run, a bare `pytest` included, leaves both out and
+says so in its summary, rather than failing. `tests/collection.py` holds
+the rule and `tests/conftest.py` applies it. FreeCAD starts in each
+directory's `pytest_sessionstart` under the same rule, because pytest
+imports the conftest of every directory named on its command line before
+any collection hook runs.
+
 THE TASK FILE ITSELF (2026-10-03, implementation note): this file names
 the old smoke and notes paths to describe the move, so until `/ship` moves
 it to `tasks/completed/` it is the one file outside that directory still

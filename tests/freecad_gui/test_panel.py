@@ -10,13 +10,16 @@ this directory's ``conftest.py`` arranges (``.claude/docs/freecad-notes.md``,
 these tests assert.
 """
 
+import sys
 from collections.abc import Iterator
+from types import TracebackType
 from typing import cast
 
 import FreeCAD
 import FreeCADGui
 import pytest
 from PySide6 import QtCore, QtGui, QtTest, QtWidgets
+from shiboken6 import Shiboken
 
 from freecad.Shelving.core.layout import (
     Basis,
@@ -499,3 +502,35 @@ def test_a_split_refusal_names_no_region_id(
     (message,) = reported
     assert "too small" in message, message
     assert unit_panel.lower not in message
+
+
+def test_a_destroyed_field_ignores_late_events(
+    unit_panel: _Fixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Closing the task panel deletes its form, and Qt can still deliver a
+    focus-out or ``editingFinished`` to the size field's callbacks during or
+    after that. They must do nothing rather than touch the deleted widget,
+    whose errors PySide6 would report through ``sys.excepthook``."""
+    errors: list[BaseException] = []
+
+    def record(
+        kind: type[BaseException],
+        value: BaseException,
+        traceback: TracebackType | None,
+    ) -> None:
+        errors.append(value)
+
+    monkeypatch.setattr(sys, "excepthook", record)
+    field = unit_panel.panel.size_field
+    unit_panel.select(unit_panel.lower)
+    field.line_edit.setFocus()
+    # Unreadable text, so a late focus-out would try to restore the value.
+    QtTest.QTest.keyClicks(field.line_edit, '12 1/2"')
+    Shiboken.delete(unit_panel.panel.form)
+    _process_events()
+    assert not Shiboken.isValid(field.widget)
+
+    field._discard_unreadable()
+    field._finished()
+    _process_events()
+    assert errors == []
