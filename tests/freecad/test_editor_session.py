@@ -6,6 +6,8 @@ Drives :class:`freecad.Shelving.editor.session.Session` directly rather than
 GUI up.
 """
 
+import shutil
+from pathlib import Path
 from typing import Protocol, cast
 
 import FreeCAD
@@ -957,5 +959,63 @@ def test_dimensions_drag_basis_stock_and_untagged() -> None:
         finally:
             if not cancelled:
                 session.cancel()
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+# The Woodworking workbench's Magic Start unit at its defaults, saved
+# unmodified from Woodworking: its boards sit in an App::LinkGroup, with a
+# plinth gap under the floor and a thin back board.
+_MAGIC_START = (
+    Path(__file__).parent / "fixtures" / "woodworking_magic_start_default.FCStd"
+)
+
+
+class _LinkGroupObject(Protocol):
+    ElementList: list[FreeCAD.DocumentObject]
+
+
+def test_a_woodworking_magic_start_unit_takes_and_gives_up_a_divider(
+    tmp_path: Path,
+) -> None:
+    """A board created in an ``App::LinkGroup`` container joins its
+    ``ElementList``, since a LinkGroup has no ``addObject``; deleting it
+    leaves the list as it was, and cancel restores the file's boards."""
+    path = tmp_path / _MAGIC_START.name
+    shutil.copyfile(_MAGIC_START, path)
+    doc = FreeCAD.openDocument(str(path))
+    try:
+        container = doc.getObject("LinkGroup")
+        assert container is not None
+        assert container.isDerivedFrom("App::LinkGroup")
+        link_group = cast("_LinkGroupObject", container)
+        elements_before = [obj.Name for obj in link_group.ElementList]
+        snapshot_before = _board_snapshot(container)
+
+        session = Session(container)
+        session.open()
+        try:
+            lower_bay_id = _find_bay_ids_in_order(session.unit.root)[0]
+            unit_before = session.unit
+            session.select(lower_bay_id)
+            assert session.split("horizontal") is None
+            doc.recompute()
+            divider_id = _find_new_board_id(unit_before.root, session.unit.root)
+            assert [obj.Name for obj in link_group.ElementList] == [
+                *elements_before,
+                divider_id,
+            ]
+            divider = doc.getObject(divider_id)
+            assert divider is not None
+            assert properties.has_board_properties(divider)
+
+            session.select(divider_id)
+            assert session.merge() is None
+            doc.recompute()
+            assert [obj.Name for obj in link_group.ElementList] == elements_before
+        finally:
+            session.cancel()
+        doc.recompute()
+        assert _board_snapshot(container) == snapshot_before
     finally:
         FreeCAD.closeDocument(doc.Name)

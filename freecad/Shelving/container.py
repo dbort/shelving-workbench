@@ -584,6 +584,17 @@ def _write_geometry(obj: FreeCAD.DocumentObject, spec: BoardSpec, board: Board) 
         box.Height = spec.size.z_mm
 
 
+def _add_child(container: FreeCAD.DocumentObject, obj: FreeCAD.DocumentObject) -> None:
+    """Make ``obj`` a direct child of ``container``. An ``App::LinkGroup``
+    has no ``addObject``; it lists its children in ``ElementList``, the way
+    the Woodworking workbench's Magic Start unit holds its boards."""
+    if container.isDerivedFrom("App::LinkGroup"):
+        link_group = cast("_ContainerObject", container)
+        link_group.ElementList = [*link_group.ElementList, obj]
+        return
+    cast("FreeCAD.DocumentObjectGroup", container).addObject(obj)
+
+
 def _create_board(
     doc: FreeCAD.Document,
     container: FreeCAD.DocumentObject,
@@ -593,7 +604,7 @@ def _create_board(
 ) -> FreeCAD.DocumentObject:
     raw = doc.addObject("Part::Box", _sanitize_name(board.role) or "Board")
     obj = cast("FreeCAD.DocumentObject", raw)
-    cast("FreeCAD.DocumentObjectGroup", container).addObject(obj)
+    _add_child(container, obj)
     _write_geometry(obj, spec, board)
     tagged = properties.ensure_board_properties(obj)
     # spec.material, not board.material: expand() has already resolved
