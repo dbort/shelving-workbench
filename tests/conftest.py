@@ -18,8 +18,8 @@ def pytest_ignore_collect(collection_path: Path, config: pytest.Config) -> bool 
         return None
     # pytest also asks about directories next to a target it is walking
     # past; only a directory the run would otherwise have entered is worth
-    # reporting. Nor one the command line already leaves out with --ignore, as
-    # tools/run-tests.sh does before running each on its own.
+    # reporting, and not one the command line already leaves out with
+    # --ignore, as tools/run-tests.sh does before running each on its own.
     ignored = {
         (config.invocation_params.dir / path).resolve()
         for path in config.getoption("ignore") or []

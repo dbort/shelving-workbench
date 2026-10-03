@@ -197,8 +197,8 @@ def _closed_box_unit(front_at_min: bool | None) -> Unit:
 
 
 def test_init_gui_imports_cleanly() -> None:
-    """Both new commands import cleanly without FreeCAD's GUI, where
-    ``FreeCADGui`` is a stub without ``addCommand``
+    """The create-unit and resize-unit commands import cleanly without
+    FreeCAD's GUI, where ``FreeCADGui`` is a stub without ``addCommand``
     (``.claude/docs/freecad-notes.md``); nothing else here imports them as a
     side effect of anything but their own module-level registration guard."""
     import freecad.Shelving.commands.create_unit  # noqa: F401
