@@ -69,9 +69,9 @@ wrong.
 
 A workaround forced while developing or testing this repo goes in
 `.claude/docs/friction-log.md`; a defect in the workbench on `main` goes in
-`.claude/docs/bug-log.md`. Log it in the same session, even when the
-workaround succeeded or the bug is fixed at once. Each file defines its
-own format and scope.
+`.claude/docs/bug-log.md`. Log a workaround in the same session, even when
+it succeeded. Each file defines its own format and scope, including which
+defects get a bug-log entry.
 
 ## Writing style by destination
 
