@@ -7,9 +7,8 @@ Work is planned, implemented, and reviewed through the task pipeline:
 Doc placement: `docs/` is human-facing prose, swept by `doc-hygiene`;
 `.claude/docs/` is agent-contract material whose absolutes are never
 style-swept. Process rules, tool contracts, runtime notes and the logs go
-in `.claude/docs/`, even when a human also reads them. Start orienting in
-the code from `.claude/docs/code-map.md`, an index of layers only: a detail
-about one module goes in that module's docstring, never in the map.
+in `.claude/docs/`, even when a human also reads them. Code orientation:
+`.claude/docs/code-map.md`.
 
 ## Invariants
 
@@ -105,7 +104,9 @@ the rule set `doc-hygiene` enforces.
   "used to") and no mentions of earlier versions. Keep history only when
   it answers "why not X?" or guards against a known regression. A "(see
   sh-XXX)" pointer stays only when it explains *why* otherwise-unusual
-  logic exists.
+  logic exists. A design doc whose decision has shipped or been
+  superseded is folded into `scope-and-design.md` or the roadmap and
+  deleted.
 - Doc comments: identifier-first summary line that adds information
   beyond the name. A function or method docstring states the *contract* a
   caller relies on: the return value and any ordering or shape guarantee,

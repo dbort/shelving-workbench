@@ -20,8 +20,9 @@ Format, oldest first:
 
 The id is `next_id` from the front matter; increment it in the same
 commit. It only moves forward, even when entries are deleted. An entry
-written during task work commits on the task's branch. The commit that
-fixes a papercut records the papercut and its fix and deletes the entry.
+written during task work commits on the task's branch. A commit that
+fixes the entry, or removes the code it concerns, deletes it and records
+the papercut and its fix in its message.
 
 ## Entries
 

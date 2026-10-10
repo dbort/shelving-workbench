@@ -22,9 +22,9 @@ decision.
 
 The id is `next_id` from the front matter; increment it in the same
 commit. It only moves forward, even when entries are deleted. An entry
-written during task work commits on the task's branch. The commit that
-fixes a bug deletes its entry. Sweeping the log happens only when the user
-asks.
+written during task work commits on the task's branch. A commit that
+fixes the entry, or removes the code it concerns, deletes it. Sweeping the
+log happens only when the user asks.
 
 ## Entries
 

@@ -26,11 +26,12 @@ Writing rules: `## Summary` is plain prose for a human skimmer and adds
 information beyond the title. `## Advice` and `## Plan` are dense and
 imperative, for an agent: each constraint with its reason, current
 decisions only, no history. Must Haves are machine-checkable ("returns
-HTTP 429 on rate limit", not "handles errors well"). Plan steps state
-outcomes and interfaces, not keystrokes. Before writing a step that
-deletes or renames a name, or changes what a test fixture produces, grep
-for every user of it and name each affected file in the plan: a missed
-dependent surfaces only as an unplanned failure late in `/work`.
+HTTP 429 on rate limit", not "handles errors well"). A manual-QA case
+only for what no test can assert. Plan steps state outcomes and
+interfaces, not keystrokes. Before writing a step that deletes or renames
+a name, or changes what a test fixture produces, grep code, comments and
+docs for every user of it and name each affected file in the plan: a
+missed dependent surfaces only as an unplanned failure late in `/work`.
 
 ```markdown
 ---
