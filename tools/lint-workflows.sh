@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
 # Lint the GitHub Actions workflows against this repo's hardening standard
-# (see docs/github-actions-hardening.md). One invocation runs every check and
-# exits non-zero if any of them fails.
+# (see .claude/docs/github-actions-hardening.md). One invocation runs every
+# check and exits non-zero if any of them fails.
 #
 # All but one check run offline and need no GitHub token. The exception
 # resolves each pinned SHA against the GitHub API and is fatal on a network

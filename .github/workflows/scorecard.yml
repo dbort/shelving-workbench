@@ -1,7 +1,8 @@
 name: Scorecard
 
-# OpenSSF Scorecard supply-chain analysis. See docs/github-actions-hardening.md
-# for the repo-wide workflow rules this file follows (SHA-pinned `uses:`,
+# OpenSSF Scorecard supply-chain analysis. See
+# .claude/docs/github-actions-hardening.md for the repo-wide workflow rules
+# this file follows (SHA-pinned `uses:`,
 # minimal per-job permissions, `push`/`schedule`/`branch_protection_rule`
 # triggers only).
 

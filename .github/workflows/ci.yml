@@ -1,7 +1,8 @@
 name: CI
 
-# This repo's workflow-hardening rules are documented in
-# docs/github-actions-hardening.md and apply to every change here. In brief:
+# This repo's workflow-hardening rules are in
+# .claude/docs/github-actions-hardening.md and apply to every change here.
+# In brief:
 #   * every `uses:` is pinned to a full 40-hex commit SHA with a `# vX.Y.Z`
 #     comment; no `@vN` or `@branch` refs;
 #   * the workflow token starts empty (`permissions: {}`) and each job
@@ -43,6 +44,7 @@ jobs:
       - name: Run the checks
         env:
           # Rate-limit headroom for the online action-pin check (see
-          # docs/github-actions-hardening.md). Read-only, expires with the job.
+          # .claude/docs/github-actions-hardening.md). Read-only, expires
+          # with the job.
           GITHUB_TOKEN: ${{ github.token }}
         run: pixi run tests

