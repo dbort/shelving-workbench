@@ -91,7 +91,9 @@ Woodworking installed:
 THICKNESS IS GEOMETRY. A `Board`'s extent along its run is its own slot width
 in the scan grid (`coords_mm` at its bounds), the same coordinates every
 sibling's size comes from, so a run always adds up exactly. That dissolves
-sh-026's mismatch, so do not port sh-026's reconciliation. A slot width can
+the catalog-thickness mismatch abandoned sh-026 tried to reconcile, so port
+none of its reconciliation. It also fixes bug-003, the same mismatch where no
+`Bay` sibling exists: the commit that fixes it deletes bug-003's entry. A slot width can
 differ from the raw box thickness by up to half `snap_mm` (0.25 mm at the
 default); the user accepted that the first write moves boards by that much.
 Keep sh-025's `Board.rule` for a board whose run axis is not its thin axis.
