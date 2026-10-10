@@ -42,7 +42,7 @@ exclude.
   joinery holes. Woodworking does these on the same solids.
 - **Doors, drawers and face frames** as things with behavior. A door can be
   drawn as a panel.
-- **Non-rectangular panels**: an L-shaped top, a mitre, a notch, a scribe.
+- **Non-rectangular panels**: an L-shaped top, a miter, a notch, a scribe.
   Such a part is carried and positioned but never generated or reshaped.
   This is the edge users are most likely to meet.
 - **Anything not axis-aligned**, such as a 45-degree corner cabinet.

@@ -102,7 +102,7 @@ Each of these is its own task when it comes up.
   rectilinear profile extruded through a thickness, derived from its
   largest face, which covers an edge notch, an L-shaped top and a stepped
   end; or have the user's own `Part::Cut` consume a box this workbench
-  owns. None covers a stopped pocket, a mitre, or anything not
+  owns. None covers a stopped pocket, a miter, or anything not
   axis-aligned.
 - **Physical materials** that reference FreeCAD's own material system, so a
   stock entry names a substance. Stock and substance are separate lists: a
