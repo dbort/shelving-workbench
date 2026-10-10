@@ -13,7 +13,7 @@ these tests assert.
 import sys
 from collections.abc import Iterator
 from types import TracebackType
-from typing import cast
+from typing import Protocol, cast
 
 import FreeCAD
 import FreeCADGui
@@ -542,6 +542,10 @@ def test_a_destroyed_field_ignores_late_events(
     assert errors == []
 
 
+class _Placed(Protocol):
+    Placement: FreeCAD.Placement
+
+
 def _unit_field_mm(unit_panel: _Fixture, dimension: UnitDimension) -> float:
     spin = unit_panel.panel.unit_fields[dimension].quantity_widget
     assert spin is not None
@@ -609,16 +613,26 @@ def test_a_spin_step_resizes_at_once(unit_panel: _Fixture) -> None:
 def test_a_refused_unit_size_reports_and_changes_nothing(
     unit_panel: _Fixture, reported: list[str]
 ) -> None:
-    lengths_mm = {
-        name: _box_mm(unit_panel, name, "Height")
-        for name in ("left_side", "right_side")
-    }
+    def snapshot() -> list[tuple[str, str, float, float, float]]:
+        return [
+            (
+                obj.Name,
+                str(cast("_Placed", obj).Placement),
+                _box_mm(unit_panel, obj.Name, "Length"),
+                _box_mm(unit_panel, obj.Name, "Width"),
+                _box_mm(unit_panel, obj.Name, "Height"),
+            )
+            for obj in unit_panel.doc.Objects
+            if obj.TypeId == "Part::Box"
+        ]
+
+    before = snapshot()
     _type_unit_size(unit_panel, "height", "30")
     unit_panel.doc.recompute()
     (message,) = reported
     assert message
-    for name, height_mm in lengths_mm.items():
-        assert _box_mm(unit_panel, name, "Height") == pytest.approx(height_mm)
+    after = snapshot()
+    assert after == before
     assert _unit_field_mm(unit_panel, "height") == pytest.approx(900.0)
 
 

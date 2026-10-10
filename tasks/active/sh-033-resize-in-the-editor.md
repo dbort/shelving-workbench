@@ -106,3 +106,12 @@ task adds no shell.
 - **N3: The `ValueError` text is wrong for resize** (`freecad/Shelving/editor/session.py:312`): `_elevation_axes` still says "no depth_axis to split by direction".
 - **N4: The roadmap still presents Resize Unit as current** (`docs/roadmap.md:249`).
 - **N5: The `unit_ops` module docstring is hard to parse** (`freecad/Shelving/unit_ops.py:1`).
+
+### Round 2: APPROVED
+- **N1: A click in the text still leaves a stale `stepping` flag set** (`freecad/Shelving/editor/panel.py:157`): a press on the line edit should clear `stepping`, so a paste after an arrow click waits for Return.
+- **N2: The roadmap fix uses history framing and an overlong line** (`docs/roadmap.md:250-251`): the status legend says a milestone's text describes what it delivered; leave it alone.
+- **N3: The GUI refusal test checks only the two sides** (`tests/freecad_gui/test_panel.py:612`): the Must Have says every board.
+- **N4: A stale plural in a docstring** (`tests/freecad/test_write.py:198-201`).
+- **N5: No test checks "one document write per spin step"** (Advice constraint): a repeated value is ignored in code, but no test counts writes.
+
+Applied after this round: N1, N2 (roadmap edit reverted), N3 and N4. N5 left as is.

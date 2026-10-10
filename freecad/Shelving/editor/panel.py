@@ -154,10 +154,11 @@ class _StepWatch(QtCore.QObject):
                 self.stepping = True
             else:
                 self.stepping = False
-        elif kind == QtCore.QEvent.Type.MouseButtonPress and watched is self._spin:
+        elif kind == QtCore.QEvent.Type.MouseButtonPress:
             self._last_wheel_s = None
-            self.bursts += 1
-            self.stepping = True
+            if watched is self._spin:
+                self.bursts += 1
+            self.stepping = watched is self._spin
         elif kind == QtCore.QEvent.Type.Wheel:
             now_s = time.monotonic()
             if self._last_wheel_s is None or now_s - self._last_wheel_s > (
