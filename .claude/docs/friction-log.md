@@ -41,9 +41,3 @@ the papercut and its fix in its message.
   stubbed `agent`/`pipeline`, and ran it under `pixi exec -s nodejs node`.
   Simpler if: `pixi run tests` extracted the block, stubbed the workflow
   API, and dry-ran it in full-tree and diff-scoped modes.
-- `friction-024` - **a manual QA structure that survives edits**: cases in
-  `docs/manual-qa.md` are numbered in one sequence, and cases that chain
-  share state through **Start** lines, so adding, removing or reordering
-  one renumbers others, and a reader cannot always tell what state a case
-  expects. Simpler if: cases had stable ids per feature section (EDITOR-1.3)
-  and each scenario held its own compound steps.

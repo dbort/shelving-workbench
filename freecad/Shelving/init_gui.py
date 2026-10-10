@@ -27,6 +27,21 @@ else:
 
 _RESOURCE_DIR = os.path.join(os.path.dirname(__file__), "resources")
 
+TOOLBAR_COMMANDS = (
+    "Shelving_Scan",
+    "Shelving_ExportBoxes",
+    "Shelving_CreateUnit",
+    "Shelving_EditUnit",
+)
+
+
+def menu_commands() -> list[str]:
+    """The Shelving menu's command ids: the toolbar's, plus the QA Wizard
+    while its developer flag is on."""
+    from freecad.Shelving import qa
+
+    return [*TOOLBAR_COMMANDS, *(["Shelving_QAWizard"] if qa.is_enabled() else [])]
+
 
 class ShelvingWorkbench(_WorkbenchBase):
     """FreeCAD workbench entry point for parametric shelving."""
@@ -42,18 +57,13 @@ class ShelvingWorkbench(_WorkbenchBase):
             create_unit,
             edit_unit,
             export_boxes,
+            qa_wizard,
             scan,
         )
 
-        command_ids = [
-            "Shelving_Scan",
-            "Shelving_ExportBoxes",
-            "Shelving_CreateUnit",
-            "Shelving_EditUnit",
-        ]
-        self.appendToolbar("Shelving", command_ids)
+        self.appendToolbar("Shelving", list(TOOLBAR_COMMANDS))
         # freecad-stubs leaves `appendMenu` unannotated.
-        self.appendMenu("Shelving", command_ids)  # type: ignore[no-untyped-call]
+        self.appendMenu("Shelving", menu_commands())  # type: ignore[no-untyped-call]
 
     def Activated(self) -> None:
         pass

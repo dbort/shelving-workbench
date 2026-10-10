@@ -33,8 +33,8 @@ check of installing from the repository on a clean profile. Milestone M10, part
 - [ ] `README.md` leads with what the workbench is for and links the guide, the
       scope document, and the roadmap. Its glossary stays, as the reference for
       the vocabulary.
-- [ ] `docs/manual-qa.md` carries a release section: install from the repository
-      through the Addon Manager on a clean profile, model a unit, move it into a
+- [ ] A release QA case in `freecad/Shelving/qa/cases/` covers: install from
+      the repository through the Addon Manager on a clean profile, model a unit, move it into a
       second document, confirm the guide's steps work as written.
 - [ ] No document refers to a milestone as forthcoming that has shipped, and no
       document names a module, command or property that does not exist. Asserted
@@ -76,8 +76,8 @@ list.
 fields; the schema is published and the existing file is already close. The
 version becomes the release version rather than `0.0.1`.
 
-DO NOT WRITE TUTORIAL SCREENSHOTS OR VIDEO. Prose plus the manual QA document's
-numbered steps is the deliverable. Images go stale faster than anything else in
+DO NOT WRITE TUTORIAL SCREENSHOTS OR VIDEO. Prose plus the QA cases' steps is
+the deliverable. Images go stale faster than anything else in
 a document and nothing in this repository can regenerate them.
 
 STANDING OBLIGATIONS (`CLAUDE.md`). Typed Python applies to the one test this
@@ -99,6 +99,6 @@ full to every document this task writes, and `doc-hygiene` is the authority.
 
 - [ ] **Step 4** (`package.xml`, `README.md`): Finalize the package metadata against the Addon Manager schema: name, description matching the guide's opening, release version, icon path, maintainer, license, and FreeCAD minimum version. Rewrite the README's opening to lead with what the workbench is for and link the guide first, then the scope document, then the roadmap; keep the setup, tests and glossary sections.
 
-- [ ] **Step 5** (`docs/manual-qa.md`): Add a release section: install from the repository through the Addon Manager on a clean profile with no development symlink; create a unit; scan a unit modeled by hand; move a finished unit into a second document with an ordinary placement and confirm it is intact; and walk the user guide's steps exactly as written, confirming each does what it says. State that this section is the pre-release gate and is run once per release rather than per task.
+- [ ] **Step 5** (`freecad/Shelving/qa/cases/`): Add a release QA case: install from the repository through the Addon Manager on a clean profile with no development symlink; create a unit; scan a unit modeled by hand; move a finished unit into a second document with an ordinary placement and confirm it is intact; and walk the user guide's steps exactly as written, confirming each does what it says. State in the case that it is the pre-release gate and is run once per release rather than per task.
 
 ## Review log

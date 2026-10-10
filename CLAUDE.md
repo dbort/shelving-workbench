@@ -8,7 +8,8 @@ Doc placement: `docs/` is human-facing prose, swept by `doc-hygiene`;
 `.claude/docs/` is agent-contract material whose absolutes are never
 style-swept. Process rules, tool contracts, runtime notes and the logs go
 in `.claude/docs/`, even when a human also reads them. Code orientation:
-`.claude/docs/code-map.md`.
+`.claude/docs/code-map.md`. The QA wizard's contract, which every manual
+QA case and wizard change follows: `.claude/docs/qa-wizard.md`.
 
 ## Invariants
 

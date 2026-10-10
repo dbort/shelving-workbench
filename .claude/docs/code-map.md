@@ -23,6 +23,10 @@ Each layer imports only the layers listed above it.
 - `freecad/Shelving/init_gui.py`: workbench registration.
 - `freecad/Shelving/debug_log.py`: Report-view diagnostics, usable from
   any layer.
+- `freecad/Shelving/qa/`: the manual QA wizard, developer tooling outside
+  the layering: it may import any layer, and only
+  `freecad/Shelving/commands/qa_wizard.py` and `init_gui.py` import it
+  (`.claude/docs/qa-wizard.md`).
 - `freecad/Shelving/resources/`: the workbench icon.
 
 Outside the package: `tools/` holds the check scripts `pixi run tests`
