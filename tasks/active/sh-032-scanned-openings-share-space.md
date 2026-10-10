@@ -134,3 +134,11 @@ task adds no shell.
 - **N4: `_recover_rules` docstring overstates "Only"** (`scan.py:887-888`): the scan also produces `Fixed` for a void beside compartments and for an axis-wrap division.
 - **N5: Decision revised in place rather than appended** (task file Advice): the original voids bullet was replaced; the Must Have at line 40 runs past the wrap width.
 - **N6: Evaluation doc still describes the old rule** (`docs/parametric-model-evaluation.md:142`, `:146`): non-blocking, the doc is not the design of record.
+
+### Round 2: REJECTED
+- **F1: The stepped-columns comments claim a regression guard the test no longer provides** (`freecad/Shelving/core/tests/test_scan.py:979-984`, `:991-995`, `:1036-1041`): "Only the wraps' exclusion from _finalize_items's rule recovery keeps each divider at its own height" is false; with `_is_axis_wrap` patched to always return `False` the test still passes, since an unexcluded wrap becomes `Weighted(18)` and the scan solve still gives 18 mm. The docstring's "not equalized ... by `Fill`" and the 162.4 mm counterfactual describe the removed twin heuristic. Restate the comments, or make the test guard the exclusion (assert each wrap is `Fixed(18)`, or widen the unit and assert each wrap stays 18 mm).
+- **N1: Stale counterfactual in the report test** (`test_report.py:35`): an unexcluded wrap would now print a weight, not a bare line.
+- **N2: Docstring contradicts its own assertion** (`test_scan.py:853`): says the column bodies are not equalized, but asserts both `Fill` at 887.0283 mm.
+- **N3: Awkward line break in a docstring** (`scan.py:889`).
+- **N4: The thickness check in the resize tests is close to vacuous** (`test_scanned_units.py:222`, `:327`): asserting where the growth went (for example the plinth keeping 100 mm) would be sharper.
+- **N5: Task-file formatting** (task file `:16`, `:71`): lines past the wrap width; the Summary is five sentences against pipeline.md's 1-3.
