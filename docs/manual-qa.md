@@ -209,9 +209,8 @@ selected.
 
 Prerequisite: a FreeCAD 1.1 install with this workbench on its addon path,
 **View → Panels → Report view** open, a new document (`Ctrl+N`).
-`Shelving_CreateUnit` and `Shelving_ResizeUnit` print their results to the
-Report view with `print()`, not to the Python console, so keep the Report
-view open.
+`Shelving_CreateUnit` prints its result to the Report view with `print()`,
+not to the Python console, so keep the Report view open.
 
 ### 1. Create a unit and confirm the tree holds plain boxes with a Shelving property group
 
@@ -234,15 +233,13 @@ Select **ShelvingUnit** itself: its own **Shelving** group holds
 1. Select **Bottom**, rename its label to `MyBottom` (F2, or the property
    editor's `Label` field), and give it a color (right-click → **Appearance…**
    or the toolbar's color swatch).
-2. Select **ShelvingUnit** and run **Resize Unit**. Enter width `800`, depth
-   `350`, height `1000` (the dialog is seeded from the unit's current
-   measured size; overwrite all three).
+2. Select **ShelvingUnit** and run **Edit Unit**. In the panel's **Unit**
+   section, which shows 600, 300 and 900 mm, type width `800`, depth `350`
+   and height `1000`, pressing Return after each, then click **OK**.
 
-Expected: the same four objects move and resize to 800 × 350 × 1000 mm; no
-new objects appear and none are deleted. **Bottom**'s label stays
-`MyBottom` and its color is unchanged. The Report view prints an
-`updated 4, created 0, deleted 0, left alone 0` line (counts may differ if
-you added other geometry first).
+Expected: the 3D view follows each Return. The same four objects move and
+resize to 800 × 350 × 1000 mm; no new objects appear and none are deleted.
+**Bottom**'s label stays `MyBottom` and its color is unchanged.
 
 ### 3. Move a board by hand, rescan, and confirm the layout takes the edit up
 
@@ -263,15 +260,15 @@ you added other geometry first).
      stays exactly where you put it, because that reading is now a
      different, equally valid layout, not a stray edit to correct. 2 mm
      keeps this comfortably inside the tolerant range.
-2. Select **ShelvingUnit** and run **Resize Unit** again, entering `800`,
-   `350`, `1000`, the same dimensions as case 2 (or run **Scan Unit** first
-   to confirm the moved board is still read correctly, then resize).
+2. Select **ShelvingUnit** and run **Edit Unit** (or run **Scan Unit**
+   first to confirm the moved board is still read correctly). In the
+   **Unit** section, type height `1010` and press Return, then click **OK**.
 
 Expected: the hand-moved board snaps back to `x = 0` as part of the
 reapplied layout; the layout reflows around the edit rather than preserving
-the stray placement, since every resize rescans the container fresh rather
-than trusting a cached tree. You do not need to move the board back by
-hand first: running Resize Unit (or Scan Unit) is what corrects it.
+the stray placement, since the editor rescans the container fresh when it
+opens rather than trusting a cached tree. You do not need to move the board
+back by hand first: the first edit is what corrects it.
 
 ### 4. Put an unrelated box in the container and confirm apply leaves it and says so
 
@@ -292,13 +289,14 @@ hand first: running Resize Unit (or Scan Unit) is what corrects it.
    part.addObject(extra)
    doc.recompute()
    ```
-2. Select **ShelvingUnit** and run **Resize Unit**. Enter width `900`,
-   depth `400`, height `1100`.
+2. Select **ShelvingUnit** and run **Edit Unit**. In the **Unit** section,
+   type width `900`, depth `400` and height `1100`, pressing Return after
+   each, then click **OK**.
 
-Expected: **HandAdded** stays exactly where it was, still in the tree and
-not deleted, because it carries none of this workbench's properties. The Report
-view's line includes `left alone 1` and names `HandAdded` on the line below
-it.
+Expected: the panel lists **HandAdded** under **Objects this workbench did
+not create**, unchecked. After **OK**, **HandAdded** stays exactly where it
+was, still in the tree and not deleted, because it carries none of this
+workbench's properties.
 
 ### 5. Save, quit, move the workbench off the path, reopen, and confirm the document is intact
 
@@ -638,3 +636,34 @@ Expected: a **Shelving** error notification explains in plain words that
 the fixed sizes add up to more than the space available, naming how much
 more, with no internal ids; the elevation and 3D view stay exactly as
 before the attempt, and the panel stays open and usable.
+
+### 18. Step a unit dimension and watch the 3D view follow
+
+**Start:** a fresh unit.
+
+1. Select the container and run **Edit Unit**. The **Unit** section at the
+   top shows width 600 mm, depth 300 mm and height 900 mm.
+2. Click the **Height** field's up arrow a few times, then hold it down.
+
+Expected: the unit grows taller in the 3D view at every step while the
+arrow is held, and the field shows each new height.
+
+3. Turn the mouse wheel over the **Width** field.
+
+Expected: the unit widens or narrows with every notch of the wheel.
+
+4. Click into **Depth**, type `500` without pressing Return.
+
+Expected: nothing changes in the 3D view while you type. Press Return:
+the unit becomes 500 mm deep.
+
+5. Type `60` in **Height** and press Return, then hold the **Height** down
+   arrow.
+
+Expected: the unit becomes 60 mm tall, then stops shrinking once its
+openings would vanish. A single error appears in the Notification Area for
+the held arrow, and the field shows the last height that worked.
+
+6. Click **Cancel**.
+
+Expected: the unit is back to 600 × 300 × 900 mm.

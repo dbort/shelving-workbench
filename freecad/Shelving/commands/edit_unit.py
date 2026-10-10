@@ -77,7 +77,7 @@ class EditUnitCommand:
             )
             run.end("refused")
             return
-        # Imported here, as resize_unit.py does with Qt: a PySide6 import
+        # Imported here rather than at module level: a PySide6 import
         # failure on some user's FreeCAD build would otherwise stop init_gui
         # from registering every Shelving command, not only this one.
         from PySide6 import QtCore

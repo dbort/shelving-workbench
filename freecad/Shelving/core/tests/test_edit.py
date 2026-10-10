@@ -17,6 +17,7 @@ from freecad.Shelving.core.edit import (
     run_axis,
     set_basis,
     set_size,
+    set_unit_size,
     split_region,
 )
 from freecad.Shelving.core.geometry import Space, Vec3
@@ -1013,6 +1014,30 @@ def _assert_same_layout(before: Unit, after: Unit) -> None:
     assert spaces_before.keys() == spaces_after.keys()
     for node_id, space in spaces_before.items():
         assert _spaces_equal(space, spaces_after[node_id]), (node_id, space)
+
+
+def test_set_unit_size_changes_only_the_outer_size() -> None:
+    unit = _column_unit(Fill())
+    resized = set_unit_size(unit, Vec3(600.0, 300.0, 1000.0))
+    assert resized.size_mm == Vec3(600.0, 300.0, 1000.0)
+    assert resized.root is unit.root
+    assert unit.size_mm == Vec3(600.0, 300.0, 900.0)
+    assert solve(resized)["top"].origin.z_mm == pytest.approx(1000.0 - 18.0)
+
+
+@pytest.mark.parametrize(
+    "size_mm",
+    [
+        Vec3(0.0, 300.0, 900.0),
+        Vec3(600.0, -1.0, 900.0),
+        Vec3(600.0, 300.0, 0.0),
+    ],
+)
+def test_set_unit_size_refuses_a_nonpositive_axis(size_mm: Vec3) -> None:
+    unit = _column_unit(Fill())
+    with pytest.raises(EditError) as err:
+        set_unit_size(unit, size_mm)
+    assert err.value.node_id == unit.id
 
 
 def test_set_size_fixes_the_region_and_leaves_every_sibling_rule() -> None:

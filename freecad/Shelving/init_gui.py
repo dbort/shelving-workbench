@@ -42,7 +42,6 @@ class ShelvingWorkbench(_WorkbenchBase):
             create_unit,
             edit_unit,
             export_boxes,
-            resize_unit,
             scan,
         )
 
@@ -50,7 +49,6 @@ class ShelvingWorkbench(_WorkbenchBase):
             "Shelving_Scan",
             "Shelving_ExportBoxes",
             "Shelving_CreateUnit",
-            "Shelving_ResizeUnit",
             "Shelving_EditUnit",
         ]
         self.appendToolbar("Shelving", command_ids)

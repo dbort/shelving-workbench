@@ -40,6 +40,7 @@ from freecad.Shelving.core.edit import (
     run_axis,
     set_basis,
     set_size,
+    set_unit_size,
     split_region,
 )
 from freecad.Shelving.core.geometry import Space, Vec3
@@ -68,6 +69,16 @@ class _Labeled(Protocol):
 # dimension field binds to (.claude/docs/freecad-notes.md, "GUI-only widget
 # access").
 PROBE_PROPERTY = "Dimension"
+
+UnitDimension = Literal["width", "depth", "height"]
+
+# The probe property each of the unit's dimension fields binds to, so an
+# expression typed into one field never shows up in another.
+UNIT_PROBE_PROPERTIES: Mapping[UnitDimension, str] = {
+    "width": "UnitWidth",
+    "depth": "UnitDepth",
+    "height": "UnitHeight",
+}
 
 _PANEL_REASON = (
     "thin through the unit's depth, so it reads as a back or front panel, "
@@ -213,7 +224,8 @@ class Session:
             "FreeCAD.DocumentObject",
             doc.addObject("App::VarSet", "ShelvingDimensionProbe"),
         )
-        probe.addProperty("App::PropertyLength", PROBE_PROPERTY, "Shelving")
+        for name in (PROBE_PROPERTY, *UNIT_PROBE_PROPERTIES.values()):
+            probe.addProperty("App::PropertyLength", name, "Shelving")
         cast("_Labeled", probe).Label = "Shelving dimension (temporary)"
         self.probe = probe
 
@@ -301,6 +313,42 @@ class Session:
             )
         return elevation_axes(depth_axis)
 
+    def _unit_axis(self, dimension: UnitDimension) -> Axis:
+        """The model axis ``dimension`` names: width and height are the
+        elevation's horizontal and vertical axes, depth is the depth axis.
+        Raises ``ValueError`` on the same terms as :meth:`_elevation_axes`."""
+        horizontal, vertical = self._elevation_axes()
+        if dimension == "width":
+            return horizontal
+        if dimension == "height":
+            return vertical
+        return next(axis for axis in Axis if axis not in (horizontal, vertical))
+
+    def unit_dimension_mm(self, dimension: UnitDimension) -> float:
+        """The unit's outer size along ``dimension``, as scanned or last set:
+        a part the scan set aside, such as a back panel, does not count."""
+        size_mm = self.unit.size_mm
+        return (size_mm.x_mm, size_mm.y_mm, size_mm.z_mm)[
+            self._unit_axis(dimension).component_index
+        ]
+
+    def resize(self, dimension: UnitDimension, size_mm: float) -> EditFailure | None:
+        """Set the unit's outer size along ``dimension``, keeping its minimum
+        corner where it is and the selection as it was. Returns ``None`` on
+        success or an :class:`EditFailure` on refusal, which changes
+        nothing."""
+        components = [
+            self.unit.size_mm.x_mm,
+            self.unit.size_mm.y_mm,
+            self.unit.size_mm.z_mm,
+        ]
+        components[self._unit_axis(dimension).component_index] = size_mm
+        try:
+            candidate = set_unit_size(self.unit, Vec3(*components))
+        except EditError as err:
+            return EditFailure(str(err), err.node_id)
+        return self._apply(candidate, select=self.selected_id)
+
     def split(self, direction: SplitDirection) -> EditFailure | None:
         """Split the selected ``Bay`` in two with a board that copies its stock
         from :func:`~freecad.Shelving.core.stock.source_board`'s choice.
@@ -338,7 +386,8 @@ class Session:
         the probe. The rule already holds the resolved number, and while
         the expression stays the field is read-only for every region."""
         if self.probe is not None:
-            self.probe.setExpression(PROBE_PROPERTY, None)
+            for name in (PROBE_PROPERTY, *UNIT_PROBE_PROPERTIES.values()):
+                self.probe.setExpression(name, None)
 
     def selected_measurement(self) -> Measurement | None:
         """The selected region's :class:`~freecad.Shelving.core.edit.Measurement`,

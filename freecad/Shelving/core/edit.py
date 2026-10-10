@@ -21,7 +21,7 @@ from __future__ import annotations
 import dataclasses
 from collections.abc import Collection, Mapping, Sequence
 
-from freecad.Shelving.core.geometry import AxisIndex, Space
+from freecad.Shelving.core.geometry import AxisIndex, Space, Vec3
 from freecad.Shelving.core.layout import (
     Axis,
     Basis,
@@ -461,6 +461,22 @@ def _with_rule(region: Region, region_id: str, rule: SizeRule) -> Region:
         changed = changed or new_item is not item
         new_items.append(new_item)
     return dataclasses.replace(region, items=new_items) if changed else region
+
+
+def set_unit_size(unit: Unit, size_mm: Vec3) -> Unit:
+    """``unit`` with outer size ``size_mm`` and its tree unchanged; the solve
+    decides where the change goes. Raises :class:`EditError` naming
+    ``unit.id`` when any axis of ``size_mm`` is not positive."""
+    for axis, value_mm in zip(
+        Axis, (size_mm.x_mm, size_mm.y_mm, size_mm.z_mm), strict=True
+    ):
+        if value_mm <= 0:
+            raise EditError(
+                unit.id,
+                f"A unit's size along {axis.value} must be more than zero; "
+                f"got {value_mm:.1f} mm.",
+            )
+    return dataclasses.replace(unit, size_mm=size_mm)
 
 
 def set_size(unit: Unit, region_id: str, size_mm: float, basis: Basis) -> Unit:

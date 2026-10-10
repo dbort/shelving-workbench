@@ -90,11 +90,11 @@ containers in signatures, `mypy --strict` clean. Shell stays simple: this
 task adds no shell.
 
 ## Plan
-- [ ] **Step 1** (`freecad/Shelving/core/edit.py`, core tests): A unit-size edit returning the unit with a new outer size, refusing a non-positive axis with `EditError`.
-- [ ] **Step 2** (`freecad/Shelving/editor/session.py`): `Session` exposes the unit's size and a resize that goes through `_apply`, returning `EditFailure` on refusal.
-- [ ] **Step 3** (`freecad/Shelving/editor/panel.py`): The Unit group with width, depth and height fields built on the existing dimension field class, applying on Return, focus-out and each spin step, refreshed after every edit.
-- [ ] **Step 4** (`freecad/Shelving/commands/resize_unit.py`, `freecad/Shelving/init_gui.py`, tests that import the command): Remove the command and its registration; keep `unit_ops.resize_unit` and `unit_ops.unit_size_mm`.
-- [ ] **Step 5** (`tests/freecad/`, `tests/freecad_gui/`): The headless session and GUI panel Must Have tests.
-- [ ] **Step 6** (`docs/manual-qa.md`, `README.md`): Rewrite the M7 resize cases for the panel, add the spin-step case, and update any glossary or command list that names Resize Unit.
+- [x] **Step 1** (`freecad/Shelving/core/edit.py`, core tests): A unit-size edit returning the unit with a new outer size, refusing a non-positive axis with `EditError`.
+- [x] **Step 2** (`freecad/Shelving/editor/session.py`): `Session` exposes the unit's size and a resize that goes through `_apply`, returning `EditFailure` on refusal.
+- [x] **Step 3** (`freecad/Shelving/editor/panel.py`): The Unit group with width, depth and height fields built on the existing dimension field class, applying on Return, focus-out and each spin step, refreshed after every edit.
+- [x] **Step 4** (`freecad/Shelving/commands/resize_unit.py`, `freecad/Shelving/init_gui.py`, tests that import the command): Remove the command and its registration; keep `unit_ops.resize_unit` and `unit_ops.unit_size_mm`.
+- [x] **Step 5** (`tests/freecad/`, `tests/freecad_gui/`): The headless session and GUI panel Must Have tests.
+- [x] **Step 6** (`docs/manual-qa.md`, `README.md`): Rewrite the M7 resize cases for the panel, add the spin-step case, and update any glossary or command list that names Resize Unit.
 
 ## Review log
