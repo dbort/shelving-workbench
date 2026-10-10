@@ -726,3 +726,18 @@ def test_a_wheel_turn_past_a_limit_reports_once(
         _wheel_down(spin)
     assert len(reported) == 1, reported
     assert 54.0 < unit_panel.session.unit_dimension_mm("height") < 60.0
+
+
+def test_the_elevation_keeps_a_usable_height_in_a_short_panel(
+    unit_panel: _Fixture,
+) -> None:
+    """The controls never squeeze the elevation below its minimum; a short
+    task panel scrolls instead."""
+    form = unit_panel.panel.form
+    form.resize(400, 200)
+    _process_events()
+    assert unit_panel.panel.view.height() >= panel_module._MIN_VIEW_HEIGHT_PX
+    form.resize(400, 1400)
+    _process_events()
+    # A tall panel's spare height goes to the elevation.
+    assert unit_panel.panel.view.height() > 1400 // 2

@@ -40,6 +40,8 @@ live. The separate Resize Unit command and its three dialogs go away.
         and the field shows the unit's current size again;
       - the fields show the new size after any resize, and stay correct
         after a split or a merge.
+- [ ] In `tests/freecad_gui/`, the elevation keeps at least its minimum
+      height when the panel is short, and takes most of a tall panel.
 - [ ] `freecad/Shelving/commands/resize_unit.py` no longer exists, and the
       workbench registers no `Shelving_ResizeUnit` command.
       `unit_ops.resize_unit` and `unit_ops.unit_size_mm` remain.
@@ -63,6 +65,10 @@ DECISIONS (user, 2026-10-10):
   edge is often off screen. Edge dragging belongs with that rework.
 - **Placement:** a "Unit" group at the top of the panel, above the
   elevation, always visible whatever is selected.
+- **The elevation keeps a usable height** (user, 2026-10-10, from manual
+  QA after round 2): with the Unit section added, the panel squeezed the
+  elevation to about 60 px. The view has a minimum height and the layout's
+  only stretch, so a short task panel scrolls instead.
 
 CONSTRAINTS:
 - Use the same widget as the opening size field (FreeCAD's

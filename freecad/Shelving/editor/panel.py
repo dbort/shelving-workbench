@@ -69,6 +69,10 @@ def report_error(message: str) -> None:
     _print_user_error("Shelving", message + "\n")
 
 
+# The elevation keeps at least this height, so the controls around it make
+# FreeCAD's task panel scroll rather than squeezing the view to a sliver.
+_MIN_VIEW_HEIGHT_PX = 320
+
 _UNIT_DIMENSIONS: tuple[tuple[UnitDimension, str], ...] = (
     ("width", "Width"),
     ("depth", "Depth"),
@@ -581,7 +585,10 @@ class EditUnitPanel:
         self.view = _EditorView(
             self._on_scene_click, self._on_scene_drag, self._on_scene_release
         )
-        layout.addWidget(self.view)
+        self.view.setMinimumHeight(_MIN_VIEW_HEIGHT_PX)
+        # The only stretch in the layout: any height the panel has to spare
+        # goes to the elevation.
+        layout.addWidget(self.view, 1)
         self._dragging = False
         # A drag re-solves on every pointer move, so one held past a limit
         # would otherwise raise a popup per move.
