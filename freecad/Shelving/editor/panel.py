@@ -175,7 +175,7 @@ class _StepWatch(QtCore.QObject):
 
 
 class _DimensionField:
-    """The size input: FreeCAD's quantity widget bound to the session's
+    """A size input: FreeCAD's quantity widget bound to the session's
     probe object, or, when the GUI cannot supply that widget, a plain line
     edit whose text goes to ``FreeCAD.Units.parseQuantity`` verbatim.
 

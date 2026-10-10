@@ -382,9 +382,10 @@ class Session:
         return self._apply(candidate)
 
     def clear_probe_expression(self) -> None:
-        """Remove any expression the dimension field's f(x) dialog bound to
-        the probe. The rule already holds the resolved number, and while
-        the expression stays the field is read-only for every region."""
+        """Remove any expression a dimension field's f(x) dialog bound to
+        the probe. The edit already holds the resolved number, and while
+        the expression stays its field is read-only; for the region size
+        field, that means read-only for every region."""
         if self.probe is not None:
             for name in (PROBE_PROPERTY, *UNIT_PROBE_PROPERTIES.values()):
                 self.probe.setExpression(name, None)
