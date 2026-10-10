@@ -165,3 +165,13 @@ the TOML boundary noted above, no bare containers in signatures,
 - [x] **Step 6** (`docs/manual-qa.md`, `README.md`, `.claude/docs/friction-log.md`, `tasks/active/sh-022-appearance-and-errors.md`, `tasks/active/sh-023-preferences.md`, `tasks/active/sh-024-user-documentation-and-release.md`, `tasks/active/sh-031-editor-stock-list-and-swap.md`): Shrink the doc to policy and how to run the wizard, keep the README link accurate, delete friction-024, add the Developer group to sh-023, and point the other tasks' manual QA at case files.
 
 ## Review log
+
+### Round 1: REJECTED
+- **F1: Report view capture has no test** (`tests/freecad_gui/test_qa_wizard.py:45`, `freecad/Shelving/qa/dock.py:42`): `report_view_text()` returns `""` when its widget lookup fails, so a renamed widget empties every step's log with the suite green. Print a marker while step 1 is current in the GUI smoke test and assert it appears in the step's `log`.
+- **F2: The bug-009 note never reaches the tester** (`freecad/Shelving/qa/cases/30-editor.toml:1-2`): it became a TOML comment the dock never shows; put it in text the dock shows, such as the `expected` of steps where crowded dimensions appear.
+- **N1: The command docstring says the command is registered only while the flag is on** (`freecad/Shelving/commands/qa_wizard.py:3-4`): only the menu entry depends on the flag.
+- **N2: The `Progress.started` comment does not match the code** (`freecad/Shelving/qa/report.py:34`): it is set when the dock is built; `isoformat(sep=" ")` is not strict ISO 8601.
+- **N3: The public-API guard rail has gaps** (`tests/test_qa_guard_rails.py:62`): underscore components in an imported module path pass.
+- **N4: `_commit()`'s `unknown` fallback is untested** (`freecad/Shelving/qa/dock.py:48`).
+- **N5: Other task files still point at old locations** (`tasks/active/sh-022-appearance-and-errors.md:91`, `tasks/active/sh-023-preferences.md:118`): sh-022 Step 3 names `command_ids`; sh-023 Step 5 still lists `docs/manual-qa.md` and has no step wiring the toggles into the readers, whose Protocol lacks a bool getter; sh-024's reflowed Must Have runs past the line width.
+- **N6: British spelling** (`tests/freecad/test_qa_actions.py:20`): "afterwards".
