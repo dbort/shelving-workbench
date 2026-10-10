@@ -677,3 +677,38 @@ def test_a_held_arrow_past_a_limit_reports_once(
         _process_events()
     assert len(reported) == 1, reported
     assert unit_panel.session.unit_dimension_mm("height") == pytest.approx(55.0)
+
+
+def _wheel_down(widget: QtWidgets.QWidget) -> None:
+    center = QtCore.QPointF(widget.rect().center())
+    event = QtGui.QWheelEvent(
+        center,
+        QtCore.QPointF(widget.mapToGlobal(center.toPoint())),
+        QtCore.QPoint(0, 0),
+        QtCore.QPoint(0, -120),
+        QtCore.Qt.MouseButton.NoButton,
+        QtCore.Qt.KeyboardModifier.NoModifier,
+        QtCore.Qt.ScrollPhase.NoScrollPhase,
+        False,
+    )
+    QtWidgets.QApplication.sendEvent(widget, event)
+    _process_events()
+
+
+def test_a_wheel_turn_past_a_limit_reports_once(
+    unit_panel: _Fixture, reported: list[str]
+) -> None:
+    """Each notch steps the height down until the openings around the shelf
+    would vanish; the notches past that are one turn of the wheel, and only
+    its first refusal is reported."""
+    _type_unit_size(unit_panel, "height", "60")
+    spin = unit_panel.panel.unit_fields["height"].quantity_widget
+    assert spin is not None
+    spin.setFocus()
+    _wheel_down(spin)
+    step_mm = 60.0 - unit_panel.session.unit_dimension_mm("height")
+    assert step_mm > 0
+    for _notch in range(int(10.0 / step_mm) + 2):
+        _wheel_down(spin)
+    assert len(reported) == 1, reported
+    assert 54.0 < unit_panel.session.unit_dimension_mm("height") < 60.0

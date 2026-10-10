@@ -1109,7 +1109,9 @@ def test_a_session_resizes_magic_start_taller_and_keeps_its_plinth(
         try:
             assert session.resize("height", 800.0) is None
             doc.recompute()
-            assert abs(_z_mm(container, "Floor") - floor_z_mm) < 1e-6
+            # The unit's bottom is at z 0, so the floor's height is the gap.
+            assert abs(floor_z_mm - 100.0) < 1e-6
+            assert abs(_z_mm(container, "Floor") - 100.0) < 1e-6
             for name in ("Floor", "Left", "Right", "Top", "Shelf"):
                 box = cast("_BoxFeature", doc.getObject(name))
                 thinnest_mm = min(

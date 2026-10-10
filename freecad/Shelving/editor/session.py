@@ -309,7 +309,7 @@ class Session:
         depth_axis = self.unit.depth_axis
         if depth_axis is None:
             raise ValueError(
-                f"unit {self.unit.id!r} has no depth_axis to split by direction"
+                f"unit {self.unit.id!r} has no depth_axis to orient its elevation"
             )
         return elevation_axes(depth_axis)
 

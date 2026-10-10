@@ -247,7 +247,8 @@ rules. The rules are keyed by the boards bounding each region, because a
 region's own id is fresh on every scan.
 
 **Create Unit** seeds a starter unit and **Resize Unit** takes new outer
-dimensions, both through the same write path. Resize rescans every time
+dimensions, both through the same write path. sh-033 moved resizing into
+the Edit Unit panel's Unit section and removed the Resize Unit command. Resize rescans every time
 rather than caching a model, so a board moved by hand between operations
 is taken up rather than overwritten. The unit's size stays geometry rather
 than becoming a container property: a property nothing recomputes would be

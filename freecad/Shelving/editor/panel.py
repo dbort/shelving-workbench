@@ -118,7 +118,14 @@ class _FieldEventFilter(QtCore.QObject):
 class _StepWatch(QtCore.QObject):
     """Notes, before the spin box sees it, every event that steps its value
     rather than editing its text: a spin arrow pressed, an arrow or page key,
-    a wheel turn. ``stepping`` stays set until a key that edits text."""
+    a wheel turn. ``stepping`` stays set until a key that edits text.
+    Installed on the spin box and its line edit, but a mouse press counts
+    only on the spin box itself: a click in the text places the caret or
+    opens a menu whose paste edits text."""
+
+    # Wheel events closer together than this are one turn of the wheel, so
+    # a touchpad gesture past a limit reports its refusal once.
+    _WHEEL_GAP_S = 0.5
 
     _STEP_KEYS = (
         QtCore.Qt.Key.Key_Up,
@@ -127,16 +134,19 @@ class _StepWatch(QtCore.QObject):
         QtCore.Qt.Key.Key_PageDown,
     )
 
-    def __init__(self, parent: QtCore.QObject) -> None:
-        super().__init__(parent)
+    def __init__(self, spin: QtWidgets.QWidget) -> None:
+        super().__init__(spin)
+        self._spin = spin
         self.stepping = False
-        # Counts presses, not repeats, so a caller can tell one held arrow
-        # from the next press.
+        # Counts presses and wheel turns, not repeats, so a caller can tell
+        # one held arrow or one gesture from the next.
         self.bursts = 0
+        self._last_wheel_s: float | None = None
 
     def eventFilter(self, watched: QtCore.QObject, event: QtCore.QEvent) -> bool:
         kind = event.type()
         if kind == QtCore.QEvent.Type.KeyPress:
+            self._last_wheel_s = None
             key_event = cast("QtGui.QKeyEvent", event)
             if key_event.key() in self._STEP_KEYS:
                 if not key_event.isAutoRepeat():
@@ -144,8 +154,17 @@ class _StepWatch(QtCore.QObject):
                 self.stepping = True
             else:
                 self.stepping = False
-        elif kind in (QtCore.QEvent.Type.MouseButtonPress, QtCore.QEvent.Type.Wheel):
+        elif kind == QtCore.QEvent.Type.MouseButtonPress and watched is self._spin:
+            self._last_wheel_s = None
             self.bursts += 1
+            self.stepping = True
+        elif kind == QtCore.QEvent.Type.Wheel:
+            now_s = time.monotonic()
+            if self._last_wheel_s is None or now_s - self._last_wheel_s > (
+                self._WHEEL_GAP_S
+            ):
+                self.bursts += 1
+            self._last_wheel_s = now_s
             self.stepping = True
         return False
 

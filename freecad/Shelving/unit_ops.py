@@ -1,5 +1,5 @@
-"""Plain functions behind Create Unit, and the resize and rescan tests and
-scripts run without the editor.
+"""Plain functions behind Create Unit, plus the resize and rescan that tests
+and scripts call without the editor.
 
 Kept out of the command classes, not merely called by them, so
 ``tests/freecad/test_write.py`` can call each operation directly without
