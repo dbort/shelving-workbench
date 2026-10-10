@@ -12,8 +12,9 @@ workbench keeps them: FreeCAD's `ShapeMaterial`, the board's appearance, and a
 per-face `Grain` list. A new shelf or divider copies all of that from the most
 fitting existing board: another shelf in the same opening first, then one
 elsewhere in the unit, then the carcass, so shelves can be a different stock
-from the carcass. Seed Catalog, Add Material and Reflow All go away; changing
-stock in the editor is a separate, later task.
+from the carcass. Seed Catalog, Add Material and Reflow All go away, and so do
+the SVG renderer and the `pixi run demo` tool, which predate FreeCAD's own 3D
+views. Changing stock in the editor is a separate, later task.
 
 ## Must Have
 - [ ] `pixi run tests` green.
@@ -21,10 +22,12 @@ stock in the editor is a separate, later task.
       `freecad/Shelving/catalog.py`, `freecad/Shelving/default_catalog.py`,
       `freecad/Shelving/commands/add_material.py`,
       `freecad/Shelving/commands/seed_catalog.py`,
-      `freecad/Shelving/commands/reflow_all.py` and
-      `tests/freecad/test_catalog.py` no longer exist, and
-      `git grep -i -E "catalog|MaterialId|default_material"` finds nothing
-      under `freecad/`, `tests/` or `tools/`.
+      `freecad/Shelving/commands/reflow_all.py`,
+      `tests/freecad/test_catalog.py`, `freecad/Shelving/core/svg.py`,
+      `freecad/Shelving/core/tests/test_svg.py`, `tools/layout_demo.py` and
+      `tests/test_layout_demo.py` no longer exist; `pixi.toml` defines no
+      `demo` task; and `git grep -i -E "catalog|MaterialId|default_material|svg"`
+      finds nothing under `freecad/`, `tests/` or `tools/`.
 - [ ] `solve`, `expand`, `scan`, `split_region` and `merge_at` take no
       catalog argument, and the workbench registers no `Shelving_SeedCatalog`,
       `Shelving_AddMaterial` or `Shelving_ReflowAll` command.
@@ -132,8 +135,11 @@ REMOVED:
   `unit_ops.reflow_all`;
 - the board and catalog-entry properties in `freecad/Shelving/properties.py`;
 - the `material` field on scan's `Box`, and `Unit.default_material`;
-- catalog-driven colour in `freecad/Shelving/core/svg.py`, which draws boards
-  in one neutral colour instead, since the core holds no appearance;
+- the SVG renderer (`freecad/Shelving/core/svg.py`) and the demo
+  (`tools/layout_demo.py`, the `demo` pixi task, its README section), with
+  their tests (user decision, 2026-10-09). Both predate FreeCAD's 3D views,
+  and deleting them saves reworking their catalog use. The editor's
+  `scene.py` mentions `core.svg` only in comments; reword those;
 - `tests/freecad/test_catalog.py`. Before deleting it, move any test there
   that isn't about the catalog, such as saving a document and reopening it
   without a proxy, to `tests/freecad/test_write.py` (unless it already has an
@@ -161,11 +167,11 @@ Protocols like the existing ones. Shell stays simple: this task changes no
 shell script beyond removing what no longer exists, if anything.
 
 ## Plan
-- [ ] **Step 1** (`freecad/Shelving/core/`): Remove the catalog from the core. Boards carry their own run-axis extent from the scan grid. `solve`, `expand`, `scan`, `split_region`, `merge_at` and the basis helpers in `edit.py` lose their catalog argument. Scan's `Box` loses `material`, `Unit` loses `default_material`, and `svg.py` draws boards in one neutral colour. Core tests follow, including sh-026's stair-step reproduction and a mixed 17.6/19 mm case.
+- [ ] **Step 1** (`freecad/Shelving/core/`): Remove the catalog from the core. Boards carry their own run-axis extent from the scan grid. `solve`, `expand`, `scan`, `split_region`, `merge_at` and the basis helpers in `edit.py` lose their catalog argument. Scan's `Box` loses `material`, and `Unit` loses `default_material`. Delete `svg.py` and `test_svg.py`. Core tests follow, including sh-026's stair-step reproduction and a mixed 17.6/19 mm case.
 - [ ] **Step 2** (`freecad/Shelving/core/edit.py` or a new core module, plus tests): Carcass classification and the SOURCE BOARD rule as a pure function. `split_region` gives the new board its source's thickness and records the source board's id.
 - [ ] **Step 3** (`freecad/Shelving/`): Remove the catalog modules, the three commands and their registration, the board and entry properties, and `unit_ops.reflow_all`. The session and panel stop reading a catalog. The write path copies `ShapeMaterial`, `Grain` and, with a GUI, `ShapeAppearance` from the source object when creating a board, and never on update. Create Unit uses the Magic Start defaults.
 - [ ] **Step 4** (`tests/freecad/`, `tests/freecad_gui/`): Delete `test_catalog.py` after moving out anything not about the catalog. Add the headless Must Have tests: the Magic Start stock copy, the create_unit fallback, update-never-touches, and leftover catalog objects. Add the GUI tests: appearance copy, a hand colour surviving a resize, Create Unit's colour.
-- [ ] **Step 5** (`tools/layout_demo.py`, `README.md`, `docs/`, `.claude/docs/freecad-notes.md`): The demo runs without a catalog. Remove the catalog glossary terms and M8 manual QA; rewrite the docs' material passages for the Woodworking conventions and the source-board rule; add the manual-QA case for a shelf of different stock.
+- [ ] **Step 5** (`tools/layout_demo.py`, `pixi.toml`, `README.md`, `docs/`, `.claude/docs/freecad-notes.md`): Delete the demo, its test and its pixi task and README section, and update `freecad-notes.md`'s mention of it. Remove the catalog glossary terms and M8 manual QA; rewrite the docs' material passages for the Woodworking conventions and the source-board rule; add the manual-QA case for a shelf of different stock.
 - [ ] **Step 6** (`tasks/active/sh-022-*.md`, `tasks/active/sh-023-*.md`, `docs/roadmap.md`): The folded-in plan edits from Advice.
 
 ## Review log
