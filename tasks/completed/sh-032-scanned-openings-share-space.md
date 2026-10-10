@@ -16,8 +16,8 @@ can change. It also snaps a sideways board's run to the scan grid, which
 lets the scanned two-unit fixture solve; sh-031's stock swap needs both.
 
 ## Must Have
-- [ ] `pixi run tests` green.
-- [ ] Scanning gives no `Bay` or `Division` a `Fixed` rule except an
+- [x] `pixi run tests` green.
+- [x] Scanning gives no `Bay` or `Division` a `Fixed` rule except an
       axis-wrap `Division` (a board shorter than its neighbors, wrapped
       with its `Void`). A run's sharing regions are its `Bay` and
       `Division` regions, or its `Void` regions when it has none; each
@@ -25,38 +25,38 @@ lets the scanned two-unit fixture solve; sh-031's stock swap needs both.
       regions are all equal within `snap_mm` gets `Fill` for each; any
       other run gets `Weighted` with weights proportional to each region's
       scanned size. Asserted in the core suite.
-- [ ] A board scanned with its own `rule` (its run is not its thin axis)
+- [x] A board scanned with its own `rule` (its run is not its thin axis)
       has that rule's `size_mm` equal to its slot width in the scan grid,
       the same width its siblings' sizes come from. Asserted in the core
       suite.
-- [ ] `real_magicstart_f1.boxes.json`, `real_stair_step.boxes.json` and
+- [x] `real_magicstart_f1.boxes.json`, `real_stair_step.boxes.json` and
       `real_two_units.boxes.json` each scan and solve at the default
       `snap_mm`, and every board's solved placement and size is within
       `snap_mm / 2` of its measured box. Asserted in the core suite.
-- [ ] On the scanned Magic Start unit, each of these solves, asserted in
+- [x] On the scanned Magic Start unit, each of these solves, asserted in
       the core suite: `set_size` on the lower bay to 300 mm, with the floor
       unmoved; `move_board` on the shelf 30 mm up, landing exactly; the
       shelf's `thickness_mm` changed to 12 mm; the unit 40 mm taller; the
       unit 40 mm wider. After the resizes every board keeps its
       `thickness_mm`.
-- [ ] `real_stair_step.boxes.json` solves 40 mm taller and 40 mm wider
+- [x] `real_stair_step.boxes.json` solves 40 mm taller and 40 mm wider
       along its horizontal elevation axis, and `real_two_units.boxes.json`
       solves 40 mm taller. Asserted in the core suite.
-- [ ] Headless, on a copy of
+- [x] Headless, on a copy of
       `tests/freecad/fixtures/woodworking_magic_start_default.FCStd`: a
       `Session` typed size of 300 mm on the lower bay succeeds and the
       shelf moves, and `unit_ops.resize_unit` 40 mm taller succeeds with
       every board 18 mm thick afterwards.
-- [ ] Headless, on the same Magic Start copy, `unit_ops.unit_size_mm` is
+- [x] Headless, on the same Magic Start copy, `unit_ops.unit_size_mm` is
       500 x 397 x 760 mm, leaving out the back panel, and Resize Unit's
       dialog starts from it; resizing to that size 40 mm taller keeps every
       board's depth.
-- [ ] `docs/scope-and-design.md` no longer says unequal neighbors are
+- [x] `docs/scope-and-design.md` no longer says unequal neighbors are
       treated as fixed, and `docs/manual-qa.md`'s expected `Scan Unit`
       output matches what the report prints.
-- [ ] bug-012's entry is deleted from `.claude/docs/bug-log.md` in the
+- [x] bug-012's entry is deleted from `.claude/docs/bug-log.md` in the
       commit that fixes it.
-- [ ] `mypy --strict` clean.
+- [x] `mypy --strict` clean.
 
 ## Advice
 
