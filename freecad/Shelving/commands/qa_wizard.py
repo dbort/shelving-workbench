@@ -1,7 +1,8 @@
 """The "QA Wizard" command: show the manual QA dock.
 
-Registered only while :func:`freecad.Shelving.qa.is_enabled` is true, and
-only in the Shelving menu, since it is developer tooling.
+Listed in the Shelving menu, never the toolbar, and only while
+:func:`freecad.Shelving.qa.is_enabled` is true, since it is developer
+tooling.
 """
 
 import os

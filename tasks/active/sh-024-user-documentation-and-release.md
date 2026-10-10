@@ -34,8 +34,9 @@ check of installing from the repository on a clean profile. Milestone M10, part
       scope document, and the roadmap. Its glossary stays, as the reference for
       the vocabulary.
 - [ ] A release QA case in `freecad/Shelving/qa/cases/` covers: install from
-      the repository through the Addon Manager on a clean profile, model a unit, move it into a
-      second document, confirm the guide's steps work as written.
+      the repository through the Addon Manager on a clean profile, model a
+      unit, move it into a second document, confirm the guide's steps work
+      as written.
 - [ ] No document refers to a milestone as forthcoming that has shipped, and no
       document names a module, command or property that does not exist. Asserted
       by a check over the documents naming code identifiers.

@@ -30,7 +30,8 @@ class StepResult:
 
 @dataclass
 class Progress:
-    # When the first verdict of this run was recorded, ISO 8601.
+    # When the wizard began this run: built without resuming, or the saved
+    # run's own start when resumed. ``YYYY-MM-DD HH:MM:SS``, local time.
     started: str
     # Case id to step id to result, in recording order.
     results: dict[str, dict[str, StepResult]] = field(default_factory=dict)

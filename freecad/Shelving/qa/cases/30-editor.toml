@@ -1,6 +1,3 @@
-# Overlapping dimensions in a crowded elevation are a known defect
-# (bug-009), not a failure of these cases.
-
 [[case]]
 id = "editor.one-session"
 title = "One editing session"
@@ -26,7 +23,8 @@ buttons enable; Delete stays disabled."""
   instruction = "Click Add Divider."
   expected = """
 A vertical divider splits the bay in the elevation, and the 3D view shows
-it as a real box while the panel is still open."""
+it as a real box while the panel is still open. Dimensions overlapping in a
+crowded elevation are a known defect (bug-009), not a failure."""
 
   [[case.step]]
   id = "refused-delete"
@@ -66,7 +64,8 @@ title = "Dimensions"
   expected = """
 A dimension over each bay: a line with an arrowhead at each end touching
 short witness lines, labeled with its value, the other basis's value beside
-it in gray. Size shows the clear height."""
+it in gray. Size shows the clear height. Dimensions overlapping in a
+crowded elevation are a known defect (bug-009), not a failure."""
 
   [[case.step]]
   id = "type-size"

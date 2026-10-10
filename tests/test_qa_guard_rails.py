@@ -60,6 +60,8 @@ def test_the_wizard_uses_public_api_only() -> None:
         name = path.relative_to(_PACKAGE)
         for module, names in _imported_modules(tree):
             if module.startswith("freecad.Shelving") and not _imports_qa(module, []):
+                if any(part.startswith("_") for part in module.split(".")):
+                    offenders.append(f"{name}: imports private module {module}")
                 offenders.extend(
                     f"{name}: imports {n} from {module}"
                     for n in names

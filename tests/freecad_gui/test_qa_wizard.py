@@ -2,6 +2,8 @@
 its setup button to the report."""
 
 import json
+import re
+import subprocess
 from collections.abc import Iterator
 
 import FreeCAD
@@ -29,6 +31,14 @@ def test_a_recorded_step_reaches_the_report(wizard: dock.QAWizard) -> None:
     assert FreeCAD.ActiveDocument is not None
     assert FreeCAD.ActiveDocument.getObject("ShelvingUnit") is not None
 
+    # Appended to the widget directly: printing through FreeCAD's console
+    # here deadlocks the offscreen GUI on a notification popup
+    # (.claude/docs/freecad-notes.md).
+    report_view = FreeCADGui.getMainWindow().findChild(
+        QtWidgets.QTextEdit, "Report view"
+    )
+    assert isinstance(report_view, QtWidgets.QTextEdit)
+    report_view.append("qa-wizard-log-marker")
     wizard.comment_edit.setPlainText("Four boards, as expected.")
     wizard.verdict_buttons["pass"].click()
     assert wizard.position_label.text() == "Step 2 of 3"
@@ -40,5 +50,15 @@ def test_a_recorded_step_reaches_the_report(wizard: dock.QAWizard) -> None:
     assert step["id"] == "start"
     assert step["verdict"] == "pass"
     assert step["comment"] == "Four boards, as expected."
+    assert "qa-wizard-log-marker" in step["log"]
+    assert re.fullmatch(r"[0-9a-f]{40}", report["commit"]), report["commit"]
     clipboard = QtWidgets.QApplication.clipboard()
     assert clipboard is not None and json.loads(clipboard.text()) == report
+
+
+def test_the_commit_falls_back_to_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
+    def no_git(*args: object, **kwargs: object) -> object:
+        raise OSError("no git")
+
+    monkeypatch.setattr(subprocess, "run", no_git)
+    assert dock._commit() == "unknown"

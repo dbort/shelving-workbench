@@ -17,7 +17,7 @@ from freecad.Shelving.qa.registry import ACTIONS, CHECKS
 @pytest.fixture(autouse=True)
 def no_documents(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Saves land in ``tmp_path``, and every document an action opened is
-    closed afterwards."""
+    closed afterward."""
     monkeypatch.setattr(tempfile, "mkdtemp", lambda prefix: str(tmp_path))
     yield
     for name in list(FreeCAD.listDocuments()):
