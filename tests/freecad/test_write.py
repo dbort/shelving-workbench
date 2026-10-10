@@ -22,7 +22,6 @@ import pytest
 
 from freecad.Shelving import properties
 from freecad.Shelving.commands.create_unit import CreateUnitCommand
-from freecad.Shelving.commands.resize_unit import ResizeUnitCommand
 from freecad.Shelving.container import read_container, write_container
 from freecad.Shelving.core.geometry import Vec3
 from freecad.Shelving.core.layout import (
@@ -196,21 +195,19 @@ def _closed_box_unit(front_at_min: bool | None) -> Unit:
 
 
 def test_init_gui_imports_cleanly() -> None:
-    """The create-unit and resize-unit commands import cleanly without
-    FreeCAD's GUI, where ``FreeCADGui`` is a stub without ``addCommand``
-    (``.claude/docs/freecad-notes.md``); nothing else here imports them as a
-    side effect of anything but their own module-level registration guard."""
+    """The create-unit command imports cleanly without FreeCAD's GUI, where
+    ``FreeCADGui`` is a stub without ``addCommand``
+    (``.claude/docs/freecad-notes.md``); nothing else here imports it as a
+    side effect of anything but its own module-level registration guard."""
     import freecad.Shelving.commands.create_unit  # noqa: F401
-    import freecad.Shelving.commands.resize_unit  # noqa: F401
     import freecad.Shelving.init_gui  # noqa: F401
 
 
 def test_inactive_without_a_document() -> None:
-    """Both commands are inactive before any document exists. Runs before
-    any test below creates one."""
+    """Create Unit is inactive before any document exists. Runs before any
+    test below creates one."""
     assert FreeCAD.ActiveDocument is None, FreeCAD.ActiveDocument
     assert CreateUnitCommand().IsActive() is False
-    assert ResizeUnitCommand().IsActive() is False
 
 
 def test_create_unit_seeds_a_tagged_closed_box() -> None:

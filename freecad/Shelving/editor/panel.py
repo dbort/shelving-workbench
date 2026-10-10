@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable, Mapping
+from functools import partial
 from typing import Protocol, cast
 
 import FreeCAD
@@ -34,9 +35,11 @@ from freecad.Shelving.debug_log import Stopwatch
 from freecad.Shelving.editor.scene import build_scene, elevation_point_mm, hit_test
 from freecad.Shelving.editor.session import (
     PROBE_PROPERTY,
+    UNIT_PROBE_PROPERTIES,
     EditFailure,
     Session,
     SplitDirection,
+    UnitDimension,
 )
 
 # freecad-stubs declares UiLoader.createWidget without parameters and
@@ -65,6 +68,16 @@ def report_error(message: str) -> None:
     which pops it up briefly and keeps it in the Report view."""
     _print_user_error("Shelving", message + "\n")
 
+
+# The elevation keeps at least this height, so the controls around it make
+# FreeCAD's task panel scroll rather than squeezing the view to a sliver.
+_MIN_VIEW_HEIGHT_PX = 320
+
+_UNIT_DIMENSIONS: tuple[tuple[UnitDimension, str], ...] = (
+    ("width", "Width"),
+    ("depth", "Depth"),
+    ("height", "Height"),
+)
 
 _BASIS_CHOICES: tuple[tuple[str, Basis], ...] = (
     ("Clear opening", Basis.CLEAR),
@@ -106,8 +119,63 @@ class _FieldEventFilter(QtCore.QObject):
         return True
 
 
+class _StepWatch(QtCore.QObject):
+    """Notes, before the spin box sees it, every event that steps its value
+    rather than editing its text: a spin arrow pressed, an arrow or page key,
+    a wheel turn. ``stepping`` stays set until a key that edits text.
+    Installed on the spin box and its line edit, but a mouse press counts
+    only on the spin box itself: a click in the text places the caret or
+    opens a menu whose paste edits text."""
+
+    # Wheel events closer together than this are one turn of the wheel, so
+    # a touchpad gesture past a limit reports its refusal once.
+    _WHEEL_GAP_S = 0.5
+
+    _STEP_KEYS = (
+        QtCore.Qt.Key.Key_Up,
+        QtCore.Qt.Key.Key_Down,
+        QtCore.Qt.Key.Key_PageUp,
+        QtCore.Qt.Key.Key_PageDown,
+    )
+
+    def __init__(self, spin: QtWidgets.QWidget) -> None:
+        super().__init__(spin)
+        self._spin = spin
+        self.stepping = False
+        # Counts presses and wheel turns, not repeats, so a caller can tell
+        # one held arrow or one gesture from the next.
+        self.bursts = 0
+        self._last_wheel_s: float | None = None
+
+    def eventFilter(self, watched: QtCore.QObject, event: QtCore.QEvent) -> bool:
+        kind = event.type()
+        if kind == QtCore.QEvent.Type.KeyPress:
+            self._last_wheel_s = None
+            key_event = cast("QtGui.QKeyEvent", event)
+            if key_event.key() in self._STEP_KEYS:
+                if not key_event.isAutoRepeat():
+                    self.bursts += 1
+                self.stepping = True
+            else:
+                self.stepping = False
+        elif kind == QtCore.QEvent.Type.MouseButtonPress:
+            self._last_wheel_s = None
+            if watched is self._spin:
+                self.bursts += 1
+            self.stepping = watched is self._spin
+        elif kind == QtCore.QEvent.Type.Wheel:
+            now_s = time.monotonic()
+            if self._last_wheel_s is None or now_s - self._last_wheel_s > (
+                self._WHEEL_GAP_S
+            ):
+                self.bursts += 1
+            self._last_wheel_s = now_s
+            self.stepping = True
+        return False
+
+
 class _DimensionField:
-    """The size input: FreeCAD's quantity widget bound to the session's
+    """A size input: FreeCAD's quantity widget bound to the session's
     probe object, or, when the GUI cannot supply that widget, a plain line
     edit whose text goes to ``FreeCAD.Units.parseQuantity`` verbatim.
 
@@ -119,7 +187,9 @@ class _DimensionField:
     ``on_size`` receives the resolved millimeters; ``on_error`` receives
     ``parseQuantity``'s own message, from the fallback only;
     ``on_expression_done`` is called once the f(x) dialog closes, after any
-    ``on_size`` it caused.
+    ``on_size`` it caused. ``property_name`` is the probe property the
+    field binds to. With ``apply_on_step``, each spin step reaches
+    ``on_size`` at once, with no Return; the fallback field has no steps.
     """
 
     def __init__(
@@ -128,6 +198,8 @@ class _DimensionField:
         on_size: Callable[[float], None],
         on_error: Callable[[str], None],
         on_expression_done: Callable[[], None],
+        property_name: str = PROBE_PROPERTY,
+        apply_on_step: bool = False,
     ) -> None:
         self._on_size = on_size
         self._on_error = on_error
@@ -151,7 +223,7 @@ class _DimensionField:
                 # Held for the widget's lifetime: the binding is what lets
                 # the field resolve a VarSet name.
                 self._binding = binding_type(spin)
-                self._binding.bind(probe, PROBE_PROPERTY)
+                self._binding.bind(probe, property_name)
             line_edit = spin.findChild(QtWidgets.QLineEdit)
             assert line_edit is not None
             self.line_edit = line_edit
@@ -175,6 +247,18 @@ class _DimensionField:
         # is reported once.
         self._rejected_text: str | None = None
         self.line_edit.editingFinished.connect(self._finished)
+        # Whether the last on_size came from a spin step, and which press of
+        # the arrows or wheel it belonged to.
+        self.last_change_was_step = False
+        self.step_burst = 0
+        self._step_watch: _StepWatch | None = None
+        if spin is not None and apply_on_step:
+            self._step_watch = _StepWatch(spin)
+            spin.installEventFilter(self._step_watch)
+            self.line_edit.installEventFilter(self._step_watch)
+            QtCore.QObject.connect(
+                spin, QtCore.SIGNAL("valueChanged(double)"), self._value_changed
+            )
         if spin is not None:
             # Accepting the f(x) dialog changes the value without any
             # editingFinished; the dialog closing is the only signal.
@@ -183,6 +267,20 @@ class _DimensionField:
                 QtCore.SIGNAL("showFormulaDialog(bool)"),
                 self._formula_dialog_toggled,
             )
+
+    def _value_changed(self, _value: float) -> None:
+        """Apply a spin step at once. A change from typing waits for Return
+        or focus-out, so a half-typed 800 never applies as 8 or 80."""
+        watch = self._step_watch
+        if watch is None or not watch.stepping or not self._alive():
+            return
+        if self.quantity_widget is None or not self._acceptable():
+            return
+        value_mm = self.quantity_widget.property("rawValue")
+        if isinstance(value_mm, float) and value_mm != self._shown_mm:
+            self.last_change_was_step = True
+            self.step_burst = watch.bursts
+            self._on_size(value_mm)
 
     def _formula_dialog_toggled(self, shown: bool) -> None:
         if not shown:
@@ -220,6 +318,7 @@ class _DimensionField:
                 return
             value_mm = self.quantity_widget.property("rawValue")
             if isinstance(value_mm, float) and value_mm != self._shown_mm:
+                self.last_change_was_step = False
                 self._on_size(value_mm)
             return
         text = self.line_edit.text()
@@ -231,6 +330,7 @@ class _DimensionField:
             self._rejected_text = text
             self._on_error(str(err).strip())
             return
+        self.last_change_was_step = False
         self._on_size(float(quantity.Value))
 
     def show_mm(self, value_mm: float | None) -> None:
@@ -462,10 +562,33 @@ class EditUnitPanel:
         self.form.setWindowTitle("Edit Unit")
         layout = QtWidgets.QVBoxLayout(self.form)
 
+        self.unit_box = QtWidgets.QGroupBox("Unit")
+        unit_layout = QtWidgets.QFormLayout(self.unit_box)
+        self.unit_fields: dict[UnitDimension, _DimensionField] = {}
+        for dimension, label in _UNIT_DIMENSIONS:
+            field = _DimensionField(
+                self.session.probe,
+                partial(self._resize, dimension),
+                report_error,
+                self._expression_done,
+                property_name=UNIT_PROBE_PROPERTIES[dimension],
+                apply_on_step=True,
+            )
+            unit_layout.addRow(label, field.widget)
+            self.unit_fields[dimension] = field
+        layout.addWidget(self.unit_box)
+        # The step press whose refusal was last reported: holding an arrow
+        # past a limit re-solves on every repeat, and one report per press
+        # is enough.
+        self._reported_step_burst: tuple[UnitDimension, int] | None = None
+
         self.view = _EditorView(
             self._on_scene_click, self._on_scene_drag, self._on_scene_release
         )
-        layout.addWidget(self.view)
+        self.view.setMinimumHeight(_MIN_VIEW_HEIGHT_PX)
+        # The only stretch in the layout: any height the panel has to spare
+        # goes to the elevation.
+        layout.addWidget(self.view, 1)
         self._dragging = False
         # A drag re-solves on every pointer move, so one held past a limit
         # would otherwise raise a popup per move.
@@ -568,6 +691,18 @@ class EditUnitPanel:
     def _merge(self) -> None:
         self._show_result(self.session.merge())
 
+    def _resize(self, dimension: UnitDimension, size_mm: float) -> None:
+        field = self.unit_fields[dimension]
+        failure = self.session.resize(dimension, size_mm)
+        if failure is None:
+            self._reported_step_burst = None
+        elif not field.last_change_was_step:
+            report_error(failure.message)
+        elif self._reported_step_burst != (dimension, field.step_burst):
+            report_error(failure.message)
+            self._reported_step_burst = (dimension, field.step_burst)
+        self._refresh()
+
     def _set_size(self, size_mm: float) -> None:
         self._show_result(self.session.set_size(size_mm))
 
@@ -631,6 +766,9 @@ class EditUnitPanel:
         self.add_divider_button.setEnabled(self.session.can_split())
         self.add_shelf_button.setEnabled(self.session.can_split())
         self.delete_button.setEnabled(self.session.can_merge())
+
+        for dimension, field in self.unit_fields.items():
+            field.show_mm(self.session.unit_dimension_mm(dimension))
 
         measurement = self.session.selected_measurement()
         self.size_field.show_mm(None if measurement is None else measurement.size_mm)

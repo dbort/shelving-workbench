@@ -13,7 +13,7 @@ these tests assert.
 import sys
 from collections.abc import Iterator
 from types import TracebackType
-from typing import cast
+from typing import Protocol, cast
 
 import FreeCAD
 import FreeCADGui
@@ -33,7 +33,7 @@ from freecad.Shelving.core.layout import (
 )
 from freecad.Shelving.editor import panel as panel_module
 from freecad.Shelving.editor.panel import AncestorWatch, EditUnitPanel
-from freecad.Shelving.editor.session import PROBE_PROPERTY, Session
+from freecad.Shelving.editor.session import PROBE_PROPERTY, Session, UnitDimension
 from freecad.Shelving.unit_ops import create_unit
 
 _TOL_MM = 1e-6
@@ -540,3 +540,204 @@ def test_a_destroyed_field_ignores_late_events(
     field._finished()
     _process_events()
     assert errors == []
+
+
+class _Placed(Protocol):
+    Placement: FreeCAD.Placement
+
+
+def _unit_field_mm(unit_panel: _Fixture, dimension: UnitDimension) -> float:
+    spin = unit_panel.panel.unit_fields[dimension].quantity_widget
+    assert spin is not None
+    value_mm = spin.property("rawValue")
+    assert isinstance(value_mm, float)
+    return value_mm
+
+
+def _type_unit_size(unit_panel: _Fixture, dimension: UnitDimension, text: str) -> None:
+    line_edit = unit_panel.panel.unit_fields[dimension].line_edit
+    line_edit.setFocus()
+    line_edit.selectAll()
+    QtTest.QTest.keyClicks(line_edit, text)
+    QtTest.QTest.keyClick(line_edit, QtCore.Qt.Key.Key_Return)
+    _process_events()
+
+
+def _box_mm(unit_panel: _Fixture, name: str, attribute: str) -> float:
+    return float(getattr(unit_panel.doc.getObject(name), attribute))
+
+
+def test_the_unit_section_shows_the_units_size(unit_panel: _Fixture) -> None:
+    assert _unit_field_mm(unit_panel, "width") == pytest.approx(600.0)
+    assert _unit_field_mm(unit_panel, "depth") == pytest.approx(300.0)
+    assert _unit_field_mm(unit_panel, "height") == pytest.approx(900.0)
+
+
+def test_a_typed_height_resizes_the_unit_on_return(unit_panel: _Fixture) -> None:
+    _type_unit_size(unit_panel, "height", "1000")
+    unit_panel.doc.recompute()
+    for name in ("left_side", "right_side"):
+        assert _box_mm(unit_panel, name, "Height") == pytest.approx(964.0)
+    assert _unit_field_mm(unit_panel, "height") == pytest.approx(1000.0)
+
+
+def test_typing_alone_does_not_resize(unit_panel: _Fixture) -> None:
+    """A half-typed value never applies: 1000 passes through 1, 10 and 100."""
+    line_edit = unit_panel.panel.unit_fields["height"].line_edit
+    line_edit.setFocus()
+    line_edit.selectAll()
+    QtTest.QTest.keyClicks(line_edit, "1000")
+    _process_events()
+    assert unit_panel.session.unit_dimension_mm("height") == pytest.approx(900.0)
+
+
+def test_a_spin_step_resizes_at_once(unit_panel: _Fixture) -> None:
+    field = unit_panel.panel.unit_fields["width"]
+    spin = field.quantity_widget
+    assert spin is not None
+    top_length_mm = _box_mm(unit_panel, "top", "Length")
+    spin.setFocus()
+    QtTest.QTest.keyClick(spin, QtCore.Qt.Key.Key_Up)
+    _process_events()
+    unit_panel.doc.recompute()
+    step_mm = _unit_field_mm(unit_panel, "width") - 600.0
+    assert step_mm > 0
+    assert unit_panel.session.unit_dimension_mm("width") == pytest.approx(
+        600.0 + step_mm
+    )
+    assert _box_mm(unit_panel, "top", "Length") == pytest.approx(
+        top_length_mm + step_mm
+    )
+
+
+def test_a_refused_unit_size_reports_and_changes_nothing(
+    unit_panel: _Fixture, reported: list[str]
+) -> None:
+    def snapshot() -> list[tuple[str, str, float, float, float]]:
+        return [
+            (
+                obj.Name,
+                str(cast("_Placed", obj).Placement),
+                _box_mm(unit_panel, obj.Name, "Length"),
+                _box_mm(unit_panel, obj.Name, "Width"),
+                _box_mm(unit_panel, obj.Name, "Height"),
+            )
+            for obj in unit_panel.doc.Objects
+            if obj.TypeId == "Part::Box"
+        ]
+
+    before = snapshot()
+    _type_unit_size(unit_panel, "height", "30")
+    unit_panel.doc.recompute()
+    (message,) = reported
+    assert message
+    after = snapshot()
+    assert after == before
+    assert _unit_field_mm(unit_panel, "height") == pytest.approx(900.0)
+
+
+def _board_ids(region: Region) -> set[str]:
+    if not isinstance(region, Division):
+        return set()
+    ids: set[str] = set()
+    for item in region.items:
+        ids |= {item.id} if isinstance(item, Board) else _board_ids(item)
+    return ids
+
+
+def test_the_unit_fields_follow_every_edit(unit_panel: _Fixture) -> None:
+    _type_unit_size(unit_panel, "width", "700")
+    before = _board_ids(unit_panel.session.unit.root)
+    unit_panel.select(unit_panel.upper)
+    unit_panel.panel.add_divider_button.click()
+    _process_events()
+    sizes_mm: dict[UnitDimension, float] = {
+        "width": 700.0,
+        "depth": 300.0,
+        "height": 900.0,
+    }
+    for dimension, size_mm in sizes_mm.items():
+        assert _unit_field_mm(unit_panel, dimension) == pytest.approx(size_mm)
+
+    (divider,) = _board_ids(unit_panel.session.unit.root) - before
+    unit_panel.select(divider)
+    unit_panel.panel.delete_button.click()
+    _process_events()
+    assert _board_ids(unit_panel.session.unit.root) == before
+    for dimension, size_mm in sizes_mm.items():
+        assert _unit_field_mm(unit_panel, dimension) == pytest.approx(size_mm)
+
+
+def test_a_held_arrow_past_a_limit_reports_once(
+    unit_panel: _Fixture, reported: list[str]
+) -> None:
+    """55 mm leaves the two openings around the shelf 0.5 mm each; every
+    repeat of a held down arrow past that refuses, and only the first
+    refusal of the press is reported."""
+    _type_unit_size(unit_panel, "height", "55")
+    assert unit_panel.session.unit_dimension_mm("height") == pytest.approx(55.0)
+    spin = unit_panel.panel.unit_fields["height"].quantity_widget
+    assert spin is not None
+    spin.setFocus()
+    for auto_repeat in (False, True, True, True):
+        event = QtGui.QKeyEvent(
+            QtCore.QEvent.Type.KeyPress,
+            QtCore.Qt.Key.Key_Down,
+            QtCore.Qt.KeyboardModifier.NoModifier,
+            "",
+            auto_repeat,
+        )
+        QtWidgets.QApplication.sendEvent(spin, event)
+        _process_events()
+    assert len(reported) == 1, reported
+    assert unit_panel.session.unit_dimension_mm("height") == pytest.approx(55.0)
+
+
+def _wheel_down(widget: QtWidgets.QWidget) -> None:
+    center = QtCore.QPointF(widget.rect().center())
+    event = QtGui.QWheelEvent(
+        center,
+        QtCore.QPointF(widget.mapToGlobal(center.toPoint())),
+        QtCore.QPoint(0, 0),
+        QtCore.QPoint(0, -120),
+        QtCore.Qt.MouseButton.NoButton,
+        QtCore.Qt.KeyboardModifier.NoModifier,
+        QtCore.Qt.ScrollPhase.NoScrollPhase,
+        False,
+    )
+    QtWidgets.QApplication.sendEvent(widget, event)
+    _process_events()
+
+
+def test_a_wheel_turn_past_a_limit_reports_once(
+    unit_panel: _Fixture, reported: list[str]
+) -> None:
+    """Each notch steps the height down until the openings around the shelf
+    would vanish; the notches past that are one turn of the wheel, and only
+    its first refusal is reported."""
+    _type_unit_size(unit_panel, "height", "60")
+    spin = unit_panel.panel.unit_fields["height"].quantity_widget
+    assert spin is not None
+    spin.setFocus()
+    _wheel_down(spin)
+    step_mm = 60.0 - unit_panel.session.unit_dimension_mm("height")
+    assert step_mm > 0
+    for _notch in range(int(10.0 / step_mm) + 2):
+        _wheel_down(spin)
+    assert len(reported) == 1, reported
+    assert 54.0 < unit_panel.session.unit_dimension_mm("height") < 60.0
+
+
+def test_the_elevation_keeps_a_usable_height_in_a_short_panel(
+    unit_panel: _Fixture,
+) -> None:
+    """The elevation keeps at least ``_MIN_VIEW_HEIGHT_PX`` in a short panel
+    and takes most of a tall one."""
+    form = unit_panel.panel.form
+    form.resize(400, 200)
+    _process_events()
+    assert unit_panel.panel.view.height() >= panel_module._MIN_VIEW_HEIGHT_PX
+    form.resize(400, 1400)
+    _process_events()
+    # A tall panel's spare height goes to the elevation.
+    assert unit_panel.panel.view.height() > 1400 // 2

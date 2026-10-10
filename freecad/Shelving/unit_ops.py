@@ -1,4 +1,5 @@
-"""Plain functions behind the create and resize commands, and a rescan.
+"""Plain functions behind Create Unit, plus the resize and rescan that tests
+and scripts call without the editor.
 
 Kept out of the command classes, not merely called by them, so
 ``tests/freecad/test_write.py`` can call each operation directly without
@@ -30,7 +31,7 @@ from freecad.Shelving.core.record import rules_from_json, with_stored_rules
 from freecad.Shelving.core.scan import scan
 
 # Shelving_CreateUnit's starting point: a single enclosed bay, closed on
-# every side, that Shelving_ResizeUnit reshapes from there. The values
+# every side, that the Edit Unit panel reshapes from there. The values
 # themselves carry no significance beyond being a plausible starting size.
 _DEFAULT_WIDTH_MM = 600.0
 _DEFAULT_DEPTH_MM = 300.0

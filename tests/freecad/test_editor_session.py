@@ -1025,8 +1025,9 @@ def test_a_magic_start_unit_takes_a_typed_size(tmp_path: Path) -> None:
 
 
 def test_a_magic_start_unit_resizes_taller(tmp_path: Path) -> None:
-    """The size Resize Unit starts from leaves out the 3 mm back panel behind
-    the boards, so keeping its depth keeps every board's depth."""
+    """The unit's scanned size, which the editor's Unit fields show, leaves
+    out the 3 mm back panel behind the boards, so keeping its depth keeps
+    every board's depth."""
     path = tmp_path / _MAGIC_START.name
     shutil.copyfile(_MAGIC_START, path)
     doc = FreeCAD.openDocument(str(path))
@@ -1053,6 +1054,72 @@ def test_a_magic_start_unit_resizes_taller(tmp_path: Path) -> None:
             assert abs(float(box.Width) - depths_mm[name]) < 1e-6, name
         left = cast("_BoxFeature", doc.getObject("Left"))
         assert abs(float(left.Height) - 800.0) < 1e-6
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def test_a_session_resizes_its_unit_and_cancel_restores_it() -> None:
+    doc = FreeCAD.newDocument("editor_resize")
+    try:
+        container = create_unit(doc)
+        doc.recompute()
+        snapshot_open = _board_snapshot(container)
+        session = Session(container)
+        session.open()
+        cancelled = False
+        try:
+            assert session.unit_dimension_mm("height") == 900.0
+            assert session.resize("height", 1000.0) is None
+            doc.recompute()
+            for name in ("left_side", "right_side"):
+                side = cast("_BoxFeature", doc.getObject(name))
+                assert abs(float(side.Height) - 964.0) < 1e-6, name
+            assert session.unit_dimension_mm("height") == 1000.0
+
+            snapshot_resized = _board_snapshot(container)
+            refused = session.resize("height", 30.0)
+            assert isinstance(refused, EditFailure), refused
+            doc.recompute()
+            assert _board_snapshot(container) == snapshot_resized
+            assert session.unit_dimension_mm("height") == 1000.0
+
+            session.cancel()
+            cancelled = True
+            doc.recompute()
+            assert _board_snapshot(container) == snapshot_open
+        finally:
+            if not cancelled:
+                session.cancel()
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def test_a_session_resizes_magic_start_taller_and_keeps_its_plinth(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / _MAGIC_START.name
+    shutil.copyfile(_MAGIC_START, path)
+    doc = FreeCAD.openDocument(str(path))
+    try:
+        container = doc.getObject("LinkGroup")
+        assert container is not None
+        floor_z_mm = _z_mm(container, "Floor")
+        session = Session(container)
+        session.open()
+        try:
+            assert session.resize("height", 800.0) is None
+            doc.recompute()
+            # The unit's bottom is at z 0, so the floor's height is the gap.
+            assert abs(floor_z_mm - 100.0) < 1e-6
+            assert abs(_z_mm(container, "Floor") - 100.0) < 1e-6
+            for name in ("Floor", "Left", "Right", "Top", "Shelf"):
+                box = cast("_BoxFeature", doc.getObject(name))
+                thinnest_mm = min(
+                    float(box.Length), float(box.Width), float(box.Height)
+                )
+                assert abs(thinnest_mm - 18.0) < 1e-6, name
+        finally:
+            session.cancel()
     finally:
         FreeCAD.closeDocument(doc.Name)
 
