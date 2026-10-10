@@ -26,8 +26,11 @@ views. Changing stock in the editor is a separate, later task.
       `tests/freecad/test_catalog.py`, `freecad/Shelving/core/svg.py`,
       `freecad/Shelving/core/tests/test_svg.py`, `tools/layout_demo.py` and
       `tests/test_layout_demo.py` no longer exist; `pixi.toml` defines no
-      `demo` task; and `git grep -i -E "catalog|MaterialId|default_material|svg"`
-      finds nothing under `freecad/`, `tests/` or `tools/`.
+      `demo` task; `git grep -i -E "catalog|MaterialId|default_material"`
+      finds nothing under `freecad/`, `tests/` or `tools/`; and
+      `git grep -E "core\.svg|core import svg|to_svg|layout_demo"` finds
+      nothing there either. The workbench icon
+      `freecad/Shelving/resources/shelving.svg` stays.
 - [ ] `solve`, `expand`, `scan`, `split_region` and `merge_at` take no
       catalog argument, and the workbench registers no `Shelving_SeedCatalog`,
       `Shelving_AddMaterial` or `Shelving_ReflowAll` command.
@@ -146,6 +149,10 @@ REMOVED:
   that isn't about the catalog, such as saving a document and reopening it
   without a proxy, to `tests/freecad/test_write.py` (unless it already has an
   equivalent).
+
+MUST HAVE CORRECTION (2026-10-09, user decision during `/work`): the
+renderer check targets the renderer's own names, not the string `svg`, which
+the workbench icon `resources/shelving.svg` legitimately carries.
 
 FOLDED-IN PLAN EDITS (user decision): this task rewrites
 - `tasks/active/sh-022-appearance-and-errors.md`: drop
