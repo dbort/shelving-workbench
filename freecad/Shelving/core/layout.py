@@ -135,7 +135,6 @@ class Board:
     rule: SizeRule | None = None
     # Free-form, set by the caller: the tree has no closed set of positions,
     # and a stepped outline has several tops, none of them *the* top.
-    # Deriving a role from tree position is M7's problem.
     role: str = ""
     # The id of the existing board whose material, appearance and grain a
     # board the editor creates copies. The write path reads it only when

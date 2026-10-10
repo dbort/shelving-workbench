@@ -15,7 +15,10 @@ GUI instead.
 The dimension field is FreeCAD's own ``Gui::QuantitySpinBox``, so it
 accepts, resolves, and displays exactly what every other length field in
 FreeCAD does. This module reads only the resolved millimeter value it
-reports and never looks at the typed text.
+reports and never looks at the typed text: the field takes an expression
+language (units, arithmetic, names of document values), so any pattern
+check over the text would refuse valid input, and a false refusal leaves
+the user no workaround.
 """
 
 from __future__ import annotations

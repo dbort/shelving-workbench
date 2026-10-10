@@ -304,10 +304,9 @@ def test_resize_updates_existing_boards_rather_than_recreating(
     create_unit_doc: tuple[FreeCAD.Document, FreeCAD.DocumentObject],
 ) -> None:
     """Resizing to a larger size updates the same document objects, checked
-    by ``Name``, and a renamed board's ``Label`` survives it. Color is the
-    other survivor this task's Must Haves name, but ``ViewObject`` is
-    ``None`` without the GUI (``.claude/docs/freecad-notes.md``), so that
-    half is a manual-qa.md case (M7 #2) instead."""
+    by ``Name``, and a renamed board's ``Label`` survives it. Color needs
+    the GUI (``.claude/docs/freecad-notes.md``), so
+    ``tests/freecad_gui/test_stock.py`` covers its survival."""
     doc, container = create_unit_doc
     group = cast("FreeCAD.DocumentObjectGroup", container)
     names_before = {o.Name for o in group.Group}

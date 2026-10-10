@@ -16,9 +16,8 @@ Pipeline rules: `.claude/docs/pipeline.md`.
    shapes the plan or gets an opt-out reason in `## Advice`.
 3. **Write** `tasks/active/sh-XXX-<slug>.md` with the id from
    `pixi run task-status -- --next-id`, using the template below.
-4. **Roadmap:** if the task delivers a `docs/roadmap.md` milestone, set
-   that milestone's Status (or split checklist) as `docs/roadmap.md`
-   § Status legend describes.
+4. **Roadmap:** if the task delivers a `docs/roadmap.md` milestone, add it
+   to that milestone's status and checklist (`pipeline.md` § Roadmap).
 5. **Commit** the task file and any roadmap edit to `main` (`sh-XXX: plan
    <title>`), link the file for the user without pasting it, and stop. The
    user starts the work with `/work sh-XXX`.
@@ -27,8 +26,12 @@ Writing rules: `## Summary` is plain prose for a human skimmer and adds
 information beyond the title. `## Advice` and `## Plan` are dense and
 imperative, for an agent: each constraint with its reason, current
 decisions only, no history. Must Haves are machine-checkable ("returns
-HTTP 429 on rate limit", not "handles errors well"). Plan steps state
-outcomes and interfaces, not keystrokes.
+HTTP 429 on rate limit", not "handles errors well"). A manual-QA case
+only for what no test can assert. Plan steps state outcomes and
+interfaces, not keystrokes. Before writing a step that deletes or renames
+a name, or changes what a test fixture produces, grep code, comments and
+docs for every user of it and name each affected file in the plan: a
+missed dependent surfaces only as an unplanned failure late in `/work`.
 
 ```markdown
 ---
