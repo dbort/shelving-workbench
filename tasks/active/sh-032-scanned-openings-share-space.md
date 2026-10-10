@@ -37,8 +37,8 @@ lets the scanned two-unit fixture solve; sh-031's stock swap needs both.
       the core suite: `set_size` on the lower bay to 300 mm, with the floor
       unmoved; `move_board` on the shelf 30 mm up, landing exactly; the
       shelf's `thickness_mm` changed to 12 mm; the unit 40 mm taller; the
-      unit 40 mm wider. After the resizes every
-      board keeps its `thickness_mm`.
+      unit 40 mm wider. After the resizes every board keeps its
+      `thickness_mm`.
 - [ ] `real_stair_step.boxes.json` solves 40 mm taller and 40 mm wider
       along its horizontal elevation axis, and `real_two_units.boxes.json`
       solves 40 mm taller. Asserted in the core suite.
@@ -47,6 +47,10 @@ lets the scanned two-unit fixture solve; sh-031's stock swap needs both.
       `Session` typed size of 300 mm on the lower bay succeeds and the
       shelf moves, and `unit_ops.resize_unit` 40 mm taller succeeds with
       every board 18 mm thick afterwards.
+- [ ] Headless, on the same Magic Start copy, `unit_ops.unit_size_mm` is
+      500 x 397 x 760 mm, leaving out the back panel, and Resize Unit's
+      dialog starts from it; resizing to that size 40 mm taller keeps every
+      board's depth.
 - [ ] `docs/scope-and-design.md` no longer says unequal neighbors are
       treated as fixed, and `docs/manual-qa.md`'s expected `Scan Unit`
       output matches what the report prints.
@@ -151,3 +155,12 @@ task adds no shell.
 ### Round 3: APPROVED
 - **N1: A comment line breaks partway through its sentence** (`freecad/Shelving/core/tests/test_scan.py:894`): "share the remaining span equally (see sh-025" ends early; reflow the comment.
 - **N2: A Must Have line in the task file is cut short** (task file `:40`): left over from round 2's N5; cosmetic.
+
+### Round 4: APPROVED
+- **N1: The `unit_size_mm` docstring names only one of the errors it can raise** (`freecad/Shelving/unit_ops.py:113`): `rules_from_json` also raises `ValueError` on a malformed rule record.
+- **N2: "The boards' bounding box" is a slight simplification** (`unit_ops.py:111-112`): the scan measures width and height from snapped grid ends.
+- **N3: No test reaches the command itself** (`freecad/Shelving/commands/resize_unit.py:129`): non-blocking; the command is a one-line call to the tested `unit_size_mm`.
+- **N4: The round 3 notes are still open** (`test_scan.py:893-894`, task file `:40`): cosmetic wrapping.
+- **N5: The new Advice decision has no Must Have** (task file Advice): its test covers it, but the Must Have list does not mention it.
+
+Applied after this round: N1, N2, N4 and N5. N3 left as is.

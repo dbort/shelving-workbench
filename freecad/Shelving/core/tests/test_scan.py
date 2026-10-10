@@ -891,8 +891,7 @@ def test_real_stair_step_solves_to_three_distinct_divider_heights() -> None:
     # `_finalize_items` excludes the dividers' wrap Divisions from rule
     # recovery, so each keeps its own grid width; the two column bodies are
     # one size within snap_mm, so both are Fill and share the remaining span
-    # equally (see sh-025
-    # Frontier Advice, "ROOT CAUSE, PART 3").
+    # equally (see sh-025 Frontier Advice, "ROOT CAUSE, PART 3").
     assert spaces[shelf015_column.id].size.y_mm == pytest.approx(887.0283, abs=0.01)
     assert spaces[panel_yx003_column.id].size.y_mm == pytest.approx(887.0283, abs=0.01)
 
