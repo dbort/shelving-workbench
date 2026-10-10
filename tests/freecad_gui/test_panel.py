@@ -299,7 +299,7 @@ def test_a_drag_keeps_the_basis(unit_panel: _Fixture) -> None:
     assert unit_panel.panel.basis_combo.currentIndex() == 1
 
 
-def test_untagged_objects_are_kept_unless_removed() -> None:
+def test_untagged_objects_are_kept_unless_deleted() -> None:
     doc = FreeCAD.newDocument("panel_smoke_untagged")
     try:
         container = create_unit(doc)
@@ -324,7 +324,7 @@ def test_untagged_objects_are_kept_unless_removed() -> None:
         # A refresh keeps the check.
         panel._refresh()
         assert panel.untagged_checks["HandAdded"].isChecked()
-        panel.remove_untagged_button.click()
+        panel.delete_untagged_button.click()
         _process_events()
         assert doc.getObject("HandAdded") is None
         assert not panel.untagged_box.isVisible()

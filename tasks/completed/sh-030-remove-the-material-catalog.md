@@ -17,8 +17,8 @@ the SVG renderer and the `pixi run demo` tool, which predate FreeCAD's own 3D
 views. Changing stock in the editor is a separate, later task.
 
 ## Must Have
-- [ ] `pixi run tests` green.
-- [ ] `freecad/Shelving/core/materials.py`, `freecad/Shelving/core/materials.schema.json`,
+- [x] `pixi run tests` green.
+- [x] `freecad/Shelving/core/materials.py`, `freecad/Shelving/core/materials.schema.json`,
       `freecad/Shelving/catalog.py`, `freecad/Shelving/default_catalog.py`,
       `freecad/Shelving/commands/add_material.py`,
       `freecad/Shelving/commands/seed_catalog.py`,
@@ -26,17 +26,20 @@ views. Changing stock in the editor is a separate, later task.
       `tests/freecad/test_catalog.py`, `freecad/Shelving/core/svg.py`,
       `freecad/Shelving/core/tests/test_svg.py`, `tools/layout_demo.py` and
       `tests/test_layout_demo.py` no longer exist; `pixi.toml` defines no
-      `demo` task; and `git grep -i -E "catalog|MaterialId|default_material|svg"`
-      finds nothing under `freecad/`, `tests/` or `tools/`.
-- [ ] `solve`, `expand`, `scan`, `split_region` and `merge_at` take no
+      `demo` task; `git grep -i -E "catalog|MaterialId|default_material"`
+      finds nothing under `freecad/`, `tests/` or `tools/`; and
+      `git grep -E "core\.svg|core import svg|to_svg|layout_demo"` finds
+      nothing there either. The workbench icon
+      `freecad/Shelving/resources/shelving.svg` stays.
+- [x] `solve`, `expand`, `scan`, `split_region` and `merge_at` take no
       catalog argument, and the workbench registers no `Shelving_SeedCatalog`,
       `Shelving_AddMaterial` or `Shelving_ReflowAll` command.
-- [ ] A board's extent along its run is its own slot width in the scan grid.
+- [x] A board's extent along its run is its own slot width in the scan grid.
       Asserted in the core suite: `real_stair_step.boxes.json` at the default
       `snap_mm` scans and solves (sh-026's reproduction), and a box set mixing
       17.6 mm and 19 mm boards scans and solves with each board's solved
       extent within 1e-6 mm of its slot width.
-- [ ] A core function returns the source board for a new board, by the rule in
+- [x] A core function returns the source board for a new board, by the rule in
       Advice (SOURCE BOARD). Core tests cover each step:
       - a parallel interior board in the same opening wins over a nearer
         carcass board;
@@ -46,33 +49,33 @@ views. Changing stock in the editor is a separate, later task.
 
       Another test asserts that on the Magic Start fixture's tree the floor,
       top and sides are carcass and the shelf is interior.
-- [ ] On `tests/freecad/fixtures/woodworking_magic_start_default.FCStd` (a
+- [x] On `tests/freecad/fixtures/woodworking_magic_start_default.FCStd` (a
       copy), after the test gives the shelf a 12 mm thickness, a non-default
       `ShapeMaterial` and a `Grain` list, Add Shelf in the lower bay creates a
       board 12 mm thick with the shelf's `ShapeMaterial` name and `Grain`
       list.
-- [ ] On a fresh `create_unit` unit, the first Add Shelf creates a board
+- [x] On a fresh `create_unit` unit, the first Add Shelf creates a board
       copying the bottom board's thickness and `ShapeMaterial`.
-- [ ] In `tests/freecad_gui/`: a new board's `ShapeAppearance` equals its
+- [x] In `tests/freecad_gui/`: a new board's `ShapeAppearance` equals its
       source board's, per-face colours included; resizing a unit leaves a
       hand-set board colour unchanged; `create_unit`'s boards are 18 mm thick
       with diffuse colour (247, 185, 108).
-- [ ] A write never changes an existing board's `ShapeMaterial`, `Grain` or
+- [x] A write never changes an existing board's `ShapeMaterial`, `Grain` or
       appearance. Asserted headless for `ShapeMaterial` and `Grain` across a
       resize.
-- [ ] A container whose boards carry a leftover `ShelvingMaterial` property,
+- [x] A container whose boards carry a leftover `ShelvingMaterial` property,
       in a document holding a leftover catalog group, opens in Edit Unit and
       takes an Add Shelf. The catalog group and every object in it are
       unchanged afterwards.
-- [ ] `tasks/active/sh-022-appearance-and-errors.md` no longer plans
+- [x] `tasks/active/sh-022-appearance-and-errors.md` no longer plans
       `Shelving_RecolourUnit` or a material-to-colour mapping,
       `tasks/active/sh-023-preferences.md` no longer plans a default-material
       preference, and `docs/roadmap.md` marks M8 superseded by sh-030 under a
       legend entry for that status.
-- [ ] `docs/manual-qa.md` has no M8 section and no case that edits a catalog
+- [x] `docs/manual-qa.md` has no M8 section and no case that edits a catalog
       or runs Reflow All, and has a case for a new shelf copying a shelf of
       different stock from the carcass.
-- [ ] `mypy --strict` clean.
+- [x] `mypy --strict` clean.
 
 ## Advice
 
@@ -147,6 +150,31 @@ REMOVED:
   without a proxy, to `tests/freecad/test_write.py` (unless it already has an
   equivalent).
 
+MUST HAVE CORRECTION (2026-10-09, user decision during `/work`): the
+renderer check targets the renderer's own names, not the string `svg`, which
+the workbench icon `resources/shelving.svg` legitimately carries.
+
+IMPLEMENTATION DECISIONS (2026-10-09, during `/work`, for the user to
+confirm at review):
+- With no parallel board at all, `source_board` falls back to the nearest
+  board of any kind, and `split_region` refuses with `EditError` only when
+  the unit has no board, so a unit of two sides still takes a shelf.
+- The leftover-objects Must Have runs on
+  `tests/freecad/fixtures/pre_sh030_unit.FCStd`, a unit `main`'s
+  `create_unit` saved before this task, and snapshots every object outside
+  the container generically. That keeps the old property names out of
+  `tests/`, as the grep Must Have requires, and tests a real old document.
+- `report` prints a board's thickness where it printed its material.
+- `sh-024`'s plan named the material catalog as a guide section and a
+  refusal; both now point at board stock and sh-031.
+
+MANUAL QA (user decisions, 2026-10-09, after round 2):
+- The editor's Remove Selected button becomes Delete Selected, with the
+  session and panel identifiers renamed to match: the button deletes the
+  objects, where "remove" reads as taking them out of the group.
+- Case 15's old shelf re-centering 3 mm after a hand thickness change stays
+  with bug-007 rather than being fixed here; the case states the shift.
+
 FOLDED-IN PLAN EDITS (user decision): this task rewrites
 - `tasks/active/sh-022-appearance-and-errors.md`: drop
   `Shelving_RecolourUnit` and colour-by-material-id, since a new board's
@@ -169,11 +197,27 @@ Protocols like the existing ones. Shell stays simple: this task changes no
 shell script beyond removing what no longer exists, if anything.
 
 ## Plan
-- [ ] **Step 1** (`freecad/Shelving/core/`): Remove the catalog from the core. Boards carry their own run-axis extent from the scan grid. `solve`, `expand`, `scan`, `split_region`, `merge_at` and the basis helpers in `edit.py` lose their catalog argument. Scan's `Box` loses `material`, and `Unit` loses `default_material`. Delete `svg.py` and `test_svg.py`. Core tests follow, including sh-026's stair-step reproduction and a mixed 17.6/19 mm case.
-- [ ] **Step 2** (`freecad/Shelving/core/edit.py` or a new core module, plus tests): Carcass classification and the SOURCE BOARD rule as a pure function. `split_region` gives the new board its source's thickness and records the source board's id.
-- [ ] **Step 3** (`freecad/Shelving/`): Remove the catalog modules, the three commands and their registration, the board and entry properties, and `unit_ops.reflow_all`. The session and panel stop reading a catalog. The write path copies `ShapeMaterial`, `Grain` and, with a GUI, `ShapeAppearance` from the source object when creating a board, and never on update. Create Unit uses the Magic Start defaults.
-- [ ] **Step 4** (`tests/freecad/`, `tests/freecad_gui/`): Delete `test_catalog.py` after moving out anything not about the catalog. Add the headless Must Have tests: the Magic Start stock copy, the create_unit fallback, update-never-touches, and leftover catalog objects. Add the GUI tests: appearance copy, a hand colour surviving a resize, Create Unit's colour.
-- [ ] **Step 5** (`tools/layout_demo.py`, `pixi.toml`, `README.md`, `docs/`, `.claude/docs/freecad-notes.md`): Delete the demo, its test and its pixi task and README section, and update `freecad-notes.md`'s mention of it. Remove the catalog glossary terms and M8 manual QA; rewrite the docs' material passages for the Woodworking conventions and the source-board rule; add the manual-QA case for a shelf of different stock.
-- [ ] **Step 6** (`tasks/active/sh-022-*.md`, `tasks/active/sh-023-*.md`, `docs/roadmap.md`): The folded-in plan edits from Advice.
+- [x] **Step 1** (`freecad/Shelving/core/`): Remove the catalog from the core. Boards carry their own run-axis extent from the scan grid. `solve`, `expand`, `scan`, `split_region`, `merge_at` and the basis helpers in `edit.py` lose their catalog argument. Scan's `Box` loses `material`, and `Unit` loses `default_material`. Delete `svg.py` and `test_svg.py`. Core tests follow, including sh-026's stair-step reproduction and a mixed 17.6/19 mm case.
+- [x] **Step 2** (`freecad/Shelving/core/edit.py` or a new core module, plus tests): Carcass classification and the SOURCE BOARD rule as a pure function. `split_region` gives the new board its source's thickness and records the source board's id.
+- [x] **Step 3** (`freecad/Shelving/`): Remove the catalog modules, the three commands and their registration, the board and entry properties, and `unit_ops.reflow_all`. The session and panel stop reading a catalog. The write path copies `ShapeMaterial`, `Grain` and, with a GUI, `ShapeAppearance` from the source object when creating a board, and never on update. Create Unit uses the Magic Start defaults.
+- [x] **Step 4** (`tests/freecad/`, `tests/freecad_gui/`): Delete `test_catalog.py` after moving out anything not about the catalog. Add the headless Must Have tests: the Magic Start stock copy, the create_unit fallback, update-never-touches, and leftover catalog objects. Add the GUI tests: appearance copy, a hand colour surviving a resize, Create Unit's colour.
+- [x] **Step 5** (`tools/layout_demo.py`, `pixi.toml`, `README.md`, `docs/`, `.claude/docs/freecad-notes.md`): Delete the demo, its test and its pixi task and README section, and update `freecad-notes.md`'s mention of it. Remove the catalog glossary terms and M8 manual QA; rewrite the docs' material passages for the Woodworking conventions and the source-board rule; add the manual-QA case for a shelf of different stock.
+- [x] **Step 6** (`tasks/active/sh-022-*.md`, `tasks/active/sh-023-*.md`, `docs/roadmap.md`): The folded-in plan edits from Advice.
 
 ## Review log
+
+### Round 1: REJECTED
+- **F1: Tier 1 of SOURCE BOARD (same run before elsewhere) is never tested on its own** (`freecad/Shelving/core/tests/test_stock.py`): in the same-run test, `shelf` is the only interior board in the unit, so tier 2 would return it too; on the Magic Start fixture `Shelf` is also the only interior Z board. Deleting the `same_run` tier passes every test. The tier-2 test has the same weakness: `shelf_high` is already nearer than `bottom` and `top`, so merging tiers 2 and 3 would still pass. Add a case where an interior board elsewhere is nearer than the same-run interior board and the same-run board still wins, and place a carcass board nearer than the nearest interior board in the tier-2 case.
+- **F2: The mm-valued centre helper and local have no `_mm` suffix** (`freecad/Shelving/core/stock.py`): `_centre(space)` returns a millimetre position and `target` holds one; they should be `_centre_mm` and `target_mm`.
+- **N1: The test showing a spacing holds while a clear size moves under a thickness change was deleted, not ported** (`freecad/Shelving/core/tests/test_edit.py`): with `Board.thickness_mm` it ports directly (25 mm boards: shelf z 300 for the spacing, 307 for the clear size). Every remaining WITH_NEXT test uses 18 mm everywhere.
+- **N2: The any-board fallback (tier 4) is not in Advice, and only some docs mention it** (`freecad/Shelving/core/stock.py`): the README glossary describes it, but `docs/scope-and-design.md` stops at the nearest outer panel.
+- **N3: Several edited prose lines were not rewrapped** (`docs/manual-qa.md`, `docs/scope-and-design.md`, `docs/roadmap.md`, `tasks/active/sh-024-user-documentation-and-release.md`).
+- **N4: `measure`'s docstring is clumsy after the edit** (`freecad/Shelving/core/edit.py`): "read from ``spaces`` (``unit`` solved). Raises" reads awkwardly; the `_rescanned_unit` and `_read_unit` docstrings were left with short, odd line breaks.
+
+### Round 2: APPROVED
+- **N1: Some edited prose is still not rewrapped** (`docs/scope-and-design.md:169`, `docs/scope-and-design.md:309`, `docs/roadmap.md:12`, `tasks/active/sh-022-appearance-and-errors.md:41`): each line ends well short of the paragraph's width because text was cut or inserted without reflowing it.
+- **N2: M5's milestone text still tells readers to run `pixi run demo`** (`docs/roadmap.md:187`): it says the command "writes an SVG elevation", and this branch deletes both the command and the renderer. M5 keeps "Done sh-014, sh-015" with no marker. The Must Haves only required marking M8, so this does not block; a short note or a partial-supersede marker would keep the roadmap accurate.
+
+### Round 3: APPROVED
+- **N1: The panel test's name still says "removed"** (`tests/freecad_gui/test_panel.py`): `test_untagged_objects_are_kept_unless_removed` now drives `delete_untagged_button`; `..._unless_deleted` would match the new wording.
+- **N2: The two manual-QA decisions are not recorded in the task's Advice**: the rename and "case 15's 3 mm shift stays with bug-007" appear only in commit 7281d03's message.

@@ -1,26 +1,22 @@
 """Every FreeCAD property this workbench reads or writes, named once.
 
 No other module spells one of these property names directly: a board's
-``ShelvingMaterial``, ``ShelvingBornAs``, ``ShelvingBornIn``, and
-``ShelvingIrregular``, a container's ``ShelvingUnitId``,
-``ShelvingDepthAxis``, ``ShelvingFacing``, and ``ShelvingRules``, the
-catalog group's marker ``ShelvingCatalog``, and a catalog entry's
-``MaterialId``, ``Description``, ``Thickness``, ``MaterialType``, and
-``NominalThickness``. The board, container, and marker properties sit in a
-``Shelving`` property group so they stand out from a plain object's built-ins
-in the property editor; the entry properties carry no such prefix because
-their names are already the ones a user editing a stock item expects.
+``ShelvingBornAs``, ``ShelvingBornIn``, and ``ShelvingIrregular``, a
+container's ``ShelvingUnitId``, ``ShelvingDepthAxis``, ``ShelvingFacing``,
+and ``ShelvingRules``, and the board stock the workbench copies but never
+owns: FreeCAD's ``ShapeMaterial``, the view's ``ShapeAppearance``, and the
+Woodworking workbench's per-face ``Grain`` list. The workbench's own
+properties sit in a ``Shelving`` property group so they stand out from a
+plain object's built-ins in the property editor.
 
-``ensure_board_properties``, ``ensure_container_properties``,
-``ensure_catalog_group_properties``, and ``ensure_entry_properties`` add
-whatever is missing and are idempotent, so a caller can call any of them on
-every write without checking first. ``freecad-stubs`` types only the generic
+``ensure_board_properties`` and ``ensure_container_properties`` add whatever
+is missing and are idempotent, so a caller can call either on every write
+without checking first. ``freecad-stubs`` types only the generic
 ``DocumentObject``, with no way to express "a ``DocumentObject`` that also
-carries these dynamically-added properties"; ``BoardObject``,
-``ContainerObject``, ``CatalogGroupObject``, and ``CatalogEntryObject`` are
-the ``Protocol`` classes that let the rest of the workbench read and write
-them with real types instead of ``getattr`` chains, and the ``ensure_*``
-functions are what a caller casts through to get one.
+carries these dynamically-added properties"; the ``Protocol`` classes here
+let the rest of the workbench read and write them with real types instead
+of ``getattr`` chains, and the ``ensure_*`` functions are what a caller
+casts through to get one.
 
 Facing is stored as a string enumeration (``"min"`` / ``"max"`` /
 ``"unknown"``) rather than a nullable boolean: a FreeCAD property has no null,
@@ -28,12 +24,6 @@ and ``Unit.front_at_min`` has three states (front at the depth
 axis's minimum end, its maximum end, or undetermined), so collapsing to two
 string values plus "property absent" would conflate "never written" with
 "determined to be undetermined".
-
-A catalog entry's ``Thickness`` is an ``App::PropertyLength``, so the
-property editor shows it with units and respects the user's unit schema; it
-reads back as a ``FreeCAD.Quantity``, not a ``float``, so
-``read_entry_thickness_mm`` converts it to a plain millimetre float rather
-than leaving that conversion to every caller.
 """
 
 from __future__ import annotations
@@ -43,11 +33,9 @@ from typing import Protocol, cast
 import FreeCAD
 
 from freecad.Shelving.core.layout import Axis
-from freecad.Shelving.core.materials import MaterialId
 
 GROUP_NAME = "Shelving"
 
-MATERIAL_PROP = "ShelvingMaterial"
 BORN_AS_PROP = "ShelvingBornAs"
 BORN_IN_PROP = "ShelvingBornIn"
 IRREGULAR_PROP = "ShelvingIrregular"
@@ -57,24 +45,12 @@ DEPTH_AXIS_PROP = "ShelvingDepthAxis"
 FACING_PROP = "ShelvingFacing"
 RULES_PROP = "ShelvingRules"
 
-CATALOG_MARKER_PROP = "ShelvingCatalog"
+# The Woodworking workbench's grain list: one entry per face, in its own
+# property group. Copied with the type and group the source carries.
+GRAIN_PROP = "Grain"
 
-ENTRY_MATERIAL_ID_PROP = "MaterialId"
-ENTRY_DESCRIPTION_PROP = "Description"
-ENTRY_THICKNESS_PROP = "Thickness"
-ENTRY_MATERIAL_TYPE_PROP = "MaterialType"
-ENTRY_NOMINAL_THICKNESS_PROP = "NominalThickness"
-
-_BOARD_PROP_NAMES = (MATERIAL_PROP, BORN_AS_PROP, BORN_IN_PROP, IRREGULAR_PROP)
+_BOARD_PROP_NAMES = (BORN_AS_PROP, BORN_IN_PROP, IRREGULAR_PROP)
 _CONTAINER_PROP_NAMES = (UNIT_ID_PROP, DEPTH_AXIS_PROP, FACING_PROP, RULES_PROP)
-_ENTRY_PROP_NAMES = (
-    ENTRY_MATERIAL_ID_PROP,
-    ENTRY_DESCRIPTION_PROP,
-    ENTRY_THICKNESS_PROP,
-    ENTRY_MATERIAL_TYPE_PROP,
-    ENTRY_NOMINAL_THICKNESS_PROP,
-)
-
 _FACING_MIN = "min"
 _FACING_MAX = "max"
 _FACING_UNKNOWN = "unknown"
@@ -87,7 +63,6 @@ class BoardObject(Protocol):
     """A board's ``DocumentObject`` after :func:`ensure_board_properties`."""
 
     Name: str
-    ShelvingMaterial: str
     ShelvingBornAs: str
     ShelvingBornIn: str
     ShelvingIrregular: bool
@@ -104,27 +79,26 @@ class ContainerObject(Protocol):
     ShelvingRules: str
 
 
-class CatalogGroupObject(Protocol):
-    """The catalog's ``App::DocumentObjectGroup`` after
-    :func:`ensure_catalog_group_properties`."""
+class FreeCADMaterial(Protocol):
+    """A ``Materials.Material``, which ``freecad-stubs`` does not type."""
 
     Name: str
-    ShelvingCatalog: bool
+    UUID: str
 
 
-class CatalogEntryObject(Protocol):
-    """One catalog entry's ``App::VarSet`` after
-    :func:`ensure_entry_properties`."""
+class _MaterialObject(Protocol):
+    ShapeMaterial: FreeCADMaterial
 
-    Name: str
-    Label: str
-    MaterialId: str
-    Description: str
-    # App::PropertyLength reads back as a Quantity but accepts a plain
-    # float on assignment, which is what write_entry_thickness_mm writes.
-    Thickness: float | FreeCAD.Quantity
-    MaterialType: str
-    NominalThickness: str
+
+class _GrainObject(Protocol):
+    Grain: list[str]
+
+
+class _AppearanceView(Protocol):
+    """A view provider's appearance: one ``FreeCAD.Material`` per face, or a
+    single entry applying to every face."""
+
+    ShapeAppearance: list[FreeCAD.Material]
 
 
 def has_board_properties(obj: FreeCAD.DocumentObject) -> bool:
@@ -133,7 +107,7 @@ def has_board_properties(obj: FreeCAD.DocumentObject) -> bool:
     This, not any single property, is what the deletion and left-alone rules
     (``freecad.Shelving.container.write_container``) mean by "carries this
     workbench's provenance": a part the workbench never wrote has none of
-    these four, and a part only partway tagged is a bug, not a state a
+    these three, and a part only partway tagged is a bug, not a state a
     caller should trust piecemeal.
     """
     return all(hasattr(obj, name) for name in _BOARD_PROP_NAMES)
@@ -144,32 +118,10 @@ def has_container_properties(obj: FreeCAD.DocumentObject) -> bool:
     return all(hasattr(obj, name) for name in _CONTAINER_PROP_NAMES)
 
 
-def has_catalog_marker(obj: FreeCAD.DocumentObject) -> bool:
-    """Whether ``obj`` is a group tagged as the document's material catalog.
-
-    Checked by property, not by ``Name`` or ``Label``: either is renameable
-    from the tree, and a rename must not silently detach the catalog.
-    """
-    return bool(getattr(obj, CATALOG_MARKER_PROP, False))
-
-
-def has_entry_properties(obj: FreeCAD.DocumentObject) -> bool:
-    """Whether ``obj`` already carries every catalog entry property."""
-    return all(hasattr(obj, name) for name in _ENTRY_PROP_NAMES)
-
-
 def ensure_board_properties(obj: FreeCAD.DocumentObject) -> BoardObject:
-    """Add any of the four board properties ``obj`` is missing, and return
+    """Add any of the three board properties ``obj`` is missing, and return
     it narrowed to :class:`BoardObject`. A no-op, property by property, on an
     object that already carries some or all of them."""
-    if not hasattr(obj, MATERIAL_PROP):
-        obj.addProperty(
-            "App::PropertyString",
-            MATERIAL_PROP,
-            GROUP_NAME,
-            "The catalog material id this board resolves to, bypassing "
-            "thickness matching. Empty means none stored.",
-        )
     if not hasattr(obj, BORN_AS_PROP):
         obj.addProperty(
             "App::PropertyString",
@@ -231,76 +183,6 @@ def ensure_container_properties(obj: FreeCAD.DocumentObject) -> ContainerObject:
             "record.rules_to_json emits it.",
         )
     return cast("ContainerObject", obj)
-
-
-def ensure_catalog_group_properties(obj: FreeCAD.DocumentObject) -> CatalogGroupObject:
-    """Add the catalog marker property to ``obj`` if it is missing, and
-    return it narrowed to :class:`CatalogGroupObject`."""
-    if not hasattr(obj, CATALOG_MARKER_PROP):
-        obj.addProperty(
-            "App::PropertyBool",
-            CATALOG_MARKER_PROP,
-            GROUP_NAME,
-            "Marks this group as the document's one material catalog.",
-        )
-        setattr(obj, CATALOG_MARKER_PROP, True)
-    return cast("CatalogGroupObject", obj)
-
-
-def ensure_entry_properties(obj: FreeCAD.DocumentObject) -> CatalogEntryObject:
-    """Add any of the five catalog entry properties ``obj`` is missing, and
-    return it narrowed to :class:`CatalogEntryObject`."""
-    if not hasattr(obj, ENTRY_MATERIAL_ID_PROP):
-        obj.addProperty(
-            "App::PropertyString",
-            ENTRY_MATERIAL_ID_PROP,
-            GROUP_NAME,
-            "The stable id a board's ShelvingMaterial references. Renaming "
-            "this object's Name or Label never changes it.",
-        )
-    if not hasattr(obj, ENTRY_DESCRIPTION_PROP):
-        obj.addProperty(
-            "App::PropertyString",
-            ENTRY_DESCRIPTION_PROP,
-            GROUP_NAME,
-            "Human-readable description of the stock item.",
-        )
-    if not hasattr(obj, ENTRY_THICKNESS_PROP):
-        obj.addProperty(
-            "App::PropertyLength",
-            ENTRY_THICKNESS_PROP,
-            GROUP_NAME,
-            "The measured panel thickness the solver subtracts for dividers "
-            "and the carcass shell.",
-        )
-    if not hasattr(obj, ENTRY_MATERIAL_TYPE_PROP):
-        obj.addProperty(
-            "App::PropertyString",
-            ENTRY_MATERIAL_TYPE_PROP,
-            GROUP_NAME,
-            "Free-form stock category, such as 'plywood' or 'mdf'.",
-        )
-    if not hasattr(obj, ENTRY_NOMINAL_THICKNESS_PROP):
-        obj.addProperty(
-            "App::PropertyString",
-            ENTRY_NOMINAL_THICKNESS_PROP,
-            GROUP_NAME,
-            "Free human label for the callout thickness (e.g. '3/4\"'), not "
-            "a millimetre value. Empty means unset.",
-        )
-    return cast("CatalogEntryObject", obj)
-
-
-def read_board_material(obj: FreeCAD.DocumentObject) -> MaterialId | None:
-    """``obj``'s stored material id, or ``None`` when absent or unset."""
-    value = getattr(obj, MATERIAL_PROP, "")
-    if not isinstance(value, str) or not value:
-        return None
-    return MaterialId(value)
-
-
-def write_board_material(obj: BoardObject, material: MaterialId | None) -> None:
-    obj.ShelvingMaterial = material or ""
 
 
 def read_board_born_as(obj: FreeCAD.DocumentObject) -> str | None:
@@ -408,51 +290,58 @@ def write_container_rules_json(obj: ContainerObject, rules_json: str) -> None:
     obj.ShelvingRules = rules_json
 
 
-def read_entry_material_id(obj: FreeCAD.DocumentObject) -> MaterialId | None:
-    value = getattr(obj, ENTRY_MATERIAL_ID_PROP, "")
-    return MaterialId(value) if isinstance(value, str) and value else None
+def read_material_name(obj: FreeCAD.DocumentObject) -> str | None:
+    """The name of ``obj``'s ``ShapeMaterial``, or ``None`` when it has none."""
+    if not hasattr(obj, "ShapeMaterial"):
+        return None
+    return cast("_MaterialObject", obj).ShapeMaterial.Name
 
 
-def write_entry_material_id(obj: CatalogEntryObject, material_id: MaterialId) -> None:
-    obj.MaterialId = str(material_id)
+def read_grain(obj: FreeCAD.DocumentObject) -> list[str] | None:
+    """``obj``'s Woodworking ``Grain`` list, or ``None`` when it has none."""
+    if not hasattr(obj, GRAIN_PROP):
+        return None
+    return list(cast("_GrainObject", obj).Grain)
 
 
-def read_entry_description(obj: FreeCAD.DocumentObject) -> str:
-    value = getattr(obj, ENTRY_DESCRIPTION_PROP, "")
-    return value if isinstance(value, str) else ""
+def _appearance_view(obj: FreeCAD.DocumentObject) -> _AppearanceView | None:
+    """``obj``'s view provider, or ``None`` without a GUI, where FreeCAD
+    creates no view provider at all."""
+    view = obj.ViewObject
+    return cast("_AppearanceView", view) if view is not None else None
 
 
-def write_entry_description(obj: CatalogEntryObject, description: str) -> None:
-    obj.Description = description
+def copy_stock(source: FreeCAD.DocumentObject, target: FreeCAD.DocumentObject) -> None:
+    """Give ``target`` ``source``'s ``ShapeMaterial``, its ``Grain`` when it
+    has one, in the same property type and group, and with a GUI its whole
+    ``ShapeAppearance``, per-face colours included.
+
+    Each property ``source`` lacks leaves ``target``'s own unchanged.
+    """
+    if hasattr(source, "ShapeMaterial") and hasattr(target, "ShapeMaterial"):
+        material = cast("_MaterialObject", source).ShapeMaterial
+        cast("_MaterialObject", target).ShapeMaterial = material
+    if hasattr(source, GRAIN_PROP):
+        if not hasattr(target, GRAIN_PROP):
+            target.addProperty(
+                source.getTypeIdOfProperty(GRAIN_PROP),
+                GRAIN_PROP,
+                source.getGroupOfProperty(GRAIN_PROP),
+            )
+        cast("_GrainObject", target).Grain = list(cast("_GrainObject", source).Grain)
+    source_view = _appearance_view(source)
+    target_view = _appearance_view(target)
+    if source_view is not None and target_view is not None:
+        target_view.ShapeAppearance = list(source_view.ShapeAppearance)
 
 
-def read_entry_thickness_mm(obj: FreeCAD.DocumentObject) -> float:
-    """``obj``'s ``Thickness`` in millimetres, converted from the
-    ``FreeCAD.Quantity`` an ``App::PropertyLength`` reads back as; ``0.0``
-    when the property is absent."""
-    value = getattr(obj, ENTRY_THICKNESS_PROP, None)
-    return float(value) if value is not None else 0.0
-
-
-def write_entry_thickness_mm(obj: CatalogEntryObject, thickness_mm: float) -> None:
-    obj.Thickness = thickness_mm
-
-
-def read_entry_material_type(obj: FreeCAD.DocumentObject) -> str:
-    value = getattr(obj, ENTRY_MATERIAL_TYPE_PROP, "")
-    return value if isinstance(value, str) else ""
-
-
-def write_entry_material_type(obj: CatalogEntryObject, material_type: str) -> None:
-    obj.MaterialType = material_type
-
-
-def read_entry_nominal_thickness(obj: FreeCAD.DocumentObject) -> str | None:
-    value = getattr(obj, ENTRY_NOMINAL_THICKNESS_PROP, "")
-    return value if isinstance(value, str) and value else None
-
-
-def write_entry_nominal_thickness(
-    obj: CatalogEntryObject, nominal_thickness: str | None
-) -> None:
-    obj.NominalThickness = nominal_thickness or ""
+def paint(obj: FreeCAD.DocumentObject, rgb: tuple[int, int, int]) -> None:
+    """Give every face of ``obj`` the diffuse colour ``rgb`` (0 to 255 per
+    channel), keeping the rest of its appearance. Does nothing without a GUI.
+    """
+    view = _appearance_view(obj)
+    if view is None:
+        return
+    appearance = view.ShapeAppearance[0]
+    appearance.DiffuseColor = (rgb[0] / 255, rgb[1] / 255, rgb[2] / 255, 1.0)
+    view.ShapeAppearance = [appearance]

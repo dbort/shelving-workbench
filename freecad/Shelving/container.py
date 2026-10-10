@@ -40,7 +40,6 @@ from freecad.Shelving import properties
 from freecad.Shelving.core.expand import BoardSpec, expand
 from freecad.Shelving.core.geometry import Vec3
 from freecad.Shelving.core.layout import Axis, Board, Division, Item, Region, Unit
-from freecad.Shelving.core.materials import Catalog
 from freecad.Shelving.core.record import rules_to_json
 from freecad.Shelving.core.scan import Box, Skipped, elevation_axes
 
@@ -217,7 +216,6 @@ def read_container(
                     corner_mm=Vec3(bound.XMin, bound.YMin, bound.ZMin),
                     size_mm=Vec3(bound.XLength, bound.YLength, bound.ZLength),
                     irregular=classification.irregular,
-                    material=properties.read_board_material(leaf),
                 )
             )
     record = ContainerRecord(
@@ -607,10 +605,6 @@ def _create_board(
     _add_child(container, obj)
     _write_geometry(obj, spec, board)
     tagged = properties.ensure_board_properties(obj)
-    # spec.material, not board.material: expand() has already resolved
-    # Board.material's None (inherit Unit.default_material) to a concrete
-    # id, and only the resolved id is a MaterialId a rescan can look up.
-    properties.write_board_material(tagged, spec.material)
     properties.write_board_irregular(tagged, board.pinned_size_mm is not None)
     properties.write_board_born_as(tagged, obj.Name)
     properties.write_board_born_in(tagged, doc.Uid)
@@ -618,9 +612,7 @@ def _create_board(
     return obj
 
 
-def write_container(
-    container: FreeCAD.DocumentObject, unit: Unit, catalog: Catalog
-) -> WriteResult:
+def write_container(container: FreeCAD.DocumentObject, unit: Unit) -> WriteResult:
     """Reconcile ``container``'s ``Part::Box`` children against ``unit``.
 
     A board matches an existing object by its ``Board.id`` equalling the
@@ -641,6 +633,10 @@ def write_container(
     is NOT matched is deleted, its layout entry gone; one that matches
     nothing and carries no provenance either is left exactly alone,
     reported in ``WriteResult.left_alone``.
+    A created board whose ``Board.stock_from`` names an object this call
+    writes copies that object's material, grain and appearance
+    (:func:`freecad.Shelving.properties.copy_stock`); no write touches them
+    on a board it updates.
     The scanner routes an object away from ever matching anything at all
     (a panel set aside by ``freecad.Shelving.core.scan.scan``, or a part
     ``read_container`` could not read) when it has no defensible place in
@@ -651,7 +647,7 @@ def write_container(
     the caller owns that.
     """
     doc = container.Document
-    specs = expand(unit, catalog)
+    specs = expand(unit)
     boards_by_id = _boards_by_id(unit.root)
     labels = _derive_labels(unit)
     existing = _existing_leaves(container)
@@ -667,6 +663,8 @@ def write_container(
 
     updated: list[str] = []
     created: list[str] = []
+    objects_by_id = dict(existing)
+    stock_copies: list[tuple[str, FreeCAD.DocumentObject]] = []
     for spec in specs:
         board = boards_by_id[spec.node_id]
         obj = existing.get(spec.node_id)
@@ -675,6 +673,9 @@ def write_container(
             if new_obj.Name != spec.node_id:
                 id_renames[spec.node_id] = new_obj.Name
             created.append(new_obj.Name)
+            objects_by_id[spec.node_id] = new_obj
+            if spec.stock_from is not None:
+                stock_copies.append((spec.stock_from, new_obj))
             continue
         matched_names.add(obj.Name)
         # A match overrides "never touch an untagged object": being named by
@@ -685,7 +686,6 @@ def write_container(
         adopting = not properties.has_board_properties(obj) or copy
         _write_geometry(obj, spec, board)
         tagged = properties.ensure_board_properties(obj)
-        properties.write_board_material(tagged, spec.material)
         properties.write_board_irregular(tagged, board.pinned_size_mm is not None)
         if adopting:
             properties.write_board_born_as(tagged, obj.Name)
@@ -701,6 +701,13 @@ def write_container(
             created.append(obj.Name)
         else:
             updated.append(obj.Name)
+
+    # After every board exists, so a source created later in this same call
+    # is found too.
+    for source_id, target in stock_copies:
+        source = objects_by_id.get(source_id)
+        if source is not None:
+            properties.copy_stock(source, target)
 
     rules_unit = (
         dataclasses.replace(unit, root=renamed_board_ids(unit.root, id_renames))

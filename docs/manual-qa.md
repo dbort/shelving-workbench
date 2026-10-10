@@ -111,15 +111,15 @@ depth axis y, size 600 x 300 x 600 mm
 WARNING: nothing says which side this unit faces, so left and right below are a coin flip: the tree is correct either way.
 
 division along z
-  board Bottom (default material)
+  board Bottom (18 mm)
   division along x, 564 mm (clear)
-    board LeftSide (default material)
+    board LeftSide (18 mm)
     division along z, 564 mm (clear)
       bay
-      board Shelf (default material)
+      board Shelf (18 mm)
       bay
-    board RightSide (default material)
-  board Top (default material)
+    board RightSide (18 mm)
+  board Top (18 mm)
 ```
 
 ### 2. A scan can succeed while reporting a skipped part
@@ -222,11 +222,12 @@ Expected: a new `ShelvingUnit` `App::Part` appears in the tree, holding four
 `Part::Box` objects labelled **Bottom**, **Top**, **Side 1**, **Side 2** (a
 fresh unit has no evidence of which way it faces, so the sides are numbered
 rather than called left/right). Select **Bottom** and open the property
-editor: a **Shelving** group holds `ShelvingMaterial`, `ShelvingBornAs`,
-`ShelvingBornIn`, and `ShelvingIrregular`. Select **ShelvingUnit** itself: its
-own **Shelving** group holds `ShelvingUnitId`, `ShelvingDepthAxis`,
-`ShelvingFacing` (`unknown`), and `ShelvingRules`. The Report view prints how
-many boards were created.
+editor: a **Shelving** group holds `ShelvingBornAs`, `ShelvingBornIn`, and
+`ShelvingIrregular`, and its `ShapeMaterial` is FreeCAD's **Default**. Every
+board is 18 mm thick and the light tan of a Woodworking Magic Start unit.
+Select **ShelvingUnit** itself: its own **Shelving** group holds
+`ShelvingUnitId`, `ShelvingDepthAxis`, `ShelvingFacing` (`unknown`), and
+`ShelvingRules`. The Report view prints how many boards were created.
 
 ### 2. Resize it and confirm boards move while labels and colours hold
 
@@ -279,8 +280,8 @@ hand first: running Resize Unit (or Scan Unit) is what corrects it.
    requires a board to have one uniquely thinnest axis to read its
    thickness from, and a cube has three tied extents, so it refuses the
    whole scan rather than reading this one object as unrelated. Thinnest
-   along `y` (this unit's depth axis) also keeps it out of thickness/material
-   matching, the same way this case's automated counterpart
+   along `y` (this unit's depth axis) also sets it aside as a panel rather
+   than placing it as a board, the same way this case's automated counterpart
    (`tests/freecad/test_write.py`'s `BackPanel`) does it:
    ```python
    doc = App.ActiveDocument
@@ -313,79 +314,6 @@ warning about a missing module, and the unit's boxes are present, correctly
 sized, and at their saved positions: plain `Part::Box` geometry needs no
 scripted type to regenerate. Restore the symlink afterward to keep using the
 workbench.
-
-## M8 — The material catalog as a document object
-
-Prerequisite: a FreeCAD 1.1 install with this workbench on its addon path,
-**View → Panels → Report view** open, a new document (`Ctrl+N`).
-
-### 1. Create a unit on an empty document and confirm a materials group appears
-
-1. With nothing selected, run **Create Unit** from the **Shelving** toolbar
-   or menu.
-
-Expected: alongside the new `ShelvingUnit`, a **Material Catalog** group
-appears in the tree, holding four `App::VarSet` entries (one per stock item
-in `freecad.Shelving.default_catalog.DEFAULT_CATALOG`). Select one, such as
-**18 mm birch plywood**: the property editor shows `MaterialId`,
-`Description`, `Thickness`, `MaterialType`, and `NominalThickness` directly,
-with no group prefix and no dialog. `Thickness` shows with units (`18 mm`).
-
-### 2. Change a thickness and confirm nothing moves until Reflow All runs
-
-1. Select the **18 mm birch plywood** entry. In the property editor, change
-   `Thickness` from `18 mm` to `25 mm`.
-
-Expected: nothing in the 3D view moves. Reflow runs only as an explicit
-command, not through FreeCAD's automatic recompute; a property edit alone
-never touches a board.
-
-2. With nothing selected, run **Reflow All** from the **Shelving** toolbar
-   or menu.
-
-Expected: the Report view prints one line for `ShelvingUnit`, in the same
-`updated N, created N, deleted N, left alone N` shape **Resize Unit**
-prints. **Bottom**, **Top**, and both sides are now 25 mm thick (check
-`Height` on **Bottom**, or measure in the 3D view), while the unit's outside
-size (600 × 300 × 900, or whatever you last resized it to) is unchanged:
-the interior bay absorbed the extra 7 mm on each of the two Z-axis boards.
-
-### 3. Add a material, leave it unedited, then assign it to one board and reflow
-
-1. Run **Add Material** from the **Shelving** toolbar or menu.
-
-Expected: a new entry named **New material** appears in the **Material
-Catalog** group and is selected, so the property editor already shows its
-properties: `MaterialId` reads `new_material`, `Thickness` reads `0 mm`.
-
-2. Leaving the new entry exactly as it is (`Thickness` still `0 mm`), select
-   nothing and run **Reflow All**, exercising the existing unit while an
-   incomplete entry sits unused in the catalog.
-
-Expected: the Report view prints a `catalog entry skipped: <New material's
-object name>: Thickness must be greater than zero, got 0 mm` line, followed
-by the normal `ShelvingUnit` line reporting the reflow as usual (`updated
-0` if nothing changed since case 2, or otherwise consistent with whatever
-state the unit was left in). Nothing about the unit is refused: the
-unfinished entry sits in the catalog unusable, but no board references it,
-so it never blocks a unit that doesn't need it (sh-019 review round 2, F1).
-Compare case 4 of the M6 section, where a genuinely invalid *board* refuses
-the whole scan and names the offenders: an unreferenced, merely incomplete
-catalog entry must not do the same.
-
-3. Select the new entry again and change `MaterialId` to something
-   memorable (`oak6`, say), `Thickness` to `6 mm`, and `MaterialType` to
-   `hardwood`.
-4. Select **Bottom** (or any other board) and change its `ShelvingMaterial`
-   property from `ply18` to `oak6`.
-5. Run **Reflow All**.
-
-Expected: no `catalog entry skipped` line this time, since every entry now
-validates. **Bottom** is now 6 mm thick; every other board is unaffected.
-The Report view's `ShelvingUnit` line shows `updated 4`. Running **Reflow
-All** again with `ShelvingMaterial` left at `oak6` reproduces the same
-result rather than drifting, since the stored id, not thickness matching,
-is what a rescan resolves it by.
 
 ## M9 — The elevation editor
 
@@ -660,24 +588,25 @@ has no board after it to measure a spacing through.
 Expected: the panel closes, the unit is back to the fresh unit's single
 bay, and the temporary object is gone from the tree.
 
-### 15. Change the stock thickness and confirm spacings hold and clears move
+### 15. A new shelf copies the shelf in its opening, not the carcass
 
 **Start:** a fresh unit.
 
-1. Select the container, run **Edit Unit**, click the bay, and click **Add
-   Divider**. Click the left bay and click **Add Shelf**; click the right
-   bay and click **Add Shelf**.
-2. Click the left lower bay, choose **Spacing (through the next board)**,
-   then type `300` and press Return.
-3. Click the right lower bay, leave **Clear opening** chosen, type `282`,
-   and press Return. Both shelves now sit at the same height.
-4. Click **OK**.
-5. In the materials group, select the `ply18` entry (**18 mm birch
-   plywood**), change its `Thickness` from `18 mm` to `25 mm`, then run
-   **Reflow All**.
+1. Select the container, run **Edit Unit**, click the bay, click **Add
+   Shelf**, and click **OK**.
+2. Select the new **Shelf 1** in the tree. In the property editor, change its
+   `Height` from `18 mm` to `12 mm`. Give it a colour unlike the carcass's
+   (right-click → **Appearance…**) and another material from FreeCAD's
+   material library, such as **Wood**. With the Woodworking workbench
+   installed, also give it a grain direction with one of its grain tools.
+3. Select the container, run **Edit Unit**, click the bay above the shelf,
+   and click **Add Shelf**.
 
-Expected: the left shelf stays exactly where it was; the right shelf rises
-by 7 mm, following the thicker bottom board.
+Expected: the second shelf is 12 mm thick and has the first shelf's colour,
+material and grain, while the bottom, top and sides keep theirs. A shelf
+takes its stock from another shelf in the same opening before it falls back
+to the carcass. The first shelf moves 3 mm, re-centering in its opening
+(bug-007), which can hide its Woodworking grain arrow.
 
 ### 16. Confirm the untagged-object list appears with nothing checked
 
@@ -694,9 +623,9 @@ and text saying the workbench leaves such objects alone unless they are
 selected. The reason wraps onto several lines rather than making the panel
 scroll sideways. Make any edit: the cube stays where it is.
 
-3. Check the cube and click **Remove Selected**, then **Cancel**.
+3. Check the cube and click **Delete Selected**, then **Cancel**.
 
-Expected: the cube disappears on **Remove Selected** and returns on
+Expected: the cube disappears on **Delete Selected** and returns on
 **Cancel**. With nothing checked, **OK** keeps it.
 
 ### 17. An unsolvable size leaves the last good state

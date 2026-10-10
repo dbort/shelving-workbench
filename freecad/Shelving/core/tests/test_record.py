@@ -22,7 +22,6 @@ from freecad.Shelving.core.layout import (
     Unit,
     Weighted,
 )
-from freecad.Shelving.core.materials import Catalog, MaterialEntry, MaterialId
 from freecad.Shelving.core.record import (
     RULE_RECORD_VERSION,
     rule_key,
@@ -31,10 +30,6 @@ from freecad.Shelving.core.record import (
     with_stored_rules,
 )
 from freecad.Shelving.core.scan import Box, scan
-
-PLY = MaterialId("ply18")
-CATALOG = Catalog(entries={PLY: MaterialEntry(PLY, "ply 18", 18.0, "plywood")})
-
 
 # --- rule_key() -------------------------------------------------------------
 
@@ -60,21 +55,21 @@ def test_rules_to_json_emits_one_entry_per_non_root_region() -> None:
     root = Division(
         axis=Axis.Z,
         items=[
-            Board(id="bottom"),
+            Board(thickness_mm=18.0, id="bottom"),
             Division(
                 axis=Axis.X,
                 items=[
-                    Board(id="left"),
+                    Board(thickness_mm=18.0, id="left"),
                     Bay(rule=Fixed(400.0), id="bay"),
-                    Board(id="right"),
+                    Board(thickness_mm=18.0, id="right"),
                 ],
                 id="mid",
             ),
-            Board(id="top"),
+            Board(thickness_mm=18.0, id="top"),
         ],
         id="root",
     )
-    unit = Unit(size_mm=Vec3(900.0, 300.0, 1800.0), default_material=PLY, root=root)
+    unit = Unit(size_mm=Vec3(900.0, 300.0, 1800.0), root=root)
     doc = json.loads(rules_to_json(unit))
     assert doc["schema_version"] == RULE_RECORD_VERSION
     # "mid" (a Division) and "bay" are the two non-root regions; the root
@@ -86,10 +81,14 @@ def _bay_unit(rule: SizeRule) -> Unit:
     """A minimal unit with one region, "bay", whose rule is under test."""
     root = Division(
         axis=Axis.Z,
-        items=[Board(id="lower"), Bay(rule=rule, id="bay"), Board(id="upper")],
+        items=[
+            Board(thickness_mm=18.0, id="lower"),
+            Bay(rule=rule, id="bay"),
+            Board(thickness_mm=18.0, id="upper"),
+        ],
         id="root",
     )
-    return Unit(size_mm=Vec3(600.0, 300.0, 900.0), default_material=PLY, root=root)
+    return Unit(size_mm=Vec3(600.0, 300.0, 900.0), root=root)
 
 
 def test_rules_to_json_preserves_fixed_basis_clear() -> None:
@@ -204,7 +203,6 @@ def test_with_stored_rules_returns_a_unit_whose_tree_is_otherwise_identical() ->
     updated = with_stored_rules(unit, {key: Fixed(250.0, basis=Basis.CLEAR)})
     assert _strip_rules(updated.root) == _strip_rules(unit.root)
     assert updated.size_mm == unit.size_mm
-    assert updated.default_material == unit.default_material
     assert updated.id == unit.id
 
 
@@ -215,7 +213,7 @@ def _b(role: str) -> Board:
     """A board whose id matches its role, standing in for what sh-018 makes
     true in the real pipeline: a board's id is its stable FreeCAD object
     name, which is also what a scanned board's role is read from."""
-    return Board(role=role, id=role)
+    return Board(thickness_mm=18.0, role=role, id=role)
 
 
 def _closed_box_unit() -> Unit:
@@ -226,7 +224,6 @@ def _closed_box_unit() -> Unit:
     ``Fixed`` instead of their original ``Fill``."""
     return Unit(
         size_mm=Vec3(900.0, 300.0, 1800.0),
-        default_material=PLY,
         root=Division(
             axis=Axis.Z,
             items=[
@@ -263,7 +260,6 @@ def _fixed_matching_siblings_unit() -> Unit:
     the stored record recovers the original ``Fixed``."""
     return Unit(
         size_mm=Vec3(900.0, 300.0, 1800.0),
-        default_material=PLY,
         root=Division(
             axis=Axis.Z,
             items=[
@@ -301,7 +297,6 @@ def _with_next_unit() -> Unit:
     ``CLEAR`` excludes the following board's thickness."""
     return Unit(
         size_mm=Vec3(600.0, 300.0, 1200.0),
-        default_material=PLY,
         root=Division(
             axis=Axis.Z,
             items=[
@@ -350,12 +345,12 @@ def _stabilize_board_ids(region: Region) -> Region:
     return dataclasses.replace(region, items=new_items)
 
 
-def _rescan_unit(unit: Unit, catalog: Catalog) -> Unit:
+def _rescan_unit(unit: Unit) -> Unit:
     """``unit`` taken to boards and back through ``scan``, with board ids
     stabilized per :func:`_stabilize_board_ids`."""
-    specs = expand(unit, catalog)
+    specs = expand(unit)
     boxes = [Box(name=s.node_id, corner_mm=s.placement, size_mm=s.size) for s in specs]
-    rescanned = scan(boxes, catalog).unit
+    rescanned = scan(boxes).unit
     return dataclasses.replace(rescanned, root=_stabilize_board_ids(rescanned.root))
 
 
@@ -366,7 +361,7 @@ def _rule_map(unit: Unit) -> Mapping[str, SizeRule]:
 def test_round_trip_all_equal_bays() -> None:
     original = _closed_box_unit()
     original_rules = _rule_map(original)
-    rescanned = _rescan_unit(original, CATALOG)
+    rescanned = _rescan_unit(original)
     # The two outer, only-child divisions recover as Fixed rather than their
     # original Fill; see _closed_box_unit's docstring.
     assert _rule_map(rescanned) != original_rules
@@ -378,7 +373,7 @@ def test_round_trip_all_equal_bays() -> None:
 def test_round_trip_recovers_a_fixed_bay_the_heuristic_flattens_to_fill() -> None:
     original = _fixed_matching_siblings_unit()
     original_rules = _rule_map(original)
-    rescanned = _rescan_unit(original, CATALOG)
+    rescanned = _rescan_unit(original)
     assert _rule_map(rescanned) != original_rules
 
     restored = with_stored_rules(rescanned, rules_from_json(rules_to_json(original)))
@@ -388,7 +383,7 @@ def test_round_trip_recovers_a_fixed_bay_the_heuristic_flattens_to_fill() -> Non
 def test_round_trip_recovers_a_with_next_basis_a_scan_always_loses() -> None:
     original = _with_next_unit()
     original_rules = _rule_map(original)
-    rescanned = _rescan_unit(original, CATALOG)
+    rescanned = _rescan_unit(original)
     assert _rule_map(rescanned) != original_rules
 
     restored = with_stored_rules(rescanned, rules_from_json(rules_to_json(original)))
@@ -419,7 +414,7 @@ def test_renamed_bounding_board_falls_back_to_scanned_rule_without_raising() -> 
     its original stored rule."""
     original = _fixed_matching_siblings_unit()
     serialized = rules_to_json(original)
-    rescanned = _rescan_unit(original, CATALOG)
+    rescanned = _rescan_unit(original)
     renamed = _rename_board_id(rescanned, old_id="shelf2", new_id="shelf2_renamed")
 
     scanned_rules = _rule_map(renamed)

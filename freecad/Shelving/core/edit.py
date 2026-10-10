@@ -36,8 +36,8 @@ from freecad.Shelving.core.layout import (
     Unit,
     Weighted,
 )
-from freecad.Shelving.core.materials import Catalog, MaterialId
 from freecad.Shelving.core.solver import solve
+from freecad.Shelving.core.stock import source_board
 
 
 class EditError(ValueError):
@@ -101,19 +101,12 @@ def _other_driven_anchor(
     return None
 
 
-def split_region(
-    unit: Unit,
-    region_id: str,
-    axis: Axis,
-    catalog: Catalog,
-    material: MaterialId | None = None,
-) -> Unit:
+def split_region(unit: Unit, region_id: str, axis: Axis) -> Unit:
     """``unit`` with the ``Bay`` named ``region_id`` replaced by a board on
     ``axis``, splitting it into two bays.
 
     When ``region_id``'s parent ``Division`` runs along a *different* axis
-    than ``axis`` (or ``region_id`` is the tree's own root, which has no
-    parent), the replacement is a new ``Division`` on ``axis`` holding
+    than ``axis``, the replacement is a new ``Division`` on ``axis`` holding
     ``Bay``, ``Board``, ``Bay``, carrying the split ``Bay``'s own rule so
     the slot it occupied in its parent still claims the same share of
     space; a fresh run has no other region to preserve, so both new bays
@@ -129,28 +122,28 @@ def split_region(
     driven sibling in the run, or two ``Fill`` halves when no such sibling
     exists.
 
-    ``material`` is the new board's material, ``None`` meaning it inherits
-    ``unit.default_material`` the same as any other board. Raises
-    :class:`EditError` naming ``region_id`` when it names a ``Void``, a
-    ``Division``, no region in ``unit`` at all, or a ``Bay`` too small to
-    hold the new board and still leave two positive-sized halves.
+    The new board takes its thickness from the board
+    :func:`~freecad.Shelving.core.stock.source_board` picks, and carries that
+    board's id as its ``stock_from``. Raises :class:`EditError` naming
+    ``region_id`` when it names a ``Void``, a ``Division``, no region in
+    ``unit`` at all, or a ``Bay`` too small to hold the new board and still
+    leave two positive-sized halves, or when ``unit`` has no board to copy
+    stock from.
     """
-    if unit.root.id == region_id:
-        if not isinstance(unit.root, Bay):
-            raise EditError(region_id, "Only an open compartment can be split.")
-        new_root: Region = Division(
-            axis=axis,
-            items=[Bay(), Board(material=material), Bay()],
-            rule=unit.root.rule,
+    if unit.root.id == region_id and not isinstance(unit.root, Bay):
+        raise EditError(region_id, "Only an open compartment can be split.")
+    spaces = solve(unit)
+    if region_id not in spaces:
+        raise EditError(region_id, "That is not part of this unit.")
+    source = source_board(unit, spaces, region_id, axis)
+    if source is None:
+        raise EditError(
+            region_id, "This unit has no board for a new board to copy its stock from."
         )
-        return dataclasses.replace(unit, root=new_root)
+    board = Board(thickness_mm=source.thickness_mm, stock_from=source.id)
     if not isinstance(unit.root, Division):
         raise EditError(region_id, "That is not part of this unit.")
-    spaces = solve(unit, catalog)
-    thickness_mm = catalog[material or unit.default_material].thickness_mm
-    replaced_root, found = _split_in_division(
-        unit.root, region_id, axis, material, thickness_mm, spaces
-    )
+    replaced_root, found = _split_in_division(unit.root, region_id, axis, board, spaces)
     if not found:
         raise EditError(region_id, "That is not part of this unit.")
     return dataclasses.replace(unit, root=replaced_root)
@@ -160,8 +153,7 @@ def _split_in_division(
     division: Division,
     region_id: str,
     axis: Axis,
-    material: MaterialId | None,
-    thickness_mm: float,
+    board: Board,
     spaces: Mapping[str, Space],
 ) -> tuple[Division, bool]:
     items = division.items
@@ -171,15 +163,11 @@ def _split_in_division(
         if item.id == region_id:
             if not isinstance(item, Bay):
                 raise EditError(region_id, "Only an open compartment can be split.")
-            replacement = _split_replacement(
-                item, division, index, axis, material, thickness_mm, spaces
-            )
+            replacement = _split_replacement(item, division, index, axis, board, spaces)
             new_items = items[:index] + replacement + items[index + 1 :]
             return dataclasses.replace(division, items=new_items), True
         if isinstance(item, Division):
-            new_child, found = _split_in_division(
-                item, region_id, axis, material, thickness_mm, spaces
-            )
+            new_child, found = _split_in_division(item, region_id, axis, board, spaces)
             if found:
                 new_items = items[:index] + [new_child] + items[index + 1 :]
                 return dataclasses.replace(division, items=new_items), True
@@ -191,8 +179,7 @@ def _split_replacement(
     parent: Division,
     index: int,
     axis: Axis,
-    material: MaterialId | None,
-    thickness_mm: float,
+    board: Board,
     spaces: Mapping[str, Space],
 ) -> list[Item]:
     """The item(s) replacing ``bay`` at ``parent.items[index]``: one wrapping
@@ -204,14 +191,14 @@ def _split_replacement(
     if parent.axis != axis:
         division = Division(
             axis=axis,
-            items=[Bay(), Board(material=material), Bay()],
+            items=[Bay(), board, Bay()],
             rule=bay.rule,
         )
         return [division]
     rule1, rule2 = _split_halves_rules(
-        bay, parent.items, index, axis, thickness_mm, spaces
+        bay, parent.items, index, axis, board.thickness_mm, spaces
     )
-    return [Bay(rule=rule1), Board(material=material), Bay(rule=rule2)]
+    return [Bay(rule=rule1), board, Bay(rule=rule2)]
 
 
 def _split_halves_rules(
@@ -242,7 +229,7 @@ def _split_halves_rules(
     return weighted_rule, weighted_rule
 
 
-def merge_at(unit: Unit, board_id: str, catalog: Catalog) -> Unit:
+def merge_at(unit: Unit, board_id: str) -> Unit:
     """``unit`` with the ``Board`` named ``board_id`` removed and the regions
     either side of it merged into one.
 
@@ -280,7 +267,7 @@ def merge_at(unit: Unit, board_id: str, catalog: Catalog) -> Unit:
     already the promoted ``Division``'s only claimants on the slack it
     itself used to claim (see :func:`_splice_collapsed_child`).
     """
-    spaces = solve(unit, catalog)
+    spaces = solve(unit)
     new_root, found, _collapsed = _merge_at(unit.root, board_id, spaces)
     if not found:
         raise EditError(board_id, "That is not a board of this unit.")
@@ -497,26 +484,24 @@ def set_size(unit: Unit, region_id: str, size_mm: float, basis: Basis) -> Unit:
 
 
 def _size_in_basis_mm(
-    unit: Unit,
     parent: Division,
     index: int,
     clear_mm: float,
     basis: Basis,
-    catalog: Catalog,
 ) -> float:
     """``clear_mm`` restated in ``basis`` for ``parent.items[index]``.
 
-    A spacing adds the next board's catalog thickness rather than its solved
+    A spacing adds the next board's ``thickness_mm`` rather than its solved
     extent, because that is what the solver subtracts when it resolves
     ``Basis.WITH_NEXT``; the two differ for a board carrying its own rule.
     """
     board = _next_board(parent, index, basis)
     if board is None:
         return clear_mm
-    return clear_mm + catalog[board.material or unit.default_material].thickness_mm
+    return clear_mm + board.thickness_mm
 
 
-def set_basis(unit: Unit, region_id: str, basis: Basis, catalog: Catalog) -> Unit:
+def set_basis(unit: Unit, region_id: str, basis: Basis) -> Unit:
     """``unit`` with the region named ``region_id`` measured in ``basis``,
     its stored size recomputed so ``solve`` places every node exactly where
     it did before.
@@ -529,9 +514,9 @@ def set_basis(unit: Unit, region_id: str, basis: Basis, catalog: Catalog) -> Uni
     itself does not solve.
     """
     parent, index = _locate_region(unit, region_id)
-    spaces = solve(unit, catalog)
+    spaces = solve(unit)
     clear_mm = spaces[region_id].extent_mm(_axis_index(parent.axis))
-    size_mm = _size_in_basis_mm(unit, parent, index, clear_mm, basis, catalog)
+    size_mm = _size_in_basis_mm(parent, index, clear_mm, basis)
     return set_size(unit, region_id, size_mm, basis)
 
 
@@ -569,7 +554,7 @@ def region_before(unit: Unit, board_id: str) -> str:
     return parent.items[index].id
 
 
-def move_board(unit: Unit, board_id: str, low_face_mm: float, catalog: Catalog) -> Unit:
+def move_board(unit: Unit, board_id: str, low_face_mm: float) -> Unit:
     """``unit`` with the board named ``board_id`` dragged so its low face
     along its run's axis sits at ``low_face_mm`` (a unit-frame coordinate).
 
@@ -585,7 +570,7 @@ def move_board(unit: Unit, board_id: str, low_face_mm: float, catalog: Catalog) 
     """
     parent, index = _board_and_region_before(unit, board_id)
     region = parent.items[index]
-    spaces = solve(unit, catalog)
+    spaces = solve(unit)
     region_low_mm = spaces[region.id].origin_mm(_axis_index(parent.axis))
     clear_mm = low_face_mm - region_low_mm
     if clear_mm <= 0:
@@ -594,7 +579,7 @@ def move_board(unit: Unit, board_id: str, low_face_mm: float, catalog: Catalog) 
             "The board cannot move past the far side of the opening it resizes.",
         )
     basis = region.rule.basis if isinstance(region.rule, Fixed) else Basis.CLEAR
-    size_mm = _size_in_basis_mm(unit, parent, index, clear_mm, basis, catalog)
+    size_mm = _size_in_basis_mm(parent, index, clear_mm, basis)
     return set_size(unit, region.id, size_mm, basis)
 
 
@@ -609,8 +594,8 @@ class Measurement:
     # Whether the region's rule is Fixed; False means it shares slack.
     fixed: bool
     clear_mm: float
-    # clear_mm plus the next board's catalog thickness, the number a
-    # Basis.WITH_NEXT rule stores; None when no board follows the region.
+    # clear_mm plus the next board's thickness_mm, the number a Basis.WITH_NEXT
+    # rule stores; None when no board follows the region.
     spacing_mm: float | None
 
     @property
@@ -621,21 +606,17 @@ class Measurement:
         return self.clear_mm
 
 
-def measure(
-    unit: Unit, region_id: str, spaces: Mapping[str, Space], catalog: Catalog
-) -> Measurement:
+def measure(unit: Unit, region_id: str, spaces: Mapping[str, Space]) -> Measurement:
     """The :class:`Measurement` of the region named ``region_id``, read from
-    ``spaces`` (``unit`` solved against ``catalog``). Raises
-    :class:`EditError` when ``region_id`` names the root, a board, or
-    nothing, the regions :func:`set_size` refuses."""
+    ``spaces``, which must be ``unit``'s solve. Raises :class:`EditError`
+    when ``region_id`` names the root, a board, or nothing, the regions
+    :func:`set_size` refuses."""
     parent, index = _locate_region(unit, region_id)
     region = parent.items[index]
     clear_mm = spaces[region_id].extent_mm(_axis_index(parent.axis))
     spacing_mm: float | None = None
     if index + 1 < len(parent.items) and isinstance(parent.items[index + 1], Board):
-        spacing_mm = _size_in_basis_mm(
-            unit, parent, index, clear_mm, Basis.WITH_NEXT, catalog
-        )
+        spacing_mm = _size_in_basis_mm(parent, index, clear_mm, Basis.WITH_NEXT)
     fixed = isinstance(region.rule, Fixed)
     basis = region.rule.basis if isinstance(region.rule, Fixed) else Basis.CLEAR
     return Measurement(

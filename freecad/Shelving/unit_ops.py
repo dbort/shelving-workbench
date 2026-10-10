@@ -1,4 +1,4 @@
-"""Plain functions behind the create/resize/rescan/reflow commands.
+"""Plain functions behind the create and resize commands, and a rescan.
 
 Kept out of the command classes, not merely called by them, so
 ``tests/freecad/test_write.py`` can call each operation directly without
@@ -8,8 +8,7 @@ through them would mean it is never tested headless. Each of
 ``create_unit``, ``resize_unit``, and ``rescan_unit`` calls
 ``freecad.Shelving.container.write_container`` exactly once and returns its
 ``WriteResult`` so a caller (a command's ``Activated``, or a test) can
-report what happened; ``reflow_all`` calls ``rescan_unit`` once per tagged
-container and collects the results.
+report what happened.
 
 ``resize_unit`` and ``rescan_unit`` never cache a model between calls: both
 start from :func:`_rescanned_unit`, which reads the container fresh and
@@ -24,14 +23,11 @@ from typing import cast
 import FreeCAD
 
 from freecad.Shelving import properties
-from freecad.Shelving.catalog import ensure_catalog, read_usable_catalog
 from freecad.Shelving.container import WriteResult, read_container, write_container
 from freecad.Shelving.core.geometry import Vec3
 from freecad.Shelving.core.layout import Axis, Bay, Board, Division, Unit
-from freecad.Shelving.core.materials import Catalog
 from freecad.Shelving.core.record import rules_from_json, with_stored_rules
 from freecad.Shelving.core.scan import scan
-from freecad.Shelving.default_catalog import DEFAULT_MATERIAL_ID
 
 # Shelving_CreateUnit's starting point: a single enclosed bay, closed on
 # every side, that Shelving_ResizeUnit reshapes from there. The values
@@ -39,6 +35,11 @@ from freecad.Shelving.default_catalog import DEFAULT_MATERIAL_ID
 _DEFAULT_WIDTH_MM = 600.0
 _DEFAULT_DEPTH_MM = 300.0
 _DEFAULT_HEIGHT_MM = 900.0
+# The Woodworking workbench's Magic Start look: its board thickness and its
+# default board colour. The boards keep the material FreeCAD gives a new
+# object, the same Default material Magic Start's boards carry.
+_DEFAULT_THICKNESS_MM = 18.0
+_DEFAULT_RGB = (247, 185, 108)
 
 
 def _default_unit() -> Unit:
@@ -50,16 +51,19 @@ def _default_unit() -> Unit:
     fixture builds."""
     return Unit(
         size_mm=Vec3(_DEFAULT_WIDTH_MM, _DEFAULT_DEPTH_MM, _DEFAULT_HEIGHT_MM),
-        default_material=DEFAULT_MATERIAL_ID,
         root=Division(
             axis=Axis.Z,
             items=[
-                Board(role="bottom"),
+                Board(thickness_mm=_DEFAULT_THICKNESS_MM, role="bottom"),
                 Division(
                     axis=Axis.X,
-                    items=[Board(role="left_side"), Bay(), Board(role="right_side")],
+                    items=[
+                        Board(thickness_mm=_DEFAULT_THICKNESS_MM, role="left_side"),
+                        Bay(),
+                        Board(thickness_mm=_DEFAULT_THICKNESS_MM, role="right_side"),
+                    ],
                 ),
-                Board(role="top"),
+                Board(thickness_mm=_DEFAULT_THICKNESS_MM, role="top"),
             ],
         ),
         depth_axis=Axis.Y,
@@ -71,33 +75,26 @@ def _default_unit() -> Unit:
 
 
 def create_unit(doc: FreeCAD.Document) -> FreeCAD.DocumentObject:
-    """Build a new ``App::Part``, seed it with a closed single-bay unit at
-    fixed defaults, and return the container. Against ``ensure_catalog(doc)``,
-    seeding the document's catalog from ``freecad.Shelving.default_catalog``
-    the first time this runs, which is what makes Create Unit work on an
-    empty document with no setup. There is no per-call catalog parameter
-    because there is only ever one catalog per document to build the
-    starting point from."""
+    """Build a new ``App::Part``, seed it with a closed single-bay unit of
+    18 mm boards at fixed defaults, and return the container. With a GUI,
+    every board is painted Magic Start's default board colour."""
     container = cast(
         "FreeCAD.DocumentObject", doc.addObject("App::Part", "ShelvingUnit")
     )
-    # read_usable_catalog, not read_catalog: an unrelated incomplete entry
-    # elsewhere in the document must not stop a brand-new unit that never
-    # references it (see catalog.py's docstring).
-    catalog, _skipped_catalog_entries = read_usable_catalog(ensure_catalog(doc))
-    write_container(container, _default_unit(), catalog)
+    result = write_container(container, _default_unit())
+    for name in result.created:
+        properties.paint(doc.getObject(name), _DEFAULT_RGB)
     return container
 
 
-def _rescanned_unit(container: FreeCAD.DocumentObject, catalog: Catalog) -> Unit:
-    """``container`` read fresh, scanned against ``catalog``, with its
-    stored rules and unit id reapplied: the common starting point for
-    :func:`resize_unit` and :func:`rescan_unit`, a resize being a rescan
-    that also substitutes the outer size."""
+def _rescanned_unit(container: FreeCAD.DocumentObject) -> Unit:
+    """``container`` read fresh and scanned, with its stored rules and unit
+    id reapplied: the common starting point for :func:`resize_unit` and
+    :func:`rescan_unit`, a resize being a rescan that also substitutes the
+    outer size."""
     boxes, skipped, record = read_container(container)
     scan_result = scan(
         boxes,
-        catalog,
         skipped=skipped,
         depth_axis=record.depth_axis,
         front_at_min=record.front_at_min,
@@ -110,55 +107,14 @@ def _rescanned_unit(container: FreeCAD.DocumentObject, catalog: Catalog) -> Unit
     return unit
 
 
-def resize_unit(
-    container: FreeCAD.DocumentObject, size_mm: Vec3, catalog: Catalog
-) -> WriteResult:
+def resize_unit(container: FreeCAD.DocumentObject, size_mm: Vec3) -> WriteResult:
     """Rescan ``container``, substitute ``size_mm`` for its outer size, and
     write the result back."""
-    unit = dataclasses.replace(_rescanned_unit(container, catalog), size_mm=size_mm)
-    return write_container(container, unit, catalog)
+    unit = dataclasses.replace(_rescanned_unit(container), size_mm=size_mm)
+    return write_container(container, unit)
 
 
-def rescan_unit(container: FreeCAD.DocumentObject, catalog: Catalog) -> WriteResult:
+def rescan_unit(container: FreeCAD.DocumentObject) -> WriteResult:
     """Rescan ``container`` and write the result straight back: the reflow
     a hand edit needs, with no size change of its own."""
-    return write_container(container, _rescanned_unit(container, catalog), catalog)
-
-
-@dataclasses.dataclass(frozen=True)
-class ReflowResult:
-    """What :func:`reflow_all` did across every unit in one document.
-
-    A unit that fails is absent from ``succeeded`` and present in
-    ``failed``, never both.
-    """
-
-    # Each succeeded container's own Name paired with its WriteResult.
-    succeeded: tuple[tuple[str, WriteResult], ...]
-    # Each failed container's own Name paired with its refusal message.
-    failed: tuple[tuple[str, str], ...]
-
-
-def reflow_all(doc: FreeCAD.Document, catalog: Catalog) -> ReflowResult:
-    """Rescan and rewrite every container in ``doc`` that carries a
-    ``ShelvingUnitId`` against ``catalog``, which is what makes a changed
-    catalog entry (a thickness edit, most commonly) reach the boards using
-    it.
-
-    A unit whose layout refuses does not stop the others: its error is
-    collected into ``ReflowResult.failed`` and the scan moves on, so one bad
-    unit never hides every other unit's report. Opens no transaction; the
-    caller owns that, the same as :func:`rescan_unit`.
-    """
-    succeeded: list[tuple[str, WriteResult]] = []
-    failed: list[tuple[str, str]] = []
-    for obj in doc.Objects:
-        if properties.read_container_unit_id(obj) is None:
-            continue
-        try:
-            result = rescan_unit(obj, catalog)
-        except Exception as err:  # noqa: BLE001 - collected per unit, not fatal
-            failed.append((obj.Name, str(err)))
-            continue
-        succeeded.append((obj.Name, result))
-    return ReflowResult(succeeded=tuple(succeeded), failed=tuple(failed))
+    return write_container(container, _rescanned_unit(container))

@@ -1,9 +1,9 @@
 """Build and hit-test a ``QGraphicsScene`` elevation for one ``Unit``.
 
-The projection matches :mod:`freecad.Shelving.core.svg`: horizontal and
-vertical are :func:`freecad.Shelving.core.scan.elevation_axes` of
-``unit.depth_axis``, with vertical flipped so the drawing reads bottom-up
-the way a real elevation does.
+The projection looks along ``unit.depth_axis``: horizontal and vertical are
+:func:`freecad.Shelving.core.scan.elevation_axes` of ``unit.depth_axis``,
+with vertical flipped so the drawing reads bottom-up the way a real
+elevation does.
 
 This module imports Qt and the layout-only parts of
 :mod:`freecad.Shelving.core`, never FreeCAD: nothing here touches a document
@@ -71,11 +71,10 @@ _LABEL_PIXEL_SIZE = 16
 def _apply_insets(axis: Axis, space: Space, insets: Insets) -> Space:
     """``space`` with ``insets`` applied to its two cross-section axes.
 
-    Mirrors :func:`freecad.Shelving.core.expand._apply_insets` and
-    :func:`freecad.Shelving.core.svg._apply_insets`; kept as its own copy
-    here rather than imported, the way each module in this package keeps its
-    own small geometry helpers instead of reaching into another module's
-    private names.
+    Mirrors :func:`freecad.Shelving.core.expand._apply_insets`; kept as its
+    own copy here rather than imported, the way each module in this package
+    keeps its own small geometry helpers instead of reaching into another
+    module's private names.
     """
     origin = space.origin
     size = space.size

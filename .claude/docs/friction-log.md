@@ -98,38 +98,6 @@ fixes a papercut records the papercut and its fix and deletes the entry.
   risk, not just the two the plan actively reused, or the Must Have list
   included an import check for the directory the plan promised to keep alive.
 
-- `friction-009` - **a board snapped to its catalog material keeps its raw
-  measured extent everywhere else, so a within-tolerance match can still fail
-  to solve**: sh-015's end-to-end fixture test needed a catalog built from
-  `real_stair_step.boxes.json`'s own measured thicknesses (no fixed catalog is
-  given for it elsewhere). That fixture has two boards measured 0.25 mm apart
-  (18.0086 mm, 18.2626 mm) that are the same real-world material; the
-  measurement gap is ordinary tolerance, and `_material_for_thickness_mm`
-  correctly resolves both to the one catalog entry within `snap_mm` (0.5 mm
-  default) of each. The actual defect is downstream: nothing reconciles a
-  board's geometric extent to the thickness it was just snapped to, so a
-  division whose one `Fixed` sibling was sized from a board's *original*
-  measured extent no longer sums to the span once that board's snapped
-  thickness differs from its raw measurement, and `solve` fails with an
-  opaque `no_slack_absorber` naming an unrelated division rather than the
-  board whose thickness moved. Diagnosed by bisecting: the same
-  `no_slack_absorber` reproduced even with the existing fixed
-  `ply18`/`mdf12` test catalog, which was 0.26 mm off this fixture's real ply
-  thickness in the same direction. Worked around by passing a tighter
-  `snap_mm=0.1` to `scan` for this fixture's test so both boards' measured
-  thicknesses landed close enough to the catalog entry that the extent
-  mismatch stayed under the solver's own slack, sidestepping the reconciliation
-  gap rather than closing it. This is exactly the kind of tolerance a human
-  builder would also hit (two measurements of the same board never agree to
-  the micron), so it is a real model gap, not a test-fixture quirk. Simpler
-  if: a board's geometric extent were corrected to its snapped catalog
-  thickness at the point of the snap, so every sibling sized against it
-  agrees; short of that, `scan` or `solve` naming the board whose extent and
-  material disagree, instead of an unrelated division's slack failing to
-  balance. Possible product angle, not scoped or planned: the editing UI
-  could surface a within-tolerance match instead of applying it silently,
-  and let the user confirm snapping the board to the catalog dimension.
-
 - `friction-011` - **`App::DocumentObjectGroup` carries no `Placement`
   property at all**: sh-016's container walk composed `obj.Placement` for
   every container with children, on the reasonable-looking assumption that
@@ -228,6 +196,6 @@ fixes a papercut records the papercut and its fix and deletes the entry.
   The workaround was a **Start** line on every case plus grouping headings
   that repeat those number ranges, which works but is fragile. Simpler if:
   the file were organized by feature area under stable non-numeric section
-  names (EDITOR, CATALOG, ...), with scenarios that can hold compound steps
+  names (EDITOR, SCAN, ...), with scenarios that can hold compound steps
   and cross-references like EDITOR-1.3 that do not shift when unrelated
   cases change.

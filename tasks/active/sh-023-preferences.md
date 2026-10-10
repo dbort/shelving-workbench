@@ -7,31 +7,30 @@ blocked_by: [sh-021]
 # sh-023: The preferences page
 
 ## Summary
-A preferences page holding the six values that are currently constants: the
-starter unit's width, height, depth and default material, and the snap and
-joint-clearance tolerances scanning uses. The tolerances matter because they are
+A preferences page holding the five values that are currently constants: the
+starter unit's width, height and depth, and the snap and joint-clearance
+tolerances scanning uses. The tolerances matter because they are
 what someone diagnosing a refusal needs to reach, and editing the source is not
 a reasonable answer. Milestone M10, part 2 of 3.
 
 ## Must Have
 - [ ] `pixi run tests` green.
 - [ ] A preferences page appears under FreeCAD's Shelving group holding exactly
-      six values: `CreateWidth`, `CreateHeight`, `CreateDepth`,
-      `CreateMaterial`, `SnapTolerance`, `JointClearance`.
+      five values: `CreateWidth`, `CreateHeight`, `CreateDepth`,
+      `SnapTolerance`, `JointClearance`.
 - [ ] `freecad/Shelving/preferences.py` exports a typed reader per value, each
       returning the stored value or the module's documented default, and each
       falling back to that default rather than raising on a missing, malformed
       or out-of-range stored value.
-- [ ] Create Unit takes its dimensions and material from preferences; scanning
-      takes both tolerances from preferences. No command reads a hard-coded
-      constant for any of the six.
+- [ ] Create Unit takes its dimensions from preferences; scanning takes both
+      tolerances from preferences. No command reads a hard-coded constant for
+      any of the five.
 - [ ] The defaults equal the constants those call sites use today, so a user who
       never opens the page sees no behaviour change. Asserted by comparing each
       reader's default against the core constant it replaces.
-- [ ] A non-positive dimension, a non-positive tolerance, a snap tolerance at or
-      above the joint clearance, and a material id absent from the document's
-      catalog each fall back to the default and report once to the report view
-      rather than failing a command.
+- [ ] A non-positive dimension, a non-positive tolerance, and a snap tolerance at
+      or above the joint clearance each fall back to the default and report once
+      to the report view rather than failing a command.
 - [ ] The readers are tested without FreeCAD's parameter system by injecting a
       mapping, so every fallback path is covered in the fast suite.
 - [ ] `tools/freecad_prefs_smoke.py` prints `shelving prefs OK` and
@@ -42,9 +41,12 @@ a reasonable answer. Milestone M10, part 2 of 3.
 
 ## Advice
 
-SIX VALUES, NO MORE. The page holds what a user changes often and what someone
-diagnosing a refusal needs: the starter unit's four values and the two
-tolerances. Do NOT add preferences for colour behaviour, label style, or
+FIVE VALUES, NO MORE. The page holds what a user changes often and what someone
+diagnosing a refusal needs: the starter unit's three dimensions and the two
+tolerances. There is no default-material preference (user decision,
+2026-10-09, during sh-030's planning): Create Unit uses FreeCAD's Default
+material, and a board's material belongs to FreeCAD and the Woodworking
+workbench. Do NOT add preferences for colour behaviour, label style, or
 anything else with one obviously right answer; that is how a preferences page
 becomes unmaintainable, and every added value is a branch every command carries
 forever.
@@ -99,9 +101,9 @@ Every length identifier carries `_mm`.
 
 - [ ] **Step 2** (`freecad/Shelving/preferences.py`): Add the FreeCAD-backed adapter implementing the protocol over `FreeCAD.ParamGet` under this workbench's parameter path, and a module-level accessor returning readers bound to it. Keep the adapter thin: no validation lives here, only the parameter reads.
 
-- [ ] **Step 3** (`freecad/Shelving/unit_ops.py`, `freecad/Shelving/container.py`, `freecad/Shelving/commands/`): Replace every hard-coded use of the six values with a preferences read. Create Unit takes its four; the read path takes both tolerances and passes them to `scan`. Grep for the constants afterwards and confirm no command names one directly. Route the reporting hook to the report view so an ignored preference is visible.
+- [ ] **Step 3** (`freecad/Shelving/unit_ops.py`, `freecad/Shelving/container.py`, `freecad/Shelving/commands/`): Replace every hard-coded use of the five values with a preferences read. Create Unit takes its three; the read path takes both tolerances and passes them to `scan`. Grep for the constants afterwards and confirm no command names one directly. Route the reporting hook to the report view so an ignored preference is visible.
 
-- [ ] **Step 4** (`freecad/Shelving/resources/preferences.ui`, `freecad/Shelving/init_gui.py`): Create the page with FreeCAD's own preference widgets bound to the six parameter paths, grouped as starter unit and tolerances, each with a tooltip saying what it affects and, for the tolerances, what a refusal looks like when they are wrong. Register it from `init_gui` with `FreeCADGui.addPreferencePage` behind the headless-safe guard.
+- [ ] **Step 4** (`freecad/Shelving/resources/preferences.ui`, `freecad/Shelving/init_gui.py`): Create the page with FreeCAD's own preference widgets bound to the five parameter paths, grouped as starter unit and tolerances, each with a tooltip saying what it affects and, for the tolerances, what a refusal looks like when they are wrong. Register it from `init_gui` with `FreeCADGui.addPreferencePage` behind the headless-safe guard.
 
 - [ ] **Step 5** (`tools/freecad_prefs_smoke.py`, `tools/run-tests.sh`, `docs/manual-qa.md`): The headless check. Assert: the readers bound to FreeCAD's parameter store return the documented defaults on a clean profile; writing a value through `ParamGet` changes what Create Unit produces; writing a bad value leaves behaviour at the default and reports; the tolerance cross-validation fires when both are written incompatibly; and registering the page does not raise when the GUI is absent. Print `shelving prefs OK` and add a matching block to `tools/run-tests.sh`. Add a manual case for opening the page, changing the starter width, and creating a unit at the new size.
 

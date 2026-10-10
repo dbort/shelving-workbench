@@ -33,16 +33,12 @@ from freecad.Shelving.core.layout import (
     Fixed,
     Unit,
 )
-from freecad.Shelving.core.materials import MaterialId
-from freecad.Shelving.default_catalog import (
-    DEFAULT_CATALOG,
-    DEFAULT_MATERIAL_ID,
-)
 from freecad.Shelving.unit_ops import (
     create_unit,
     rescan_unit,
     resize_unit,
 )
+from tests.freecad_materials import library_material
 
 _TOL_MM = 1e-6
 _THICKNESS_MM = 18.0
@@ -174,16 +170,19 @@ def _closed_box_unit(front_at_min: bool | None) -> Unit:
     "known" without duplicating the tree."""
     return Unit(
         size_mm=Vec3(600.0, 300.0, 900.0),
-        default_material=DEFAULT_MATERIAL_ID,
         root=Division(
             axis=Axis.Z,
             items=[
-                Board(role="bottom"),
+                Board(thickness_mm=18.0, role="bottom"),
                 Division(
                     axis=Axis.X,
-                    items=[Board(role="left_side"), Bay(), Board(role="right_side")],
+                    items=[
+                        Board(thickness_mm=18.0, role="left_side"),
+                        Bay(),
+                        Board(thickness_mm=18.0, role="right_side"),
+                    ],
                 ),
-                Board(role="top"),
+                Board(thickness_mm=18.0, role="top"),
             ],
         ),
         depth_axis=Axis.Y,
@@ -269,7 +268,7 @@ def test_known_facing_labels_contain_left_and_right() -> None:
             container = cast(
                 "FreeCAD.DocumentObject", doc.addObject("App::Part", "Unit")
             )
-            write_container(container, _closed_box_unit(front_at_min), DEFAULT_CATALOG)
+            write_container(container, _closed_box_unit(front_at_min))
             doc.recompute()
             left_label = doc.getObject("left_side").Label
             right_label = doc.getObject("right_side").Label
@@ -298,7 +297,7 @@ def test_rescan_recovers_the_same_tree(
     boxes, skipped, _record = read_container(container)
     assert {b.name for b in boxes} == {"bottom", "left_side", "right_side", "top"}
     assert len(skipped) == 0, skipped
-    result = rescan_unit(container, DEFAULT_CATALOG)
+    result = rescan_unit(container)
     assert result.created == ()
     assert result.deleted == ()
     assert sorted(result.updated) == ["bottom", "left_side", "right_side", "top"]
@@ -318,7 +317,7 @@ def test_resize_updates_existing_boards_rather_than_recreating(
     bottom = cast("_Placeable", doc.getObject("bottom"))
     bottom.Label = "MyBottom"
 
-    result = resize_unit(container, Vec3(900.0, 300.0, 900.0), DEFAULT_CATALOG)
+    result = resize_unit(container, Vec3(900.0, 300.0, 900.0))
     doc.recompute()
 
     assert result.created == ()
@@ -357,7 +356,7 @@ def test_left_alone_objects_are_never_touched() -> None:
         panel_placement_before = cast("_Placeable", panel).Placement.Base
         skewed_placement_before = cast("_Placeable", skewed).Placement.Base
 
-        result = rescan_unit(container, DEFAULT_CATALOG)
+        result = rescan_unit(container)
         doc.recompute()
 
         assert set(result.left_alone) == {"BackPanel", "Skewed"}
@@ -395,7 +394,7 @@ def test_irregular_board_moves_without_rewriting_its_shape() -> None:
         assert notched.irregular is True
         assert len(skipped) == 0, skipped
 
-        adopt_result = rescan_unit(container, DEFAULT_CATALOG)
+        adopt_result = rescan_unit(container)
         doc.recompute()
         assert "NotchedShelf" in adopt_result.created
         assert properties.has_board_properties(shelf)
@@ -409,9 +408,7 @@ def test_irregular_board_moves_without_rewriting_its_shape() -> None:
 
         # Height only: the shelf's own footprint (564 x 300) is unaffected,
         # so its pinned size still matches and only its Z position moves.
-        move_result = resize_unit(
-            container, Vec3(600.0, 300.0, 1200.0), DEFAULT_CATALOG
-        )
+        move_result = resize_unit(container, Vec3(600.0, 300.0, 1200.0))
         doc.recompute()
         assert "NotchedShelf" in move_result.updated
         volume_after = cast("_ShapeFeature", shelf).Shape.Volume
@@ -446,7 +443,7 @@ def test_copied_board_is_adopted_as_new_on_rescan() -> None:
         assert properties.read_board_born_as(raw_copy) == "bottom"
         assert raw_copy.Name != "bottom"
 
-        result = rescan_unit(container, DEFAULT_CATALOG)
+        result = rescan_unit(container)
         doc.recompute()
 
         assert raw_copy.Name in result.created
@@ -457,35 +454,31 @@ def test_copied_board_is_adopted_as_new_on_rescan() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
-def test_stored_material_survives_a_thickness_mismatch() -> None:
-    """A board tagged ``ShelvingMaterial="mdf19"`` still resolves to
-    ``mdf19`` even after its measured thickness is hand-edited away from
-    19mm to a value no catalog entry matches within the snap tolerance: the
-    stored id bypasses thickness matching, which is what lets a
-    catalog entry's thickness change later (M8) without stranding every
-    board already written against the old one."""
-    doc = _new_document("write_smoke_material")
+class _StockFeature(Protocol):
+    ShapeMaterial: properties.FreeCADMaterial
+    Grain: list[str]
+
+
+def test_a_resize_never_changes_a_boards_material_or_grain() -> None:
+    """A board's ``ShapeMaterial`` and Woodworking ``Grain`` belong to the
+    user: a write moves and sizes the board and leaves both as they were."""
+    doc = _new_document("write_keeps_stock")
     try:
-        container = cast("FreeCAD.DocumentObject", doc.addObject("App::Part", "Unit"))
-        unit = _closed_box_unit(front_at_min=None)
-        assert isinstance(unit.root, Division)
-        bottom = unit.root.items[0]
-        assert isinstance(bottom, Board)
-        bottom.material = MaterialId("mdf19")
-        write_container(container, unit, DEFAULT_CATALOG)
+        container = create_unit(doc)
+        doc.recompute()
+        bottom = cast("FreeCAD.DocumentObject", doc.getObject("bottom"))
+        bottom.addProperty("App::PropertyStringList", "Grain", "Woodworking")
+        stock = cast("_StockFeature", bottom)
+        stock.ShapeMaterial = library_material("Wood")
+        grain = ["H", "H", "V", "V", "X", "X"]
+        stock.Grain = grain
+
+        resize_unit(container, Vec3(700.0, 300.0, 1000.0))
         doc.recompute()
 
-        bottom_box = cast("_BoxFeature", doc.getObject("bottom"))
-        assert bottom_box.Height == pytest.approx(19.0)
-        # No catalog entry sits within the 0.5mm default snap tolerance of
-        # 15mm, so thickness matching alone would refuse this board.
-        bottom_box.Height = 15.0
-        doc.recompute()
-
-        boxes, skipped, _record = read_container(container)
-        assert len(skipped) == 0, skipped
-        rescanned_bottom = next(b for b in boxes if b.name == "bottom")
-        assert rescanned_bottom.material == MaterialId("mdf19")
+        assert cast("_BoxFeature", bottom).Length == pytest.approx(700.0)
+        assert properties.read_material_name(bottom) == "Wood"
+        assert properties.read_grain(bottom) == grain
     finally:
         FreeCAD.closeDocument(doc.Name)
 
@@ -504,45 +497,44 @@ def test_fixed_rule_survives_apply_rescan_and_reapply() -> None:
         # read back as equal-sized siblings on a plain rescan.
         unit = Unit(
             size_mm=Vec3(600.0, 300.0, 900.0),
-            default_material=DEFAULT_MATERIAL_ID,
             root=Division(
                 axis=Axis.Z,
                 items=[
-                    Board(role="bottom"),
+                    Board(thickness_mm=18.0, role="bottom"),
                     Division(
                         axis=Axis.X,
                         items=[
-                            Board(role="left_side"),
+                            Board(thickness_mm=18.0, role="left_side"),
                             Division(
                                 axis=Axis.Z,
                                 items=[
                                     Bay(rule=Fixed(423.0)),
-                                    Board(role="mid_shelf"),
+                                    Board(thickness_mm=18.0, role="mid_shelf"),
                                     Bay(),
                                 ],
                             ),
-                            Board(role="right_side"),
+                            Board(thickness_mm=18.0, role="right_side"),
                         ],
                     ),
-                    Board(role="top"),
+                    Board(thickness_mm=18.0, role="top"),
                 ],
             ),
             depth_axis=Axis.Y,
             front_at_min=None,
         )
-        write_container(container, unit, DEFAULT_CATALOG)
+        write_container(container, unit)
         doc.recompute()
         expected_z_mm = _THICKNESS_MM + 423.0
 
-        rescan_unit(container, DEFAULT_CATALOG)
+        rescan_unit(container)
         doc.recompute()
         z_after_first_rescan = doc.getObject("mid_shelf").Placement.Base.z
 
-        rescan_unit(container, DEFAULT_CATALOG)
+        rescan_unit(container)
         doc.recompute()
         z_after_second_rescan = doc.getObject("mid_shelf").Placement.Base.z
 
-        resize_unit(container, Vec3(600.0, 300.0, 1200.0), DEFAULT_CATALOG)
+        resize_unit(container, Vec3(600.0, 300.0, 1200.0))
         doc.recompute()
         z_after_resize = doc.getObject("mid_shelf").Placement.Base.z
 

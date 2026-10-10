@@ -1,12 +1,11 @@
 """Region-tree data model for a shelving unit.
 
-A ``Unit`` is an outer size, a default material, and a root ``Region``. A
-``Region`` is a ``Bay`` (an open compartment), a ``Void`` (space inside the
-unit's bounding box that is not part of the unit), or a ``Division`` (a
-region cut into an ordered run of boards and sub-regions along one
-``Axis``). The carcass shell is not a distinguished rule here: it is the
-outermost boards of the outermost divisions, built from the same items an
-interior division uses.
+A ``Unit`` is an outer size and a root ``Region``. A ``Region`` is a
+``Bay`` (an open compartment), a ``Void`` (space inside the unit's bounding
+box that is not part of the unit), or a ``Division`` (a region cut into an
+ordered run of boards and sub-regions along one ``Axis``). The carcass
+shell is not a distinguished rule here: it is the outermost boards of the
+outermost divisions, built from the same items an interior division uses.
 """
 
 from __future__ import annotations
@@ -16,7 +15,6 @@ import uuid
 from dataclasses import dataclass, field
 
 from freecad.Shelving.core.geometry import AxisIndex, Vec3
-from freecad.Shelving.core.materials import MaterialId
 
 
 def new_id() -> str:
@@ -115,20 +113,22 @@ class Board:
     or by ``rule`` when that is set.
     """
 
+    # The board's own thickness. A scanned board without a rule takes its
+    # slot width in the scan's snapped grid, so its run adds up exactly; one
+    # with a rule keeps its measured size across its thin axis. A new board
+    # copies the thickness of the board it takes its stock from.
+    thickness_mm: float
     # ``None`` means the board is regenerable: the solver derives its extent
     # from the layout, same as any other item. A value means the workbench
     # cannot reproduce this part, a notched panel say, and carries the shape
     # it is pinned at; the solver then verifies the derived extent against
     # this rather than deriving it standalone.
     pinned_size_mm: Vec3 | None = None
-    # ``None`` inherits ``Unit.default_material``; the solver resolves the id
-    # to a thickness, this model keeps the ``None`` verbatim.
-    material: MaterialId | None = None
     insets: Insets = Insets()
-    # ``None`` means the division-axis extent is the board's catalog
-    # thickness. A value overrides that, for a board whose measured size
-    # along its containing division's axis is not its thickness, a divider
-    # shorter than its neighbors say. Reuses the same ``SizeRule`` every
+    # ``None`` means the division-axis extent is ``thickness_mm``. A value
+    # overrides that, for a board whose measured size along its containing
+    # division's axis is not its thickness, a divider shorter than its
+    # neighbors say. Reuses the same ``SizeRule`` every
     # ``Bay``/``Void``/``Division`` carries as its own ``rule`` so a caller
     # never needs to know which axis this board's containing ``Division``
     # cuts along to set it correctly.
@@ -137,7 +137,15 @@ class Board:
     # and a stepped outline has several tops, none of them *the* top.
     # Deriving a role from tree position is M7's problem.
     role: str = ""
+    # The id of the existing board whose material, appearance and grain a
+    # board the editor creates copies. The write path reads it only when
+    # creating the board's object, so it need not survive a scan.
+    stock_from: str | None = None
     id: str = field(default_factory=new_id)
+
+    def __post_init__(self) -> None:
+        if self.thickness_mm <= 0:
+            raise ValueError(f"Board.thickness_mm must be > 0, got {self.thickness_mm}")
 
 
 @dataclass
@@ -184,14 +192,13 @@ Item = Board | Region
 
 @dataclass
 class Unit:
-    """A shelving unit: outer size, a default material, and a root region.
+    """A shelving unit: an outer size and a root region.
 
     Every board is a ``Board`` item somewhere in the tree, so a closed box, a
     stepped outline, and a framed wall differ only in the shape of that tree.
     """
 
     size_mm: Vec3
-    default_material: MaterialId
     root: Region
     # The axis a reader projects along to see the unit as a flat elevation.
     # Affects presentation only: the model divides along any axis
@@ -211,5 +218,3 @@ class Unit:
             raise ValueError(f"Unit.size_mm.y_mm must be > 0, got {self.size_mm.y_mm}")
         if self.size_mm.z_mm <= 0:
             raise ValueError(f"Unit.size_mm.z_mm must be > 0, got {self.size_mm.z_mm}")
-        if not self.default_material:
-            raise ValueError("Unit.default_material must be non-empty")

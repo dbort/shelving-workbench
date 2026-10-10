@@ -89,9 +89,9 @@ namespace-portion directory of the same name, confirmed directly. That
 its own `extend_path` bookkeeping and, when `PATH_TO_FREECAD_LIBDIR` is
 unset, prints a diagnostic line to stdout the first time this happens in a
 plain Python process (not under `freecadcmd`, which has already imported
-`FreeCAD` by the time a script runs). `tools/layout_demo.py` sets
-`PATH_TO_FREECAD_LIBDIR` defensively before its own imports to suppress
-that diagnostic; see its module docstring.
+`FreeCAD` by the time a script runs). A plain-Python script that needs a
+clean stdout sets `PATH_TO_FREECAD_LIBDIR` before its own imports to
+suppress that diagnostic.
 
 ## `import FreeCADGui` returns a stub that lacks `Workbench`
 

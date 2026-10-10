@@ -55,57 +55,6 @@ the log happens only when the user asks.
   question, not a mechanical patch, worth a `new-task` interview rather
   than an ad hoc commit into shared scanning logic.
 
-- `bug-003` - **a board's catalog-thickness mismatch cannot be reconciled
-  when its containing `Division` has no direct `Bay` sibling, crashing
-  `solve` on real fixtures scanned against an ordinary human-chosen
-  catalog**: any `Board` whose resolved catalog thickness differs from
-  its own raw measured width needs a sibling in the same `Division` to
-  absorb the difference so `distribute()`'s exact-sum requirement still
-  holds (`solver.py`, `EPS_MM = 1e-6`). `sh-026` (in progress, parked
-  on its own branch) fixes this when a direct `Bay` sibling exists,
-  largest wins when several do, and makes `scan` refuse with `ScanError`
-  otherwise. It does not, and structurally
-  cannot without a materially bigger fix, handle the case where the only
-  sibling is a content-bearing `Division` (no `Bay` at that level at
-  all): confirmed on `real_stair_step.boxes.json` with a coarse
-  `ply18`/`mdf12`-style catalog, where the root-level top board
-  (`panelYX`) mismatches by 0.2626 mm and its only sibling is the
-  `columns` `Division`. Three implementation rounds explored fixes that
-  each looked correct in isolation and broke on the real fixture: (1)
-  growing the largest sibling's own reported size relocates the mismatch
-  into that sibling's children instead of resolving it, since a
-  `Division`'s own size is only meaningful along its *parent's* axis, not
-  its own; (2) freezing one chosen descendant and recursing does not
-  generalize, because `solver.py`'s `_place` passes a `Division`'s
-  cross-axes through **unchanged** to every child (`_place`'s own
-  docstring: "shares space's extent along its own axis among its items
-  and passes the other two axes through unchanged"), so every descendant
-  that itself divides along the *originating* axis independently needs
-  its own absorber for the *same* delta, not just the one path a
-  recursive-freeze chooses. Found during `sh-026`'s own implementation
-  (rounds 2-3), each round's diagnosis verified against the actual
-  `distribute()` trace, not guessed. Worked around by narrowing `sh-026`'s
-  own scope to the direct-`Bay`-sibling case only, `ScanError`-refusing
-  (not crashing) the no-`Bay` case instead of silently producing wrong
-  geometry; the underlying gap is untouched. Round 4 found that this
-  narrowing also refuses the default `Shelving_CreateUnit` shape
-  (`Bottom, Division[Left, Bay, Right], Top`) after a catalog thickness
-  edit, failing `tests/freecad/test_catalog.py`'s two reflow tests:
-  Bottom/Top's only sibling is the inner `Division`, with its `Bay` one
-  level down. That shape has no same-axis descendant, so round 3's
-  recursive freeze did pass there; adding a shelf to the default unit
-  would turn it into this entry's hard case. Fix: `sh-XXX task`. The
-  correct fix needs to identify every descendant sharing the mismatch's
-  own axis (reachable via cross-axis passthrough through an arbitrary
-  number of intervening `Division`s) and give each one its own
-  independent absorber for the same delta, or relocate the whole
-  reconciliation into `solver.py`'s `distribute()` itself rather than
-  pre-computing `scan.py`-side `Fixed` rules that have to anticipate
-  every axis `_place` will later pass them through; either is a real
-  architectural decision, not a mechanical patch, worth a `new-task`
-  interview starting from this entry's trace rather than re-deriving it
-  from scratch.
-
 - `bug-004` - **the Edit Unit panel's elevation is drawn far larger than
   the task pane, so a whole unit cannot be seen or worked on at once**:
   the `QGraphicsView` in `freecad/Shelving/editor/panel.py` shows the scene
@@ -145,7 +94,7 @@ the log happens only when the user asks.
   4. Run `unit_ops.rescan_unit`.
 
   The shelf returns to z 441.0 from 381.0. The same happens inside the
-  editor session, and with Resize Unit and Reflow All. The scan reads the
+  editor session, and with Resize Unit. The scan reads the
   moved geometry correctly: the two bays are unequal, so it would assign
   `Fixed`. But `record.with_stored_rules` then overwrites both bays with
   the stored `Fill` rules keyed by their bounding boards, which still
@@ -155,6 +104,9 @@ the log happens only when the user asks.
   comes from `sh-018`'s rule record), but the editor is what makes shelves
   with stored `Fill` rules common. Found during `sh-020`'s manual QA
   sign-off, as a second contributor to the same user report as bug-006.
+  A hand thickness change triggers it too: in `sh-030`'s manual QA, a
+  shelf thinned from 18 mm to 12 mm by its bottom face re-centered 3 mm on
+  the next edit, and the move hid the Woodworking grain-arrow text on it.
   Fix: `sh-XXX task`. A stored rule has to yield when the scanned geometry
   disagrees with what that rule would solve to, but it still has to win
   where geometry is ambiguous (the reason `Basis.WITH_NEXT` is stored).
