@@ -5,7 +5,16 @@ from pathlib import Path
 import pytest
 
 from freecad.Shelving.core.geometry import Vec3
-from freecad.Shelving.core.layout import Axis, Bay, Board, Division, Fill, Fixed, Unit
+from freecad.Shelving.core.layout import (
+    Axis,
+    Bay,
+    Board,
+    Division,
+    Fill,
+    Fixed,
+    Unit,
+    Void,
+)
 from freecad.Shelving.core.scan import boxes_from_json, scan
 from freecad.Shelving.core.solver import solve
 from freecad.Shelving.core.stock import is_carcass, source_board
@@ -63,19 +72,13 @@ def test_an_interior_board_in_the_same_run_wins_over_a_nearer_carcass_board() ->
     assert _source_id(unit, "target", Axis.Z) == "shelf"
 
 
-def _two_column_unit(right_column: Bay | Division) -> Unit:
-    left_column = Division(
-        axis=Axis.Z,
-        items=[
-            Bay(rule=Fixed(300.0)),
-            _board("shelf_low", 15.0),
-            Bay(rule=Fixed(150.0)),
-            _board("shelf_high", 16.0),
-            Bay(rule=Fill()),
-        ],
-    )
+def _two_column_unit(
+    width_mm: float, left_column: Bay | Division, right_column: Bay | Division
+) -> Unit:
+    """A 1000 mm tall unit of 18 mm boards: bottom, top, two sides, and a
+    divider between two columns of equal width."""
     return Unit(
-        size_mm=Vec3(1000.0, 300.0, 1000.0),
+        size_mm=Vec3(width_mm, 300.0, 1000.0),
         root=Division(
             axis=Axis.Z,
             items=[
@@ -96,17 +99,67 @@ def _two_column_unit(right_column: Bay | Division) -> Unit:
     )
 
 
+def test_an_interior_board_in_the_same_run_wins_over_a_nearer_one_elsewhere() -> None:
+    """``shelf_same``'s centre is 457 mm above the target bay's, while
+    ``shelf_other``, across the divider in the next column, is about 191 mm
+    from it."""
+    unit = _two_column_unit(
+        400.0,
+        Division(
+            axis=Axis.Z,
+            items=[
+                Bay(rule=Fill(), id="target"),
+                _board("shelf_same", 15.0),
+                Bay(rule=Fixed(50.0)),
+            ],
+        ),
+        Division(
+            axis=Axis.Z,
+            items=[
+                Bay(rule=Fixed(450.0)),
+                _board("shelf_other", 16.0),
+                Bay(rule=Fill()),
+            ],
+        ),
+    )
+    assert not is_carcass(unit, "shelf_other")
+    assert _source_id(unit, "target", Axis.Z) == "shelf_same"
+
+
 def test_with_no_interior_board_in_the_run_the_nearest_interior_board_wins() -> None:
-    """The target bay's centre is 500 mm up; ``shelf_high``'s is 491 mm up,
-    nearer than ``shelf_low``'s, and the carcass bottom and top rank below
-    any interior board."""
-    unit = _two_column_unit(Bay(id="target"))
+    """The target bay sits on ``floor_b``, a carcass board raised over a
+    void, 332 mm from its centre. ``shelf_high`` in the other column is
+    about 519 mm away and ``shelf_low`` farther still, and ``shelf_high``
+    wins: any interior board ranks above every carcass board."""
+    unit = _two_column_unit(
+        1000.0,
+        Division(
+            axis=Axis.Z,
+            items=[
+                Bay(rule=Fixed(300.0)),
+                _board("shelf_low", 15.0),
+                Bay(rule=Fixed(150.0)),
+                _board("shelf_high", 16.0),
+                Bay(rule=Fill()),
+            ],
+        ),
+        Division(
+            axis=Axis.Z,
+            items=[
+                Void(rule=Fixed(300.0)),
+                _board("floor_b"),
+                Bay(rule=Fill(), id="target"),
+            ],
+        ),
+    )
+    assert is_carcass(unit, "floor_b")
     assert _source_id(unit, "target", Axis.Z) == "shelf_high"
 
 
 def test_with_no_interior_board_at_all_the_nearest_carcass_board_wins() -> None:
-    """The interior divider is not parallel to a new shelf, so it never
-    counts; the 20 mm bottom's centre is 1 mm nearer than the 22 mm top's."""
+    """The divider and the left side are not parallel to a new shelf, so
+    they never count, though the left side is the nearest board of all; the
+    20 mm bottom's centre is 1 mm nearer than the 22 mm top's."""
     unit = Unit(
         size_mm=Vec3(1000.0, 300.0, 1000.0),
         root=Division(

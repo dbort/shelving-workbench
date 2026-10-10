@@ -345,10 +345,10 @@ user cannot act on reads as a bug, so the suggestion is data beside each
 reason rather than prose scattered through the commands.
 
 The preferences page holds five values and no more: the starter unit's
-three dimensions, and the snap and joint-clearance tolerances. The tolerances are there
-because real geometry has coincident edges disagreeing by up to 0.09 mm,
-and someone whose model is worse needs a way forward that is not editing
-the source.
+three dimensions, and the snap and joint-clearance tolerances. The
+tolerances are there because real geometry has coincident edges
+disagreeing by up to 0.09 mm, and someone whose model is worse needs a way
+forward that is not editing the source.
 
 Then the user guide, which leads with scanning geometry you already have
 rather than with creating a unit, documents what each refusal means, and

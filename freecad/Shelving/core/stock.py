@@ -80,7 +80,7 @@ def is_carcass(unit: Unit, board_id: str) -> bool:
     raise KeyError(board_id)
 
 
-def _centre(space: Space) -> tuple[float, float, float]:
+def _center_mm(space: Space) -> tuple[float, float, float]:
     return (
         space.origin.x_mm + space.size.x_mm / 2,
         space.origin.y_mm + space.size.y_mm / 2,
@@ -107,7 +107,7 @@ def source_board(
 
     Raises ``KeyError`` when ``region_id`` is absent from ``spaces``.
     """
-    target = _centre(spaces[region_id])
+    target_mm = _center_mm(spaces[region_id])
     parent_id: str | None = None
     boards: list[_Placed] = []
     for placed in _walk(unit.root):
@@ -128,7 +128,7 @@ def source_board(
     for tier in (same_run, interior, carcass, boards):
         if tier:
             nearest = min(
-                tier, key=lambda p: math.dist(_centre(spaces[p.item.id]), target)
+                tier, key=lambda p: math.dist(_center_mm(spaces[p.item.id]), target_mm)
             )
             assert isinstance(nearest.item, Board)
             return nearest.item

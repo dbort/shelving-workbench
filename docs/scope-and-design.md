@@ -15,8 +15,8 @@ produces belongs to your document rather than to the workbench.
 
 A shelving unit is designed as a flat front elevation: a rectangle divided
 into compartments by shelves and dividers, each panel as thick as it
-really is. Change the height and the shelves redistribute. Type an exact opening and its neighbours absorb the
-difference.
+really is. Change the height and the shelves redistribute. Type an exact
+opening and its neighbours absorb the difference.
 
 What makes it unusual is the other direction. The panels are ordinary
 FreeCAD solids with no hidden machinery attached, so any other tool can
@@ -214,11 +214,11 @@ the axis and need not alternate, so two adjacent panels are two boards face
 to face.
 
 Each item contributes a size along the division's axis. A panel
-contributes its own thickness, measured from its solid. A region contributes a **rule**: a
-fixed size, a share of what is left, or an equal share. Fixed sizes drive
-the layout, shares absorb what is left over, and a division whose fixed
-sizes exceed the space available, or which has slack and nothing to absorb
-it, is an error naming the region responsible.
+contributes its own thickness, measured from its solid. A region
+contributes a **rule**: a fixed size, a share of what is left, or an equal
+share. Fixed sizes drive the layout, shares absorb what is left over, and
+a division whose fixed sizes exceed the space available, or which has
+slack and nothing to absorb it, is an error naming the region responsible.
 
 A fixed size states what it measures. By default it is the clear opening
 between the panels either side. It can instead include the panel next to
@@ -305,7 +305,8 @@ does: FreeCAD's own material property, the panel's appearance, and a grain
 list with one entry per face. A panel the editor adds copies all of these,
 and its thickness, from an existing panel lying the same way: another
 shelf in the same opening first, then the nearest such shelf elsewhere in
-the unit, then the nearest outer panel. An outer panel is one with no
+the unit, then the nearest outer panel, and with no panel lying the same
+way, the nearest panel of all. An outer panel is one with no
 compartment beyond it on one side, so a floor raised over a plinth counts
 as outer. That way a shelf can be different stock from the carcass, and
 new shelves follow the shelves rather than the carcass.
@@ -326,8 +327,8 @@ different document is a relocation.
 
 **On each panel**: the rule for the space beside it. Nothing else of the
 workbench's own; material, colour and grain are the ones FreeCAD and the
-Woodworking workbench already keep. What kind of panel it is and how far it is held off its
-neighbours are both derived.
+Woodworking workbench already keep. What kind of panel it is and how far
+it is held off its neighbours are both derived.
 
 **On the container**: the unit's identity, its elevation plane, which way
 it faces, and a record of the compartment rules. That record is not the

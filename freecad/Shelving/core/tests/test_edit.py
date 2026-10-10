@@ -977,22 +977,22 @@ def test_merge_collapse_with_no_other_driven_sibling_moves_no_board() -> None:
 # --- set_size / set_basis / move_board ---------------------------------------
 
 
-def _column_unit(lower_rule: SizeRule) -> Unit:
-    """One vertical run: bottom, a lower bay ruled by ``lower_rule``, a
-    shelf, a ``Fill`` upper bay, a ``Weighted`` top bay, and a top. Every
-    node carries a fixed id so a test can name it."""
+def _column_unit(lower_rule: SizeRule, thickness_mm: float = 18.0) -> Unit:
+    """One vertical run of ``thickness_mm`` boards: bottom, a lower bay ruled
+    by ``lower_rule``, a shelf, a ``Fill`` upper bay, a ``Weighted`` top bay,
+    and a top. Every node carries a fixed id so a test can name it."""
     return Unit(
         size_mm=Vec3(600.0, 300.0, 900.0),
         root=Division(
             axis=Axis.Z,
             items=[
-                Board(thickness_mm=18.0, id="bottom"),
+                Board(thickness_mm=thickness_mm, id="bottom"),
                 Bay(id="lower", rule=lower_rule),
-                Board(thickness_mm=18.0, id="shelf"),
+                Board(thickness_mm=thickness_mm, id="shelf"),
                 Bay(id="upper"),
-                Board(thickness_mm=18.0, id="shelf2"),
+                Board(thickness_mm=thickness_mm, id="shelf2"),
                 Void(id="topmost", rule=Weighted(2.0)),
-                Board(thickness_mm=18.0, id="top"),
+                Board(thickness_mm=thickness_mm, id="top"),
             ],
             id="column",
         ),
@@ -1113,6 +1113,21 @@ def test_set_basis_uses_the_thickness_of_a_board_with_its_own_rule() -> None:
     unit.root.items[2] = Board(thickness_mm=18.0, id="shelf", rule=Fixed(30.0))
     edited = set_basis(unit, "lower", Basis.WITH_NEXT)
     _assert_same_layout(unit, edited)
+
+
+def test_a_spacing_holds_boards_and_a_clear_size_moves_them_across_thicknesses() -> (
+    None
+):
+    """The reason basis exists: thicker stock keeps a shelf's position under a
+    spacing, and pushes it up under a clear opening."""
+    spacing = Fixed(300.0, Basis.WITH_NEXT)
+    clear = Fixed(282.0, Basis.CLEAR)
+    for rule in (spacing, clear):
+        assert solve(_column_unit(rule))["shelf"].origin.z_mm == pytest.approx(300.0)
+    thick_spacing = solve(_column_unit(spacing, thickness_mm=25.0))
+    thick_clear = solve(_column_unit(clear, thickness_mm=25.0))
+    assert thick_spacing["shelf"].origin.z_mm == pytest.approx(300.0)
+    assert thick_clear["shelf"].origin.z_mm == pytest.approx(307.0)
 
 
 @pytest.mark.parametrize(

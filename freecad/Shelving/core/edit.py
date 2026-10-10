@@ -608,9 +608,9 @@ class Measurement:
 
 def measure(unit: Unit, region_id: str, spaces: Mapping[str, Space]) -> Measurement:
     """The :class:`Measurement` of the region named ``region_id``, read from
-    ``spaces`` (``unit`` solved). Raises
-    :class:`EditError` when ``region_id`` names the root, a board, or
-    nothing, the regions :func:`set_size` refuses."""
+    ``spaces``, which must be ``unit``'s solve. Raises :class:`EditError`
+    when ``region_id`` names the root, a board, or nothing, the regions
+    :func:`set_size` refuses."""
     parent, index = _locate_region(unit, region_id)
     region = parent.items[index]
     clear_mm = spaces[region_id].extent_mm(_axis_index(parent.axis))

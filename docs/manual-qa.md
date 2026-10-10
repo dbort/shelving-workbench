@@ -224,10 +224,10 @@ fresh unit has no evidence of which way it faces, so the sides are numbered
 rather than called left/right). Select **Bottom** and open the property
 editor: a **Shelving** group holds `ShelvingBornAs`, `ShelvingBornIn`, and
 `ShelvingIrregular`, and its `ShapeMaterial` is FreeCAD's **Default**. Every
-board is 18 mm thick and the light tan of a Woodworking Magic Start unit. Select **ShelvingUnit** itself: its
-own **Shelving** group holds `ShelvingUnitId`, `ShelvingDepthAxis`,
-`ShelvingFacing` (`unknown`), and `ShelvingRules`. The Report view prints how
-many boards were created.
+board is 18 mm thick and the light tan of a Woodworking Magic Start unit.
+Select **ShelvingUnit** itself: its own **Shelving** group holds
+`ShelvingUnitId`, `ShelvingDepthAxis`, `ShelvingFacing` (`unknown`), and
+`ShelvingRules`. The Report view prints how many boards were created.
 
 ### 2. Resize it and confirm boards move while labels and colours hold
 

@@ -88,10 +88,10 @@ def create_unit(doc: FreeCAD.Document) -> FreeCAD.DocumentObject:
 
 
 def _rescanned_unit(container: FreeCAD.DocumentObject) -> Unit:
-    """``container`` read fresh and scanned, with its
-    stored rules and unit id reapplied: the common starting point for
-    :func:`resize_unit` and :func:`rescan_unit`, a resize being a rescan
-    that also substitutes the outer size."""
+    """``container`` read fresh and scanned, with its stored rules and unit
+    id reapplied: the common starting point for :func:`resize_unit` and
+    :func:`rescan_unit`, a resize being a rescan that also substitutes the
+    outer size."""
     boxes, skipped, record = read_container(container)
     scan_result = scan(
         boxes,

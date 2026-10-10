@@ -130,9 +130,9 @@ class LeftAlone:
 
 
 def _read_unit(container: FreeCAD.DocumentObject) -> tuple[Unit, Mapping[str, str]]:
-    """``container`` read fresh and scanned, with its stored
-    rules and unit id reapplied, and the reason each part the scan did not
-    place in the tree was set aside, keyed by ``Name``.
+    """``container`` read fresh and scanned, with its stored rules and unit
+    id reapplied, and the reason each part the scan did not place in the
+    tree was set aside, keyed by ``Name``.
 
     Mirrors :func:`freecad.Shelving.unit_ops._rescanned_unit`; kept as its
     own copy here rather than imported, the way every other small

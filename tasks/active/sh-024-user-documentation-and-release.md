@@ -59,8 +59,8 @@ DOCUMENT THE REFUSALS, and give them their own section. This workbench refuses
 rather than guessing, so a user will meet a refusal early and it will be their
 first real interaction with the design. For each common one, say what it means
 in terms of their geometry and what to do: a part that is not a box, a layout
-not reachable by straight cuts, an over-constrained size, a pinned part the layout wants to resize. A refusal a
-user cannot act on reads as a bug.
+not reachable by straight cuts, an over-constrained size, a pinned part the
+layout wants to resize. A refusal a user cannot act on reads as a bug.
 
 DO NOT OVERSELL. State the three limits plainly in their own section:
 rectangular boxes only, one elevation plane per unit, layouts reachable by
