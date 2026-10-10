@@ -98,3 +98,11 @@ task adds no shell.
 - [x] **Step 6** (`docs/manual-qa.md`, `README.md`): Rewrite the M7 resize cases for the panel, add the spin-step case, and update any glossary or command list that names Resize Unit.
 
 ## Review log
+
+### Round 1: REJECTED
+- **F1: A wheel scroll past a limit floods the error report, and no test covers it** (`freecad/Shelving/editor/panel.py:146`): `_StepWatch` starts a new burst on every `Wheel` event and `_resize` reports once per burst, so a touchpad gesture past a refused size raises dozens of notifications. Treat an unbroken run of wheel events as one burst, and add a GUI test sending several `QWheelEvent`s past the limit that asserts exactly one report.
+- **N1: A click in the text counts as a step** (`panel.py:144`): a `MouseButtonPress` on the line edit sets `stepping`, so a following context-menu paste or middle-click paste applies with no Return. Count mouse presses only on the spin box.
+- **N2: The plinth gap is never checked against 100 mm** (`tests/freecad/test_editor_session.py:1110`): only Floor's z is compared before and after.
+- **N3: The `ValueError` text is wrong for resize** (`freecad/Shelving/editor/session.py:312`): `_elevation_axes` still says "no depth_axis to split by direction".
+- **N4: The roadmap still presents Resize Unit as current** (`docs/roadmap.md:249`).
+- **N5: The `unit_ops` module docstring is hard to parse** (`freecad/Shelving/unit_ops.py:1`).
