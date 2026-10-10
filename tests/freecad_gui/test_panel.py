@@ -731,8 +731,8 @@ def test_a_wheel_turn_past_a_limit_reports_once(
 def test_the_elevation_keeps_a_usable_height_in_a_short_panel(
     unit_panel: _Fixture,
 ) -> None:
-    """The controls never squeeze the elevation below its minimum; a short
-    task panel scrolls instead."""
+    """The elevation keeps at least ``_MIN_VIEW_HEIGHT_PX`` in a short panel
+    and takes most of a tall one."""
     form = unit_panel.panel.form
     form.resize(400, 200)
     _process_events()

@@ -121,3 +121,8 @@ task adds no shell.
 - **N5: No test checks "one document write per spin step"** (Advice constraint): a repeated value is ignored in code, but no test counts writes.
 
 Applied after this round: N1, N2 (roadmap edit reverted), N3 and N4. N5 left as is.
+
+### Round 3: APPROVED
+- **N1: The test docstring claims behavior the test does not check** (`tests/freecad_gui/test_panel.py:734-735`): "a short task panel scrolls instead" is FreeCAD's task-panel scroll area, which the test does not exercise; say only that the view keeps its minimum in a short panel and takes most of a tall one.
+
+Applied after this round: N1.
