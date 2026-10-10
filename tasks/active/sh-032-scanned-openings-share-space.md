@@ -81,6 +81,13 @@ DECISIONS (user, 2026-10-09):
   stores its scanned `Fixed` rules in its rule record, and a stored rule
   wins over the scan. The workbench is unreleased; do not migrate.
 
+- **Resize Unit's starting size is the scanned size** (user, 2026-10-10,
+  added after round 3 from manual QA): the dialog took the bounding box of
+  every part, so Magic Start's 3 mm back panel made its depth 400 mm
+  instead of 397 mm, and accepting it grew every board to the panel's
+  rear face. `unit_ops.unit_size_mm` gives the scan's size, which leaves
+  set-aside panels out.
+
 IMPLEMENTER DECISIONS (2026-10-09, planning):
 - Keep `Fill` for a run whose sharing regions are all equal within
   `snap_mm`, since it reads as "equal share" in the report and panel and

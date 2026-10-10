@@ -37,7 +37,7 @@ from freecad.Shelving.editor.session import (
     Session,
     SplitDirection,
 )
-from freecad.Shelving.unit_ops import create_unit, resize_unit
+from freecad.Shelving.unit_ops import create_unit, resize_unit, unit_size_mm
 from tests.freecad_materials import library_material
 
 
@@ -1025,18 +1025,32 @@ def test_a_magic_start_unit_takes_a_typed_size(tmp_path: Path) -> None:
 
 
 def test_a_magic_start_unit_resizes_taller(tmp_path: Path) -> None:
+    """The size Resize Unit starts from leaves out the 3 mm back panel behind
+    the boards, so keeping its depth keeps every board's depth."""
     path = tmp_path / _MAGIC_START.name
     shutil.copyfile(_MAGIC_START, path)
     doc = FreeCAD.openDocument(str(path))
     try:
         container = doc.getObject("LinkGroup")
         assert container is not None
-        resize_unit(container, Vec3(500.0, 397.0, 800.0))
+        names = ("Floor", "Left", "Right", "Top", "Shelf")
+        depths_mm = {
+            name: float(cast("_BoxFeature", doc.getObject(name)).Width)
+            for name in names
+        }
+        current_mm = unit_size_mm(container)
+        assert (current_mm.x_mm, current_mm.y_mm, current_mm.z_mm) == (
+            500.0,
+            397.0,
+            760.0,
+        )
+        resize_unit(container, Vec3(current_mm.x_mm, current_mm.y_mm, 800.0))
         doc.recompute()
-        for name in ("Floor", "Left", "Right", "Top", "Shelf"):
+        for name in names:
             box = cast("_BoxFeature", doc.getObject(name))
             thinnest_mm = min(float(box.Length), float(box.Width), float(box.Height))
             assert abs(thinnest_mm - 18.0) < 1e-6, name
+            assert abs(float(box.Width) - depths_mm[name]) < 1e-6, name
         left = cast("_BoxFeature", doc.getObject("Left"))
         assert abs(float(left.Height) - 800.0) < 1e-6
     finally:

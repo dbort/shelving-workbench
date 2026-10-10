@@ -16,8 +16,7 @@ import FreeCAD
 
 from freecad.Shelving.container import WriteResult, read_container
 from freecad.Shelving.core.geometry import Vec3
-from freecad.Shelving.core.scan import Box
-from freecad.Shelving.unit_ops import resize_unit
+from freecad.Shelving.unit_ops import resize_unit, unit_size_mm
 
 _RESOURCE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources")
 _ICON = os.path.join(_RESOURCE_DIR, "shelving.svg")
@@ -49,19 +48,6 @@ def _selected_container() -> FreeCAD.DocumentObject | None:
     ):
         return selection[0]
     return None
-
-
-def _measured_extent_mm(boxes: list[Box]) -> Vec3:
-    """The outer bounding size across every box in ``boxes``: what the
-    resize dialog seeds its fields from, in the same x/y/z = width/depth/
-    height convention ``Unit.size_mm`` uses everywhere else."""
-    x0_mm = min(b.corner_mm.x_mm for b in boxes)
-    x1_mm = max(b.corner_mm.x_mm + b.size_mm.x_mm for b in boxes)
-    y0_mm = min(b.corner_mm.y_mm for b in boxes)
-    y1_mm = max(b.corner_mm.y_mm + b.size_mm.y_mm for b in boxes)
-    z0_mm = min(b.corner_mm.z_mm for b in boxes)
-    z1_mm = max(b.corner_mm.z_mm + b.size_mm.z_mm for b in boxes)
-    return Vec3(x1_mm - x0_mm, y1_mm - y0_mm, z1_mm - z0_mm)
 
 
 def _prompt_dimension_mm(label: str, current_mm: float) -> float | None:
@@ -136,7 +122,15 @@ class ResizeUnitCommand:
         if not boxes:
             print("REFUSED: the selected container holds no readable boards")
             return
-        size_mm = _prompt_size_mm(_measured_extent_mm(boxes))
+        # The scanned size, so a field left as it is keeps that dimension. A
+        # bounding box over every part would count a back panel behind the
+        # boards and grow the unit by its thickness.
+        try:
+            current_mm = unit_size_mm(container)
+        except Exception as err:  # noqa: BLE001 - report, don't crash the GUI
+            print(f"REFUSED: {err}")
+            return
+        size_mm = _prompt_size_mm(current_mm)
         if size_mm is None:
             return
         doc = container.Document
