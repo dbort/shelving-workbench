@@ -324,7 +324,7 @@ def test_untagged_objects_are_kept_unless_removed() -> None:
         # A refresh keeps the check.
         panel._refresh()
         assert panel.untagged_checks["HandAdded"].isChecked()
-        panel.remove_untagged_button.click()
+        panel.delete_untagged_button.click()
         _process_events()
         assert doc.getObject("HandAdded") is None
         assert not panel.untagged_box.isVisible()

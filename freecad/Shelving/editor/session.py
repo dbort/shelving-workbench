@@ -420,7 +420,7 @@ class Session:
     def end_drag(self) -> None:
         self._drag = None
 
-    def remove_untagged(self, names: Collection[str]) -> EditFailure | None:
+    def delete_untagged(self, names: Collection[str]) -> EditFailure | None:
         """Delete the listed :attr:`left_alone` objects inside this
         session's transaction, so :meth:`cancel` restores them. Refuses,
         deleting nothing, when any name is not currently listed."""

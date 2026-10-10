@@ -605,7 +605,8 @@ bay, and the temporary object is gone from the tree.
 Expected: the second shelf is 12 mm thick and has the first shelf's colour,
 material and grain, while the bottom, top and sides keep theirs. A shelf
 takes its stock from another shelf in the same opening before it falls back
-to the carcass.
+to the carcass. The first shelf moves 3 mm, re-centering in its opening
+(bug-007), which can hide its Woodworking grain arrow.
 
 ### 16. Confirm the untagged-object list appears with nothing checked
 
@@ -622,9 +623,9 @@ and text saying the workbench leaves such objects alone unless they are
 selected. The reason wraps onto several lines rather than making the panel
 scroll sideways. Make any edit: the cube stays where it is.
 
-3. Check the cube and click **Remove Selected**, then **Cancel**.
+3. Check the cube and click **Delete Selected**, then **Cancel**.
 
-Expected: the cube disappears on **Remove Selected** and returns on
+Expected: the cube disappears on **Delete Selected** and returns on
 **Cancel**. With nothing checked, **OK** keeps it.
 
 ### 17. An unsolvable size leaves the last good state

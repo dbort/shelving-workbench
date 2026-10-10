@@ -104,6 +104,9 @@ the log happens only when the user asks.
   comes from `sh-018`'s rule record), but the editor is what makes shelves
   with stored `Fill` rules common. Found during `sh-020`'s manual QA
   sign-off, as a second contributor to the same user report as bug-006.
+  A hand thickness change triggers it too: in `sh-030`'s manual QA, a
+  shelf thinned from 18 mm to 12 mm by its bottom face re-centered 3 mm on
+  the next edit, and the move hid the Woodworking grain-arrow text on it.
   Fix: `sh-XXX task`. A stored rule has to yield when the scanned geometry
   disagrees with what that rule would solve to, but it still has to win
   where geometry is ambiguous (the reason `Basis.WITH_NEXT` is stored).

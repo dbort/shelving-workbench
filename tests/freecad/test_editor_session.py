@@ -921,10 +921,10 @@ def test_dimensions_drag_basis_and_untagged() -> None:
                 hand_added_before
             )
             assert [e.name for e in session.left_alone] == ["HandAdded"]
-            refused = session.remove_untagged(["bottom"])
+            refused = session.delete_untagged(["bottom"])
             assert isinstance(refused, EditFailure), refused
             assert doc.getObject("bottom") is not None
-            assert session.remove_untagged(["HandAdded"]) is None
+            assert session.delete_untagged(["HandAdded"]) is None
             assert doc.getObject("HandAdded") is None
             assert session.left_alone == ()
 

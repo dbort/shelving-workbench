@@ -194,7 +194,7 @@ The layout vocabulary and how each term maps onto the code in
   creates the temporary probe object the dimension field binds to so it can
   resolve a `VarSet` name, and `commit` deletes it. `left_alone` lists the
   container's objects this workbench did not write, each with its reason;
-  `remove_untagged` deletes named ones inside the transaction. A rejected
+  `delete_untagged` deletes named ones inside the transaction. A rejected
   edit returns an `EditFailure` (a message and the offending id) rather than
   raising, and changes nothing.
 - **Shelving_EditUnit**: the command id that opens the elevation editor task
