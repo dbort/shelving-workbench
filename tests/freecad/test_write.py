@@ -485,7 +485,7 @@ def test_a_resize_never_changes_a_boards_material_or_grain() -> None:
 
 def test_fixed_rule_survives_apply_rescan_and_reapply() -> None:
     """A ``Fixed`` bay sized to exactly match its sibling's slack-absorbed
-    size, so a naive rescan's equal-siblings heuristic would recover both as
+    size, so a rescan's rule recovery alone would recover both as
     ``Fill``, keeps its stored, non-recoverable size across two rescans and
     a resize: the shelf between them stays at its fixed offset rather than
     drifting to an even split of the new available space."""

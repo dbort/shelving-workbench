@@ -139,11 +139,11 @@ confirm or amend each of them.
 | Clearance at a joint | A gap up to a tolerance (default 3 mm) is a joint; the gap is stored per plank end and apply reproduces it. Larger gaps refuse |
 | Per-plank depth | Scan records each plank's depth and Y offset as per-node overrides; apply reproduces them; unit depth is the default for new planks |
 | Back and front panels | Y-thin planks are set aside from the bay partition and reported; back-panel semantics arrive with M11 |
-| Rule recovery | Stored rule metadata on a box is authoritative. Without it, sibling openings equal within tolerance become `fill` and the rest become `fixed` |
+| Rule recovery | Stored rule metadata on a box is authoritative. Without it, every compartment shares leftover space in proportion to its size (all `fill` when a run is one size), and a void beside compartments is `fixed` |
 | Plank identity | The FreeCAD `Name`. Never stored by us, so it cannot be copied and a duplicate is a distinct entity by construction |
 | Provenance | Two stored fields, the `Name` and the document `Uid` at the time the plank was tagged. They classify what a mismatch means: a changed `Name` is a copy, a changed `Uid` is a relocation |
 | Stored metadata | Only what geometry cannot carry: **material** and the **rule** of the region beside the plank. Role and clearance are derived, so a copy carries fewer wrong fields |
-| Region rules | A record on the container, keyed by plank `Name`. Not a source of truth for geometry; a missing or stale entry falls back to the equal-siblings heuristic |
+| Region rules | A record on the container, keyed by plank `Name`. Not a source of truth for geometry; a missing or stale entry falls back to the scan's own rule recovery |
 | Reflow | Inert by default: scan, edit, apply are commands. An optional per-unit driver for automatic reflow comes later, and a live unit is not hand-editable |
 | Repeat rules | Deferred to `StudWall` (M12), where a computed member count is the point. Its children are positional, so it introduces a second identity scheme |
 | Draft arrays | Skipped loudly for now. Expanding one into its element placements is easy but adds a type to the envelope |

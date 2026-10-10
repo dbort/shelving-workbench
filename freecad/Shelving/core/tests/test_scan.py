@@ -536,7 +536,7 @@ def _b(role: str, thickness_mm: float = 18.0) -> Board:
 
 
 def _closed_box_unit() -> Unit:
-    """Four equal bays behind three shelves: the equal-siblings case."""
+    """Four equal bays behind three shelves: every run all one size."""
     return Unit(
         size_mm=Vec3(900.0, 300.0, 1800.0),
         root=Division(
@@ -592,8 +592,8 @@ def _stepped_unit() -> Unit:
 
 
 def _second_stock_unit() -> Unit:
-    """One 12 mm shelf splitting the interior into two unequal bays: the
-    unequal-siblings case, and the second-stock case together."""
+    """One 12 mm shelf splitting the interior into two unequal bays: a run of
+    differing sizes, and a second stock, together."""
     return Unit(
         size_mm=Vec3(900.0, 300.0, 1800.0),
         root=Division(
@@ -645,8 +645,8 @@ def _board_multiset(
 
 
 def _region_rules(region: Bay | Void | Division) -> list[type[object]]:
-    """Every non-``Board`` item's rule type, pre-order, for asserting the
-    equal-siblings recovery separately from the shape comparison."""
+    """Every non-``Board`` item's rule type, pre-order, for asserting rule
+    recovery separately from the shape comparison."""
     rules: list[type[object]] = []
     if isinstance(region, Division):
         for item in region.items:
@@ -888,10 +888,10 @@ def test_real_stair_step_solves_to_three_distinct_divider_heights() -> None:
         assert board is not None
         assert spaces[board.id].size.y_mm == pytest.approx(expected, abs=0.01)
 
-    # `_finalize_items` excludes the dividers' wrap Divisions from its
-    # sibling-uniformity comparison, so each keeps its own raw grid width;
-    # the two column bodies are genuine Fill twins of each other (within
-    # snap_mm), so they share the remaining span equally (see sh-025
+    # `_finalize_items` excludes the dividers' wrap Divisions from rule
+    # recovery, so each keeps its own grid width; the two column bodies are
+    # one size within snap_mm, so both are Fill and share the remaining span
+    # equally (see sh-025
     # Frontier Advice, "ROOT CAUSE, PART 3").
     assert spaces[shelf015_column.id].size.y_mm == pytest.approx(887.0283, abs=0.01)
     assert spaces[panel_yx003_column.id].size.y_mm == pytest.approx(887.0283, abs=0.01)
@@ -976,13 +976,11 @@ def _stepped_columns_boxes() -> list[Box]:
         # Splits the left bay only, giving the shell one enclosed Bay so
         # scan accepts it as a tree.
         _box("Shelf", (18.0, 0.0, 500.0), (381.0, 300.0, 18.0)),
-        # Mirrors RightSide's own gap, giving the outer "body" Division a
-        # second near-equal-width wrap (three 18 mm dividers) and a second
-        # near-equal-width void (two 379 mm gaps): a lone divider's wrap
-        # never lands in _finalize_items's sibling comparison at all when
-        # nothing else in the division is close to its own width, so this
-        # shape is what exercises has_twin and would catch a regression a
-        # single wrap cannot (see sh-025 Frontier Advice, "ROOT CAUSE,
+        # Mirrors RightSide's own gap, giving the outer "body" Division
+        # several near-equal-width wraps (three 18 mm dividers) and voids
+        # (two 379 mm gaps) beside its compartment. Only the wraps'
+        # exclusion from _finalize_items's rule recovery keeps each divider
+        # at its own height (see sh-025 Frontier Advice, "ROOT CAUSE,
         # PART 3").
         _box("Divider2", (1193.0, 0.0, 18.0), (18.0, 300.0, 582.0)),
     ]

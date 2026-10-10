@@ -678,9 +678,10 @@ def _make_board(
     )
     # cross_axis is the slab's cross-section axis; the enclosing Division's
     # own axis is whichever of the grid's two elevation axes cross_axis is
-    # not. When that axis is not the board's own thin axis, the board's real
-    # measured span along it (not its thickness) is what the Division must
-    # carry, a divider shorter than its neighbors say.
+    # not. When that axis is not the board's own thin axis, the board's span
+    # along it (not its thickness) is what the Division must carry, a
+    # divider shorter than its neighbors say. This measured span stands in
+    # until _finalize_items replaces it with the board's slot width.
     enclosing_axis = ctx.horizontal if cross_axis is ctx.vertical else ctx.vertical
     rule: SizeRule | None = None
     if enclosing_axis is not board.thin_axis:
@@ -883,8 +884,9 @@ def _recover_rules(sizes_mm: Sequence[float], snap_mm: float) -> list[SizeRule]:
 
     A scan recovers ``Fixed`` for no compartment: geometry cannot tell a size
     someone meant to hold from one that came out that way, and a run with
-    nothing to share leftover space refuses every edit. Only a size typed or
-    dragged in the editor, kept in the stored rule record, holds. The
+    nothing to share leftover space refuses every edit. A compartment's size
+    holds only once it is typed or dragged in the editor and kept in the
+    stored rule record. The
     ``Fill`` case keeps an equal run reading as equal shares; mixing
     ``Fill`` (weight 1) with size-valued weights in one run would move
     boards.

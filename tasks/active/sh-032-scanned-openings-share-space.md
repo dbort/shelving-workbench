@@ -37,8 +37,9 @@ fixture from ever solving. sh-031's stock swap depends on both.
       `snap_mm / 2` of its measured box. Asserted in the core suite.
 - [ ] On the scanned Magic Start unit, each of these solves, asserted in
       the core suite: `set_size` on the lower bay to 300 mm, with the floor
-      unmoved; `move_board` on the shelf 30 mm up, landing exactly; the shelf's `thickness_mm` changed to 12 mm;
-      the unit 40 mm taller; the unit 40 mm wider. After the resizes every
+      unmoved; `move_board` on the shelf 30 mm up, landing exactly; the
+      shelf's `thickness_mm` changed to 12 mm; the unit 40 mm taller; the
+      unit 40 mm wider. After the resizes every
       board keeps its `thickness_mm`.
 - [ ] `real_stair_step.boxes.json` solves 40 mm taller and 40 mm wider
       along its horizontal elevation axis, and `real_two_units.boxes.json`
@@ -63,8 +64,11 @@ DECISIONS (user, 2026-10-09):
   scanned size. Only a size the user types or drags, or one a stored rule
   record carries, is `Fixed`. That makes a scanned unit behave like one
   built in the editor, whose split bays already share.
-- **A void shares only as a last resort** (revised 2026-10-10 during
-  `/work`): it keeps its size unless nothing else in its run can change.
+- **Voids share like compartments** (superseded on 2026-10-10, see the
+  next entry), so a plinth gap grows and shrinks with the unit, and the
+  void above a stair-step's short column lets the unit grow taller.
+- **A void shares only as a last resort** (user, 2026-10-10, during
+  `/work`, superseding the previous entry): it keeps its size unless nothing else in its run can change.
   Sharing it like a compartment moved Magic Start's floor on every edit
   inside the unit, and a 30 mm shelf drag landed 6.6 mm short because the
   plinth gap gave up part of the space. The void above a stair-step's

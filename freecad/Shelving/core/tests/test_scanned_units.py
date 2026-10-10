@@ -29,6 +29,7 @@ from freecad.Shelving.core.scan import (
     DEFAULT_SNAP_MM,
     Box,
     _is_axis_wrap,
+    _snap_lines,
     elevation_axes,
     export_from_json,
     scan,
@@ -172,6 +173,42 @@ def test_two_side_by_side_tops_fill_their_run_exactly() -> None:
     run_mm = _component_mm(spaces[tops.id].size, tops.axis)
     assert sum(rules_mm) == pytest.approx(run_mm, abs=1e-9)
     assert abs(sum(measured_mm) - run_mm) > 1e-4
+
+
+@pytest.mark.parametrize("name", ["real_stair_step", "real_two_units"])
+def test_a_ruled_board_spans_its_slot_in_the_scan_grid(name: str) -> None:
+    """A board lying across its run carries a rule whose size is the gap
+    between two of the scan's snapped grid lines, the lines every sibling's
+    size comes from, and its solved edges sit on those lines."""
+    boxes = {box.name: box for box in _boxes(name)}
+    unit = _scanned(name)
+    spaces = solve(unit)
+    placed = {spec.node_id for spec in expand(unit)}
+    ruled = 0
+    for division in _divisions(unit.root):
+        axis = division.axis
+        lines_mm = _snap_lines(
+            [
+                edge_mm
+                for box_name in placed
+                for edge_mm in (
+                    _component_mm(boxes[box_name].corner_mm, axis),
+                    _component_mm(boxes[box_name].corner_mm, axis)
+                    + _component_mm(boxes[box_name].size_mm, axis),
+                )
+            ],
+            DEFAULT_SNAP_MM,
+        )
+        for item in division.items:
+            if not isinstance(item, Board) or item.rule is None:
+                continue
+            assert isinstance(item.rule, Fixed)
+            ruled += 1
+            low_mm = _component_mm(spaces[item.id].origin, axis) + lines_mm[0]
+            high_mm = low_mm + item.rule.size_mm
+            assert min(abs(low_mm - line_mm) for line_mm in lines_mm) < 1e-6
+            assert min(abs(high_mm - line_mm) for line_mm in lines_mm) < 1e-6
+    assert ruled >= 2
 
 
 def _first(region: Region, kind: type[Item], board_id: str = "") -> Item:
