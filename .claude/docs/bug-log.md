@@ -58,7 +58,7 @@ the log happens only when the user asks.
 - `bug-004` - **the Edit Unit panel's elevation is drawn far larger than
   the task pane, so a whole unit cannot be seen or worked on at once**:
   the `QGraphicsView` in `freecad/Shelving/editor/panel.py` shows the scene
-  at 1 scene unit per pixel, and scene units are millimetres
+  at 1 scene unit per pixel, and scene units are millimeters
   (`editor/scene.py`), so a typical unit is several times taller and wider
   than the docked Tasks pane. The user had to scroll down about 12 screens
   and right about 2 to see all of it. Found during `sh-020`'s manual QA
@@ -117,15 +117,15 @@ the log happens only when the user asks.
   one another, labels included, so some values are unreadable. Found in
   sh-021's manual QA on FreeCAD 1.1.1. Root cause: `_add_region_dimensions`
   in `freecad/Shelving/editor/scene.py` places each dimension line at a
-  fixed fraction of its region's cross extent (the centre for a bay or
+  fixed fraction of its region's cross extent (the center for a bay or
   void, a quarter for a nested division) with no awareness of the other
-  dimensions, so nested and neighbouring regions collide. Fix: `sh-XXX
+  dimensions, so nested and neighboring regions collide. Fix: `sh-XXX
   task`, because choosing where dimensions go (offset lanes, drawing only
   the selected region's, moving labels outside the unit) is a design
   decision the user wants to make separately.
 - `bug-010` - **a dimension set from an expression keeps only the resolved
   number**: typing `VarSet.Len` or binding it with f(x) sizes the region
-  once, but the rule stores the millimetre value, so a later change to the
+  once, but the rule stores the millimeter value, so a later change to the
   `VarSet` moves nothing. FreeCAD users expect a bound length to follow its
   expression. Found in sh-021's manual QA. Root cause: a region's size lives
   in the container's rule record (`freecad/Shelving/core/record.py`), which

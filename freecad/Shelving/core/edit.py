@@ -233,10 +233,10 @@ def merge_at(unit: Unit, board_id: str) -> Unit:
     """``unit`` with the ``Board`` named ``board_id`` removed and the regions
     either side of it merged into one.
 
-    The merged region takes the first (lower-index) neighbour's id, and a
+    The merged region takes the first (lower-index) neighbor's id, and a
     rule chosen so ``solve`` reproduces every other region's pre-edit size in
-    the run: the neighbours' combined size plus the removed board's
-    thickness, ``Fixed`` when both neighbours were ``Fixed``, otherwise a
+    the run: the neighbors' combined size plus the removed board's
+    thickness, ``Fixed`` when both neighbors were ``Fixed``, otherwise a
     ``Weighted`` weight solved against another driven sibling in the run (or
     ``Fill`` when no such sibling exists), the exact inverse of
     :func:`split_region`'s own rule choice. *Unless* the merge leaves its
@@ -244,12 +244,12 @@ def merge_at(unit: Unit, board_id: str) -> Unit:
     itself is then replaced by it, taking the ``Division``'s own rule
     instead, which is what makes a split-then-merge round trip return the
     tree to its original shape rather than leaving a degenerate one-item
-    ``Division`` behind. The second neighbour is discarded whole: when it is
+    ``Division`` behind. The second neighbor is discarded whole: when it is
     itself a ``Division``, every board and region in its subtree disappears
     with it, silently, rather than being refused, since the letter of
     "regions either side merged into one" does not distinguish a leaf region
     from a subtree. Raises :class:`EditError` naming ``board_id`` when it
-    names no board in ``unit``, or a board whose neighbour on either side is
+    names no board in ``unit``, or a board whose neighbor on either side is
     missing (the end of a run) or is itself a ``Board`` rather than a
     region.
 

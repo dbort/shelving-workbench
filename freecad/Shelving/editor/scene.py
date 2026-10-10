@@ -64,7 +64,7 @@ _WITNESS_HALF_MM = 12.0
 _ARROW_LENGTH_MM = 10.0
 _ARROW_HALF_WIDTH_MM = 3.5
 # The labels' height. QFont.setPixelSize sizes a scene item's text in item
-# coordinates, so this is scene millimetres whatever the view's zoom.
+# coordinates, so this is scene millimeters whatever the view's zoom.
 _LABEL_PIXEL_SIZE = 16
 
 
@@ -154,7 +154,7 @@ def _add_dimension(
 ) -> None:
     """Draw one dimension from ``low_mm`` to ``high_mm`` along the run's
     axis, with its dimension line at ``cross_mm`` on the other elevation axis
-    (both unit-frame millimetres), and a witness line lying on each face it
+    (both unit-frame millimeters), and a witness line lying on each face it
     measures, each end of the dimension line an arrowhead whose tip touches
     that witness line."""
 
@@ -244,7 +244,7 @@ def _add_region_dimensions(
                     along_index
                 ) + after_space.extent_mm(along_index)
         clear_text = _format_mm(clear_high_mm - low_mm)
-        # A nested Division's dimension sits off its centre line, where its
+        # A nested Division's dimension sits off its center line, where its
         # own children's dimensions cross it.
         fraction = 0.25 if isinstance(item, Division) else 0.5
         cross_mm = space.origin_mm(across_index) + fraction * space.extent_mm(

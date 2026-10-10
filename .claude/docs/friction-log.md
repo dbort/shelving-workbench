@@ -59,7 +59,7 @@ fixes a papercut records the papercut and its fix and deletes the entry.
   walking the container chain and multiplying placements in
   `spikes/plain_planks/export_boxes.py`. Simpler if: `getGlobalPlacement`
   composed through link containers too, or the API doc stated which container
-  types it honours so the gap was findable without an experiment.
+  types it honors so the gap was findable without an experiment.
 
 - `friction-006` - **a dataclass default instance of an unhashable class fails
   at import time, not at review time**: sh-013's task file literally specified

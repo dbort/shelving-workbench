@@ -36,7 +36,7 @@ _DEFAULT_WIDTH_MM = 600.0
 _DEFAULT_DEPTH_MM = 300.0
 _DEFAULT_HEIGHT_MM = 900.0
 # The Woodworking workbench's Magic Start look: its board thickness and its
-# default board colour. The boards keep the material FreeCAD gives a new
+# default board color. The boards keep the material FreeCAD gives a new
 # object, the same Default material Magic Start's boards carry.
 _DEFAULT_THICKNESS_MM = 18.0
 _DEFAULT_RGB = (247, 185, 108)
@@ -77,7 +77,7 @@ def _default_unit() -> Unit:
 def create_unit(doc: FreeCAD.Document) -> FreeCAD.DocumentObject:
     """Build a new ``App::Part``, seed it with a closed single-bay unit of
     18 mm boards at fixed defaults, and return the container. With a GUI,
-    every board is painted Magic Start's default board colour."""
+    every board is painted Magic Start's default board color."""
     container = cast(
         "FreeCAD.DocumentObject", doc.addObject("App::Part", "ShelvingUnit")
     )

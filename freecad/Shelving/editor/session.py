@@ -60,7 +60,7 @@ from freecad.Shelving.debug_log import Stopwatch
 SplitDirection = Literal["horizontal", "vertical"]
 
 
-class _Labelled(Protocol):
+class _Labeled(Protocol):
     Label: str
 
 
@@ -214,7 +214,7 @@ class Session:
             doc.addObject("App::VarSet", "ShelvingDimensionProbe"),
         )
         probe.addProperty("App::PropertyLength", PROBE_PROPERTY, "Shelving")
-        cast("_Labelled", probe).Label = "Shelving dimension (temporary)"
+        cast("_Labeled", probe).Label = "Shelving dimension (temporary)"
         self.probe = probe
 
     def commit(self) -> None:
@@ -247,7 +247,7 @@ class Session:
         """Whether the current selection is a ``Board``: the only kind of
         node :meth:`merge` acts on. ``True`` does not promise :meth:`merge`
         succeeds: :func:`~freecad.Shelving.core.edit.merge_at` refuses by
-        name when the board's neighbours do not permit a merge."""
+        name when the board's neighbors do not permit a merge."""
         if self.selected_id is None:
             return False
         node = _find_node(self.unit.root, self.selected_id)
@@ -322,7 +322,7 @@ class Session:
         return self._apply(candidate)
 
     def merge(self) -> EditFailure | None:
-        """Remove the selected ``Board`` and merge its neighbouring regions.
+        """Remove the selected ``Board`` and merge its neighboring regions.
         Returns ``None`` on success, which clears the selection, or an
         :class:`EditFailure` on refusal, which changes nothing."""
         if self.selected_id is None:

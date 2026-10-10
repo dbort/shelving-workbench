@@ -16,14 +16,14 @@ produces belongs to your document rather than to the workbench.
 A shelving unit is designed as a flat front elevation: a rectangle divided
 into compartments by shelves and dividers, each panel with its real
 thickness. Change the height and the shelves redistribute. Type an exact
-opening and its neighbours absorb the difference.
+opening and its neighbors absorb the difference.
 
 What makes it unusual is the other direction. The panels are ordinary
 FreeCAD solids with no hidden machinery attached, so any other tool can
 read, measure, cut, and export them, and a document opens correctly on a
 machine where this workbench is not installed. The workbench can also read
 an arrangement of panels back and recover the layout from it, which means
-it works on shelving you have already modelled, and it means editing a
+it works on shelving you have already modeled, and it means editing a
 panel with somebody else's tool is a supported thing to do rather than
 something that breaks the model.
 
@@ -44,7 +44,7 @@ a cut list.
 **Assembly** positions finished parts relative to each other. It solves
 where things go, not what they are.
 
-**The Woodworking workbench** by dprojects is the closest neighbour and
+**The Woodworking workbench** by dprojects is the closest neighbor and
 the most important one. It is a large, mature, MIT-licensed collection of
 tools for exactly this domain: it generates cabinet carcasses from
 dimensions, moves and resizes panels, drills dowel and shelf-pin holes,
@@ -97,7 +97,7 @@ truth off the geometry instead of insisting on its own copy.
 easy case and not a very common one. Real units step at the top or the
 bottom, mix panel depths in one carcass, sit in pairs whose sides meet,
 have panels notched to clear something in the wall, and hold a shelf that
-is a different material from its neighbours. A model that only expresses
+is a different material from its neighbors. A model that only expresses
 the easy case forces every real design out of it immediately.
 
 **Connecting a design to what surrounds it.** A unit is built for a
@@ -120,8 +120,8 @@ downstream of the shape this workbench describes. Woodworking covers much
 of this well and operates on the same solids, so the answer is to hand off
 rather than to duplicate.
 
-**Doors, drawers, and face frames** as modelled things with their own
-behaviour. A door is a panel like any other and can be drawn as one; it is
+**Doors, drawers, and face frames** as modeled things with their own
+behavior. A door is a panel like any other and can be drawn as one; it is
 not something the layout understands.
 
 **Panels that are not rectangular boxes.** An L-shaped top cut from one
@@ -155,7 +155,7 @@ it.
 
 Two ways in, and they meet in the same place.
 
-**Adopting what you already have.** You have a unit modelled as panels,
+**Adopting what you already have.** You have a unit modeled as panels,
 whether you drew them, generated them with another tool, or inherited the
 file. You select the container holding them and ask the workbench to read
 it. It works out the arrangement and tells you what it found, including
@@ -172,7 +172,7 @@ and get a plain carcass. Editing proceeds identically from there.
 split it, drag a shelf, or type an exact opening size. Everything else
 redistributes according to what is fixed and what is free, and the 3D
 follows. Setting an exact size makes that opening fixed, and its
-neighbours take up the difference. A dimension says whether it measures
+neighbors take up the difference. A dimension says whether it measures
 the clear opening or the spacing from one shelf's top to the next, because
 changing to thicker stock holds one and moves the other. Dragging changes
 the number and not what it measures, so a drag never rewrites intent. An
@@ -241,7 +241,7 @@ setting. The panel cut first runs through; panels in the pieces it creates
 stop against it.
 
 **An outline that steps** is expressed with voids. A column that is
-shorter than its neighbour is a region holding a compartment, its own top,
+shorter than its neighbor is a region holding a compartment, its own top,
 and a void taking the remaining height. No rule about outlines is needed.
 
 The model's restrictions are that every member is a rectangular box, every
@@ -257,8 +257,8 @@ The reader works out which axis is the depth, treats the other two as the
 elevation, and divides the elevation wherever a straight line passes
 without cutting through any panel. Where two lines are closer together
 than a joint tolerance they are one joint rather than a compartment, which
-is what keeps a shelf held a millimetre off each side from producing two
-one-millimetre compartments. Space that connects to the outside of the
+is what keeps a shelf held a millimeter off each side from producing two
+one-millimeter compartments. Space that connects to the outside of the
 bounding rectangle is a void; space enclosed by panels is a compartment.
 
 Its guarantee is that it does not guess. Every arrangement it cannot
@@ -275,12 +275,12 @@ than inferred:
   have solved to the same size are identical. The same holds for what a
   fixed size measures, since a clear opening and a shelf spacing place the
   panels in the same positions. Stored intent wins; without it, equal
-  neighbours are treated as sharing and unequal ones as fixed.
+  neighbors are treated as sharing and unequal ones as fixed.
 - **Which side the unit faces**, which decides nothing about the geometry
   and everything about which end is called the left. Two weak hints exist,
   a back or a front panel, and a front inset with a flush rear, and both
   fire rarely. Unknown is the normal answer, it is stored once and
-  remembered, and a guess is labelled as one.
+  remembered, and a guess is labeled as one.
 
 Parts that are not simple boxes are read by their overall size and marked
 as unchangeable, so a panel notched to clear something in the wall takes
@@ -293,12 +293,12 @@ then drives the space around it instead of being driven by it.
 that container: matched ones updated where they stand, new ones created,
 removed ones deleted.
 
-Matching is by the object's own identity, so a panel you renamed, coloured,
+Matching is by the object's own identity, so a panel you renamed, colored,
 or referenced from elsewhere in the document survives a reflow. Nothing is
 recreated that did not need to be. Panels marked unchangeable may be moved
 but are never rewritten.
 
-A panel's material, colour and grain are never written to a panel that
+A panel's material, color and grain are never written to a panel that
 already exists. The workbench keeps them where the Woodworking workbench
 does: FreeCAD's own material property, the panel's appearance, and a grain
 list with one entry per face. A panel the editor adds copies all of these,
@@ -325,9 +325,9 @@ copying a shelf to make another shelf wanted. A preserved name in a
 different document is a relocation.
 
 **On each panel**: the rule for the space beside it. Nothing else of the
-workbench's own; material, colour and grain are the ones FreeCAD and the
+workbench's own; material, color and grain are the ones FreeCAD and the
 Woodworking workbench already keep. What kind of panel it is and how far
-it is held off its neighbours are both derived.
+it is held off its neighbors are both derived.
 
 **On the container**: the unit's identity, its elevation plane, which way
 it faces, and a record of the compartment rules. That record is not the
@@ -395,7 +395,7 @@ that is not there.
 
 Stated because they are the places the design is currently thin.
 
-Whether a panel reaches its neighbours is not checked. A shelf floating
+Whether a panel reaches its neighbors is not checked. A shelf floating
 clear of both sides is a valid arrangement of straight cuts, so it is
 accepted, and the gaps beside it are reported as compartments. Whether a
 design is buildable is a separate question from whether it is expressible,

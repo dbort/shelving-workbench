@@ -13,7 +13,7 @@ moved.
 
 Two earlier alternatives, promoting the solver's driving values to
 properties and generating every number as a FreeCAD expression, were
-evaluated and dropped in favour of this one; they are in this file's git
+evaluated and dropped in favor of this one; they are in this file's git
 history. The one idea from them worth keeping is that a unit's rules could
 later be persisted as expressions on the boxes rather than as properties;
 nothing below depends on it.
@@ -79,7 +79,7 @@ envelope.
   shape with a warning. Every other Part, Draft, and Woodworking tool
   works on the output unchanged.
 - **Adoption of existing geometry.** The editor works on shelving the user
-  already modelled, or imported, as long as it fits the envelope.
+  already modeled, or imported, as long as it fits the envelope.
 - **Lap order is read from geometry** rather than reserved in the schema.
 - **Direct plank edits round-trip.** This reverses the "3D edits" decision
   of record: resizing a plank with Woodworking's `magicResizer` and then
@@ -283,7 +283,7 @@ Three findings that change the plan:
   exactly the same region as the left and right sides and appears as a
   third full-span cut beside them. The converter has to read the outer
   two cuts as the shell and the rest as the root split's dividers. This
-  is an artefact of `Carcass` keeping its shell implicit; the general
+  is an artifact of `Carcass` keeping its shell implicit; the general
   model with an explicit shell and outside leaves does not have it.
 - **A shelf that runs through the sides has no home in today's `Carcass`.**
   Scan handles it (it is an outer cut with three or more members), but
@@ -350,7 +350,7 @@ a new rule: it is guillotine, and lap order fell out of the tree order.
 Getting there took two fixes, both of which the synthetic tests had no way
 to provoke:
 
-- **The elevation plane cannot be assumed.** The unit is modelled on the
+- **The elevation plane cannot be assumed.** The unit is modeled on the
   YZ plane with X as depth, because that is how it sits in the room. The
   spike had X-across and Y-deep hardcoded, so it read the unit end-on and
   refused with a bogus overlap. Scanning now detects the plane, taking
@@ -423,7 +423,7 @@ Consequences for the design:
 - **Unknown is a first-class state.** The spike carries `front_at_min` as
   an explicit `None`, and the derived left-right sign returns `None` with
   it, so any code needing a left or a right must handle not knowing.
-- **A guess must be labelled as one.** Scanning records which evidence
+- **A guess must be labeled as one.** Scanning records which evidence
   settled the facing, and the report prints the reasoning when it guessed.
 - **The editor needs a "view from the other side" control**, and it is the
   natural place to set the property the first time. Since unknown is the
@@ -520,9 +520,9 @@ test flips the back's thickness to confirm the two cases diverge.
 
 That is the second time the facing heuristic has been wrong on the first
 real example it met. The rule stands: facing is stored, a heuristic only
-seeds it, and a guess is labelled as one.
+seeds it, and a guess is labeled as one.
 
-### The carcass is a specialisation, not a primitive
+### The carcass is a specialization, not a primitive
 
 Scanning produces a tree of regions and full-span cuts. `Carcass`
 produces four shell planks by rule: a top and a bottom running the full
@@ -569,7 +569,7 @@ Ten tests establish what it buys:
   say it.
 - **A shelf can run through the sides.** Lap order is the order the splits
   nest, so a through-shelf is a plank higher up the tree. The carcass
-  reserves this as a per-joint override that expansion never honours, and
+  reserves this as a per-joint override that expansion never honors, and
   can only produce two full-width planks.
 - **A per-plank inset keeps the rear flush**, which is the real unit's
   shape and the convention it follows.
@@ -616,12 +616,12 @@ not a defect so much as a rule that was too narrow.
   the case where the slab holds one plank.
 
 The new rule needed two conditions to stay useful. A cut line must be a
-face of a plank **in that region**, or a neighbouring unit's shelf heights
+face of a plank **in that region**, or a neighboring unit's shelf heights
 slice this one's empty space into a dozen meaningless slabs. And lines
 closer together than the clearance are one joint rather than a
 compartment, with the face of a plank the cut separates winning, or a
-shelf held a millimetre off each side turns its two joint gaps into two
-one millimetre bays.
+shelf held a millimeter off each side turns its two joint gaps into two
+one millimeter bays.
 
 `CutSplit` became `Divide` with a single ordered item list, matching the
 general model, so a shell plank at a region edge is the first item rather
@@ -632,10 +632,10 @@ All three real fixtures now scan. The two abutting units come out with
 two side panels face to face, neither pair having a member that spans
 alone.
 
-One behaviour changed rather than improved. A plank floating clear of both
-neighbours is no longer refused, because `[gap, plank, gap]` is a legal
+One behavior changed rather than improved. A plank floating clear of both
+neighbors is no longer refused, because `[gap, plank, gap]` is a legal
 partition and the general rule cannot say otherwise. Whether a plank
-reaches its neighbours is a question about the thing being buildable, not
+reaches its neighbors is a question about the thing being buildable, not
 about the layout being a tree. Nothing asks it yet, and something should.
 
 ### Verdict
@@ -829,7 +829,7 @@ of it: cut the back strip full width, then cut what remains into the side
 run and the void. A T cuts the crossbar off and then cuts the rest into
 void, stem, void. An aisle is two strips with the walkway as the void
 between them. The arrangement of runs is the same operation as the
-arrangement of shelves, one level up, so the model generalises to a tree
+arrangement of shelves, one level up, so the model generalizes to a tree
 whose splits may run along any of the three axes.
 
 What it would buy beyond the arrangements themselves:
@@ -867,7 +867,7 @@ counts that stay trivial.
 ### Panels that are not boxes
 
 A revision of a real plan has a plank with a rectangle cut out along one
-edge, for access to a breaker panel, modelled as an `App::Part` holding a
+edge, for access to a breaker panel, modeled as an `App::Part` holding a
 `PartDesign::Body` whose `Pad` extrudes a notched sketch. For layout it
 behaves like a plank: it spans a region, it has a thickness, it sits at a
 position. The notch is fabrication detail, not layout.
@@ -1014,11 +1014,11 @@ dropped.
   contents.
 - M8 (catalog) keeps its shape; material identity is a stored property
   on each box.
-- M9 (editor) becomes the centre of the product: it is the only place the
+- M9 (editor) becomes the center of the product: it is the only place the
   tree exists, so it opens from a scanned container, not only from a
   unit the workbench created.
 - M12 and M13 (`StudWall`, openings) gain scan rules for studs and
-  headers; the on-centre spacing rule is recovered from stored properties,
+  headers; the on-center spacing rule is recovered from stored properties,
   never from geometry.
 - The "3D edits" and "Source of truth" decisions in `architecture.md`
   change: direct edits round-trip through scan, and the boxes are the

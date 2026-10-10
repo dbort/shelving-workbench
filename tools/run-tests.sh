@@ -53,7 +53,7 @@ export XDG_CACHE_HOME="$freecad_dirs/cache"
 printf '== %s\n' freecadcmd_import_check.py
 freecadcmd tools/freecadcmd_import_check.py
 
-# Separate processes: a running GUI changes headless FreeCAD's behaviour.
+# Separate processes: a running GUI changes headless FreeCAD's behavior.
 printf '== %s\n' tests/freecad
 pytest tests/freecad
 printf '== %s\n' tests/freecad_gui

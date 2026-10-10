@@ -1,6 +1,6 @@
 """Unit coverage of ``tools/check_action_pins.py``.
 
-The module is built from small, injectable pieces so its behaviour can be
+The module is built from small, injectable pieces so its behavior can be
 pinned without a network round-trip or a mock HTTP server: ``resolve_commit``
 and ``main`` take a ``fetch`` callable, ``offline_mode`` reads one environment
 variable, and ``classify_status`` / ``auth_headers`` are pure. ``pixi run tests``

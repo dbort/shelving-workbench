@@ -219,7 +219,7 @@ view open.
    or menu.
 
 Expected: a new `ShelvingUnit` `App::Part` appears in the tree, holding four
-`Part::Box` objects labelled **Bottom**, **Top**, **Side 1**, **Side 2** (a
+`Part::Box` objects labeled **Bottom**, **Top**, **Side 1**, **Side 2** (a
 fresh unit has no evidence of which way it faces, so the sides are numbered
 rather than called left/right). Select **Bottom** and open the property
 editor: a **Shelving** group holds `ShelvingBornAs`, `ShelvingBornIn`, and
@@ -229,18 +229,18 @@ Select **ShelvingUnit** itself: its own **Shelving** group holds
 `ShelvingUnitId`, `ShelvingDepthAxis`, `ShelvingFacing` (`unknown`), and
 `ShelvingRules`. The Report view prints how many boards were created.
 
-### 2. Resize it and confirm boards move while labels and colours hold
+### 2. Resize it and confirm boards move while labels and colors hold
 
 1. Select **Bottom**, rename its label to `MyBottom` (F2, or the property
-   editor's `Label` field), and give it a colour (right-click → **Appearance…**
-   or the toolbar's colour swatch).
+   editor's `Label` field), and give it a color (right-click → **Appearance…**
+   or the toolbar's color swatch).
 2. Select **ShelvingUnit** and run **Resize Unit**. Enter width `800`, depth
    `350`, height `1000` (the dialog is seeded from the unit's current
    measured size; overwrite all three).
 
 Expected: the same four objects move and resize to 800 × 350 × 1000 mm; no
 new objects appear and none are deleted. **Bottom**'s label stays
-`MyBottom` and its colour is unchanged. The Report view prints an
+`MyBottom` and its color is unchanged. The Report view prints an
 `updated 4, created 0, deleted 0, left alone 0` line (counts may differ if
 you added other geometry first).
 
@@ -248,14 +248,14 @@ you added other geometry first).
 
 1. Select **Side 1**. In the property editor, expand `Placement` →
    `Position` and change `x` from `0` to `2`, moving it 2 mm toward the
-   unit's centre. Use exactly this axis, direction, and distance:
+   unit's center. Use exactly this axis, direction, and distance:
    - Any move along `z` overlaps **Bottom** or **Top**: at this size
      **Side 1** and **Side 2** are captured flush against both with no
      slack.
    - Moving **Side 1** *away* from the unit along `x` opens a gap in the
      shell wider than the scan's 3 mm clearance tolerance, and both of
      those refuse instead of demonstrating the reflow this case is about.
-   - Moving it *toward the centre* by more than 3 mm scans and resizes
+   - Moving it *toward the center* by more than 3 mm scans and resizes
      successfully, but does not demonstrate reflow either: past 3 mm the
      scanner reads the gap as a real void rather than clearance-tolerant
      measurement noise, correctly, since nothing tells it an edit that size
@@ -484,8 +484,8 @@ Expected: the **Size** field shows the bay's current clear height, the
 readout below it shows both `clear` and `spacing` values (spacing being 18
 mm more, the shelf's thickness), and notes that the bay shares the leftover
 space. A dimension is drawn over each bay: a line with an arrowhead at each
-end, each tip touching a short witness line, labelled with its value, the
-other value beside it in grey.
+end, each tip touching a short witness line, labeled with its value, the
+other value beside it in gray.
 
 2. Type `300` in **Size** and press Return.
 
@@ -502,7 +502,7 @@ Expected: the field and the dimension resolve it to 38.10 mm.
 2. Type `1 + 1/2"` (no unit on the `1`) and press Return.
 
 Expected: 13.70 mm. FreeCAD's length fields read a bare number as
-millimetres even inside a sum, so this is 1 mm plus 12.70 mm; the workbench
+millimeters even inside a sum, so this is 1 mm plus 12.70 mm; the workbench
 passes the text to FreeCAD untouched and shows what FreeCAD made of it.
 
 3. Type `12 1/2"`.
@@ -550,7 +550,7 @@ Expected: nothing moves; the dimension now runs from the bottom board's top
 face through the shelf to the shelf's top face and reads `318`, with
 `clear 300` beside it.
 
-2. Drag the shelf up by a few centimetres and release.
+2. Drag the shelf up by a few centimeters and release.
 
 Expected: the shelf follows the pointer, the lower bay becomes selected,
 its dimension still spans through the shelf, and the basis control still
@@ -595,14 +595,14 @@ bay, and the temporary object is gone from the tree.
 1. Select the container, run **Edit Unit**, click the bay, click **Add
    Shelf**, and click **OK**.
 2. Select the new **Shelf 1** in the tree. In the property editor, change its
-   `Height` from `18 mm` to `12 mm`. Give it a colour unlike the carcass's
+   `Height` from `18 mm` to `12 mm`. Give it a color unlike the carcass's
    (right-click → **Appearance…**) and another material from FreeCAD's
    material library, such as **Wood**. With the Woodworking workbench
    installed, also give it a grain direction with one of its grain tools.
 3. Select the container, run **Edit Unit**, click the bay above the shelf,
    and click **Add Shelf**.
 
-Expected: the second shelf is 12 mm thick and has the first shelf's colour,
+Expected: the second shelf is 12 mm thick and has the first shelf's color,
 material and grain, while the bottom, top and sides keep theirs. A shelf
 takes its stock from another shelf in the same opening before it falls back
 to the carcass. The first shelf moves 3 mm, re-centering in its opening

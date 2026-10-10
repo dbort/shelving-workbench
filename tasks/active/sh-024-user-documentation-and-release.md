@@ -9,14 +9,14 @@ blocked_by: [sh-022, sh-023]
 ## Summary
 The documentation a user needs and the metadata the Addon Manager needs: a guide
 covering both ways in, adopting geometry you already have and starting from
-nothing, and what a refusal means; a finalised `package.xml`; and the release
+nothing, and what a refusal means; a finalized `package.xml`; and the release
 check of installing from the repository on a clean profile. Milestone M10, part
 3 of 3, and the last task before v1.
 
 ## Must Have
 - [ ] `pixi run tests` green.
 - [ ] `docs/user-guide.md` exists and covers, in this order: what the workbench
-      does in a paragraph; scanning a unit you already modelled; creating one
+      does in a paragraph; scanning a unit you already modeled; creating one
       from nothing; editing in the panel; board stock; what a refusal
       means and the common ones; and what other tools can do with the output.
 - [ ] Every command the workbench registers appears in the guide with its menu
@@ -28,7 +28,7 @@ check of installing from the repository on a clean profile. Milestone M10, part
       cuts. Each says what happens when you exceed it, which is a named refusal
       rather than a wrong answer.
 - [ ] `package.xml` carries the final name, description, version, icon,
-      maintainer, licence, and the FreeCAD minimum version, and validates
+      maintainer, license, and the FreeCAD minimum version, and validates
       against the Addon Manager's schema.
 - [ ] `README.md` leads with what the workbench is for and links the guide, the
       scope document, and the roadmap. Its glossary stays, as the reference for
@@ -99,16 +99,16 @@ full to every document this task writes, and `doc-hygiene` is the authority.
 
 ## Plan
 
-- [ ] **Step 1** (`docs/user-guide.md`): Write the guide. Open with a paragraph on what the workbench does and who it is for. Then, in order: scanning a unit you already modelled, including what a container is and why one is required; creating a unit from nothing; editing in the panel, covering selection, split, merge, typed sizes, dragging, and what the measurement basis means with the thickness-change example; board stock: where material, colour and grain live, which board a new one copies them from, and changing them with the editor's stock swap (sh-031); working alongside other tools, naming what Woodworking's cut list and drilling do with the output and that a document opens without this workbench installed. Use the vocabulary the README glossary defines and no other.
+- [ ] **Step 1** (`docs/user-guide.md`): Write the guide. Open with a paragraph on what the workbench does and who it is for. Then, in order: scanning a unit you already modeled, including what a container is and why one is required; creating a unit from nothing; editing in the panel, covering selection, split, merge, typed sizes, dragging, and what the measurement basis means with the thickness-change example; board stock: where material, color and grain live, which board a new one copies them from, and changing them with the editor's stock swap (sh-031); working alongside other tools, naming what Woodworking's cut list and drilling do with the output and that a document opens without this workbench installed. Use the vocabulary the README glossary defines and no other.
 
 - [ ] **Step 2** (`docs/user-guide.md`): Add the two sections that keep the guide honest. A refusals section, one subsection per common refusal, each saying what it means in terms of the user's geometry and what to do about it. A limits section stating rectangular boxes only, one elevation plane per unit, and guillotine layouts only, each with what happens when you exceed it. Keep both consistent with `docs/scope-and-design.md` without copying it.
 
 - [ ] **Step 3** (`docs/user-guide.md`, `tests/test_docs.py`): Add the command table: one row per registered command with its id, menu name, what it acts on, and what it does. Write the test comparing the ids `freecad.Shelving.init_gui` registers against the ids parsed from that table, failing when either side has an id the other lacks. Import `init_gui` without FreeCAD if possible; if not, read the id list from the module source rather than importing it, and say in a comment why.
 
-- [ ] **Step 4** (`package.xml`, `README.md`): Finalise the package metadata against the Addon Manager schema: name, description matching the guide's opening, release version, icon path, maintainer, licence, and FreeCAD minimum version. Rewrite the README's opening to lead with what the workbench is for and link the guide first, then the scope document, then the roadmap; keep the setup, tests and glossary sections.
+- [ ] **Step 4** (`package.xml`, `README.md`): Finalize the package metadata against the Addon Manager schema: name, description matching the guide's opening, release version, icon path, maintainer, license, and FreeCAD minimum version. Rewrite the README's opening to lead with what the workbench is for and link the guide first, then the scope document, then the roadmap; keep the setup, tests and glossary sections.
 
 - [ ] **Step 5** (`docs/architecture.md`, repository-wide): Delete `docs/architecture.md`. First grep every document, task file and source comment for links or references to it and repoint each at `docs/scope-and-design.md`, or delete the reference where it only marked the supersession. Confirm nothing references the file afterwards.
 
-- [ ] **Step 6** (`docs/manual-qa.md`): Add a release section: install from the repository through the Addon Manager on a clean profile with no development symlink; create a unit; scan a unit modelled by hand; move a finished unit into a second document with an ordinary placement and confirm it is intact; and walk the user guide's steps exactly as written, confirming each does what it says. State that this section is the pre-release gate and is run once per release rather than per task.
+- [ ] **Step 6** (`docs/manual-qa.md`): Add a release section: install from the repository through the Addon Manager on a clean profile with no development symlink; create a unit; scan a unit modeled by hand; move a finished unit into a second document with an ordinary placement and confirm it is intact; and walk the user guide's steps exactly as written, confirming each does what it says. State that this section is the pre-release gate and is run once per release rather than per task.
 
 ## Review log

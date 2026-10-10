@@ -2,7 +2,7 @@
 processes.
 
 ``tests/test_collection.py`` covers the rule itself. What only a real run
-shows is pytest's own behaviour around the hooks that apply it: that it
+shows is pytest's own behavior around the hooks that apply it: that it
 never asks ``pytest_ignore_collect`` about command-line paths, and that it
 imports a named directory's ``conftest.py`` before collection starts. If a
 pytest upgrade changed either, a mixed run would start FreeCAD again and

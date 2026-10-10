@@ -9,7 +9,7 @@ blocked_by: [sh-021]
 ## Summary
 A board's label is written once, when the board is created, so a user's own
 names survive every edit, and a command rewrites them on request. A new board's
-colour already comes from the board it copies its stock from (sh-030). Makes
+color already comes from the board it copies its stock from (sh-030). Makes
 every refusal across the workbench say the same kind of thing: what failed,
 which objects, and what to do. Milestone M10, part 1 of 3.
 
@@ -37,19 +37,19 @@ which objects, and what to do. Milestone M10, part 1 of 3.
 
 THE OWNERSHIP RULE, and everything here follows from it. The workbench states an
 opinion when it CREATES something and never again. A board gets a label at
-creation, and a colour copied from its source board (sh-030); an update
+creation, and a color copied from its source board (sh-030); an update
 rewrites neither. That is what makes sh-018's
-promise true, that a rename and a colour survive a resize, and it is asserted in
+promise true, that a rename and a color survive a resize, and it is asserted in
 that task's smoke. Taking the opinion back is an explicit command, never a side
 effect of an edit.
 
 DO NOT ADD A VIEW PROVIDER. Boards are plain `Part::Box` objects with no proxy,
 which is what lets a document open without this workbench.
 
-NO COLOUR COMMAND (user decision, 2026-10-09, during sh-030's planning): a
-board's colour comes from its source board and the editor's stock swap
-(sh-031) changes it, so there is no colour-by-material mapping and no
-recolour command.
+NO COLOR COMMAND (user decision, 2026-10-09, during sh-030's planning): a
+board's color comes from its source board and the editor's stock swap
+(sh-031) changes it, so there is no color-by-material mapping and no
+recolor command.
 
 RELABEL IS NOT AUTOMATIC WHEN FACING CHANGES. A unit scanned without a facing
 gets neutral side names; setting the facing later does not rewrite them, because

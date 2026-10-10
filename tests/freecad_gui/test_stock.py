@@ -1,5 +1,5 @@
 """Board appearance, which exists only with FreeCAD's GUI up: a new board's
-copy of its source board's, Create Unit's colour, and a hand-set colour
+copy of its source board's, Create Unit's color, and a hand-set color
 surviving a write (``.claude/docs/freecad-notes.md``, "A ``DocumentObject``'s
 ``ViewObject`` is ``None``")."""
 
@@ -45,7 +45,7 @@ def _view(doc: FreeCAD.Document, name: str) -> _AppearanceView:
 
 
 def _appearance(view: _AppearanceView) -> list[_Appearance]:
-    """Each face's diffuse colour, transparency and shininess."""
+    """Each face's diffuse color, transparency and shininess."""
     return [
         (tuple(m.DiffuseColor[:3]), m.Transparency, m.Shininess)
         for m in view.ShapeAppearance
@@ -92,7 +92,7 @@ def _board_ids(region: Region) -> set[str]:
     return ids
 
 
-def test_create_unit_boards_are_18_mm_in_magic_start_colour(
+def test_create_unit_boards_are_18_mm_in_magic_start_color(
     doc: FreeCAD.Document,
 ) -> None:
     create_unit(doc)
@@ -112,7 +112,7 @@ def test_a_new_board_copies_its_source_boards_whole_appearance(
     doc: FreeCAD.Document,
 ) -> None:
     """The first shelf in a new unit copies the bottom board, per-face
-    colours, transparency and shininess included."""
+    colors, transparency and shininess included."""
     container = create_unit(doc)
     doc.recompute()
     bottom = _view(doc, "bottom")
@@ -135,7 +135,7 @@ def test_a_new_board_copies_its_source_boards_whole_appearance(
         session.cancel()
 
 
-def test_a_resize_keeps_a_hand_set_board_colour(doc: FreeCAD.Document) -> None:
+def test_a_resize_keeps_a_hand_set_board_color(doc: FreeCAD.Document) -> None:
     container = create_unit(doc)
     doc.recompute()
     top = _view(doc, "top")

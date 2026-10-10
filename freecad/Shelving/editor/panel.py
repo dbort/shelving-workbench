@@ -14,7 +14,7 @@ GUI instead.
 
 The dimension field is FreeCAD's own ``Gui::QuantitySpinBox``, so it
 accepts, resolves, and displays exactly what every other length field in
-FreeCAD does. This module reads only the resolved millimetre value it
+FreeCAD does. This module reads only the resolved millimeter value it
 reports and never looks at the typed text.
 """
 
@@ -116,7 +116,7 @@ class _DimensionField:
     Whether the text resolves is the widget's verdict, read from its
     ``acceptableInput``; this class never looks at the text itself.
 
-    ``on_size`` receives the resolved millimetres; ``on_error`` receives
+    ``on_size`` receives the resolved millimeters; ``on_error`` receives
     ``parseQuantity``'s own message, from the fallback only;
     ``on_expression_done`` is called once the f(x) dialog closes, after any
     ``on_size`` it caused.
@@ -257,7 +257,7 @@ class _DimensionField:
 class _EditorView(QtWidgets.QGraphicsView):
     """A ``QGraphicsView`` that reports the scene position of every press to
     ``on_click``, every move with the left button held to ``on_drag`` once
-    the pointer has travelled the platform's start-drag distance from the
+    the pointer has traveled the platform's start-drag distance from the
     press, and every release to ``on_release``."""
 
     def __init__(
@@ -305,8 +305,8 @@ class _EditorView(QtWidgets.QGraphicsView):
         if not self._drag_started:
             if self._press_pos is None:
                 return
-            travelled_px = (pos - self._press_pos).manhattanLength()
-            if travelled_px < QtWidgets.QApplication.startDragDistance():
+            traveled_px = (pos - self._press_pos).manhattanLength()
+            if traveled_px < QtWidgets.QApplication.startDragDistance():
                 return
             self._drag_started = True
         self._on_drag(self.mapToScene(pos))

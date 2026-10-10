@@ -217,7 +217,7 @@ def test_create_unit_seeds_a_tagged_closed_box() -> None:
     """``create_unit`` produces a container of plain ``Part::Box`` objects,
     each carrying the four board properties, the container carrying its own
     four, and a label per board naming its role. Facing is unknown (a fresh
-    unit has no evidence either way), so the two sides are labelled "Side 1"
+    unit has no evidence either way), so the two sides are labeled "Side 1"
     / "Side 2", containing neither "left" nor "right"."""
     doc = _new_document("write_smoke_create")
     try:
@@ -307,7 +307,7 @@ def test_resize_updates_existing_boards_rather_than_recreating(
     create_unit_doc: tuple[FreeCAD.Document, FreeCAD.DocumentObject],
 ) -> None:
     """Resizing to a larger size updates the same document objects, checked
-    by ``Name``, and a renamed board's ``Label`` survives it. Colour is the
+    by ``Name``, and a renamed board's ``Label`` survives it. Color is the
     other survivor this task's Must Haves name, but ``ViewObject`` is
     ``None`` without the GUI (``.claude/docs/freecad-notes.md``), so that
     half is a manual-qa.md case (M7 #2) instead."""
@@ -374,7 +374,7 @@ def test_left_alone_objects_are_never_touched() -> None:
 
 def test_irregular_board_moves_without_rewriting_its_shape() -> None:
     """A hand-built notched board slotted into a real bay is read as an
-    irregular ``Box``, adopted (tagged, not relabelled) on the next rescan,
+    irregular ``Box``, adopted (tagged, not relabeled) on the next rescan,
     then moved, never resized or recreated, by a resize that shifts its
     region: its solid volume is unchanged, and only its ``Placement``
     differs."""

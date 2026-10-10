@@ -7,7 +7,7 @@ pipeline.
 
 M0 to M3 are history. They were delivered against an earlier design in
 which the workbench owned its plank objects and drove them from a
-serialised split-tree, described in [`architecture.md`](architecture.md).
+serialized split-tree, described in [`architecture.md`](architecture.md).
 The layout engine from that work carries forward; the object layer does
 not. M4 onwards rebuild on the current design, in which plain solids are
 the model and the workbench reads and writes them.
@@ -229,7 +229,7 @@ references it.
   (blocked on sh-016 and sh-017)
 
 Apply a layout back to a container as plain `Part::Box` objects, matched
-by the object's own name so a rename, a colour, or a downstream reference
+by the object's own name so a rename, a color, or a downstream reference
 survives, and deleting only objects this workbench tagged, so a part it
 did not write is never removed.
 
@@ -256,7 +256,7 @@ live-unit driver under *Later*.
 
 *Verify in FreeCAD:* create a unit and get plain boxes; scan it back and
 get the same layout; resize it and watch it reflow while labels and
-colours hold; move a board by hand and rescan to take the edit up; put an
+colors hold; move a board by hand and rescan to take the edit up; put an
 unrelated box in the container and confirm apply leaves it and says so;
 save, reopen with the workbench uninstalled, and find the document
 intact.
@@ -333,9 +333,9 @@ shelves hold, then undo the whole session in one step.
   sh-023)
 
 The workbench states an opinion when it creates something and never again.
-A board takes a readable label, and the colour of the board it copies its
+A board takes a readable label, and the color of the board it copies its
 stock from, when it is written, and an update rewrites neither, so a
-rename or a recolour survives every resize. A command takes the label back
+rename or a recolor survives every resize. A command takes the label back
 on request.
 
 Every refusal takes one shape: a summary, the objects responsible, and a
@@ -376,7 +376,7 @@ size changes, and scans back as the same treatment.
 **Status:** Planned
 
 A second consumer of the same core: bottom plate, double top plate, and
-studs at on-centre spacing with a remainder stud. Brings the repeat rule,
+studs at on-center spacing with a remainder stud. Brings the repeat rule,
 where a member count is computed from a pitch rather than spelled out, and
 with it the question of how members that have no durable identity are
 matched on reflow.
@@ -414,13 +414,13 @@ Each of these is its own task when it comes up.
   stock entry names a substance rather than describing one. Stock and
   substance are separate lists: a thickness belongs to the sheet you
   bought, a density to the material. The first real payoff is mass, since
-  per-board volume is already computed, and colour by material would come
+  per-board volume is already computed, and color by material would come
   with it. Stress analysis is much further off: the model is butt joints
-  with no fasteners, so an analysis would be modelling a pile of loose
+  with no fasteners, so an analysis would be modeling a pile of loose
   boards.
 - **Panels that are not boxes**, beginning with whether a board is better
-  modelled as a rectilinear profile extruded through a thickness.
-- **A support check**, since a board floating clear of its neighbours is a
+  modeled as a rectilinear profile extruded through a thickness.
+- **A support check**, since a board floating clear of its neighbors is a
   valid arrangement of straight cuts and is currently accepted.
 - **Parametric joinery** with promote-to-Body, the cut-list spreadsheet,
   the TechDraw elevation, and assembly joints.

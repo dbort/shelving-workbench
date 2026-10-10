@@ -5,7 +5,7 @@ A board's geometry is its parent division's solved
 inset by the board's own ``Insets``. A ``Void`` contributes no board: it has
 no id in the boards it would otherwise occupy, only in the solved space map.
 
-All lengths are float millimetres in the unit's local frame: origin at the
+All lengths are float millimeters in the unit's local frame: origin at the
 front-bottom-left corner, ``+X`` right (width), ``+Y`` back (depth), ``+Z`` up
 (height). A :attr:`BoardSpec.placement` is the board's minimum corner in that
 frame, the point a caller would extrude the box from before translating.
@@ -39,7 +39,7 @@ class BoardSpec:
 
 
 def total_volume_mm3(specs: Sequence[BoardSpec]) -> float:
-    """Summed bounding-box volume over ``specs``, cubic millimetres."""
+    """Summed bounding-box volume over ``specs``, cubic millimeters."""
     return sum(s.size.x_mm * s.size.y_mm * s.size.z_mm for s in specs)
 
 

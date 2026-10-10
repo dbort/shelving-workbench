@@ -10,7 +10,7 @@ because the region model can already express what a scan needs to say: an
 enclosed compartment, a stepped outline's void, a run of boards and
 sub-regions along one axis, and a board's own end clearances as ``Insets``.
 
-The elevation plane is detected, not assumed: real units are modelled on
+The elevation plane is detected, not assumed: real units are modeled on
 whichever plane suited the room, so the depth axis is taken to be the one
 with the smallest bounding-box extent and can be overridden. A board thin
 along the depth axis (a back or a front panel) projects over the whole
@@ -768,14 +768,14 @@ def _clean_lines(
     """Interior grid lines that a board in this region ends on and none crosses.
 
     Three filters. A line no board ends on separates nothing, and the grid is
-    global, so without that test a neighbouring unit's shelf heights would
+    global, so without that test a neighboring unit's shelf heights would
     slice this region's empty space into a dozen meaningless slabs. A line no
     board straddles is the guillotine condition itself. And lines closer
     together than the clearance are one joint, not a compartment, so only one
     of them survives: the face of a board thin along the cut axis, which is
     ``preferred_thin_axis``. Without that last rule a shelf held a
-    millimetre off each side turns its two joint gaps into two one
-    millimetre bays.
+    millimeter off each side turns its two joint gaps into two one
+    millimeter bays.
     """
     spans = [grid.cols[i] if across else grid.rows[i] for i in inside]
     faces = {edge for span in spans for edge in span}
