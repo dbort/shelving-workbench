@@ -198,3 +198,11 @@ shell script beyond removing what no longer exists, if anything.
 - [x] **Step 6** (`tasks/active/sh-022-*.md`, `tasks/active/sh-023-*.md`, `docs/roadmap.md`): The folded-in plan edits from Advice.
 
 ## Review log
+
+### Round 1: REJECTED
+- **F1: Tier 1 of SOURCE BOARD (same run before elsewhere) is never tested on its own** (`freecad/Shelving/core/tests/test_stock.py`): in the same-run test, `shelf` is the only interior board in the unit, so tier 2 would return it too; on the Magic Start fixture `Shelf` is also the only interior Z board. Deleting the `same_run` tier passes every test. The tier-2 test has the same weakness: `shelf_high` is already nearer than `bottom` and `top`, so merging tiers 2 and 3 would still pass. Add a case where an interior board elsewhere is nearer than the same-run interior board and the same-run board still wins, and place a carcass board nearer than the nearest interior board in the tier-2 case.
+- **F2: The mm-valued centre helper and local have no `_mm` suffix** (`freecad/Shelving/core/stock.py`): `_centre(space)` returns a millimetre position and `target` holds one; they should be `_centre_mm` and `target_mm`.
+- **N1: The test showing a spacing holds while a clear size moves under a thickness change was deleted, not ported** (`freecad/Shelving/core/tests/test_edit.py`): with `Board.thickness_mm` it ports directly (25 mm boards: shelf z 300 for the spacing, 307 for the clear size). Every remaining WITH_NEXT test uses 18 mm everywhere.
+- **N2: The any-board fallback (tier 4) is not in Advice, and only some docs mention it** (`freecad/Shelving/core/stock.py`): the README glossary describes it, but `docs/scope-and-design.md` stops at the nearest outer panel.
+- **N3: Several edited prose lines were not rewrapped** (`docs/manual-qa.md`, `docs/scope-and-design.md`, `docs/roadmap.md`, `tasks/active/sh-024-user-documentation-and-release.md`).
+- **N4: `measure`'s docstring is clumsy after the edit** (`freecad/Shelving/core/edit.py`): "read from ``spaces`` (``unit`` solved). Raises" reads awkwardly; the `_rescanned_unit` and `_read_unit` docstrings were left with short, odd line breaks.
