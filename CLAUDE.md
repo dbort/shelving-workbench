@@ -6,7 +6,8 @@ Work is planned, implemented, and reviewed through the task pipeline:
 
 Doc placement: `docs/` is human-facing prose, swept by `doc-hygiene`;
 `.claude/docs/` is agent-contract material whose absolutes are never
-style-swept.
+style-swept. Process rules, tool contracts, runtime notes and the logs go
+in `.claude/docs/`, even when a human also reads them.
 
 ## Invariants
 
@@ -27,8 +28,12 @@ style-swept.
   `_effective_thicknesses`). An identifier whose value is a `str` label
   rather than the number itself (`nominal_thickness`) takes no unit
   suffix. There is no dedicated units type; the suffix is the whole
-  mechanism. (`docs/architecture.md` states the same rule for the
-  split-tree; this is the project-wide form.)
+  mechanism.
+- **The README glossary is user vocabulary:** an entry defines a term as a
+  user meets it, with no function, class, module, or internal concept
+  names; those belong in docstrings. FreeCAD type names a user sees in the
+  tree (`Part::Box`) are fine. `tests/test_readme_glossary.py` enforces
+  it.
 
 ## Standing task-planning obligations
 
