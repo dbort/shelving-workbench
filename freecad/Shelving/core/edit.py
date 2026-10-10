@@ -594,8 +594,8 @@ class Measurement:
     # Whether the region's rule is Fixed; False means it shares slack.
     fixed: bool
     clear_mm: float
-    # clear_mm plus the next board's thickness_mm, the number a
-    # Basis.WITH_NEXT rule stores; None when no board follows the region.
+    # clear_mm plus the next board's thickness_mm, the number a Basis.WITH_NEXT
+    # rule stores; None when no board follows the region.
     spacing_mm: float | None
 
     @property

@@ -662,8 +662,8 @@ def _make_board(
     # cross_axis is the slab's cross-section axis; the enclosing Division's
     # own axis is whichever of the grid's two elevation axes cross_axis is
     # not. When that axis is not the board's own thin axis, the board's real
-    # measured span along it (not its thickness) is what the
-    # Division must carry, a divider shorter than its neighbors say.
+    # measured span along it (not its thickness) is what the Division must
+    # carry, a divider shorter than its neighbors say.
     enclosing_axis = ctx.horizontal if cross_axis is ctx.vertical else ctx.vertical
     rule: SizeRule | None = None
     if enclosing_axis is not board.thin_axis:

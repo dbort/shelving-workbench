@@ -1,12 +1,11 @@
 """Region-tree data model for a shelving unit.
 
-A ``Unit`` is an outer size and a root ``Region``. A
-``Region`` is a ``Bay`` (an open compartment), a ``Void`` (space inside the
-unit's bounding box that is not part of the unit), or a ``Division`` (a
-region cut into an ordered run of boards and sub-regions along one
-``Axis``). The carcass shell is not a distinguished rule here: it is the
-outermost boards of the outermost divisions, built from the same items an
-interior division uses.
+A ``Unit`` is an outer size and a root ``Region``. A ``Region`` is a
+``Bay`` (an open compartment), a ``Void`` (space inside the unit's bounding
+box that is not part of the unit), or a ``Division`` (a region cut into an
+ordered run of boards and sub-regions along one ``Axis``). The carcass
+shell is not a distinguished rule here: it is the outermost boards of the
+outermost divisions, built from the same items an interior division uses.
 """
 
 from __future__ import annotations
@@ -114,8 +113,10 @@ class Board:
     or by ``rule`` when that is set.
     """
 
-    # The board's own thickness: a scanned board's measured size across its
-    # thin axis, a new board's copied from the board it takes its stock from.
+    # The board's own thickness. A scanned board without a rule takes its
+    # slot width in the scan's snapped grid, so its run adds up exactly; one
+    # with a rule keeps its measured size across its thin axis. A new board
+    # copies the thickness of the board it takes its stock from.
     thickness_mm: float
     # ``None`` means the board is regenerable: the solver derives its extent
     # from the layout, same as any other item. A value means the workbench

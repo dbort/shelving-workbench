@@ -9,9 +9,8 @@ M0 to M3 are history. They were delivered against an earlier design in
 which the workbench owned its plank objects and drove them from a
 serialised split-tree, described in [`architecture.md`](architecture.md).
 The layout engine from that work carries forward; the object layer does
-not. M4 onwards rebuild on the current design, in
-which plain solids are the model and the workbench reads and writes
-them.
+not. M4 onwards rebuild on the current design, in which plain solids are
+the model and the workbench reads and writes them.
 
 ## Status legend
 

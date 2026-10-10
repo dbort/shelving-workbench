@@ -1105,9 +1105,9 @@ def test_set_basis_restates_the_number_in_the_new_basis() -> None:
 
 
 def test_set_basis_uses_the_thickness_of_a_board_with_its_own_rule() -> None:
-    """The solver resolves ``WITH_NEXT`` by the next board's
-    ``thickness_mm``, not its ruled extent, so the restated number must too or the
-    layout would move."""
+    """The solver resolves ``WITH_NEXT`` by the next board's ``thickness_mm``,
+    not its ruled extent, so the restated number must too or the layout would
+    move."""
     unit = _column_unit(Fixed(282.0))
     assert isinstance(unit.root, Division)
     unit.root.items[2] = Board(thickness_mm=18.0, id="shelf", rule=Fixed(30.0))

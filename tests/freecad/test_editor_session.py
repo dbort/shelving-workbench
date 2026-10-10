@@ -1082,7 +1082,7 @@ def test_the_first_shelf_in_a_new_unit_copies_the_bottom_board() -> None:
 
 # A unit saved by the workbench before sh-030: its boards carry a
 # ShelvingMaterial property, and the document holds the group of stock
-# entries the workbench then kept. Neither means anything now.
+# entries the workbench then kept. The workbench ignores both.
 _PRE_SH030_UNIT = Path(__file__).parent / "fixtures" / "pre_sh030_unit.FCStd"
 
 _PropertyValue = str | tuple["_PropertyValue", ...]

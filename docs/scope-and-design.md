@@ -14,8 +14,8 @@ A FreeCAD workbench for designing shelving, built so that the geometry it
 produces belongs to your document rather than to the workbench.
 
 A shelving unit is designed as a flat front elevation: a rectangle divided
-into compartments by shelves and dividers, each panel as thick as it
-really is. Change the height and the shelves redistribute. Type an exact
+into compartments by shelves and dividers, each panel with its real
+thickness. Change the height and the shelves redistribute. Type an exact
 opening and its neighbours absorb the difference.
 
 What makes it unusual is the other direction. The panels are ordinary
@@ -166,8 +166,7 @@ why. It never guesses, and it never produces a plausible answer to a
 question it could not resolve.
 
 **Starting from nothing.** You create a unit, give it overall dimensions,
-and get a plain carcass. Editing proceeds identically from
-there.
+and get a plain carcass. Editing proceeds identically from there.
 
 **Editing.** A unit opens as a front elevation. You pick a compartment and
 split it, drag a shelf, or type an exact opening size. Everything else
@@ -306,10 +305,10 @@ list with one entry per face. A panel the editor adds copies all of these,
 and its thickness, from an existing panel lying the same way: another
 shelf in the same opening first, then the nearest such shelf elsewhere in
 the unit, then the nearest outer panel, and with no panel lying the same
-way, the nearest panel of all. An outer panel is one with no
-compartment beyond it on one side, so a floor raised over a plinth counts
-as outer. That way a shelf can be different stock from the carcass, and
-new shelves follow the shelves rather than the carcass.
+way, the nearest panel of all. An outer panel is one with no compartment
+beyond it on one side, so a floor raised over a plinth counts as outer.
+That way a shelf can be different stock from the carcass, and new shelves
+follow the shelves rather than the carcass.
 
 ## What is stored, and where
 
