@@ -140,3 +140,7 @@ task adds no shell.
 - **N3: Awkward line break in a docstring** (`scan.py:889`).
 - **N4: The thickness check in the resize tests is close to vacuous** (`test_scanned_units.py:222`, `:327`): asserting where the growth went (for example the plinth keeping 100 mm) would be sharper.
 - **N5: Task-file formatting** (task file `:16`, `:71`): lines past the wrap width; the Summary is five sentences against pipeline.md's 1-3.
+
+### Round 3: APPROVED
+- **N1: A comment line breaks partway through its sentence** (`freecad/Shelving/core/tests/test_scan.py:894`): "share the remaining span equally (see sh-025" ends early; reflow the comment.
+- **N2: A Must Have line in the task file is cut short** (task file `:40`): left over from round 2's N5; cosmetic.
