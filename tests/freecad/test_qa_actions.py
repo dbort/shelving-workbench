@@ -61,3 +61,10 @@ def test_the_menu_holds_the_wizard_only_while_its_flag_is_on(
 
 def test_the_wizard_is_on_by_default() -> None:
     assert qa.enabled is True
+
+
+def test_the_fresh_unit_checks_pass_on_a_fresh_unit() -> None:
+    actions.fresh_unit()
+    for name in ("four_boards", "fresh_unit_size", "side_1_at_x_zero"):
+        result = CHECKS[name](FreeCAD.ActiveDocument)
+        assert result.passed, (name, result.detail)

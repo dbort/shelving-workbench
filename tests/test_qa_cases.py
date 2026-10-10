@@ -118,3 +118,15 @@ def test_a_file_that_is_not_progress_is_refused(tmp_path: Path) -> None:
     path.write_text('{"cases": []}', encoding="utf-8")
     with pytest.raises(ValueError, match="not a QA progress file"):
         load_progress(path)
+
+
+def test_a_repeated_step_id_is_refused() -> None:
+    step = {"id": "s", "instruction": "Do.", "expected": "Done."}
+    with pytest.raises(CaseFileError, match="step 's': repeated step id"):
+        parse_cases({"case": [{"id": "c", "title": "C", "step": [step, step]}]}, "x")
+
+
+def test_case_2s_restore_step_carries_the_side_1_check() -> None:
+    (case,) = [c for c in load_cases() if c.id == "write.moved-board-corrected"]
+    (step,) = [s for s in case.steps if s.id == "edit-and-resize"]
+    assert step.check == "side_1_at_x_zero"

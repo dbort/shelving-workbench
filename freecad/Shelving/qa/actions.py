@@ -189,7 +189,10 @@ def fresh_unit_size(doc: FreeCAD.Document | None) -> CheckResult:
     size = unit_size_mm(container)
     sizes_mm = (size.x_mm, size.y_mm, size.z_mm)
     expected_mm = (600.0, 300.0, 900.0)
-    passed = all(abs(a - b) < 1e-6 for a, b in zip(sizes_mm, expected_mm, strict=True))
+    passed = all(
+        abs(actual_mm - want_mm) < 1e-6
+        for actual_mm, want_mm in zip(sizes_mm, expected_mm, strict=True)
+    )
     detail = " x ".join(f"{value_mm:g}" for value_mm in sizes_mm) + " mm"
     return CheckResult(passed=passed, detail=detail)
 

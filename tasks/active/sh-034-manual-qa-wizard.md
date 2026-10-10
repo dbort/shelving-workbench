@@ -175,3 +175,13 @@ the TOML boundary noted above, no bare containers in signatures,
 - **N4: `_commit()`'s `unknown` fallback is untested** (`freecad/Shelving/qa/dock.py:48`).
 - **N5: Other task files still point at old locations** (`tasks/active/sh-022-appearance-and-errors.md:91`, `tasks/active/sh-023-preferences.md:118`): sh-022 Step 3 names `command_ids`; sh-023 Step 5 still lists `docs/manual-qa.md` and has no step wiring the toggles into the readers, whose Protocol lacks a bool getter; sh-024's reflowed Must Have runs past the line width.
 - **N6: British spelling** (`tests/freecad/test_qa_actions.py:20`): "afterwards".
+
+### Round 2: APPROVED
+- **N1: Unitless locals for millimeter values** (`freecad/Shelving/qa/actions.py:192`): `a` and `b` hold millimeters.
+- **N2: The step-id duplicate check is untested** (`freecad/Shelving/qa/model.py:94`).
+- **N3: No test ties Case 2's restore step to the Side 1 check** (`tests/test_qa_cases.py:75`).
+- **N4: The advisory checks' passing path is asserted only for Side 1** (`tests/freecad/test_qa_actions.py:28`).
+- **N5: The import guard rail misses relative imports** (`tests/test_qa_guard_rails.py:34`): theoretical, the package uses none.
+- **N6: British spelling left on an edited line** (`tasks/active/sh-023-preferences.md:114`): "afterwards".
+
+Applied after this round: N1, N2, N3, N4 and N6. N5 left as is.
