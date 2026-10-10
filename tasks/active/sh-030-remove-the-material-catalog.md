@@ -168,6 +168,13 @@ confirm at review):
 - `sh-024`'s plan named the material catalog as a guide section and a
   refusal; both now point at board stock and sh-031.
 
+MANUAL QA (user decisions, 2026-10-09, after round 2):
+- The editor's Remove Selected button becomes Delete Selected, with the
+  session and panel identifiers renamed to match: the button deletes the
+  objects, where "remove" reads as taking them out of the group.
+- Case 15's old shelf re-centering 3 mm after a hand thickness change stays
+  with bug-007 rather than being fixed here; the case states the shift.
+
 FOLDED-IN PLAN EDITS (user decision): this task rewrites
 - `tasks/active/sh-022-appearance-and-errors.md`: drop
   `Shelving_RecolourUnit` and colour-by-material-id, since a new board's
@@ -210,3 +217,7 @@ shell script beyond removing what no longer exists, if anything.
 ### Round 2: APPROVED
 - **N1: Some edited prose is still not rewrapped** (`docs/scope-and-design.md:169`, `docs/scope-and-design.md:309`, `docs/roadmap.md:12`, `tasks/active/sh-022-appearance-and-errors.md:41`): each line ends well short of the paragraph's width because text was cut or inserted without reflowing it.
 - **N2: M5's milestone text still tells readers to run `pixi run demo`** (`docs/roadmap.md:187`): it says the command "writes an SVG elevation", and this branch deletes both the command and the renderer. M5 keeps "Done sh-014, sh-015" with no marker. The Must Haves only required marking M8, so this does not block; a short note or a partial-supersede marker would keep the roadmap accurate.
+
+### Round 3: APPROVED
+- **N1: The panel test's name still says "removed"** (`tests/freecad_gui/test_panel.py`): `test_untagged_objects_are_kept_unless_removed` now drives `delete_untagged_button`; `..._unless_deleted` would match the new wording.
+- **N2: The two manual-QA decisions are not recorded in the task's Advice**: the rename and "case 15's 3 mm shift stays with bug-007" appear only in commit 7281d03's message.
