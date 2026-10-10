@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from freecad.Shelving.core.edit import run_axis
 from freecad.Shelving.core.expand import BoardSpec, expand
 from freecad.Shelving.core.geometry import Vec3
 from freecad.Shelving.core.layout import (
@@ -22,8 +23,8 @@ from freecad.Shelving.core.layout import (
     Unit,
     Void,
 )
-from freecad.Shelving.core.materials import Catalog, MaterialEntry, MaterialId
 from freecad.Shelving.core.scan import (
+    DEFAULT_SNAP_MM,
     Box,
     FacingEvidence,
     ScanError,
@@ -40,15 +41,6 @@ from freecad.Shelving.core.scan import (
     scan,
 )
 from freecad.Shelving.core.solver import solve
-
-PLY = MaterialId("ply18")
-MDF = MaterialId("mdf12")
-CATALOG = Catalog(
-    entries={
-        PLY: MaterialEntry(PLY, "ply 18", 18.0, "plywood"),
-        MDF: MaterialEntry(MDF, "mdf 12", 12.0, "mdf"),
-    }
-)
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -191,7 +183,7 @@ def test_explicit_depth_axis_changes_which_axis_the_tree_divides_along() -> None
     boxes = _six_sided_shell()
     assert detect_depth_axis(boxes) is Axis.Z
 
-    default = scan(boxes, CATALOG)
+    default = scan(boxes)
     assert default.unit.depth_axis is Axis.Z
     assert sorted(p.name for p in default.panels) == ["Bottom", "Top"]
     default_root = default.unit.root
@@ -200,7 +192,7 @@ def test_explicit_depth_axis_changes_which_axis_the_tree_divides_along() -> None
     assert isinstance(default_inner, Division)
     assert default_inner.axis is Axis.Y
 
-    override = scan(boxes, CATALOG, depth_axis=Axis.Y)
+    override = scan(boxes, depth_axis=Axis.Y)
     assert override.unit.depth_axis is Axis.Y
     assert sorted(p.name for p in override.panels) == ["Back", "Front"]
     override_root = override.unit.root
@@ -257,7 +249,7 @@ def test_explicit_front_at_min_is_never_second_guessed(front_at_min: bool) -> No
     directions, must come back verbatim with ``FacingEvidence.GIVEN`` rather
     than being recomputed from the geometry."""
     boxes = boxes_from_json(REAL_MAGICSTART_F1.read_text(encoding="utf-8"))
-    result = scan(boxes, CATALOG, front_at_min=front_at_min)
+    result = scan(boxes, front_at_min=front_at_min)
     assert result.unit.front_at_min is front_at_min
     assert result.facing_evidence is FacingEvidence.GIVEN
 
@@ -297,7 +289,7 @@ def test_overlap_is_refused_naming_both() -> None:
         ]
     )
     with pytest.raises(ScanError, match="overlaps") as info:
-        scan(boxes, CATALOG)
+        scan(boxes)
     assert sorted(info.value.objects) == ["ShelfA", "ShelfB"]
 
 
@@ -333,7 +325,7 @@ def test_pinwheel_is_refused_naming_the_cycle() -> None:
         ]
     )
     with pytest.raises(ScanError, match="not a tree") as info:
-        scan(pinwheel, CATALOG)
+        scan(pinwheel)
     assert sorted(info.value.objects) == ["A", "B", "C", "D"]
 
 
@@ -370,24 +362,14 @@ def test_no_enclosed_bay_is_refused() -> None:
         _box("RightSide", (982.0, 0.0, 18.0), (18.0, depth_mm, 964.0)),
     ]
     with pytest.raises(ScanError, match="no enclosed bay"):
-        scan(boxes, CATALOG)
+        scan(boxes)
 
 
 def test_square_section_box_is_refused() -> None:
     boxes = _closed_box([_box("Post", (18.0, 0.0, 18.0), (50.0, 300.0, 50.0))])
     with pytest.raises(ScanError, match="no single thin axis") as info:
-        scan(boxes, CATALOG)
+        scan(boxes)
     assert info.value.objects == ("Post",)
-
-
-def test_thickness_matching_no_catalog_entry_is_refused() -> None:
-    wrong_catalog = Catalog(
-        entries={PLY: MaterialEntry(PLY, "ply 12", 12.0, "plywood")}
-    )
-    boxes = _closed_box([])
-    with pytest.raises(ScanError, match="no material has thickness") as info:
-        scan(boxes, wrong_catalog)
-    assert info.value.objects == ("Bottom",)
 
 
 def _find_board(region: Region, role: str) -> Board | None:
@@ -409,12 +391,12 @@ def test_irregular_box_scans_with_pinned_size_mm_set() -> None:
     """An irregular box places as a ``Board`` carrying its measured extent as
     ``pinned_size_mm``, with the rest of the tree unaffected."""
     boxes = _closed_box([])
-    plain = scan(boxes, CATALOG)
+    plain = scan(boxes)
     pinned_boxes = [
         dataclasses.replace(b, irregular=True) if b.name == "Bottom" else b
         for b in boxes
     ]
-    pinned_result = scan(pinned_boxes, CATALOG)
+    pinned_result = scan(pinned_boxes)
 
     assert _shape(pinned_result.unit.root) == _shape(plain.unit.root)
     bottom_box = next(b for b in boxes if b.name == "Bottom")
@@ -426,46 +408,72 @@ def test_irregular_box_scans_with_pinned_size_mm_set() -> None:
     assert plain_bottom.pinned_size_mm is None
 
 
-def test_stored_material_resolves_despite_thickness_mismatch() -> None:
-    """A board tagged with a stored material resolves to that entry even
-    though its measured extent (18 mm, the ``_closed_box`` default) does not
-    match the entry's thickness (MDF at 12 mm): the stored id bypasses
-    thickness matching rather than refusing."""
-    boxes = _closed_box([])
-    tagged = [
-        dataclasses.replace(b, material=MDF) if b.name == "Bottom" else b for b in boxes
-    ]
-    result = scan(tagged, CATALOG)
-    bottom = _find_board(result.unit.root, "Bottom")
-    assert bottom is not None
-    # MDF is a minority (one board out of four), so PLY remains the default
-    # material and Bottom's explicit MDF id must survive rather than
-    # collapsing to None.
-    assert bottom.material == MDF
+def _boards(region: Region) -> list[Board]:
+    """Every ``Board`` under ``region``, in pre-order."""
+    if not isinstance(region, Division):
+        return []
+    found: list[Board] = []
+    for item in region.items:
+        if isinstance(item, Board):
+            found.append(item)
+        else:
+            found.extend(_boards(item))
+    return found
 
 
-def test_box_with_no_material_still_matches_by_thickness() -> None:
-    boxes = _closed_box([])
-    assert all(b.material is None for b in boxes)
-    result = scan(boxes, CATALOG)
-    bottom = _find_board(result.unit.root, "Bottom")
-    assert bottom is not None
-    # Resolved via thickness matching to PLY, which is also the default
-    # material every board here resolves to, so it collapses to None.
-    assert bottom.material is None
+def _run_extent_mm(unit: Unit, board: Board) -> float:
+    """``board``'s solved extent along the axis of the run holding it."""
+    axis = run_axis(unit, board.id)
+    size = solve(unit)[board.id].size
+    return {Axis.X: size.x_mm, Axis.Y: size.y_mm, Axis.Z: size.z_mm}[axis]
 
 
-def test_stored_material_absent_from_catalog_refuses_naming_the_board() -> None:
-    boxes = _closed_box([])
-    tagged = [
-        dataclasses.replace(b, material=MaterialId("unknown"))
-        if b.name == "Bottom"
-        else b
-        for b in boxes
-    ]
-    with pytest.raises(ScanError, match="not in the catalog") as info:
-        scan(tagged, CATALOG)
-    assert info.value.objects == ("Bottom",)
+def test_mixed_thicknesses_solve_to_each_boards_own_slot() -> None:
+    """A 19 mm carcass holding 17.6 mm shelves and a 17.6 mm divider scans
+    and solves with every board's run-axis extent its own slot in the grid,
+    which for these exact edges is its measured thickness."""
+    boxes = _closed_box(
+        [
+            _box("ShelfA", (19.0, 0.0, 400.0), (962.0, 300.0, 17.6)),
+            _box("Divider", (491.2, 0.0, 417.6), (17.6, 300.0, 563.4)),
+            _box("ShelfB", (19.0, 0.0, 700.0), (472.2, 300.0, 17.6)),
+        ],
+        thickness_mm=19.0,
+    )
+    measured_mm = {
+        b.name: min(b.size_mm.x_mm, b.size_mm.y_mm, b.size_mm.z_mm) for b in boxes
+    }
+    unit = scan(boxes).unit
+    boards = _boards(unit.root)
+    assert sorted(b.role for b in boards) == sorted(measured_mm)
+    for board in boards:
+        assert board.rule is None
+        assert board.thickness_mm == pytest.approx(measured_mm[board.role], abs=1e-6)
+        assert _run_extent_mm(unit, board) == pytest.approx(
+            board.thickness_mm, abs=1e-6
+        )
+
+
+def test_snap_drift_puts_a_board_in_its_slot_within_half_the_snap() -> None:
+    """A shelf measuring 18.3 mm between grid lines another board fixed 0.3 mm
+    away takes the slot's width as its thickness, within half of ``snap_mm``
+    of its measured thickness."""
+    boxes = _closed_box(
+        [
+            _box("ShelfA", (18.0, 0.0, 400.0), (482.0, 300.0, 18.3)),
+            _box("Divider", (500.0, 0.0, 18.0), (18.0, 300.0, 964.0)),
+            _box("ShelfB", (518.0, 0.0, 400.2), (464.0, 300.0, 18.0)),
+        ]
+    )
+    unit = scan(boxes, snap_mm=0.5).unit
+    for board in _boards(unit.root):
+        if board.rule is None:
+            assert _run_extent_mm(unit, board) == pytest.approx(
+                board.thickness_mm, abs=1e-6
+            )
+    shelf_a = _find_board(unit.root, "ShelfA")
+    assert shelf_a is not None
+    assert abs(shelf_a.thickness_mm - 18.3) <= 0.25
 
 
 def _shape(region: Bay | Division | Void) -> object:
@@ -496,11 +504,11 @@ def test_missing_board_reports_its_bay_as_void_not_open_quietly() -> None:
             boxes.append(_box("Top", (0.0, 0.0, 982.0), (1000.0, 300.0, 18.0)))
         return boxes
 
-    complete = scan(shape(True), CATALOG)
+    complete = scan(shape(True))
     missing_top = Skipped(
         name="Top", label="Top", type="Part::Box", reason="missing from export"
     )
-    incomplete = scan(shape(False), CATALOG, skipped=[missing_top])
+    incomplete = scan(shape(False), skipped=[missing_top])
 
     assert incomplete.skipped == (missing_top,)
     complete_root = complete.unit.root
@@ -519,18 +527,17 @@ def test_missing_board_reports_its_bay_as_void_not_open_quietly() -> None:
     assert _shape(incomplete_inner) == ("z", ("Bay", "Shelf", "Void"))
 
 
-def _b(role: str, material: MaterialId | None = None) -> Board:
+def _b(role: str, thickness_mm: float = 18.0) -> Board:
     """A board whose id matches its role, so a scanned board's role (set
     from the ``Box.name`` scanning read, which is ``expand``'s ``node_id``,
     the board's id) can be compared directly against the hand-built role."""
-    return Board(role=role, id=role, material=material)
+    return Board(thickness_mm=thickness_mm, role=role, id=role)
 
 
 def _closed_box_unit() -> Unit:
     """Four equal bays behind three shelves: the equal-siblings case."""
     return Unit(
         size_mm=Vec3(900.0, 300.0, 1800.0),
-        default_material=PLY,
         root=Division(
             axis=Axis.Z,
             items=[
@@ -564,7 +571,6 @@ def _stepped_unit() -> Unit:
     """A short column with open space above its top, captured as a ``Void``."""
     return Unit(
         size_mm=Vec3(1218.0, 300.0, 1200.0),
-        default_material=PLY,
         root=Division(
             axis=Axis.Z,
             items=[
@@ -584,12 +590,11 @@ def _stepped_unit() -> Unit:
     )
 
 
-def _second_material_unit() -> Unit:
-    """One MDF shelf splitting the interior into two unequal bays: the
-    unequal-siblings case, and the second-material case together."""
+def _second_stock_unit() -> Unit:
+    """One 12 mm shelf splitting the interior into two unequal bays: the
+    unequal-siblings case, and the second-stock case together."""
     return Unit(
         size_mm=Vec3(900.0, 300.0, 1800.0),
-        default_material=PLY,
         root=Division(
             axis=Axis.Z,
             items=[
@@ -602,7 +607,7 @@ def _second_material_unit() -> Unit:
                             axis=Axis.Z,
                             items=[
                                 Bay(rule=Fixed(300.0, basis=Basis.CLEAR)),
-                                _b("shelf", material=MDF),
+                                _b("shelf", thickness_mm=12.0),
                                 Bay(rule=Fill()),
                             ],
                         ),
@@ -618,7 +623,7 @@ def _second_material_unit() -> Unit:
 ROUND_TRIP_UNITS = {
     "closed_box": _closed_box_unit,
     "stepped": _stepped_unit,
-    "second_material": _second_material_unit,
+    "second_stock": _second_stock_unit,
 }
 
 
@@ -653,13 +658,13 @@ def _region_rules(region: Bay | Void | Division) -> list[type[object]]:
 @pytest.mark.parametrize("name", sorted(ROUND_TRIP_UNITS))
 def test_round_trip_reproduces_tree_shape_and_boards(name: str) -> None:
     original = ROUND_TRIP_UNITS[name]()
-    specs = expand(original, CATALOG)
+    specs = expand(original)
     boxes = [Box(name=s.node_id, corner_mm=s.placement, size_mm=s.size) for s in specs]
 
-    result = scan(boxes, CATALOG)
+    result = scan(boxes)
 
     assert _shape(result.unit.root) == _shape(original.root)
-    recovered_specs = expand(result.unit, CATALOG)
+    recovered_specs = expand(result.unit)
     assert _board_multiset(recovered_specs) == _board_multiset(specs)
 
 
@@ -667,9 +672,9 @@ def test_equal_siblings_recover_as_fill() -> None:
     original = _closed_box_unit()
     boxes = [
         Box(name=s.node_id, corner_mm=s.placement, size_mm=s.size)
-        for s in expand(original, CATALOG)
+        for s in expand(original)
     ]
-    result = scan(boxes, CATALOG)
+    result = scan(boxes)
     # The outermost two levels have exactly one region sibling each (nothing
     # to compare against), then the four equal bays behind the three
     # shelves: those must recover as Fill, not Fixed at their solved size.
@@ -677,45 +682,13 @@ def test_equal_siblings_recover_as_fill() -> None:
 
 
 def test_unequal_siblings_recover_as_fixed() -> None:
-    original = _second_material_unit()
+    original = _second_stock_unit()
     boxes = [
         Box(name=s.node_id, corner_mm=s.placement, size_mm=s.size)
-        for s in expand(original, CATALOG)
+        for s in expand(original)
     ]
-    result = scan(boxes, CATALOG)
+    result = scan(boxes)
     assert _region_rules(result.unit.root) == [Fixed, Fixed, Fixed, Fixed]
-
-
-def test_thicknesses_mm_reports_every_distinct_board_thickness() -> None:
-    """``_second_material_unit`` mixes 18 mm ply with a 12 mm MDF shelf, so
-    the reported set must carry both rather than collapsing to one."""
-    original = _second_material_unit()
-    boxes = [
-        Box(name=s.node_id, corner_mm=s.placement, size_mm=s.size)
-        for s in expand(original, CATALOG)
-    ]
-    result = scan(boxes, CATALOG)
-    assert result.thicknesses_mm == frozenset({18.0, 12.0})
-
-
-def test_thicknesses_mm_rounds_out_real_geometry_jitter() -> None:
-    """Real geometry measures nominally identical stock as slightly
-    different floats: a real FreeCAD export had four supposedly coincident
-    edges spread over 0.09 mm, so two 18 mm boards can measure a few
-    microns apart. The round to four decimal places in
-    ``thicknesses_mm`` is what keeps such a pair reporting as one thickness
-    rather than two; without it this assertion would see a two-element set."""
-    boxes = _closed_box([])
-    jittered = [
-        dataclasses.replace(
-            b, size_mm=Vec3(b.size_mm.x_mm, b.size_mm.y_mm, b.size_mm.z_mm + 3e-6)
-        )
-        if b.name == "Top"
-        else b
-        for b in boxes
-    ]
-    result = scan(jittered, CATALOG)
-    assert result.thicknesses_mm == frozenset({18.0})
 
 
 def _kinds_names(division: Division) -> tuple[str, list[str]]:
@@ -746,7 +719,7 @@ def test_real_magicstart_f1_whole_tree() -> None:
     between them, a 100 mm plinth ``Void`` below the floor, 1 mm insets on
     the shelf, the back in ``panels``, front at minimum depth."""
     boxes = boxes_from_json(REAL_MAGICSTART_F1.read_text(encoding="utf-8"))
-    result = scan(boxes, CATALOG)
+    result = scan(boxes)
 
     assert [p.name for p in result.panels] == ["Back"]
     assert result.unit.depth_axis is Axis.Y
@@ -778,7 +751,7 @@ def test_real_stair_step_whole_tree() -> None:
     their shortfall, ``Void`` below each step, and the two inner shelves
     under their own divider."""
     boxes = boxes_from_json(REAL_STAIR_STEP.read_text(encoding="utf-8"))
-    result = scan(boxes, CATALOG)
+    result = scan(boxes)
 
     root = _division(result.unit.root)
     assert root.axis is Axis.Z
@@ -837,31 +810,26 @@ def test_real_stair_step_whole_tree() -> None:
         assert _kinds_names(sub) == ("oPo", [shelf_name])
 
 
-def _catalog_from_thicknesses(boxes: Sequence[Box]) -> Catalog:
-    """A generic material per distinct board thickness in ``boxes``, built
-    from the fixture's own geometry rather than a hand-picked catalog.
-
-    Mirrors :func:`freecad.Shelving.core.tests.test_svg._catalog_from_thicknesses`;
-    kept as its own copy since each test module keeps its own fixtures
-    rather than importing across test modules.
-    """
-    # Round to four decimal places to merge the sub-thousandth jitter real
-    # exported geometry has between nominally identical boards, without
-    # rounding away real precision the way a whole-millimetre bucket would.
-    thicknesses_mm = sorted(
-        {round(min(b.size_mm.x_mm, b.size_mm.y_mm, b.size_mm.z_mm), 4) for b in boxes}
-    )
-    return Catalog(
-        entries={
-            MaterialId(f"generic{t}"): MaterialEntry(
-                id=MaterialId(f"generic{t}"),
-                name=f"{t} mm stock",
-                thickness_mm=float(t),
-                material_type="generic",
-            )
-            for t in thicknesses_mm
-        }
-    )
+def test_real_stair_step_solves_at_the_default_snap() -> None:
+    """The real stair-step export's panels measure about 18.26 mm. Each
+    board takes its slot in the grid as its run-axis extent, so the tree
+    solves at the default ``snap_mm`` with every rule-less board within half
+    of it of its measured thickness."""
+    boxes = boxes_from_json(REAL_STAIR_STEP.read_text(encoding="utf-8"))
+    measured_mm = {
+        b.name: min(b.size_mm.x_mm, b.size_mm.y_mm, b.size_mm.z_mm) for b in boxes
+    }
+    unit = scan(boxes).unit
+    solve(unit)
+    for board in _boards(unit.root):
+        if board.rule is not None:
+            continue
+        assert _run_extent_mm(unit, board) == pytest.approx(
+            board.thickness_mm, abs=1e-6
+        )
+        assert abs(board.thickness_mm - measured_mm[board.role]) <= (
+            DEFAULT_SNAP_MM / 2 + 1e-9
+        )
 
 
 def test_real_stair_step_solves_to_three_distinct_divider_heights() -> None:
@@ -873,16 +841,8 @@ def test_real_stair_step_solves_to_three_distinct_divider_heights() -> None:
     rather than being equalized with its near-equal-width siblings.
     """
     boxes = boxes_from_json(REAL_STAIR_STEP.read_text(encoding="utf-8"))
-    # test_real_stair_step_whole_tree above uses the coarse whole-mm CATALOG,
-    # whose ply18 (18.0 mm) is ~0.26 mm off this fixture's real panel
-    # thickness and overflows solve() (tracked as friction-009 in
-    # .claude/docs/friction-log.md); build the catalog from the fixture's
-    # own measured thicknesses instead, with a tight snap_mm, exactly as
-    # test_svg.py's end-to-end stair-step test does, so this test can solve
-    # the corrected tree shape.
-    catalog = _catalog_from_thicknesses(boxes)
-    result = scan(boxes, catalog, snap_mm=0.1)
-    spaces = solve(result.unit, catalog)
+    result = scan(boxes)
+    spaces = solve(result.unit)
 
     expected_z_mm = {
         "panelZX012": 330.2,
@@ -931,7 +891,7 @@ def test_real_two_units_whole_tree() -> None:
     boards side by side, and the notched panel appearing in ``skipped``
     rather than as a board."""
     boxes, skipped = export_from_json(REAL_TWO_UNITS.read_text(encoding="utf-8"))
-    result = scan(boxes, CATALOG, skipped=skipped)
+    result = scan(boxes, skipped=skipped)
 
     assert [s.name for s in result.skipped] == ["Sketch006", "Pad003"]
 
@@ -958,7 +918,7 @@ def test_real_two_units_whole_tree() -> None:
     # Together the two units' top boards span the width; neither spans it
     # alone, so they show up as two adjacent Board items, not one. Each is
     # thin along Z, not Y, so each carries its own real Y-span as its own
-    # rule rather than a catalog thickness.
+    # rule rather than its thickness.
     assert _kinds_names(tops) == ("PP", ["panelYX", "panelYX004"])
     top_a, top_b = tops.items
     assert isinstance(top_a, Board) and isinstance(top_a.rule, Fixed)
@@ -1025,7 +985,7 @@ def test_short_divider_between_differently_sized_bays_keeps_its_own_height() -> 
     near-equal-width siblings by ``Fill``.
     """
     boxes = _stepped_columns_boxes()
-    result = scan(boxes, CATALOG)
+    result = scan(boxes)
 
     columns = result.unit.root
     assert isinstance(columns, Division)
@@ -1056,7 +1016,7 @@ def test_short_divider_between_differently_sized_bays_keeps_its_own_height() -> 
     divider2_wrap = body.items[6]
     assert isinstance(divider2_wrap, Division)
 
-    spaces = solve(result.unit, CATALOG)
+    spaces = solve(result.unit)
     # The divider keeps its own 582 mm, not LeftSide's 982 mm.
     assert spaces[divider.id].size.z_mm == pytest.approx(582.0)
     left_side = body.items[0]

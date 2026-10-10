@@ -94,9 +94,9 @@ def _insets_suffix(board: Board) -> str:
 
 def _render(item: Item, indent: str) -> list[str]:
     if isinstance(item, Board):
-        material = item.material or "default material"
         role = item.role or item.id
-        return [f"{indent}board {role} ({material}){_insets_suffix(item)}"]
+        thickness = f"{item.thickness_mm:g} mm"
+        return [f"{indent}board {role} ({thickness}){_insets_suffix(item)}"]
     if isinstance(item, Bay):
         return [f"{indent}bay{_rule_suffix(item)}"]
     if isinstance(item, Void):

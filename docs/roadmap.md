@@ -8,8 +8,8 @@ pipeline.
 M0 to M3 are history. They were delivered against an earlier design in
 which the workbench owned its plank objects and drove them from a
 serialised split-tree, described in [`architecture.md`](architecture.md).
-The layout engine and the material catalog from that work carry forward;
-the object layer does not. M4 onwards rebuild on the current design, in
+The layout engine from that work carries forward; the object layer does
+not. M4 onwards rebuild on the current design, in
 which plain solids are the model and the workbench reads and writes
 them.
 
@@ -23,6 +23,9 @@ task uses:
   Keep the id in sync; add `(blocked on sh-YYY)` when relevant.
 - **Done sh-XXX** — the task merged to `main`. Record the id that
   delivered it.
+- **Superseded by sh-XXX (was Done sh-YYY)** — later work removed or
+  replaced what the milestone delivered. The milestone's text describes
+  what it delivered; the superseding task's file says what replaced it.
 
 Set **Task sh-XXX** in the same change that creates the task file. The
 flip to **Done sh-XXX** is made by `/ship` when the branch merges
@@ -261,7 +264,7 @@ intact.
 
 ## M8 — Material catalog
 
-**Status:** Done sh-019
+**Status:** Superseded by sh-030 (was Done sh-019)
 
 The catalog moves out of code and into the document: a group of `VarSet`
 entries, one per stock item, each editable in the property editor. No
@@ -331,19 +334,18 @@ shelves hold, then undo the whole session in one step.
   sh-023)
 
 The workbench states an opinion when it creates something and never again.
-A board takes its material's colour and a readable label when it is
-written, and an update rewrites neither, so a rename or a recolour
-survives every resize. Two commands take that opinion back on request.
-Colour maps deterministically from the material id, so the same stock is
-the same colour in every unit.
+A board takes a readable label, and the colour of the board it copies its
+stock from, when it is written, and an update rewrites neither, so a
+rename or a recolour survives every resize. A command takes the label back
+on request.
 
 Every refusal takes one shape: a summary, the objects responsible, and a
 suggested next step, with the objects selected in the 3D view. A refusal a
 user cannot act on reads as a bug, so the suggestion is data beside each
 reason rather than prose scattered through the commands.
 
-The preferences page holds six values and no more: the starter unit's four,
-and the snap and joint-clearance tolerances. The tolerances are there
+The preferences page holds five values and no more: the starter unit's
+three dimensions, and the snap and joint-clearance tolerances. The tolerances are there
 because real geometry has coincident edges disagreeing by up to 0.09 mm,
 and someone whose model is worse needs a way forward that is not editing
 the source.

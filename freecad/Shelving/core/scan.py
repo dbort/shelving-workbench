@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import enum
 import json
-from collections import Counter, deque
+from collections import deque
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
@@ -50,7 +50,6 @@ from freecad.Shelving.core.layout import (
     Unit,
     Void,
 )
-from freecad.Shelving.core.materials import Catalog, MaterialId
 
 # Real geometry disagrees at joints by tens of microns: a unit exported from
 # FreeCAD had four supposedly-coincident edges spread over 0.09 mm. The snap
@@ -74,12 +73,6 @@ class Box:
     # measured extent as Board.pinned_size_mm, for the solver to verify
     # rather than derive.
     irregular: bool = False
-    # The material this box is known to be, bypassing thickness matching.
-    # Set when the exporter already knows the board's material
-    # (round-tripping a previously written container); None falls back to
-    # matching the catalog entry whose thickness is closest to the box's
-    # measured thin-axis extent.
-    material: MaterialId | None = None
 
 
 @dataclass(frozen=True)
@@ -363,7 +356,6 @@ class _Elevated:
     thin_axis: Axis
     thickness_mm: float
     irregular: bool = False
-    material: MaterialId | None = None
 
 
 def _elevate(box: Box, horizontal: Axis, vertical: Axis, depth_axis: Axis) -> _Elevated:
@@ -383,7 +375,6 @@ def _elevate(box: Box, horizontal: Axis, vertical: Axis, depth_axis: Axis) -> _E
         thin_axis,
         thickness_mm,
         irregular=box.irregular,
-        material=box.material,
     )
 
 
@@ -398,8 +389,6 @@ class _ScanContext:
     depth_hi_mm: float
     clearance_mm: float
     snap_mm: float
-    materials_by_name: Mapping[str, MaterialId]
-    default_material: MaterialId
 
 
 _EMPTY = -1
@@ -441,10 +430,9 @@ class _Grid:
                             (board.name, self.boards[other].name),
                         )
                     self.cover[j][i] = index
-            # Keep the board's measured extents. Snapping moves an edge by up
-            # to half the tolerance, which would corrupt the thickness that
-            # identifies the board's material; the grid owns the topology and
-            # `cols` / `rows` carry it.
+            # Keep the board's measured extents for its insets, pinned size
+            # and rule: snapping moves an edge by up to half the tolerance.
+            # The grid owns the topology and `cols` / `rows` carry it.
             self.boards.append(board)
             self.cols.append((i0, i1))
             self.rows.append((j0, j1))
@@ -544,7 +532,9 @@ def _finalize_items(
     snap_mm: float,
 ) -> list[Item]:
     """``raw`` with each non-``Board``, non-wrap item's ``rule`` set by the
-    equal-siblings heuristic, sized from its span in ``bounds``/``coords_mm``.
+    equal-siblings heuristic, sized from its span in ``bounds``/``coords_mm``,
+    and each ``Board`` without a ``rule`` given that span as its
+    ``thickness_mm``.
 
     A ``Board``'s size along its division's axis is fixed (its own thickness,
     or its own ``rule`` override), never derived from the sibling
@@ -574,6 +564,11 @@ def _finalize_items(
         assert isinstance(region_item, Bay | Void | Division)
         region_item.rule = rule
     for i, item in enumerate(raw):
+        # A board's thickness is its slot in the same snapped grid every
+        # sibling's size comes from, so a run adds up exactly. Its measured
+        # thickness can differ from the slot by up to half of snap_mm.
+        if isinstance(item, Board) and item.rule is None:
+            item.thickness_mm = coords_mm[bounds[i + 1]] - coords_mm[bounds[i]]
         if _is_axis_wrap(item):
             assert isinstance(item, Division)
             item.rule = Fixed(
@@ -652,7 +647,6 @@ def _make_board(
         board.d0_mm - ctx.depth_lo_mm,
         ctx.depth_hi_mm - board.d1_mm,
     )
-    material = ctx.materials_by_name[board.name]
     pinned_size_mm = (
         _unit_size_mm(
             ctx.horizontal,
@@ -668,7 +662,7 @@ def _make_board(
     # cross_axis is the slab's cross-section axis; the enclosing Division's
     # own axis is whichever of the grid's two elevation axes cross_axis is
     # not. When that axis is not the board's own thin axis, the board's real
-    # measured span along it (not its catalog thickness) is what the
+    # measured span along it (not its thickness) is what the
     # Division must carry, a divider shorter than its neighbors say.
     enclosing_axis = ctx.horizontal if cross_axis is ctx.vertical else ctx.vertical
     rule: SizeRule | None = None
@@ -682,8 +676,10 @@ def _make_board(
             basis=Basis.CLEAR,
         )
     return Board(
+        # Measured, until _finalize_items replaces it with the board's slot
+        # width when the board has no rule.
+        thickness_mm=board.thickness_mm,
         pinned_size_mm=pinned_size_mm,
-        material=None if material == ctx.default_material else material,
         insets=Insets(**insets_kwargs),
         role=board.name,
         rule=rule,
@@ -881,48 +877,6 @@ def _recover_rules(sizes_mm: Sequence[float], snap_mm: float) -> list[SizeRule]:
     return rules
 
 
-def _material_for_thickness_mm(
-    catalog: Catalog, thickness_mm: float, snap_mm: float, board_name: str
-) -> MaterialId:
-    for entry in catalog:
-        if abs(entry.thickness_mm - thickness_mm) <= snap_mm:
-            return entry.id
-    raise ScanError(
-        f"{board_name}: no material has thickness {thickness_mm:g} mm", (board_name,)
-    )
-
-
-def _resolve_material(catalog: Catalog, board: _Elevated, snap_mm: float) -> MaterialId:
-    """The material ``board`` resolves to: its stored material when set,
-    bypassing thickness matching, otherwise the catalog entry whose
-    thickness is closest to its measured extent.
-
-    A stored material is what lets a catalog entry's thickness change
-    (M8) without stranding the boards already written against the old
-    thickness: they carry the id, not a thickness to re-match.
-    """
-    if board.material is not None:
-        if board.material not in catalog:
-            raise ScanError(
-                f"{board.name}: material {board.material!r} is not in the catalog",
-                (board.name,),
-            )
-        return board.material
-    return _material_for_thickness_mm(catalog, board.thickness_mm, snap_mm, board.name)
-
-
-def _resolve_materials(
-    catalog: Catalog, elevated: Sequence[_Elevated], snap_mm: float
-) -> dict[str, MaterialId]:
-    return {p.name: _resolve_material(catalog, p, snap_mm) for p in elevated}
-
-
-def _default_material(materials_by_name: Mapping[str, MaterialId]) -> MaterialId:
-    """The material the most boards resolved to: the catalog entry a scanned
-    unit's ``default_material`` should be, since most boards inherit it."""
-    return Counter(materials_by_name.values()).most_common(1)[0][0]
-
-
 def _unit_size_mm(
     horizontal: Axis,
     vertical: Axis,
@@ -950,12 +904,10 @@ class ScanResult:
     # rather than dropped so a missing board is visible in the result.
     skipped: tuple[Skipped, ...]
     facing_evidence: FacingEvidence
-    thicknesses_mm: frozenset[float]
 
 
 def scan(
     boxes: Sequence[Box],
-    catalog: Catalog,
     *,
     snap_mm: float = DEFAULT_SNAP_MM,
     clearance_mm: float = DEFAULT_CLEARANCE_MM,
@@ -995,8 +947,6 @@ def scan(
         )
 
     elevated = [_elevate(b, horizontal, vertical, depth_axis) for b in members]
-    materials_by_name = _resolve_materials(catalog, elevated, snap_mm)
-    default_material = _default_material(materials_by_name)
 
     grid = _Grid(elevated, snap_mm)
     depth_lo_mm = min(p.d0_mm for p in elevated)
@@ -1009,8 +959,6 @@ def scan(
         depth_hi_mm=depth_hi_mm,
         clearance_mm=clearance_mm,
         snap_mm=snap_mm,
-        materials_by_name=materials_by_name,
-        default_material=default_material,
     )
     root = _region(grid, ctx, 0, len(grid.hs_mm) - 1, 0, len(grid.vs_mm) - 1)
     if not _has_bay(root):
@@ -1028,7 +976,6 @@ def scan(
             grid.vs_mm[-1] - grid.vs_mm[0],
             depth_hi_mm - depth_lo_mm,
         ),
-        default_material=default_material,
         root=root,
         depth_axis=depth_axis,
         front_at_min=front_at_min,
@@ -1038,5 +985,4 @@ def scan(
         panels=tuple(panels),
         skipped=tuple(skipped),
         facing_evidence=facing_evidence,
-        thicknesses_mm=frozenset(round(p.thickness_mm, 4) for p in elevated),
     )

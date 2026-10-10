@@ -15,19 +15,6 @@ from freecad.Shelving.core.layout import (
     Unit,
     Void,
 )
-from freecad.Shelving.core.materials import Catalog, MaterialEntry, MaterialId
-
-PLY18 = MaterialId("ply18")
-
-
-def _catalog() -> Catalog:
-    return Catalog(
-        entries={
-            PLY18: MaterialEntry(
-                id=PLY18, name="18 mm ply", thickness_mm=18.0, material_type="plywood"
-            ),
-        }
-    )
 
 
 def _assert_vec3(actual: Vec3, x_mm: float, y_mm: float, z_mm: float) -> None:
@@ -48,20 +35,19 @@ def _closed_box(width_mm: float, depth_mm: float, height_mm: float) -> Unit:
     distinguished shell rule of their own."""
     return Unit(
         size_mm=Vec3(width_mm, depth_mm, height_mm),
-        default_material=PLY18,
         root=Division(
             axis=Axis.Z,
             items=[
-                Board(role="bottom"),
+                Board(thickness_mm=18.0, role="bottom"),
                 Division(
                     axis=Axis.X,
                     items=[
-                        Board(role="left_side"),
+                        Board(thickness_mm=18.0, role="left_side"),
                         Bay(),
-                        Board(role="right_side"),
+                        Board(thickness_mm=18.0, role="right_side"),
                     ],
                 ),
-                Board(role="top"),
+                Board(thickness_mm=18.0, role="top"),
             ],
         ),
     )
@@ -71,7 +57,7 @@ def test_closed_box_matches_the_carcass_models_geometry() -> None:
     """Expected values are hard-coded: there is no independent model to
     compute an expected result from and compare against at runtime."""
     unit = _closed_box(900.0, 300.0, 1800.0)
-    specs = expand(unit, _catalog())
+    specs = expand(unit)
     assert len(specs) == 4
     by_role = {spec.role: spec for spec in specs}
     _assert_vec3(by_role["bottom"].size, 900.0, 300.0, 18.0)
@@ -87,7 +73,10 @@ def test_closed_box_matches_the_carcass_models_geometry() -> None:
 def _column(void_mm: float, prefix: str) -> Division:
     """A stack of a bay, its own top, and (if positive) the void above it: the
     step is a ``Void`` taking the leftover height."""
-    items: list[Item] = [Bay(id=f"{prefix}_bay"), Board(role="top", id=f"{prefix}_top")]
+    items: list[Item] = [
+        Bay(id=f"{prefix}_bay"),
+        Board(thickness_mm=18.0, role="top", id=f"{prefix}_top"),
+    ]
     if void_mm > 0:
         items.append(Void(rule=Fixed(void_mm), id=f"{prefix}_void"))
     return Division(axis=Axis.Z, items=items, id=f"{prefix}_division")
@@ -98,21 +87,20 @@ def _stepped_unit() -> Unit:
     carcass shell rule could not state."""
     return Unit(
         size_mm=Vec3(1200.0, 300.0, 1200.0),
-        default_material=PLY18,
         root=Division(
             axis=Axis.Z,
             items=[
-                Board(role="bottom", id="bottom"),
+                Board(thickness_mm=18.0, role="bottom", id="bottom"),
                 Division(
                     axis=Axis.X,
                     items=[
-                        Board(role="left_side"),
+                        Board(thickness_mm=18.0, role="left_side"),
                         _column(0.0, "col0"),
-                        Board(role="divider"),
+                        Board(thickness_mm=18.0, role="divider"),
                         _column(300.0, "col1"),
-                        Board(role="divider"),
+                        Board(thickness_mm=18.0, role="divider"),
                         _column(600.0, "col2"),
-                        Board(role="right_side"),
+                        Board(thickness_mm=18.0, role="right_side"),
                     ],
                     id="middle",
                 ),
@@ -124,7 +112,7 @@ def _stepped_unit() -> Unit:
 
 def test_stepped_outline_expands_with_falling_tops_and_no_void_boards() -> None:
     unit = _stepped_unit()
-    specs = expand(unit, _catalog())
+    specs = expand(unit)
 
     tops_mm = sorted(
         spec.placement.z_mm + spec.size.z_mm for spec in specs if spec.role == "top"
@@ -145,11 +133,15 @@ def test_stepped_outline_expands_with_falling_tops_and_no_void_boards() -> None:
 def test_two_adjacent_boards_touch() -> None:
     root = Division(
         axis=Axis.Z,
-        items=[Bay(), Board(role="lower", id="lower"), Board(role="upper", id="upper")],
+        items=[
+            Bay(),
+            Board(thickness_mm=18.0, role="lower", id="lower"),
+            Board(thickness_mm=18.0, role="upper", id="upper"),
+        ],
         id="root",
     )
-    unit = Unit(size_mm=Vec3(600.0, 300.0, 1000.0), default_material=PLY18, root=root)
-    specs = expand(unit, _catalog())
+    unit = Unit(size_mm=Vec3(600.0, 300.0, 1000.0), root=root)
+    specs = expand(unit)
     lower = _by_id(specs, "lower")
     upper = _by_id(specs, "upper")
     assert upper.placement.z_mm == pytest.approx(lower.placement.z_mm + lower.size.z_mm)
@@ -159,11 +151,11 @@ def test_board_insets_apply_to_cross_section_axes_only() -> None:
     insets = Insets(y_min_mm=10.0, y_max_mm=20.0, z_min_mm=5.0, z_max_mm=7.0)
     root = Division(
         axis=Axis.X,
-        items=[Board(insets=insets, id="inset_board"), Bay()],
+        items=[Board(thickness_mm=18.0, insets=insets, id="inset_board"), Bay()],
         id="root",
     )
-    unit = Unit(size_mm=Vec3(600.0, 300.0, 900.0), default_material=PLY18, root=root)
-    board = _by_id(expand(unit, _catalog()), "inset_board")
+    unit = Unit(size_mm=Vec3(600.0, 300.0, 900.0), root=root)
+    board = _by_id(expand(unit), "inset_board")
 
     # X is the division's own axis: the solved thickness, never inset.
     assert board.size.x_mm == pytest.approx(18.0)
@@ -178,6 +170,6 @@ def test_board_insets_apply_to_cross_section_axes_only() -> None:
 
 def test_total_volume_mm3_sums_the_closed_box() -> None:
     unit = _closed_box(900.0, 300.0, 1800.0)
-    specs = expand(unit, _catalog())
+    specs = expand(unit)
     expected_mm3 = 2 * (900.0 * 300.0 * 18.0) + 2 * (18.0 * 300.0 * 1764.0)
     assert total_volume_mm3(specs) == pytest.approx(expected_mm3, abs=1e-6)

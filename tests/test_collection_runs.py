@@ -131,7 +131,7 @@ def test_a_run_aimed_at_the_headless_directory_starts_freecad_there(
 ) -> None:
     run = _collect(tmp_path, "tests/freecad")
     assert run.returncode == 0, run.output
-    assert len(_freecad_node_ids(run.output)) >= 47
+    assert len(_freecad_node_ids(run.output)) >= 38
     assert _HEADLESS_NOTE not in run.output
     # FreeCADGui is loaded here too, as the headless stub the workbench's own
     # modules import, so it says nothing about which startup ran.

@@ -25,7 +25,6 @@ from typing import Literal, Protocol, cast
 import FreeCAD
 
 from freecad.Shelving import properties
-from freecad.Shelving.catalog import ensure_catalog, read_usable_catalog
 from freecad.Shelving.container import (
     read_container,
     renamed_board_ids,
@@ -53,7 +52,6 @@ from freecad.Shelving.core.layout import (
     Region,
     Unit,
 )
-from freecad.Shelving.core.materials import Catalog, MaterialId
 from freecad.Shelving.core.record import rules_from_json, with_stored_rules
 from freecad.Shelving.core.scan import elevation_axes, scan
 from freecad.Shelving.core.solver import LayoutSolveError, describe_solve_error, solve
@@ -131,10 +129,8 @@ class LeftAlone:
     reason: str
 
 
-def _read_unit(
-    container: FreeCAD.DocumentObject, catalog: Catalog
-) -> tuple[Unit, Mapping[str, str]]:
-    """``container`` read fresh, scanned against ``catalog``, with its stored
+def _read_unit(container: FreeCAD.DocumentObject) -> tuple[Unit, Mapping[str, str]]:
+    """``container`` read fresh and scanned, with its stored
     rules and unit id reapplied, and the reason each part the scan did not
     place in the tree was set aside, keyed by ``Name``.
 
@@ -148,7 +144,6 @@ def _read_unit(
     watch.lap(f"read_container ({len(boxes)} boxes, {len(skipped)} skipped)")
     scan_result = scan(
         boxes,
-        catalog,
         skipped=skipped,
         depth_axis=record.depth_axis,
         front_at_min=record.front_at_min,
@@ -171,15 +166,11 @@ class Session:
     def __init__(self, container: FreeCAD.DocumentObject) -> None:
         watch = Stopwatch("session")
         self.container = container
-        self.catalog, self._skipped_catalog_entries = read_usable_catalog(
-            ensure_catalog(container.Document)
-        )
-        watch.lap("catalog")
         # unit and spaces are the current, already-solved state, replaced
         # wholesale by every accepted edit.
-        self.unit, self._set_aside_reasons = _read_unit(container, self.catalog)
+        self.unit, self._set_aside_reasons = _read_unit(container)
         watch.lap("read unit")
-        self.spaces: Mapping[str, Space] = solve(self.unit, self.catalog)
+        self.spaces: Mapping[str, Space] = solve(self.unit)
         watch.lap("solve")
         # A region or board id. A split or merge clears it, since the id it
         # just edited no longer names anything the caller can act on.
@@ -275,10 +266,10 @@ class Session:
         document, selecting ``select``, or return an :class:`EditFailure`
         when it fails to solve, leaving the session and document untouched."""
         try:
-            spaces: Mapping[str, Space] = solve(candidate, self.catalog)
+            spaces: Mapping[str, Space] = solve(candidate)
             # write_container solves again before writing any board, so a
             # LayoutSolveError from either call means nothing was written.
-            result = write_container(self.container, candidate, self.catalog)
+            result = write_container(self.container, candidate)
         except LayoutSolveError as err:
             return EditFailure(describe_solve_error(err), err.node_id)
         if result.id_renames:
@@ -310,11 +301,9 @@ class Session:
             )
         return elevation_axes(depth_axis)
 
-    def split(
-        self, direction: SplitDirection, material: MaterialId | None = None
-    ) -> EditFailure | None:
-        """Split the selected ``Bay`` in two, ``material`` defaulting to the
-        unit's own.
+    def split(self, direction: SplitDirection) -> EditFailure | None:
+        """Split the selected ``Bay`` in two with a board that copies its stock
+        from :func:`~freecad.Shelving.core.stock.source_board`'s choice.
 
         ``direction`` names an elevation axis, not a model axis:
         "horizontal" divides the bay left and right behind a vertical
@@ -327,9 +316,7 @@ class Session:
         horizontal, vertical = self._elevation_axes()
         axis = horizontal if direction == "horizontal" else vertical
         try:
-            candidate = split_region(
-                self.unit, self.selected_id, axis, self.catalog, material
-            )
+            candidate = split_region(self.unit, self.selected_id, axis)
         except EditError as err:
             return EditFailure(str(err), err.node_id)
         return self._apply(candidate)
@@ -341,7 +328,7 @@ class Session:
         if self.selected_id is None:
             return EditFailure("select a board to merge", None)
         try:
-            candidate = merge_at(self.unit, self.selected_id, self.catalog)
+            candidate = merge_at(self.unit, self.selected_id)
         except EditError as err:
             return EditFailure(str(err), err.node_id)
         return self._apply(candidate)
@@ -360,7 +347,7 @@ class Session:
         if self.selected_id is None:
             return None
         try:
-            return measure(self.unit, self.selected_id, self.spaces, self.catalog)
+            return measure(self.unit, self.selected_id, self.spaces)
         except EditError:
             return None
 
@@ -373,7 +360,7 @@ class Session:
             return EditFailure("select a region to size", None)
         region_id = self.selected_id
         try:
-            basis = measure(self.unit, region_id, self.spaces, self.catalog).basis
+            basis = measure(self.unit, region_id, self.spaces).basis
             candidate = set_size(self.unit, region_id, size_mm, basis)
         except EditError as err:
             return EditFailure(str(err), err.node_id)
@@ -387,7 +374,7 @@ class Session:
             return EditFailure("select a region to measure", None)
         region_id = self.selected_id
         try:
-            candidate = set_basis(self.unit, region_id, basis, self.catalog)
+            candidate = set_basis(self.unit, region_id, basis)
         except EditError as err:
             return EditFailure(str(err), err.node_id)
         except LayoutSolveError as err:
@@ -425,7 +412,7 @@ class Session:
         low_face_mm = pointer_mm.component_mm(axis.component_index) - grab_offset_mm
         try:
             region_id = region_before(self.unit, board_id)
-            candidate = move_board(self.unit, board_id, low_face_mm, self.catalog)
+            candidate = move_board(self.unit, board_id, low_face_mm)
         except EditError as err:
             return EditFailure(str(err), err.node_id)
         return self._apply(candidate, select=region_id)

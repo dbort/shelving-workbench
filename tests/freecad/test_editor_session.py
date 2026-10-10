@@ -13,7 +13,6 @@ from typing import Protocol, cast
 import FreeCAD
 
 from freecad.Shelving import properties
-from freecad.Shelving.catalog import ensure_catalog, read_catalog
 from freecad.Shelving.container import (
     read_container,
     unit_for_selection,
@@ -32,17 +31,14 @@ from freecad.Shelving.core.layout import (
     Unit,
 )
 from freecad.Shelving.core.scan import elevation_axes
-from freecad.Shelving.default_catalog import (
-    DEFAULT_CATALOG,
-    DEFAULT_MATERIAL_ID,
-)
 from freecad.Shelving.editor.session import (
     PROBE_PROPERTY,
     EditFailure,
     Session,
     SplitDirection,
 )
-from freecad.Shelving.unit_ops import create_unit, reflow_all
+from freecad.Shelving.unit_ops import create_unit
+from tests.freecad_materials import library_material
 
 
 class _Placeable(Protocol):
@@ -429,16 +425,19 @@ def _tiny_unit() -> Unit:
     to solve rather than write anything."""
     return Unit(
         size_mm=Vec3(40.0, 300.0, 900.0),
-        default_material=DEFAULT_MATERIAL_ID,
         root=Division(
             axis=Axis.Z,
             items=[
-                Board(role="bottom"),
+                Board(thickness_mm=18.0, role="bottom"),
                 Division(
                     axis=Axis.X,
-                    items=[Board(role="left_side"), Bay(), Board(role="right_side")],
+                    items=[
+                        Board(thickness_mm=18.0, role="left_side"),
+                        Bay(),
+                        Board(thickness_mm=18.0, role="right_side"),
+                    ],
                 ),
-                Board(role="top"),
+                Board(thickness_mm=18.0, role="top"),
             ],
         ),
         depth_axis=Axis.Y,
@@ -454,16 +453,19 @@ def _rotated_default_unit() -> Unit:
     across it."""
     return Unit(
         size_mm=Vec3(300.0, 600.0, 900.0),
-        default_material=DEFAULT_MATERIAL_ID,
         root=Division(
             axis=Axis.Z,
             items=[
-                Board(role="bottom"),
+                Board(thickness_mm=18.0, role="bottom"),
                 Division(
                     axis=Axis.Y,
-                    items=[Board(role="left_side"), Bay(), Board(role="right_side")],
+                    items=[
+                        Board(thickness_mm=18.0, role="left_side"),
+                        Bay(),
+                        Board(thickness_mm=18.0, role="right_side"),
+                    ],
                 ),
-                Board(role="top"),
+                Board(thickness_mm=18.0, role="top"),
             ],
         ),
         depth_axis=Axis.X,
@@ -563,7 +565,7 @@ def test_an_unsolvable_edit_changes_nothing() -> None:
         container = cast(
             "FreeCAD.DocumentObject", doc.addObject("App::Part", "TinyUnit")
         )
-        write_container(container, _tiny_unit(), DEFAULT_CATALOG)
+        write_container(container, _tiny_unit())
         doc.recompute()
 
         session = Session(container)
@@ -703,7 +705,7 @@ def test_split_direction_follows_the_units_depth_axis() -> None:
         container = cast(
             "FreeCAD.DocumentObject", doc.addObject("App::Part", "RotatedUnit")
         )
-        write_container(container, _rotated_default_unit(), DEFAULT_CATALOG)
+        write_container(container, _rotated_default_unit())
         doc.recompute()
 
         session = Session(container)
@@ -798,16 +800,6 @@ def _z_mm(container: FreeCAD.DocumentObject, name: str) -> float:
     return float(obj.Placement.Base.z)
 
 
-def _catalog_entry(
-    doc: FreeCAD.Document, material_id: str
-) -> properties.CatalogEntryObject:
-    group = ensure_catalog(doc)
-    for obj in cast("FreeCAD.DocumentObjectGroup", group).Group:
-        if properties.read_entry_material_id(obj) == material_id:
-            return cast("properties.CatalogEntryObject", obj)
-    raise AssertionError(f"no catalog entry {material_id!r}")
-
-
 def _split_bay(session: Session, bay_id: str, direction: SplitDirection) -> str:
     """Split ``bay_id`` and return the new board's id."""
     unit_before = session.unit
@@ -818,14 +810,13 @@ def _split_bay(session: Session, bay_id: str, direction: SplitDirection) -> str:
     return _find_new_board_id(unit_before.root, session.unit.root)
 
 
-def test_dimensions_drag_basis_stock_and_untagged() -> None:
+def test_dimensions_drag_basis_and_untagged() -> None:
     """The dimension operations end to end on one document, all inside one
     session: a set size fixes its region and the sibling redistributes;
     toggling the basis moves no board; a drag changes the number and keeps
     the basis; an unsolvable size changes nothing; an untagged box is
     listed as left alone, survives every write, and goes only when named;
-    a thicker stock then holds a spacing-based shelf and moves a clear-based
-    one; and cancel restores the opening document exactly."""
+    and cancel restores the opening document exactly."""
     doc = FreeCAD.newDocument("editor_smoke_dimensions")
     try:
         container = create_unit(doc)
@@ -839,8 +830,6 @@ def test_dimensions_drag_basis_stock_and_untagged() -> None:
         doc.recompute()
         snapshot_open = _board_snapshot(container)
         hand_added_before = _board_snapshot_by_name(container)["HandAdded"]
-        stock = _catalog_entry(doc, DEFAULT_MATERIAL_ID)
-        stock_thickness_before_mm = float(stock.Thickness)
 
         session = Session(container)
         session.open()
@@ -939,23 +928,11 @@ def test_dimensions_drag_basis_stock_and_untagged() -> None:
             assert doc.getObject("HandAdded") is None
             assert session.left_alone == ()
 
-            # A thicker stock: the spacing holds its shelf, the clear size
-            # lets its shelf ride up with the thicker bottom board.
-            left_z_mm = _z_mm(container, left_shelf_id)
-            right_z_mm = _z_mm(container, right_shelf_id)
-            properties.write_entry_thickness_mm(stock, 25.0)
-            result = reflow_all(doc, read_catalog(ensure_catalog(doc)))
-            doc.recompute()
-            assert container.Name in {n for n, _r in result.succeeded}, result
-            assert abs(_z_mm(container, left_shelf_id) - left_z_mm) < 1e-6
-            assert abs(_z_mm(container, right_shelf_id) - (right_z_mm + 7.0)) < 1e-6
-
             session.cancel()
             cancelled = True
             doc.recompute()
             assert _board_snapshot(container) == snapshot_open
             assert doc.getObject(probe_name) is None
-            assert float(stock.Thickness) == stock_thickness_before_mm
         finally:
             if not cancelled:
                 session.cancel()
@@ -1017,5 +994,148 @@ def test_a_woodworking_magic_start_unit_takes_and_gives_up_a_divider(
             session.cancel()
         doc.recompute()
         assert _board_snapshot(container) == snapshot_before
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+class _StockBox(_BoxFeature, Protocol):
+    ShapeMaterial: properties.FreeCADMaterial
+    Grain: list[str]
+
+
+def _add_board_in_lower_bay(session: Session) -> FreeCAD.DocumentObject:
+    """Add a shelf in the session's first bay and return its object."""
+    unit_before = session.unit
+    session.select(_find_bay_ids_in_order(session.unit.root)[0])
+    assert session.split("vertical") is None
+    doc = session.container.Document
+    doc.recompute()
+    new_id = _find_new_board_id(unit_before.root, session.unit.root)
+    new_board = doc.getObject(new_id)
+    assert new_board is not None
+    return cast("FreeCAD.DocumentObject", new_board)
+
+
+def test_a_new_shelf_copies_the_stock_of_the_shelf_in_its_opening(
+    tmp_path: Path,
+) -> None:
+    """The lower bay's run holds the floor and top, which are carcass, and
+    the shelf, which is not: the new shelf takes the shelf's thickness,
+    material and grain, and no existing board's material changes."""
+    path = tmp_path / _MAGIC_START.name
+    shutil.copyfile(_MAGIC_START, path)
+    doc = FreeCAD.openDocument(str(path))
+    try:
+        container = doc.getObject("LinkGroup")
+        assert container is not None
+        shelf_obj = doc.getObject("Shelf")
+        assert shelf_obj is not None
+        shelf_obj.addProperty("App::PropertyStringList", "Grain", "Woodworking")
+        shelf = cast("_StockBox", shelf_obj)
+        shelf.Height = 12.0
+        shelf.ShapeMaterial = library_material("Wood")
+        grain = ["V", "V", "H", "H", "X", "X"]
+        shelf.Grain = grain
+        doc.recompute()
+
+        session = Session(container)
+        session.open()
+        try:
+            new_shelf = _add_board_in_lower_bay(session)
+            assert abs(float(cast("_BoxFeature", new_shelf).Height) - 12.0) < 1e-6
+            assert properties.read_material_name(new_shelf) == "Wood"
+            assert properties.read_grain(new_shelf) == grain
+            for name in ("Floor", "Top", "Left", "Right"):
+                board = doc.getObject(name)
+                assert board is not None
+                assert properties.read_material_name(board) == "Default", name
+                assert properties.read_grain(board) is None, name
+        finally:
+            session.cancel()
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def test_the_first_shelf_in_a_new_unit_copies_the_bottom_board() -> None:
+    """A new unit has no interior board, so a shelf copies the nearest
+    parallel carcass board; the bottom and top are equally near, and the
+    bottom comes first."""
+    doc = FreeCAD.newDocument("editor_first_shelf_stock")
+    try:
+        container = create_unit(doc)
+        bottom = doc.getObject("bottom")
+        assert bottom is not None
+        cast("_StockBox", bottom).ShapeMaterial = library_material("Wood")
+        doc.recompute()
+
+        session = Session(container)
+        session.open()
+        try:
+            new_shelf = _add_board_in_lower_bay(session)
+            assert abs(float(cast("_BoxFeature", new_shelf).Height) - 18.0) < 1e-6
+            assert properties.read_material_name(new_shelf) == "Wood"
+        finally:
+            session.cancel()
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+# A unit saved by the workbench before sh-030: its boards carry a
+# ShelvingMaterial property, and the document holds the group of stock
+# entries the workbench then kept. Neither means anything now.
+_PRE_SH030_UNIT = Path(__file__).parent / "fixtures" / "pre_sh030_unit.FCStd"
+
+_PropertyValue = str | tuple["_PropertyValue", ...]
+_ObjectSnapshot = tuple[str, str, tuple[tuple[str, _PropertyValue], ...]]
+
+
+def _property_value(value: object) -> _PropertyValue:
+    if isinstance(value, FreeCAD.DocumentObject):
+        return value.Name
+    if isinstance(value, list | tuple):
+        return tuple(_property_value(item) for item in value)
+    return str(value)
+
+
+def _objects_outside(container: FreeCAD.DocumentObject) -> list[_ObjectSnapshot]:
+    """Every object in ``container``'s document other than the container and
+    its members, with every property's value."""
+    members = {obj.Name for obj in cast("FreeCAD.DocumentObjectGroup", container).Group}
+    return [
+        (
+            obj.Name,
+            obj.TypeId,
+            tuple(
+                (name, _property_value(obj.getPropertyByName(name)))
+                for name in sorted(obj.PropertiesList)
+            ),
+        )
+        for obj in container.Document.Objects
+        if obj.Name != container.Name and obj.Name not in members
+    ]
+
+
+def test_a_unit_saved_before_sh030_edits_and_its_old_objects_stay_unchanged(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / _PRE_SH030_UNIT.name
+    shutil.copyfile(_PRE_SH030_UNIT, path)
+    doc = FreeCAD.openDocument(str(path))
+    try:
+        container = doc.getObject("ShelvingUnit")
+        assert container is not None
+        for name in ("bottom", "top", "left_side", "right_side"):
+            assert hasattr(doc.getObject(name), "ShelvingMaterial"), name
+        before = _objects_outside(container)
+        assert any(obj_type == "App::VarSet" for _name, obj_type, _props in before)
+
+        session = Session(container)
+        session.open()
+        new_shelf = _add_board_in_lower_bay(session)
+        assert abs(float(cast("_BoxFeature", new_shelf).Height) - 18.0) < 1e-6
+        session.commit()
+        doc.recompute()
+
+        assert _objects_outside(container) == before
     finally:
         FreeCAD.closeDocument(doc.Name)

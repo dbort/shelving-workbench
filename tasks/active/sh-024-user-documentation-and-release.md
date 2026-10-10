@@ -17,7 +17,7 @@ check of installing from the repository on a clean profile. Milestone M10, part
 - [ ] `pixi run tests` green.
 - [ ] `docs/user-guide.md` exists and covers, in this order: what the workbench
       does in a paragraph; scanning a unit you already modelled; creating one
-      from nothing; editing in the panel; the material catalog; what a refusal
+      from nothing; editing in the panel; board stock; what a refusal
       means and the common ones; and what other tools can do with the output.
 - [ ] Every command the workbench registers appears in the guide with its menu
       name, what it acts on, and what it does. A test asserts the set of command
@@ -59,8 +59,7 @@ DOCUMENT THE REFUSALS, and give them their own section. This workbench refuses
 rather than guessing, so a user will meet a refusal early and it will be their
 first real interaction with the design. For each common one, say what it means
 in terms of their geometry and what to do: a part that is not a box, a layout
-not reachable by straight cuts, a thickness matching no catalog entry, an
-over-constrained size, a pinned part the layout wants to resize. A refusal a
+not reachable by straight cuts, an over-constrained size, a pinned part the layout wants to resize. A refusal a
 user cannot act on reads as a bug.
 
 DO NOT OVERSELL. State the three limits plainly in their own section:
@@ -100,7 +99,7 @@ full to every document this task writes, and `doc-hygiene` is the authority.
 
 ## Plan
 
-- [ ] **Step 1** (`docs/user-guide.md`): Write the guide. Open with a paragraph on what the workbench does and who it is for. Then, in order: scanning a unit you already modelled, including what a container is and why one is required; creating a unit from nothing; editing in the panel, covering selection, split, merge, typed sizes, dragging, and what the measurement basis means with the thickness-change example; the material catalog and how a thickness change reaches boards; working alongside other tools, naming what Woodworking's cut list and drilling do with the output and that a document opens without this workbench installed. Use the vocabulary the README glossary defines and no other.
+- [ ] **Step 1** (`docs/user-guide.md`): Write the guide. Open with a paragraph on what the workbench does and who it is for. Then, in order: scanning a unit you already modelled, including what a container is and why one is required; creating a unit from nothing; editing in the panel, covering selection, split, merge, typed sizes, dragging, and what the measurement basis means with the thickness-change example; board stock: where material, colour and grain live, which board a new one copies them from, and changing them with the editor's stock swap (sh-031); working alongside other tools, naming what Woodworking's cut list and drilling do with the output and that a document opens without this workbench installed. Use the vocabulary the README glossary defines and no other.
 
 - [ ] **Step 2** (`docs/user-guide.md`): Add the two sections that keep the guide honest. A refusals section, one subsection per common refusal, each saying what it means in terms of the user's geometry and what to do about it. A limits section stating rectangular boxes only, one elevation plane per unit, and guillotine layouts only, each with what happens when you exceed it. Keep both consistent with `docs/scope-and-design.md` without copying it.
 

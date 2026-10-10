@@ -3,18 +3,8 @@
 from dataclasses import replace
 from pathlib import Path
 
-from freecad.Shelving.core.materials import Catalog, MaterialEntry, MaterialId
 from freecad.Shelving.core.report import report
 from freecad.Shelving.core.scan import Skipped, boxes_from_json, scan
-
-PLY = MaterialId("ply18")
-MDF = MaterialId("mdf12")
-CATALOG = Catalog(
-    entries={
-        PLY: MaterialEntry(PLY, "ply 18", 18.0, "plywood"),
-        MDF: MaterialEntry(MDF, "mdf 12", 12.0, "mdf"),
-    }
-)
 
 FIXTURES = Path(__file__).parent / "fixtures"
 REAL_STAIR_STEP = FIXTURES / "real_stair_step.boxes.json"
@@ -23,7 +13,7 @@ REAL_MAGICSTART_F1 = FIXTURES / "real_magicstart_f1.boxes.json"
 
 def test_stair_step_report_shows_plane_facing_and_tree() -> None:
     boxes = boxes_from_json(REAL_STAIR_STEP.read_text(encoding="utf-8"))
-    result = scan(boxes, CATALOG)
+    result = scan(boxes)
     text = report(result)
     lines = text.splitlines()
 
@@ -42,25 +32,27 @@ def test_stair_step_report_shows_plane_facing_and_tree() -> None:
     # gives it its own raw grid width (see sh-025 Frontier Advice, "ROOT
     # CAUSE, PART 3"), so it prints its own clear size rather than the bare,
     # size-less line a `Fill` division would print.
-    divider_index = lines.index("      board panelZX012 (default material)")
+    divider_index = next(
+        i for i, line in enumerate(lines) if line.startswith("      board panelZX012 (")
+    )
     assert lines[divider_index - 2] == "    division along z, 18.2411 mm (clear)"
     assert "skipped" not in text
 
 
 def test_magicstart_report_names_the_panel_evidence_and_insets() -> None:
     boxes = boxes_from_json(REAL_MAGICSTART_F1.read_text(encoding="utf-8"))
-    result = scan(boxes, CATALOG)
+    result = scan(boxes)
     text = report(result)
 
     assert text.splitlines()[0] == "depth axis y, size 500 x 397 x 760 mm"
     assert "a back or front panel says so" in text
-    assert "board Shelf (default material), insets x 1/1" in text
+    assert "board Shelf (18 mm), insets x 1/1" in text
     assert "void, 100 mm (clear)" in text
 
 
 def test_undetermined_facing_warns_left_and_right_are_a_coin_flip() -> None:
     boxes = boxes_from_json(REAL_MAGICSTART_F1.read_text(encoding="utf-8"))
-    result = scan(boxes, CATALOG, front_at_min=None)
+    result = scan(boxes, front_at_min=None)
     # magicStart's overlay back infers a facing on its own; strip it back out
     # so the warning path is what's under test, not the inference.
     undetermined_unit = replace(result.unit, front_at_min=None)
@@ -76,7 +68,6 @@ def test_skipped_parts_render_as_a_block_with_reasons() -> None:
     boxes = boxes_from_json(REAL_STAIR_STEP.read_text(encoding="utf-8"))
     result = scan(
         boxes,
-        CATALOG,
         skipped=[
             Skipped(
                 name="Pad001",

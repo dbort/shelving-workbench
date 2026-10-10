@@ -32,7 +32,6 @@ from freecad.Shelving.core.scan import (
     detect_depth_axis,
     scan,
 )
-from freecad.Shelving.default_catalog import DEFAULT_CATALOG
 from freecad.Shelving.unit_ops import create_unit, resize_unit
 
 _TOL_MM = 1e-6
@@ -255,7 +254,7 @@ def test_closed_shell_with_a_shelf(
     assert len(boxes) == 5, len(boxes)
     assert len(skipped) == 0, skipped
     _assert_shelf_reads_correctly(boxes)
-    result = scan(boxes, DEFAULT_CATALOG, skipped=skipped)
+    result = scan(boxes, skipped=skipped)
     _assert_shell_tree_shape(result.unit.root)
 
 
@@ -422,7 +421,7 @@ def test_scan_uses_the_stored_depth_axis_on_a_deep_unit(doc: FreeCAD.Document) -
     re-deriving, not loosening."""
     container = create_unit(doc)
     doc.recompute()
-    resize_unit(container, Vec3(1600.0, 700.0, 450.0), DEFAULT_CATALOG)
+    resize_unit(container, Vec3(1600.0, 700.0, 450.0))
     doc.recompute()
 
     boxes, skipped, record = read_container(container)
@@ -432,11 +431,10 @@ def test_scan_uses_the_stored_depth_axis_on_a_deep_unit(doc: FreeCAD.Document) -
         record.depth_axis,
     )
     with pytest.raises(ScanError):
-        scan(boxes, DEFAULT_CATALOG, skipped=skipped)
+        scan(boxes, skipped=skipped)
 
     scan(
         boxes,
-        DEFAULT_CATALOG,
         skipped=skipped,
         depth_axis=record.depth_axis,
         front_at_min=record.front_at_min,

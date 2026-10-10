@@ -19,13 +19,12 @@ from freecad.Shelving.core.geometry import Space
 # explicit "as" re-export: mypy --strict requires it
 from freecad.Shelving.core.geometry import Vec3 as Vec3
 from freecad.Shelving.core.layout import Axis, Board, Division, Insets, Region, Unit
-from freecad.Shelving.core.materials import Catalog, MaterialId
 from freecad.Shelving.core.solver import solve
 
 
 @dataclass(frozen=True)
 class BoardSpec:
-    """One physical board: its node id, role, extent, minimum corner, material.
+    """One physical board: its node id, role, extent and minimum corner.
 
     ``size`` and ``placement`` are :class:`Vec3` in the unit's local frame.
     """
@@ -34,7 +33,9 @@ class BoardSpec:
     role: str
     size: Vec3
     placement: Vec3
-    material: MaterialId
+    # The board's ``Board.stock_from``: set only on a board the editor has
+    # just created, naming the existing board it copies stock from.
+    stock_from: str | None = None
 
 
 def total_volume_mm3(specs: Sequence[BoardSpec]) -> float:
@@ -42,22 +43,20 @@ def total_volume_mm3(specs: Sequence[BoardSpec]) -> float:
     return sum(s.size.x_mm * s.size.y_mm * s.size.z_mm for s in specs)
 
 
-def expand(unit: Unit, catalog: Catalog) -> list[BoardSpec]:
+def expand(unit: Unit) -> list[BoardSpec]:
     """One :class:`BoardSpec` per ``Board`` in the tree, in pre-order.
 
-    A material id absent from ``catalog`` raises ``KeyError``; an
-    unsatisfiable layout raises
+    An unsatisfiable layout raises
     :class:`~freecad.Shelving.core.solver.LayoutSolveError`.
     """
-    spaces = solve(unit, catalog)
+    spaces = solve(unit)
     specs: list[BoardSpec] = []
-    _collect(unit.root, unit, spaces, specs)
+    _collect(unit.root, spaces, specs)
     return specs
 
 
 def _collect(
     region: Region,
-    unit: Unit,
     spaces: Mapping[str, Space],
     out: list[BoardSpec],
 ) -> None:
@@ -72,19 +71,19 @@ def _collect(
                     role=item.role,
                     size=board_space.size,
                     placement=board_space.origin,
-                    material=item.material or unit.default_material,
+                    stock_from=item.stock_from,
                 )
             )
         else:
-            _collect(item, unit, spaces, out)
+            _collect(item, spaces, out)
 
 
 def _apply_insets(axis: Axis, space: Space, insets: Insets) -> Space:
     """``space`` with ``insets`` applied to its two cross-section axes.
 
     The pair on ``axis`` itself is ignored: a board fills its division's axis
-    with the solved extent (its catalog thickness unless ``rule``
-    overrides it), never an inset.
+    with the solved extent (its ``thickness_mm`` unless ``rule`` overrides
+    it), never an inset.
     """
     origin = space.origin
     size = space.size

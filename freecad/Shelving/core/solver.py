@@ -32,7 +32,6 @@ from freecad.Shelving.core.layout import (
     Unit,
     Weighted,
 )
-from freecad.Shelving.core.materials import Catalog
 
 EPS_MM: float = 1e-6
 
@@ -156,16 +155,10 @@ def _replace_component_mm(v: Vec3, axis_index: AxisIndex, value_mm: float) -> Ve
     return Vec3(*components)
 
 
-def _thickness_mm(board: Board, unit: Unit, catalog: Catalog) -> float:
-    return catalog[board.material or unit.default_material].thickness_mm
-
-
 def _resolve_with_next(
     rule: Fixed,
     index: int,
     items: Sequence[Item],
-    unit: Unit,
-    catalog: Catalog,
     region_id: str,
 ) -> Fixed:
     """Resolve a ``Basis.WITH_NEXT`` rule to an equivalent ``Basis.CLEAR`` one.
@@ -180,8 +173,7 @@ def _resolve_with_next(
         raise LayoutSolveError(region_id, "unresolvable_basis", {})
     next_board = items[index + 1]
     assert isinstance(next_board, Board)
-    next_thickness_mm = _thickness_mm(next_board, unit, catalog)
-    resolved_size_mm = rule.size_mm - next_thickness_mm
+    resolved_size_mm = rule.size_mm - next_board.thickness_mm
     if resolved_size_mm <= 0:
         # Fixed.__post_init__ would reject this with a bare ValueError, which
         # breaks the LayoutSolveError contract solve's callers are told to
@@ -196,8 +188,6 @@ def _rule_for_item(
     item: Item,
     index: int,
     items: Sequence[Item],
-    unit: Unit,
-    catalog: Catalog,
 ) -> SizeRule:
     """The rule ``distribute`` should use for ``item``.
 
@@ -213,10 +203,10 @@ def _rule_for_item(
     if isinstance(item, Board):
         if item.rule is not None:
             return item.rule
-        return Fixed(size_mm=_thickness_mm(item, unit, catalog))
+        return Fixed(size_mm=item.thickness_mm)
     rule = item.rule
     if isinstance(rule, Fixed) and rule.basis is Basis.WITH_NEXT:
-        return _resolve_with_next(rule, index, items, unit, catalog, item.id)
+        return _resolve_with_next(rule, index, items, item.id)
     return rule
 
 
@@ -253,8 +243,6 @@ def _check_pinned(board: Board, size: Vec3) -> None:
 def _place(
     region: Region,
     space: Space,
-    unit: Unit,
-    catalog: Catalog,
     out: dict[str, Space],
 ) -> None:
     """Record one :class:`~freecad.Shelving.core.geometry.Space` per node id in the
@@ -272,7 +260,7 @@ def _place(
     axis_index = _axis_index(region.axis)
     axis_span_mm = space.extent_mm(axis_index)
     rules: list[SizeRule] = [
-        _rule_for_item(item, index, region.items, unit, catalog)
+        _rule_for_item(item, index, region.items)
         for index, item in enumerate(region.items)
     ]
     sizes_mm = distribute(axis_span_mm, rules, [], node_id=region.id)
@@ -293,20 +281,18 @@ def _place(
             _check_pinned(item, child_space.size)
             out[item.id] = child_space
         else:
-            _place(item, child_space, unit, catalog, out)
+            _place(item, child_space, out)
 
 
-def solve(unit: Unit, catalog: Catalog) -> dict[str, Space]:
+def solve(unit: Unit) -> dict[str, Space]:
     """One :class:`~freecad.Shelving.core.geometry.Space` per region and board id.
 
     The root is placed at the unit's local-frame origin with extent
-    ``unit.size_mm``. A ``default_material`` or ``Board.material`` id absent
-    from ``catalog`` raises ``KeyError`` from :meth:`Catalog.__getitem__`, not
-    :class:`LayoutSolveError`.
+    ``unit.size_mm``.
     """
     out: dict[str, Space] = {}
     root_space = Space(origin=Vec3(0.0, 0.0, 0.0), size=unit.size_mm)
-    _place(unit.root, root_space, unit, catalog, out)
+    _place(unit.root, root_space, out)
     return out
 
 

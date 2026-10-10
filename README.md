@@ -15,12 +15,6 @@ is for and how it is built, and [`docs/roadmap.md`](docs/roadmap.md) for the
 milestone breakdown. [`docs/architecture.md`](docs/architecture.md) describes
 the pre-M4 design; `scope-and-design.md` is the design of record.
 
-To eyeball a solved layout, run `pixi run demo`: it builds a sample stepped
-unit, solves the region tree, and prints the catalog, the solved position and
-size of every region, and the expanded board table. Add
-`pixi run demo -- --svg layout.svg` to also write the solved layout as an SVG
-elevation, which opens with Quick Look (spacebar in Finder) or any browser.
-
 ## Setup
 
 ### Recommended: `tools/install-deps.sh`
@@ -80,8 +74,7 @@ The layout vocabulary and how each term maps onto the code in
 [`docs/scope-and-design.md`](docs/scope-and-design.md).
 
 - **Unit**: a shelving unit. `Unit` in `freecad.Shelving.core.layout` holds
-  the outer `size_mm`, a `default_material`, a root `Region`, and a
-  persistent `id`.
+  the outer `size_mm`, a root `Region`, and a persistent `id`.
   There is no distinguished shell: the outermost boards of the outermost
   divisions are the shell.
 - **Region**: `Bay | Void | Division`, one node of the tree. Every region
@@ -100,6 +93,8 @@ The layout vocabulary and how each term maps onto the code in
   documentation calls the same thing a panel. `Board.role` is a free-form
   string set by the caller; there is no closed role enum, because a stepped
   outline can have several tops and none of them is *the* top.
+  `Board.thickness_mm` is the board's own thickness: for a scanned board,
+  its slot in the scan's snapped grid, so a run always adds up exactly.
 - **Insets**: how far a `Board` is set back from its region on each of six
   faces (`x_min_mm` / `x_max_mm` / `y_min_mm` / `y_max_mm` / `z_min_mm` /
   `z_max_mm`, all defaulting to `0.0`). The pair on the board's own division
@@ -115,13 +110,6 @@ The layout vocabulary and how each term maps onto the code in
   item immediately after it in the run, the way a shelf spacing is usually
   quoted top face to top face; the solver resolves it to a clear size before
   distributing.
-- **Catalog**: the material table. `Catalog` in
-  `freecad.Shelving.core.materials` maps a `MaterialId` to a `MaterialEntry`.
-- **Material entry**: one stock record. `MaterialEntry` carries `id`, `name`,
-  `thickness_mm`, `material_type`, and an optional `nominal_thickness` label.
-  The solver resolves a `MaterialId` to `thickness_mm`.
-- **MaterialId**: a `NewType('MaterialId', str)`. `Unit.default_material`
-  applies to any `Board` that sets no `material` of its own.
 - **Local coordinate frame**: origin at the unit's front-bottom-left corner,
   `+X` right (width), `+Y` back (depth), `+Z` up (height). A board's
   placement in that frame is its minimum corner; its size is its extent
@@ -155,27 +143,21 @@ The layout vocabulary and how each term maps onto the code in
 - **Shelving_ExportBoxes**: the command id that writes a selected
   container's boards and unreadable parts to JSON without scanning, so a
   unit `Shelving_Scan` refuses can still be captured.
-- **catalog entry**: one stock item as a document object: an `App::VarSet`
-  carrying `MaterialId`, `Description`, `Thickness`, `MaterialType`, and
-  `NominalThickness`, editable in the property editor with no dialog.
-  `freecad.Shelving.catalog.read_catalog` builds a `Catalog` from every
-  entry in a document's one catalog group.
-- **MaterialId as the stable key**: a board stores an entry's `MaterialId`,
-  never its object `Name` or `Label`, either of which is renameable from
-  the tree; a duplicate `MaterialId` is an error rather than something
-  silently resolved, since a board referring to it would otherwise be
-  ambiguous.
-- **the one-catalog rule**: a document holds at most one catalog group,
-  found by a marker property rather than by name; two is an error naming
-  both, since a board's material would otherwise depend on which one a
-  command happened to find. `freecad.Shelving.catalog.ensure_catalog` seeds
-  one from `freecad.Shelving.default_catalog` on demand, so an empty
-  document needs no setup before `Shelving_CreateUnit` runs.
-- **Reflow All**: the `Shelving_ReflowAll` command id. Rescans and rewrites
-  every container carrying `ShelvingUnitId` against the document's catalog,
-  in one transaction; a unit that refuses does not stop the others. Nothing
-  in this workbench recomputes on its own, so this is the only way a
-  changed catalog entry reaches the boards using it.
+- **stock**: a board's thickness, `ShapeMaterial`, appearance, and grain.
+  The workbench keeps the last three where the Woodworking workbench does:
+  FreeCAD's `ShapeMaterial`, the view's `ShapeAppearance`, and a `Grain`
+  string list in property group `Woodworking`, one entry per face. A write
+  never changes them on a board that already exists.
+- **carcass board**: a board with, along its run, no `Bay` between one of
+  its faces and the unit's edge, only `Void`, other boards, or nothing.
+  `freecad.Shelving.core.stock.is_carcass` decides it from the tree, so a
+  floor raised over a plinth gap is carcass.
+- **source board**: the existing board a board the editor creates copies
+  its stock from, chosen by `freecad.Shelving.core.stock.source_board`
+  among boards with the same thin axis: an interior board in the new
+  board's own run, then the nearest interior board, then the nearest
+  carcass board; failing all three, the nearest board of any kind. The new
+  `Board` carries its id as `stock_from`.
 - **the core edit layer**: `freecad.Shelving.core.edit`. `split_region`,
   `merge_at`, `set_size`, `set_basis`, and `move_board` rebuild a `Unit`'s
   tree, `Unit` in, `Unit` out, never mutating the argument; `EditError` is

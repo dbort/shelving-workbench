@@ -32,11 +32,6 @@ from freecad.Shelving.core.layout import (  # noqa: E402
     Void,
     Weighted,
 )
-from freecad.Shelving.core.materials import (  # noqa: E402
-    Catalog,
-    MaterialEntry,
-    MaterialId,
-)
 from freecad.Shelving.core.solver import solve  # noqa: E402
 from freecad.Shelving.editor.scene import (  # noqa: E402
     _DIMENSION_DATA_ROLE,
@@ -46,32 +41,22 @@ from freecad.Shelving.editor.scene import (  # noqa: E402
     hit_test,
 )
 
-PLY = MaterialId("ply18")
-CATALOG = Catalog(
-    entries={
-        PLY: MaterialEntry(
-            id=PLY, name="18mm plywood", thickness_mm=18.0, material_type="plywood"
-        )
-    }
-)
-
 # One horizontal run: a weighted Bay, an 18mm divider board, and a Fill Void,
 # each given an explicit id so a test can address it directly rather than
 # searching the tree for it.
 _UNIT = Unit(
     size_mm=Vec3(900.0, 300.0, 600.0),
-    default_material=PLY,
     root=Division(
         axis=Axis.X,
         items=[
             Bay(id="bay1", rule=Weighted(1.0)),
-            Board(id="board1", role="divider"),
+            Board(thickness_mm=18.0, id="board1", role="divider"),
             Void(id="void1"),
         ],
     ),
     depth_axis=Axis.Y,
 )
-_SPACES = solve(_UNIT, CATALOG)
+_SPACES = solve(_UNIT)
 
 # The same run, rotated a quarter turn: depth is X, not Y, so the elevation's
 # horizontal axis is Y and its vertical axis is Z (unchanged, since Z is
@@ -79,18 +64,17 @@ _SPACES = solve(_UNIT, CATALOG)
 # pair other than the X/Z default every other fixture in this module uses.
 _ROTATED_UNIT = Unit(
     size_mm=Vec3(300.0, 900.0, 600.0),
-    default_material=PLY,
     root=Division(
         axis=Axis.Y,
         items=[
             Bay(id="rbay1", rule=Weighted(1.0)),
-            Board(id="rboard1", role="divider"),
+            Board(thickness_mm=18.0, id="rboard1", role="divider"),
             Void(id="rvoid1"),
         ],
     ),
     depth_axis=Axis.X,
 )
-_ROTATED_SPACES = solve(_ROTATED_UNIT, CATALOG)
+_ROTATED_SPACES = solve(_ROTATED_UNIT)
 
 # Scene (mm) coordinates known to land inside each named item, and one known
 # to land outside the unit. Derived from _SPACES above: bay1 spans x in
@@ -237,12 +221,11 @@ def _dimension_unit(bay_rule: SizeRule) -> Unit:
     """``_UNIT``'s run with ``bay1`` ruled by ``bay_rule``."""
     return Unit(
         size_mm=Vec3(900.0, 300.0, 600.0),
-        default_material=PLY,
         root=Division(
             axis=Axis.X,
             items=[
                 Bay(id="bay1", rule=bay_rule),
-                Board(id="board1", role="divider"),
+                Board(thickness_mm=18.0, id="board1", role="divider"),
                 Void(id="void1"),
             ],
             id="root",
@@ -294,13 +277,9 @@ def _simple_text(scene: QtWidgets.QGraphicsScene, region_id: str, part: str) -> 
 def test_the_two_bases_draw_dimensions_of_different_span(
     qapp: QtWidgets.QApplication,
 ) -> None:
-    assert solve(_CLEAR_UNIT, CATALOG) == solve(_SPACING_UNIT, CATALOG)
-    clear = _dimension_line(
-        build_scene(_CLEAR_UNIT, solve(_CLEAR_UNIT, CATALOG)), "bay1"
-    )
-    spacing = _dimension_line(
-        build_scene(_SPACING_UNIT, solve(_SPACING_UNIT, CATALOG)), "bay1"
-    )
+    assert solve(_CLEAR_UNIT) == solve(_SPACING_UNIT)
+    clear = _dimension_line(build_scene(_CLEAR_UNIT, solve(_CLEAR_UNIT)), "bay1")
+    spacing = _dimension_line(build_scene(_SPACING_UNIT, solve(_SPACING_UNIT)), "bay1")
     assert clear.length() == pytest.approx(441.0)
     assert spacing.length() == pytest.approx(459.0)
 
@@ -308,7 +287,7 @@ def test_the_two_bases_draw_dimensions_of_different_span(
 def test_a_clear_dimension_spans_the_void_between_the_faces(
     qapp: QtWidgets.QApplication,
 ) -> None:
-    scene = build_scene(_CLEAR_UNIT, solve(_CLEAR_UNIT, CATALOG))
+    scene = build_scene(_CLEAR_UNIT, solve(_CLEAR_UNIT))
     line = _dimension_line(scene, "bay1")
     assert sorted((line.x1(), line.x2())) == pytest.approx([0.0, 441.0])
     # 0 is the unit's left edge, 441 the divider's near face.
@@ -320,7 +299,7 @@ def test_a_clear_dimension_spans_the_void_between_the_faces(
 def test_a_spacing_dimension_crosses_the_next_board(
     qapp: QtWidgets.QApplication,
 ) -> None:
-    scene = build_scene(_SPACING_UNIT, solve(_SPACING_UNIT, CATALOG))
+    scene = build_scene(_SPACING_UNIT, solve(_SPACING_UNIT))
     line = _dimension_line(scene, "bay1")
     assert sorted((line.x1(), line.x2())) == pytest.approx([0.0, 459.0])
     # 459 is the divider's far face, so the line runs through the whole of
@@ -333,7 +312,7 @@ def test_a_spacing_dimension_crosses_the_next_board(
 def test_a_region_with_no_board_after_it_has_no_readout(
     qapp: QtWidgets.QApplication,
 ) -> None:
-    scene = build_scene(_CLEAR_UNIT, solve(_CLEAR_UNIT, CATALOG))
+    scene = build_scene(_CLEAR_UNIT, solve(_CLEAR_UNIT))
     assert _simple_text(scene, "void1", "label") == "441"
     assert _dimension_parts(scene, "void1", "readout") == []
 
@@ -341,7 +320,7 @@ def test_a_region_with_no_board_after_it_has_no_readout(
 def test_hit_testing_a_dimension_label_returns_its_region(
     qapp: QtWidgets.QApplication,
 ) -> None:
-    scene = build_scene(_SPACING_UNIT, solve(_SPACING_UNIT, CATALOG))
+    scene = build_scene(_SPACING_UNIT, solve(_SPACING_UNIT))
     (label,) = _dimension_parts(scene, "bay1", "label")
     assert hit_test(scene, label.sceneBoundingRect().center()) == "bay1"
 
@@ -349,7 +328,7 @@ def test_hit_testing_a_dimension_label_returns_its_region(
 def test_a_spacing_line_over_a_board_still_hits_the_board(
     qapp: QtWidgets.QApplication,
 ) -> None:
-    scene = build_scene(_SPACING_UNIT, solve(_SPACING_UNIT, CATALOG))
+    scene = build_scene(_SPACING_UNIT, solve(_SPACING_UNIT))
     line = _dimension_line(scene, "bay1")
     on_the_board = QtCore.QPointF(450.0, line.y1())
     assert hit_test(scene, on_the_board) == "board1"
@@ -370,7 +349,7 @@ def test_elevation_point_inverts_the_projection(
 def test_each_dimension_end_has_an_arrowhead_on_its_face(
     qapp: QtWidgets.QApplication,
 ) -> None:
-    scene = build_scene(_SPACING_UNIT, solve(_SPACING_UNIT, CATALOG))
+    scene = build_scene(_SPACING_UNIT, solve(_SPACING_UNIT))
     arrows = _dimension_parts(scene, "bay1", "arrow")
     assert len(arrows) == 2
     tips_x_mm: list[float] = []
@@ -389,7 +368,7 @@ def test_each_dimension_end_has_an_arrowhead_on_its_face(
 def test_a_press_on_an_arrowhead_still_hits_what_is_under_it(
     qapp: QtWidgets.QApplication,
 ) -> None:
-    scene = build_scene(_SPACING_UNIT, solve(_SPACING_UNIT, CATALOG))
+    scene = build_scene(_SPACING_UNIT, solve(_SPACING_UNIT))
     line = _dimension_line(scene, "bay1")
     # The far arrowhead lies over board1's last few millimetres.
     assert hit_test(scene, QtCore.QPointF(457.0, line.y1())) == "board1"

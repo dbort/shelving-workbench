@@ -14,9 +14,8 @@ A FreeCAD workbench for designing shelving, built so that the geometry it
 produces belongs to your document rather than to the workbench.
 
 A shelving unit is designed as a flat front elevation: a rectangle divided
-into compartments by shelves and dividers, each panel with a real
-thickness taken from a material list. Change the height and the shelves
-redistribute. Type an exact opening and its neighbours absorb the
+into compartments by shelves and dividers, each panel as thick as it
+really is. Change the height and the shelves redistribute. Type an exact opening and its neighbours absorb the
 difference.
 
 What makes it unusual is the other direction. The panels are ordinary
@@ -166,8 +165,8 @@ If it cannot read the arrangement, it says which panels defeated it and
 why. It never guesses, and it never produces a plausible answer to a
 question it could not resolve.
 
-**Starting from nothing.** You create a unit, give it overall dimensions
-and a material, and get a plain carcass. Editing proceeds identically from
+**Starting from nothing.** You create a unit, give it overall dimensions,
+and get a plain carcass. Editing proceeds identically from
 there.
 
 **Editing.** A unit opens as a front elevation. You pick a compartment and
@@ -215,7 +214,7 @@ the axis and need not alternate, so two adjacent panels are two boards face
 to face.
 
 Each item contributes a size along the division's axis. A panel
-contributes its material thickness. A region contributes a **rule**: a
+contributes its own thickness, measured from its solid. A region contributes a **rule**: a
 fixed size, a share of what is left, or an equal share. Fixed sizes drive
 the layout, shares absorb what is left over, and a division whose fixed
 sizes exceed the space available, or which has slack and nothing to absorb
@@ -270,7 +269,7 @@ sounds: a missing panel does not cause a failure, it causes a plausible
 and wrong answer, because compartments that were enclosed read as open
 instead.
 
-Three things geometry cannot tell it, all of which are supplied rather
+Two things geometry cannot tell it, both of which are supplied rather
 than inferred:
 
 - **Rules**, because a compartment that is fixed and one that happens to
@@ -278,8 +277,6 @@ than inferred:
   fixed size measures, since a clear opening and a shelf spacing place the
   panels in the same positions. Stored intent wins; without it, equal
   neighbours are treated as sharing and unequal ones as fixed.
-- **Material identity**, because thickness alone does not name a stock
-  entry.
 - **Which side the unit faces**, which decides nothing about the geometry
   and everything about which end is called the left. Two weak hints exist,
   a back or a front panel, and a front inset with a flush rear, and both
@@ -302,6 +299,17 @@ or referenced from elsewhere in the document survives a reflow. Nothing is
 recreated that did not need to be. Panels marked unchangeable may be moved
 but are never rewritten.
 
+A panel's material, colour and grain are never written to a panel that
+already exists. The workbench keeps them where the Woodworking workbench
+does: FreeCAD's own material property, the panel's appearance, and a grain
+list with one entry per face. A panel the editor adds copies all of these,
+and its thickness, from an existing panel lying the same way: another
+shelf in the same opening first, then the nearest such shelf elsewhere in
+the unit, then the nearest outer panel. An outer panel is one with no
+compartment beyond it on one side, so a floor raised over a plinth counts
+as outer. That way a shelf can be different stock from the carcass, and
+new shelves follow the shelves rather than the carcass.
+
 ## What is stored, and where
 
 The principle is that anything derivable from geometry is derived, because
@@ -316,8 +324,9 @@ and the answer is to treat it as new geometry, which is what somebody
 copying a shelf to make another shelf wanted. A preserved name in a
 different document is a relocation.
 
-**On each panel**: its material, and the rule for the space beside it.
-Nothing else. What kind of panel it is and how far it is held off its
+**On each panel**: the rule for the space beside it. Nothing else of the
+workbench's own; material, colour and grain are the ones FreeCAD and the
+Woodworking workbench already keep. What kind of panel it is and how far it is held off its
 neighbours are both derived.
 
 **On the container**: the unit's identity, its elevation plane, which way
@@ -341,7 +350,6 @@ Bookcase                        App::Part
   Right Side                    Part::Box
   Shelf 1                       Part::Box
   Shelf 2                       Part::Box
-Shelving Materials              a material list
 Shelving Parameters             App::VarSet, when named values are used
 ```
 

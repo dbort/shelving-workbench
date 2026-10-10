@@ -16,9 +16,6 @@ from freecad.Shelving.core.layout import (
     Weighted,
     new_id,
 )
-from freecad.Shelving.core.materials import MaterialId
-
-PLY = MaterialId("ply18")
 
 
 def test_division_rejects_empty_items() -> None:
@@ -30,7 +27,6 @@ def test_unit_size_x_mm_must_be_positive() -> None:
     with pytest.raises(ValueError, match="size_mm.x_mm"):
         Unit(
             size_mm=Vec3(0.0, 1800.0, 300.0),
-            default_material=PLY,
             root=Bay(),
         )
 
@@ -39,7 +35,6 @@ def test_unit_size_y_mm_must_be_positive() -> None:
     with pytest.raises(ValueError, match="size_mm.y_mm"):
         Unit(
             size_mm=Vec3(900.0, -1.0, 300.0),
-            default_material=PLY,
             root=Bay(),
         )
 
@@ -48,18 +43,14 @@ def test_unit_size_z_mm_must_be_positive() -> None:
     with pytest.raises(ValueError, match="size_mm.z_mm"):
         Unit(
             size_mm=Vec3(900.0, 1800.0, 0.0),
-            default_material=PLY,
             root=Bay(),
         )
 
 
-def test_unit_default_material_must_be_nonempty() -> None:
-    with pytest.raises(ValueError, match="default_material"):
-        Unit(
-            size_mm=Vec3(900.0, 1800.0, 300.0),
-            default_material=MaterialId(""),
-            root=Bay(),
-        )
+@pytest.mark.parametrize("thickness_mm", [0.0, -18.0])
+def test_board_thickness_mm_must_be_positive(thickness_mm: float) -> None:
+    with pytest.raises(ValueError, match="thickness_mm"):
+        Board(thickness_mm=thickness_mm)
 
 
 def test_fixed_size_must_be_positive() -> None:
@@ -91,18 +82,17 @@ def test_new_id_calls_differ() -> None:
 
 
 def test_board_pinned_size_mm_defaults_to_none() -> None:
-    assert Board().pinned_size_mm is None
+    assert Board(thickness_mm=18.0).pinned_size_mm is None
 
 
 def test_board_pinned_size_mm_can_be_set() -> None:
     size_mm = Vec3(400.0, 18.0, 250.0)
-    assert Board(pinned_size_mm=size_mm).pinned_size_mm == size_mm
+    assert Board(thickness_mm=18.0, pinned_size_mm=size_mm).pinned_size_mm == size_mm
 
 
 def test_unit_depth_axis_and_front_at_min_default_to_none() -> None:
     unit = Unit(
         size_mm=Vec3(900.0, 1800.0, 300.0),
-        default_material=PLY,
         root=Bay(),
     )
     assert unit.depth_axis is None
@@ -112,7 +102,6 @@ def test_unit_depth_axis_and_front_at_min_default_to_none() -> None:
 def test_unit_depth_axis_and_front_at_min_can_be_set() -> None:
     unit = Unit(
         size_mm=Vec3(900.0, 1800.0, 300.0),
-        default_material=PLY,
         root=Bay(),
         depth_axis=Axis.Y,
         front_at_min=True,
@@ -122,13 +111,12 @@ def test_unit_depth_axis_and_front_at_min_can_be_set() -> None:
 
 
 def test_ids_survive_construction() -> None:
-    board = Board(id="my-board")
+    board = Board(thickness_mm=18.0, id="my-board")
     bay = Bay(id="my-bay")
     void = Void(id="my-void")
     division = Division(axis=Axis.Z, items=[board], id="my-division")
     unit = Unit(
         size_mm=Vec3(900.0, 1800.0, 300.0),
-        default_material=PLY,
         root=division,
         id="my-unit",
     )
