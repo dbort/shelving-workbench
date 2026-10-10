@@ -19,7 +19,7 @@ _PATH_SPAN = re.compile(r"`([\w./-]+/[\w./-]*)`")
 
 
 def mentioned_paths(text: str) -> list[str]:
-    """Return every code span in ``text`` that contains a slash, in order."""
+    """Return every path-like code span in ``text``, in order."""
     return _PATH_SPAN.findall(text)
 
 
