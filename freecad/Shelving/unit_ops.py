@@ -107,6 +107,14 @@ def _rescanned_unit(container: FreeCAD.DocumentObject) -> Unit:
     return unit
 
 
+def unit_size_mm(container: FreeCAD.DocumentObject) -> Vec3:
+    """``container``'s outer size as the scan grid measures it, leaving out
+    every part the scan sets aside, such as a back panel. Raises
+    ``ScanError`` when the container does not scan, and ``ValueError`` when
+    its stored rule record is malformed."""
+    return _rescanned_unit(container).size_mm
+
+
 def resize_unit(container: FreeCAD.DocumentObject, size_mm: Vec3) -> WriteResult:
     """Rescan ``container``, substitute ``size_mm`` for its outer size, and
     write the result back."""

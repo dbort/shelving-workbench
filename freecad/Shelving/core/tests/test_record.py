@@ -217,11 +217,8 @@ def _b(role: str) -> Board:
 
 
 def _closed_box_unit() -> Unit:
-    """Four equal bays behind three shelves. The bays themselves are what
-    the equal-siblings heuristic is built for and recover as ``Fill``
-    correctly; the two outer divisions (each an only child within its own
-    parent's run, nothing to compare against) do not and recover as
-    ``Fixed`` instead of their original ``Fill``."""
+    """Four equal bays behind three shelves, every region ``Fill``: the
+    rules a scan recovers on its own, with no stored record."""
     return Unit(
         size_mm=Vec3(900.0, 300.0, 1800.0),
         root=Division(
@@ -362,9 +359,7 @@ def test_round_trip_all_equal_bays() -> None:
     original = _closed_box_unit()
     original_rules = _rule_map(original)
     rescanned = _rescan_unit(original)
-    # The two outer, only-child divisions recover as Fixed rather than their
-    # original Fill; see _closed_box_unit's docstring.
-    assert _rule_map(rescanned) != original_rules
+    assert _rule_map(rescanned) == original_rules
 
     restored = with_stored_rules(rescanned, rules_from_json(rules_to_json(original)))
     assert _rule_map(restored) == original_rules

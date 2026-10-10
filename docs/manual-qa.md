@@ -112,9 +112,9 @@ WARNING: nothing says which side this unit faces, so left and right below are a 
 
 division along z
   board Bottom (18 mm)
-  division along x, 564 mm (clear)
+  division along x
     board LeftSide (18 mm)
-    division along z, 564 mm (clear)
+    division along z
       bay
       board Shelf (18 mm)
       bay

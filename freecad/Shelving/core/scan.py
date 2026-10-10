@@ -49,6 +49,7 @@ from freecad.Shelving.core.layout import (
     SizeRule,
     Unit,
     Void,
+    Weighted,
 )
 
 # Real geometry disagrees at joints by tens of microns: a unit exported from
@@ -531,22 +532,24 @@ def _finalize_items(
     coords_mm: Sequence[float],
     snap_mm: float,
 ) -> list[Item]:
-    """``raw`` with each non-``Board``, non-wrap item's ``rule`` set by the
-    equal-siblings heuristic, sized from its span in ``bounds``/``coords_mm``,
-    and each ``Board`` without a ``rule`` given that span as its
-    ``thickness_mm``.
+    """``raw`` with each non-``Board``, non-wrap item's ``rule`` set from its
+    span in ``bounds``/``coords_mm``, and each ``Board`` given that span as
+    its ``thickness_mm``, or as its ``rule``'s size when it has one.
+
+    The ``Bay`` and ``Division`` regions share leftover space by
+    :func:`_recover_rules`, and each ``Void`` beside them is ``Fixed`` at its
+    span. A run holding no ``Bay`` or ``Division`` shares among its voids.
 
     A ``Board``'s size along its division's axis is fixed (its own thickness,
-    or its own ``rule`` override), never derived from the sibling
-    comparison, so it is excluded from it: two boards happening to be the
-    same size as some region must not make that region ``Fill``. An
-    axis-wrap ``Division`` (see ``_is_axis_wrap``) is excluded the same way
-    and for the same reason: its own axis extent is fixed by its wrapped
-    ``Board``'s own ``rule``, so it was never a genuine region the sibling
-    heuristic could speak about, and gets ``Fixed`` at its own raw grid
-    width directly instead of being compared against its siblings. Do not
-    widen this filter back to a bare ``isinstance(item, Board)`` check;
-    that would let an axis-wrap ``Division`` back into the comparison and
+    or its own ``rule`` override), so it takes no share of leftover space
+    and is excluded from the recovery: two boards happening to be the same
+    size as some region must not make that region ``Fill``. An axis-wrap
+    ``Division`` (see ``_is_axis_wrap``) is excluded the same way and for
+    the same reason: its own axis extent is its wrapped ``Board``'s slot,
+    so it gets ``Fixed`` at its own grid width directly, and the ``Void``
+    inside it absorbs changes along the wrap's axis instead. Do not widen
+    this filter back to a bare ``isinstance(item, Board)`` check; that
+    would let an axis-wrap ``Division`` back into the recovery and
     reintroduce the bug this exclusion closes.
     """
     region_positions = [
@@ -554,27 +557,41 @@ def _finalize_items(
         for i, item in enumerate(raw)
         if not isinstance(item, Board) and not _is_axis_wrap(item)
     ]
-    region_sizes_mm = [
-        coords_mm[bounds[i + 1]] - coords_mm[bounds[i]] for i in region_positions
+    # A void shares leftover space only when nothing else in its run can, so
+    # a plinth gap holds still while the compartments beside it change, and
+    # the void above a short column still lets a stepped unit grow.
+    sharing_positions = [i for i in region_positions if not isinstance(raw[i], Void)]
+    if not sharing_positions:
+        sharing_positions = region_positions
+    sizes_mm = [
+        coords_mm[bounds[i + 1]] - coords_mm[bounds[i]] for i in sharing_positions
     ]
-    rules = _recover_rules(region_sizes_mm, snap_mm)
+    rules = _recover_rules(sizes_mm, snap_mm)
     items = list(raw)
-    for position, rule in zip(region_positions, rules, strict=True):
+    for position, rule in zip(sharing_positions, rules, strict=True):
         region_item = items[position]
         assert isinstance(region_item, Bay | Void | Division)
         region_item.rule = rule
-    for i, item in enumerate(raw):
-        # A board's thickness is its slot in the same snapped grid every
-        # sibling's size comes from, so a run adds up exactly. Its measured
-        # thickness can differ from the slot by up to half of snap_mm.
-        if isinstance(item, Board) and item.rule is None:
-            item.thickness_mm = coords_mm[bounds[i + 1]] - coords_mm[bounds[i]]
-        if _is_axis_wrap(item):
-            assert isinstance(item, Division)
-            item.rule = Fixed(
-                size_mm=coords_mm[bounds[i + 1]] - coords_mm[bounds[i]],
+    for position in region_positions:
+        if position not in sharing_positions:
+            void = items[position]
+            assert isinstance(void, Void)
+            void.rule = Fixed(
+                size_mm=coords_mm[bounds[position + 1]] - coords_mm[bounds[position]],
                 basis=Basis.CLEAR,
             )
+    for i, item in enumerate(raw):
+        slot_mm = coords_mm[bounds[i + 1]] - coords_mm[bounds[i]]
+        # A board's extent along its run is its slot in the same snapped
+        # grid every sibling's size comes from, so a run adds up exactly. Its
+        # measured extent can differ from the slot by up to half of snap_mm.
+        if isinstance(item, Board) and item.rule is None:
+            item.thickness_mm = slot_mm
+        elif isinstance(item, Board):
+            item.rule = Fixed(size_mm=slot_mm, basis=Basis.CLEAR)
+        if _is_axis_wrap(item):
+            assert isinstance(item, Division)
+            item.rule = Fixed(size_mm=slot_mm, basis=Basis.CLEAR)
     return items
 
 
@@ -661,9 +678,10 @@ def _make_board(
     )
     # cross_axis is the slab's cross-section axis; the enclosing Division's
     # own axis is whichever of the grid's two elevation axes cross_axis is
-    # not. When that axis is not the board's own thin axis, the board's real
-    # measured span along it (not its thickness) is what the Division must
-    # carry, a divider shorter than its neighbors say.
+    # not. When that axis is not the board's own thin axis, the board's span
+    # along it (not its thickness) is what the Division must carry, a
+    # divider shorter than its neighbors say. This measured span stands in
+    # until _finalize_items replaces it with the board's slot width.
     enclosing_axis = ctx.horizontal if cross_axis is ctx.vertical else ctx.vertical
     rule: SizeRule | None = None
     if enclosing_axis is not board.thin_axis:
@@ -860,21 +878,23 @@ def _index_of(lines_mm: Sequence[float], value_mm: float, snap_mm: float) -> int
 
 
 def _recover_rules(sizes_mm: Sequence[float], snap_mm: float) -> list[SizeRule]:
-    """``Fill`` for every size another sibling matches within ``snap_mm``,
-    ``Fixed(size, Basis.CLEAR)`` otherwise.
+    """One sharing rule per region of a run, under which the solve reproduces
+    ``sizes_mm``: ``Fill`` for each when every size agrees with the others
+    within ``snap_mm``, ``Weighted(size)`` for each otherwise.
 
-    A basis is not recoverable from geometry: a clear opening and a shelf
-    spacing quoted face to face place the boards identically, so every
-    recovered ``Fixed`` gets ``Basis.CLEAR``.
+    A scan recovers ``Fixed`` for no compartment: geometry cannot tell a size
+    someone meant to hold from one that came out that way, and a run with
+    nothing to share leftover space refuses every edit. A compartment's size
+    holds only once it is typed or dragged in the editor and kept in the
+    stored rule record. The ``Fill`` case keeps an equal run reading as
+    equal shares; mixing ``Fill`` (weight 1) with size-valued weights in one
+    run would move boards.
     """
-    rules: list[SizeRule] = []
-    for i, size_mm in enumerate(sizes_mm):
-        has_twin = any(
-            j != i and abs(other - size_mm) <= snap_mm
-            for j, other in enumerate(sizes_mm)
-        )
-        rules.append(Fill() if has_twin else Fixed(size_mm=size_mm, basis=Basis.CLEAR))
-    return rules
+    if not sizes_mm:
+        return []
+    if max(sizes_mm) - min(sizes_mm) <= snap_mm:
+        return [Fill() for _ in sizes_mm]
+    return [Weighted(weight=size_mm) for size_mm in sizes_mm]
 
 
 def _unit_size_mm(

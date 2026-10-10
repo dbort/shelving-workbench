@@ -876,12 +876,10 @@ def test_merge_collapse_never_nests_a_same_axis_division_either() -> None:
 
 
 def _two_unequal_fixed_openings_unit() -> Unit:
-    """Two unequal openings, both ``Fixed``: scanning a hand-built unit gives
-    every opening without a same-size twin its own ``Fixed`` rule (see
-    ``scan.py``'s ``_recover_rules``), so no bay in this run is ever driven
-    and every edit below exercises ``_splice_collapsed_child``'s
-    ``anchor is None`` branch, the one every other merge-collapse fixture in
-    this module leaves untested."""
+    """Two unequal openings, both ``Fixed``, as two typed sizes leave them:
+    no bay in this run is driven, so every edit below exercises
+    ``_splice_collapsed_child``'s ``anchor is None`` branch, the one every
+    other merge-collapse fixture in this module leaves untested."""
     return Unit(
         size_mm=Vec3(600.0, 300.0, 350.0 + 400.0 + 3 * 18.0),
         root=Division(

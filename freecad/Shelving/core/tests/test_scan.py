@@ -22,6 +22,7 @@ from freecad.Shelving.core.layout import (
     Region,
     Unit,
     Void,
+    Weighted,
 )
 from freecad.Shelving.core.scan import (
     DEFAULT_SNAP_MM,
@@ -535,7 +536,7 @@ def _b(role: str, thickness_mm: float = 18.0) -> Board:
 
 
 def _closed_box_unit() -> Unit:
-    """Four equal bays behind three shelves: the equal-siblings case."""
+    """Four equal bays behind three shelves: every run all one size."""
     return Unit(
         size_mm=Vec3(900.0, 300.0, 1800.0),
         root=Division(
@@ -591,8 +592,8 @@ def _stepped_unit() -> Unit:
 
 
 def _second_stock_unit() -> Unit:
-    """One 12 mm shelf splitting the interior into two unequal bays: the
-    unequal-siblings case, and the second-stock case together."""
+    """One 12 mm shelf splitting the interior into two unequal bays: a run of
+    differing sizes, and a second stock, together."""
     return Unit(
         size_mm=Vec3(900.0, 300.0, 1800.0),
         root=Division(
@@ -644,8 +645,8 @@ def _board_multiset(
 
 
 def _region_rules(region: Bay | Void | Division) -> list[type[object]]:
-    """Every non-``Board`` item's rule type, pre-order, for asserting the
-    equal-siblings recovery separately from the shape comparison."""
+    """Every non-``Board`` item's rule type, pre-order, for asserting rule
+    recovery separately from the shape comparison."""
     rules: list[type[object]] = []
     if isinstance(region, Division):
         for item in region.items:
@@ -675,20 +676,31 @@ def test_equal_siblings_recover_as_fill() -> None:
         for s in expand(original)
     ]
     result = scan(boxes)
-    # The outermost two levels have exactly one region sibling each (nothing
-    # to compare against), then the four equal bays behind the three
-    # shelves: those must recover as Fill, not Fixed at their solved size.
-    assert _region_rules(result.unit.root) == [Fixed, Fixed, Fill, Fill, Fill, Fill]
+    # The outermost two levels have one region each, then the four equal
+    # bays behind the three shelves: every run is all one size, so every
+    # region shares equally.
+    assert _region_rules(result.unit.root) == [Fill, Fill, Fill, Fill, Fill, Fill]
 
 
-def test_unequal_siblings_recover_as_fixed() -> None:
+def test_unequal_siblings_share_in_proportion_to_their_size() -> None:
+    """The 300 mm bay under the 12 mm shelf and the bay above it differ, so
+    each shares leftover space weighted by its scanned size, and nothing is
+    fixed: the solve reproduces the scan, and either bay can give or take
+    space."""
     original = _second_stock_unit()
     boxes = [
         Box(name=s.node_id, corner_mm=s.placement, size_mm=s.size)
         for s in expand(original)
     ]
     result = scan(boxes)
-    assert _region_rules(result.unit.root) == [Fixed, Fixed, Fixed, Fixed]
+    assert _region_rules(result.unit.root) == [Fill, Fill, Weighted, Weighted]
+    root = _division(result.unit.root)
+    column = _division(_division(root.items[1]).items[1])
+    lower, _shelf, upper = column.items
+    assert isinstance(lower, Bay) and isinstance(lower.rule, Weighted)
+    assert isinstance(upper, Bay) and isinstance(upper.rule, Weighted)
+    assert lower.rule.weight == pytest.approx(300.0)
+    assert upper.rule.weight == pytest.approx(1800.0 - 2 * 18.0 - 300.0 - 12.0)
 
 
 def _kinds_names(division: Division) -> tuple[str, list[str]]:
@@ -836,9 +848,9 @@ def test_real_stair_step_solves_to_three_distinct_divider_heights() -> None:
     """``panelZX012``/``panelZX007``/``panelZX008`` each solve to their own
     measured Z height (330.2 / 940.5874 / 1480.3374 mm) rather than being
     stretched to the tallest's height, with each wrapped divider's solved
-    Z-extent matching its ``rule``; each wrapped divider's and each
-    column body's own cross-axis (Y) size stays its own true width too,
-    rather than being equalized with its near-equal-width siblings.
+    Z-extent matching its ``rule``. Along the cross axis (Y) each wrapped
+    divider keeps its own width, and the two column bodies, one size within
+    the snap tolerance, share the rest equally.
     """
     boxes = boxes_from_json(REAL_STAIR_STEP.read_text(encoding="utf-8"))
     result = scan(boxes)
@@ -876,11 +888,10 @@ def test_real_stair_step_solves_to_three_distinct_divider_heights() -> None:
         assert board is not None
         assert spaces[board.id].size.y_mm == pytest.approx(expected, abs=0.01)
 
-    # `_finalize_items` excludes the dividers' wrap Divisions from its
-    # sibling-uniformity comparison, so each keeps its own raw grid width;
-    # the two column bodies are genuine Fill twins of each other (within
-    # snap_mm), so they share the remaining span equally (see sh-025
-    # Frontier Advice, "ROOT CAUSE, PART 3").
+    # `_finalize_items` excludes the dividers' wrap Divisions from rule
+    # recovery, so each keeps its own grid width; the two column bodies are
+    # one size within snap_mm, so both are Fill and share the remaining span
+    # equally (see sh-025 Frontier Advice, "ROOT CAUSE, PART 3").
     assert spaces[shelf015_column.id].size.y_mm == pytest.approx(887.0283, abs=0.01)
     assert spaces[panel_yx003_column.id].size.y_mm == pytest.approx(887.0283, abs=0.01)
 
@@ -889,9 +900,11 @@ def test_real_two_units_whole_tree() -> None:
     """Both seams present, one an adjacent ``Board`` and the other wrapped in
     its own ``Division``+``Void`` for its shortfall, the units' two top
     boards side by side, and the notched panel appearing in ``skipped``
-    rather than as a board."""
+    rather than as a board. The tree solves, each void taking its measured
+    size."""
     boxes, skipped = export_from_json(REAL_TWO_UNITS.read_text(encoding="utf-8"))
     result = scan(boxes, skipped=skipped)
+    spaces = solve(result.unit)
 
     assert [s.name for s in result.skipped] == ["Sketch006", "Pad003"]
 
@@ -906,8 +919,7 @@ def test_real_two_units_whole_tree() -> None:
     assert _kinds_names(face) == ("xP", ["panelFaceYX"])
     face_void = face.items[0]
     assert isinstance(face_void, Void)
-    assert isinstance(face_void.rule, Fixed)
-    assert face_void.rule.size_mm == pytest.approx(1828.7975, abs=0.001)
+    assert spaces[face_void.id].size.y_mm == pytest.approx(1828.7975, abs=0.25)
     face_board = face.items[1]
     assert isinstance(face_board, Board)
     assert isinstance(face_board.rule, Fixed)
@@ -917,8 +929,8 @@ def test_real_two_units_whole_tree() -> None:
     assert tops.axis is Axis.Y
     # Together the two units' top boards span the width; neither spans it
     # alone, so they show up as two adjacent Board items, not one. Each is
-    # thin along Z, not Y, so each carries its own real Y-span as its own
-    # rule rather than its thickness.
+    # thin along Z, not Y, so each carries its Y slot as its own rule rather
+    # than its thickness.
     assert _kinds_names(tops) == ("PP", ["panelYX", "panelYX004"])
     top_a, top_b = tops.items
     assert isinstance(top_a, Board) and isinstance(top_a.rule, Fixed)
@@ -938,12 +950,11 @@ def test_real_two_units_whole_tree() -> None:
     assert _kinds_names(left_wrap) == ("xP", ["panelZX008"])
     left_void = left_wrap.items[0]
     assert isinstance(left_void, Void)
-    assert isinstance(left_void.rule, Fixed)
-    assert left_void.rule.size_mm == pytest.approx(921.5374, abs=0.001)
+    assert spaces[left_void.id].size.z_mm == pytest.approx(921.5374, abs=0.25)
     left_side = left_wrap.items[1]
     assert isinstance(left_side, Board) and left_side.role == "panelZX008"
     assert isinstance(left_side.rule, Fixed)
-    assert left_side.rule.size_mm == pytest.approx(1480.3374, abs=0.001)
+    assert left_side.rule.size_mm == pytest.approx(1480.3374, abs=0.25)
     assert isinstance(right_side, Board) and right_side.role == "panelZX001"
     assert right_side.rule is None
 
@@ -964,14 +975,9 @@ def _stepped_columns_boxes() -> list[Box]:
         # Splits the left bay only, giving the shell one enclosed Bay so
         # scan accepts it as a tree.
         _box("Shelf", (18.0, 0.0, 500.0), (381.0, 300.0, 18.0)),
-        # Mirrors RightSide's own gap, giving the outer "body" Division a
-        # second near-equal-width wrap (three 18 mm dividers) and a second
-        # near-equal-width void (two 379 mm gaps): a lone divider's wrap
-        # never lands in _finalize_items's sibling comparison at all when
-        # nothing else in the division is close to its own width, so this
-        # shape is what exercises has_twin and would catch a regression a
-        # single wrap cannot (see sh-025 Frontier Advice, "ROOT CAUSE,
-        # PART 3").
+        # Mirrors RightSide's own gap, giving the outer "body" Division three
+        # wraps (18 mm dividers) and two voids (379 mm gaps) beside its one
+        # compartment (see sh-025 Frontier Advice, "ROOT CAUSE, PART 3").
         _box("Divider2", (1193.0, 0.0, 18.0), (18.0, 300.0, 582.0)),
     ]
 
@@ -979,10 +985,10 @@ def _stepped_columns_boxes() -> list[Box]:
 def test_short_divider_between_differently_sized_bays_keeps_its_own_height() -> None:
     """A divider shorter than its taller neighbor solves to its own true
     height, wrapped in a nested ``Division``+``Void`` for the shortfall,
-    rather than being stretched to the taller bay's height, and every
-    region's own cross-axis size (the axis the outer "body" ``Division``
-    itself runs along) is its own true width too, not equalized with its
-    near-equal-width siblings by ``Fill``.
+    rather than being stretched to the taller bay's height. Along the axis
+    the outer "body" ``Division`` runs, each wrap is its divider's slot:
+    ``Fixed`` at 18 mm and excluded from rule recovery, so when the unit
+    widens it stays 18 mm and the compartment takes the growth.
     """
     boxes = _stepped_columns_boxes()
     result = scan(boxes)
@@ -1002,8 +1008,6 @@ def test_short_divider_between_differently_sized_bays_keeps_its_own_height() -> 
     assert divider.rule.size_mm == pytest.approx(582.0)
     divider_void = divider_wrap.items[1]
     assert isinstance(divider_void, Void)
-    assert isinstance(divider_void.rule, Fixed)
-    assert divider_void.rule.size_mm == pytest.approx(400.0)
 
     bay_division = body.items[1]
     assert isinstance(bay_division, Division)
@@ -1017,24 +1021,36 @@ def test_short_divider_between_differently_sized_bays_keeps_its_own_height() -> 
     assert isinstance(divider2_wrap, Division)
 
     spaces = solve(result.unit)
-    # The divider keeps its own 582 mm, not LeftSide's 982 mm.
+    # The divider keeps its own 582 mm, not LeftSide's 982 mm, and the void
+    # above it takes the rest.
     assert spaces[divider.id].size.z_mm == pytest.approx(582.0)
+    assert spaces[divider_void.id].size.z_mm == pytest.approx(400.0)
     left_side = body.items[0]
     assert isinstance(left_side, Board) and left_side.role == "LeftSide"
     assert spaces[left_side.id].size.z_mm == pytest.approx(982.0)
 
-    # Cross-axis (X): the left bay (381 mm) and the two void gaps beside the
-    # dividers (both bays' own space, 379 mm each) keep their own true
-    # width, and each wrap keeps its own 18 mm too, none of them the
-    # wrongly-equalized 162.4 mm all five non-Board, non-bay-division
-    # siblings would share if the wrap exclusion in `_finalize_items` were
-    # missing.
+    # Cross-axis (X): the left bay (381 mm), the two void gaps beside the
+    # dividers (379 mm each) and each wrap (18 mm) keep their own width.
     assert spaces[bay_division.id].size.x_mm == pytest.approx(381.0)
-    assert spaces[divider_wrap.id].size.x_mm == pytest.approx(18.0)
-    assert spaces[right_side_wrap.id].size.x_mm == pytest.approx(18.0)
-    assert spaces[divider2_wrap.id].size.x_mm == pytest.approx(18.0)
     assert spaces[void_gap_1.id].size.x_mm == pytest.approx(379.0)
     assert spaces[void_gap_2.id].size.x_mm == pytest.approx(379.0)
+    wraps = (divider_wrap, right_side_wrap, divider2_wrap)
+    for wrap in wraps:
+        assert isinstance(wrap.rule, Fixed)
+        assert wrap.rule.size_mm == pytest.approx(18.0)
+        assert spaces[wrap.id].size.x_mm == pytest.approx(18.0)
+
+    # A wrap that shared space like a compartment would widen with it.
+    wider = dataclasses.replace(
+        result.unit,
+        size_mm=dataclasses.replace(
+            result.unit.size_mm, x_mm=result.unit.size_mm.x_mm + 60.0
+        ),
+    )
+    wider_spaces = solve(wider)
+    assert wider_spaces[bay_division.id].size.x_mm == pytest.approx(441.0)
+    for wrap in wraps:
+        assert wider_spaces[wrap.id].size.x_mm == pytest.approx(18.0)
 
 
 def _find_pad(nodes: list[dict[str, object]]) -> dict[str, object] | None:

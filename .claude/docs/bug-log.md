@@ -164,21 +164,3 @@ the log happens only when the user asks.
   log confirming which ancestor held the form back, and, if it is the
   overlay, on whether the panel should raise it (for example through
   FreeCAD's overlay API) or document the setting.
-
-- `bug-012` - **a typed size is refused on a scanned unit whose openings all
-  differ in size**: on the Woodworking workbench's default Magic Start unit
-  (`tests/freecad/fixtures/woodworking_magic_start_default.FCStd`), typing
-  any size for a bay in Edit Unit fails with "Every opening in this row or
-  column has a fixed size, leaving ... mm with nowhere to go". Found in the
-  LinkGroup fix's spike. Root cause: `_recover_rules` in
-  `freecad/Shelving/core/scan.py` gives a region `Fill` only when a sibling
-  in its run has a matching size and `Fixed` otherwise, so the column's
-  plinth gap (100 mm), lower bay (253 mm) and upper bay (353 mm) all come
-  back `Fixed`. `set_size` then leaves no region to absorb the difference,
-  and the solver refuses. Dragging the shelf fails too, as an overflow
-  ("The fixed sizes add up to 30.0 mm more than the space available" for a
-  30 mm drag), since the fixed bay above cannot shrink. Fix: `sh-XXX task`,
-  because which openings should stay fixed and which should share leftover
-  space on a unit nobody sized in this workbench (for example, everything
-  but the region being sized, or the largest opening, or a prompt) is a
-  product decision, and it changes the scan heuristic other units rely on.
