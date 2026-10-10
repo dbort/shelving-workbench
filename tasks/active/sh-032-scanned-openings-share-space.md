@@ -121,3 +121,12 @@ task adds no shell.
 - [x] **Step 4** (`docs/scope-and-design.md`, `docs/manual-qa.md`, `.claude/docs/bug-log.md`): The doc updates and bug-012's deletion.
 
 ## Review log
+
+### Round 1: REJECTED
+- **F1: Comments in unchanged tests now describe the removed heuristic as current behavior** (`freecad/Shelving/core/tests/test_edit.py:879-883`, `freecad/Shelving/core/tests/test_scan.py:978-985`): the `_two_unequal_fixed_openings_unit` docstring says scanning gives every opening without a same-size twin its own `Fixed` rule, and the `_stepped_columns_boxes` comment says the shape exercises `has_twin`, which this diff deletes. Restate the rationale for the current rule or drop the claim.
+- **N1: Other references to the old heuristic** (`test_scan.py:539`, `:596`, `:649`, `:892-893`; `tests/freecad/test_write.py:488`): "equal-siblings case/recovery", "sibling-uniformity comparison", "Fill twins", "equal-siblings heuristic" name a mechanism that no longer exists.
+- **N2: Stale comment on the placeholder board rule** (`freecad/Shelving/core/scan.py:679-683`): it says the board's measured span is what the Division must carry; `_finalize_items` now replaces it with the slot width.
+- **N3: The slot-width Must Have is only tested indirectly** (`test_scanned_units.py:154-174`): no single board's `rule.size_mm` is checked against its own slot, and stair-step's ruled boards are not covered.
+- **N4: `_recover_rules` docstring overstates "Only"** (`scan.py:887-888`): the scan also produces `Fixed` for a void beside compartments and for an axis-wrap division.
+- **N5: Decision revised in place rather than appended** (task file Advice): the original voids bullet was replaced; the Must Have at line 40 runs past the wrap width.
+- **N6: Evaluation doc still describes the old rule** (`docs/parametric-model-evaluation.md:142`, `:146`): non-blocking, the doc is not the design of record.
