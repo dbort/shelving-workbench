@@ -206,3 +206,7 @@ shell script beyond removing what no longer exists, if anything.
 - **N2: The any-board fallback (tier 4) is not in Advice, and only some docs mention it** (`freecad/Shelving/core/stock.py`): the README glossary describes it, but `docs/scope-and-design.md` stops at the nearest outer panel.
 - **N3: Several edited prose lines were not rewrapped** (`docs/manual-qa.md`, `docs/scope-and-design.md`, `docs/roadmap.md`, `tasks/active/sh-024-user-documentation-and-release.md`).
 - **N4: `measure`'s docstring is clumsy after the edit** (`freecad/Shelving/core/edit.py`): "read from ``spaces`` (``unit`` solved). Raises" reads awkwardly; the `_rescanned_unit` and `_read_unit` docstrings were left with short, odd line breaks.
+
+### Round 2: APPROVED
+- **N1: Some edited prose is still not rewrapped** (`docs/scope-and-design.md:169`, `docs/scope-and-design.md:309`, `docs/roadmap.md:12`, `tasks/active/sh-022-appearance-and-errors.md:41`): each line ends well short of the paragraph's width because text was cut or inserted without reflowing it.
+- **N2: M5's milestone text still tells readers to run `pixi run demo`** (`docs/roadmap.md:187`): it says the command "writes an SVG elevation", and this branch deletes both the command and the renderer. M5 keeps "Done sh-014, sh-015" with no marker. The Must Haves only required marking M8, so this does not block; a short note or a partial-supersede marker would keep the roadmap accurate.
