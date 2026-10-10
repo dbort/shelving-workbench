@@ -46,6 +46,21 @@ behind a developer flag that the planned preferences page will expose.
 - [ ] The QA Wizard command is in the Shelving menu, not the toolbar, while
       the wizard's developer flag is on, and absent while it is off. The
       flag is on by default.
+- [ ] Guard rails, each a test in the core-free suite with a failure
+      message that names the rule:
+      - no module under `freecad/Shelving/` outside `qa/` imports
+        `freecad.Shelving.qa`, except the QA Wizard command module and
+        `init_gui.py`;
+      - no module under `freecad/Shelving/qa/` imports an underscore name
+        from another `freecad.Shelving` module, or reads an underscore
+        attribute of anything but its own `self`;
+      - the Python under `freecad/Shelving/qa/` totals at most 1,200 lines,
+        and the message says raising the budget is a planning decision for
+        the user;
+      - loading a case file with a key the loader does not know fails,
+        naming the key and the file.
+- [ ] `.claude/docs/qa-wizard.md` states the wizard's contract (Advice,
+      GUARD RAILS), and `CLAUDE.md` points to it in one line.
 - [ ] `tasks/active/sh-023-preferences.md` plans a Developer group with the
       timing log and QA wizard toggles, both off by default.
       `tasks/active/sh-022-appearance-and-errors.md`,
@@ -98,6 +113,25 @@ DECISIONS (user, 2026-10-10):
 - **Forward only.** Recording a verdict moves to the next step and is
   final. Restarting a case clears its verdicts and comments.
 
+GUARD RAILS (user, 2026-10-10, after planning): keep the wizard small, and
+add no production complexity for it beyond plain design for testability.
+- Production code never depends on the wizard: only the QA Wizard command
+  module and `init_gui.py` import `freecad.Shelving.qa`.
+- The wizard drives production code through its public API only. When a
+  setup action is awkward to write, the remedy is a production change that
+  is a testability improvement worth having on its own (a public helper the
+  headless or GUI tests could use too), never a hook that exists only for
+  the wizard and never a reach into a private name.
+- The `qa/` Python has a 1,200-line budget, about a quarter over the
+  planned size. A test enforces it, and raising it is the user's call at
+  planning time, not an implementer's during `/work`.
+- Case files are closed data: the loader rejects unknown keys, so a case
+  gains a field only when a reviewed task adds it to the loader.
+- A new manual QA case is a TOML file plus, at most, a new setup action or
+  check. Anything else the wizard should do is a new task.
+- `.claude/docs/qa-wizard.md` states these rules for future work, so a
+  later task's `/work` and review apply them without rereading this file.
+
 PLANNING DECISIONS (2026-10-10):
 - The wizard ships in the workbench package (`freecad/Shelving/qa/`),
   since it runs inside FreeCAD; hatchling already packages non-Python
@@ -127,6 +161,7 @@ the TOML boundary noted above, no bare containers in signatures,
 - [ ] **Step 2** (`freecad/Shelving/qa/cases/`, `freecad/Shelving/qa/actions.py`): Port every case from `docs/manual-qa.md` to TOML, with setup actions for each starting point and pasted code block, and advisory checks where the document can answer (at least case 2's Side 1 position).
 - [ ] **Step 3** (`freecad/Shelving/qa/dock.py`, `freecad/Shelving/commands/qa_wizard.py`, `freecad/Shelving/init_gui.py`): The dock widget (case list with status, current step, setup button, check result, Pass/Fail/Skip, comment, restart case, Copy report), Report view capture, and the QA Wizard command registered in the Shelving menu only while the flag is on.
 - [ ] **Step 4** (`tests/freecad/`, `tests/freecad_gui/`): Every setup action on a fresh document, headless where it can be, and the one GUI smoke test.
-- [ ] **Step 5** (`docs/manual-qa.md`, `README.md`, `.claude/docs/friction-log.md`, `tasks/active/sh-022-appearance-and-errors.md`, `tasks/active/sh-023-preferences.md`, `tasks/active/sh-024-user-documentation-and-release.md`, `tasks/active/sh-031-editor-stock-list-and-swap.md`): Shrink the doc to policy and how to run the wizard, keep the README link accurate, delete friction-024, add the Developer group to sh-023, and point the other tasks' manual QA at case files.
+- [ ] **Step 5** (`tests/test_qa_guard_rails.py`, `.claude/docs/qa-wizard.md`, `CLAUDE.md`): The guard-rail tests (import direction, public API only, the line budget, closed case files) and the written contract, with `CLAUDE.md`'s one-line pointer.
+- [ ] **Step 6** (`docs/manual-qa.md`, `README.md`, `.claude/docs/friction-log.md`, `tasks/active/sh-022-appearance-and-errors.md`, `tasks/active/sh-023-preferences.md`, `tasks/active/sh-024-user-documentation-and-release.md`, `tasks/active/sh-031-editor-stock-list-and-swap.md`): Shrink the doc to policy and how to run the wizard, keep the README link accurate, delete friction-024, add the Developer group to sh-023, and point the other tasks' manual QA at case files.
 
 ## Review log
