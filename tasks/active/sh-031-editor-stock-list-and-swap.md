@@ -1,7 +1,7 @@
 ---
 id: sh-031
 title: "The editor's stock list and stock swap"
-blocked_by: [sh-030]
+blocked_by: [sh-030, sh-032]
 ---
 
 # sh-031: The editor's stock list and stock swap
