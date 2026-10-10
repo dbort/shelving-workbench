@@ -22,6 +22,7 @@ from freecad.Shelving.core.layout import (
     Region,
     Unit,
     Void,
+    Weighted,
 )
 from freecad.Shelving.core.scan import (
     DEFAULT_SNAP_MM,
@@ -675,20 +676,31 @@ def test_equal_siblings_recover_as_fill() -> None:
         for s in expand(original)
     ]
     result = scan(boxes)
-    # The outermost two levels have exactly one region sibling each (nothing
-    # to compare against), then the four equal bays behind the three
-    # shelves: those must recover as Fill, not Fixed at their solved size.
-    assert _region_rules(result.unit.root) == [Fixed, Fixed, Fill, Fill, Fill, Fill]
+    # The outermost two levels have one region each, then the four equal
+    # bays behind the three shelves: every run is all one size, so every
+    # region shares equally.
+    assert _region_rules(result.unit.root) == [Fill, Fill, Fill, Fill, Fill, Fill]
 
 
-def test_unequal_siblings_recover_as_fixed() -> None:
+def test_unequal_siblings_share_in_proportion_to_their_size() -> None:
+    """The 300 mm bay under the 12 mm shelf and the bay above it differ, so
+    each shares leftover space weighted by its scanned size, and nothing is
+    fixed: the solve reproduces the scan, and either bay can give or take
+    space."""
     original = _second_stock_unit()
     boxes = [
         Box(name=s.node_id, corner_mm=s.placement, size_mm=s.size)
         for s in expand(original)
     ]
     result = scan(boxes)
-    assert _region_rules(result.unit.root) == [Fixed, Fixed, Fixed, Fixed]
+    assert _region_rules(result.unit.root) == [Fill, Fill, Weighted, Weighted]
+    root = _division(result.unit.root)
+    column = _division(_division(root.items[1]).items[1])
+    lower, _shelf, upper = column.items
+    assert isinstance(lower, Bay) and isinstance(lower.rule, Weighted)
+    assert isinstance(upper, Bay) and isinstance(upper.rule, Weighted)
+    assert lower.rule.weight == pytest.approx(300.0)
+    assert upper.rule.weight == pytest.approx(1800.0 - 2 * 18.0 - 300.0 - 12.0)
 
 
 def _kinds_names(division: Division) -> tuple[str, list[str]]:
@@ -889,9 +901,11 @@ def test_real_two_units_whole_tree() -> None:
     """Both seams present, one an adjacent ``Board`` and the other wrapped in
     its own ``Division``+``Void`` for its shortfall, the units' two top
     boards side by side, and the notched panel appearing in ``skipped``
-    rather than as a board."""
+    rather than as a board. The tree solves, each void taking its measured
+    size."""
     boxes, skipped = export_from_json(REAL_TWO_UNITS.read_text(encoding="utf-8"))
     result = scan(boxes, skipped=skipped)
+    spaces = solve(result.unit)
 
     assert [s.name for s in result.skipped] == ["Sketch006", "Pad003"]
 
@@ -906,8 +920,7 @@ def test_real_two_units_whole_tree() -> None:
     assert _kinds_names(face) == ("xP", ["panelFaceYX"])
     face_void = face.items[0]
     assert isinstance(face_void, Void)
-    assert isinstance(face_void.rule, Fixed)
-    assert face_void.rule.size_mm == pytest.approx(1828.7975, abs=0.001)
+    assert spaces[face_void.id].size.y_mm == pytest.approx(1828.7975, abs=0.25)
     face_board = face.items[1]
     assert isinstance(face_board, Board)
     assert isinstance(face_board.rule, Fixed)
@@ -917,8 +930,8 @@ def test_real_two_units_whole_tree() -> None:
     assert tops.axis is Axis.Y
     # Together the two units' top boards span the width; neither spans it
     # alone, so they show up as two adjacent Board items, not one. Each is
-    # thin along Z, not Y, so each carries its own real Y-span as its own
-    # rule rather than its thickness.
+    # thin along Z, not Y, so each carries its Y slot as its own rule rather
+    # than its thickness.
     assert _kinds_names(tops) == ("PP", ["panelYX", "panelYX004"])
     top_a, top_b = tops.items
     assert isinstance(top_a, Board) and isinstance(top_a.rule, Fixed)
@@ -938,12 +951,11 @@ def test_real_two_units_whole_tree() -> None:
     assert _kinds_names(left_wrap) == ("xP", ["panelZX008"])
     left_void = left_wrap.items[0]
     assert isinstance(left_void, Void)
-    assert isinstance(left_void.rule, Fixed)
-    assert left_void.rule.size_mm == pytest.approx(921.5374, abs=0.001)
+    assert spaces[left_void.id].size.z_mm == pytest.approx(921.5374, abs=0.25)
     left_side = left_wrap.items[1]
     assert isinstance(left_side, Board) and left_side.role == "panelZX008"
     assert isinstance(left_side.rule, Fixed)
-    assert left_side.rule.size_mm == pytest.approx(1480.3374, abs=0.001)
+    assert left_side.rule.size_mm == pytest.approx(1480.3374, abs=0.25)
     assert isinstance(right_side, Board) and right_side.role == "panelZX001"
     assert right_side.rule is None
 
@@ -1002,8 +1014,6 @@ def test_short_divider_between_differently_sized_bays_keeps_its_own_height() -> 
     assert divider.rule.size_mm == pytest.approx(582.0)
     divider_void = divider_wrap.items[1]
     assert isinstance(divider_void, Void)
-    assert isinstance(divider_void.rule, Fixed)
-    assert divider_void.rule.size_mm == pytest.approx(400.0)
 
     bay_division = body.items[1]
     assert isinstance(bay_division, Division)
@@ -1017,8 +1027,10 @@ def test_short_divider_between_differently_sized_bays_keeps_its_own_height() -> 
     assert isinstance(divider2_wrap, Division)
 
     spaces = solve(result.unit)
-    # The divider keeps its own 582 mm, not LeftSide's 982 mm.
+    # The divider keeps its own 582 mm, not LeftSide's 982 mm, and the void
+    # above it takes the rest.
     assert spaces[divider.id].size.z_mm == pytest.approx(582.0)
+    assert spaces[divider_void.id].size.z_mm == pytest.approx(400.0)
     left_side = body.items[0]
     assert isinstance(left_side, Board) and left_side.role == "LeftSide"
     assert spaces[left_side.id].size.z_mm == pytest.approx(982.0)

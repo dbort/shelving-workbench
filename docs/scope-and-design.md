@@ -274,8 +274,10 @@ than inferred:
 - **Rules**, because a compartment that is fixed and one that happens to
   have solved to the same size are identical. The same holds for what a
   fixed size measures, since a clear opening and a shelf spacing place the
-  panels in the same positions. Stored intent wins; without it, equal
-  neighbors are treated as sharing and unequal ones as fixed.
+  panels in the same positions. Stored intent wins. Without it, every
+  compartment shares leftover space in proportion to its size, so any
+  edit has somewhere to go, and a void keeps its size unless nothing
+  beside it can change.
 - **Which side the unit faces**, which decides nothing about the geometry
   and everything about which end is called the left. Two weak hints exist,
   a back or a front panel, and a front inset with a flush rear, and both

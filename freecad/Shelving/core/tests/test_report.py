@@ -24,14 +24,16 @@ def test_stair_step_report_shows_plane_facing_and_tree() -> None:
     )
     assert lines[2] == ""
     assert lines[3] == "division along z"
-    assert "  division along y, 1480.34 mm (clear)" in lines
+    # The only region in its run, so it shares the run's leftover space and
+    # prints no size of its own.
+    assert "  division along y" in lines
     # panelZX012 (330.2 mm) is shorter than its tallest neighbor panelZX008
     # (1480.3374 mm), so it is nested a level deeper, under its own void, as
     # the wrapping division directly above its own board line. `_finalize_items`
-    # excludes the wrap division from the sibling-uniformity comparison and
-    # gives it its own raw grid width (see sh-025 Frontier Advice, "ROOT
-    # CAUSE, PART 3"), so it prints its own clear size rather than the bare,
-    # size-less line a `Fill` division would print.
+    # excludes the wrap division from rule recovery and gives it its own grid
+    # width (see sh-025 Frontier Advice, "ROOT CAUSE, PART 3"), so it prints
+    # its own clear size rather than the bare, size-less line a `Fill`
+    # division would print.
     divider_index = next(
         i for i, line in enumerate(lines) if line.startswith("      board panelZX012 (")
     )
@@ -47,7 +49,11 @@ def test_magicstart_report_names_the_panel_evidence_and_insets() -> None:
     assert text.splitlines()[0] == "depth axis y, size 500 x 397 x 760 mm"
     assert "a back or front panel says so" in text
     assert "board Shelf (18 mm), insets x 1/1" in text
+    # The plinth gap holds its size; the lower and upper bays differ, so each
+    # shares leftover space in proportion to its scanned size.
     assert "void, 100 mm (clear)" in text
+    assert "bay, weight 253" in text
+    assert "bay, weight 353" in text
 
 
 def test_undetermined_facing_warns_left_and_right_are_a_coin_flip() -> None:

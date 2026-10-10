@@ -37,7 +37,7 @@ from freecad.Shelving.editor.session import (
     Session,
     SplitDirection,
 )
-from freecad.Shelving.unit_ops import create_unit
+from freecad.Shelving.unit_ops import create_unit, resize_unit
 from tests.freecad_materials import library_material
 
 
@@ -994,6 +994,51 @@ def test_a_woodworking_magic_start_unit_takes_and_gives_up_a_divider(
             session.cancel()
         doc.recompute()
         assert _board_snapshot(container) == snapshot_before
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def test_a_magic_start_unit_takes_a_typed_size(tmp_path: Path) -> None:
+    """Its openings all differ in size, and each shares leftover space, so
+    sizing the lower bay moves the shelf and the upper bay takes up the
+    rest."""
+    path = tmp_path / _MAGIC_START.name
+    shutil.copyfile(_MAGIC_START, path)
+    doc = FreeCAD.openDocument(str(path))
+    try:
+        container = doc.getObject("LinkGroup")
+        assert container is not None
+        shelf_z_mm = _z_mm(container, "Shelf")
+        floor_z_mm = _z_mm(container, "Floor")
+        session = Session(container)
+        session.open()
+        try:
+            session.select(_find_bay_ids_in_order(session.unit.root)[0])
+            assert session.set_size(300.0) is None
+            doc.recompute()
+            assert abs(_z_mm(container, "Shelf") - (shelf_z_mm + 47.0)) < 1e-6
+            assert abs(_z_mm(container, "Floor") - floor_z_mm) < 1e-6
+        finally:
+            session.cancel()
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def test_a_magic_start_unit_resizes_taller(tmp_path: Path) -> None:
+    path = tmp_path / _MAGIC_START.name
+    shutil.copyfile(_MAGIC_START, path)
+    doc = FreeCAD.openDocument(str(path))
+    try:
+        container = doc.getObject("LinkGroup")
+        assert container is not None
+        resize_unit(container, Vec3(500.0, 397.0, 800.0))
+        doc.recompute()
+        for name in ("Floor", "Left", "Right", "Top", "Shelf"):
+            box = cast("_BoxFeature", doc.getObject(name))
+            thinnest_mm = min(float(box.Length), float(box.Width), float(box.Height))
+            assert abs(thinnest_mm - 18.0) < 1e-6, name
+        left = cast("_BoxFeature", doc.getObject("Left"))
+        assert abs(float(left.Height) - 800.0) < 1e-6
     finally:
         FreeCAD.closeDocument(doc.Name)
 

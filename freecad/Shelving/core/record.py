@@ -21,7 +21,7 @@ deleting a bounding board invalidates its neighbors' keys; the correct
 response, and what :func:`with_stored_rules` does, is to fall back to the
 region's scanned rule rather than raise. The geometry scanned is still
 correct, only the stored intent for that one region is lost, and the
-equal-siblings heuristic (:mod:`freecad.Shelving.core.scan`) is the
+scan's own rule recovery (:mod:`freecad.Shelving.core.scan`) is the
 documented fallback for it.
 
 A ``Fixed`` rule's :class:`~freecad.Shelving.core.layout.Basis` rides along
