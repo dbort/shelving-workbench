@@ -886,10 +886,9 @@ def _recover_rules(sizes_mm: Sequence[float], snap_mm: float) -> list[SizeRule]:
     someone meant to hold from one that came out that way, and a run with
     nothing to share leftover space refuses every edit. A compartment's size
     holds only once it is typed or dragged in the editor and kept in the
-    stored rule record. The
-    ``Fill`` case keeps an equal run reading as equal shares; mixing
-    ``Fill`` (weight 1) with size-valued weights in one run would move
-    boards.
+    stored rule record. The ``Fill`` case keeps an equal run reading as
+    equal shares; mixing ``Fill`` (weight 1) with size-valued weights in one
+    run would move boards.
     """
     if not sizes_mm:
         return []

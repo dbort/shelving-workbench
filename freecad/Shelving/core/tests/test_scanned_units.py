@@ -324,4 +324,23 @@ def test_a_scanned_unit_resizes_and_keeps_every_board_thickness(
     assert unit.depth_axis is not None
     axis = elevation_axes(unit.depth_axis)[elevation_index]
     resized = _resized(unit, axis, 40.0)
-    _thicknesses_hold(resized, dict(solve(resized)))
+    spaces = dict(solve(resized))
+    _thicknesses_hold(resized, spaces)
+
+
+def test_magic_start_grows_taller_in_its_bays_and_keeps_its_plinth() -> None:
+    """The plinth gap is a void beside compartments, so the two bays take
+    all 40 mm, in proportion to their sizes."""
+    unit = _scanned("real_magicstart_f1")
+    before = solve(unit)
+    column = _magic_start_column(unit)
+    plinth = next(item for item in column.items if isinstance(item, Void))
+    lower_bay, upper_bay = (item for item in column.items if isinstance(item, Bay))
+    after = solve(_resized(unit, Axis.Z, 40.0))
+    assert after[plinth.id].size.z_mm == pytest.approx(100.0)
+    growth_mm = [
+        after[bay.id].size.z_mm - before[bay.id].size.z_mm
+        for bay in (lower_bay, upper_bay)
+    ]
+    assert sum(growth_mm) == pytest.approx(40.0)
+    assert growth_mm[0] / growth_mm[1] == pytest.approx(253.0 / 353.0)

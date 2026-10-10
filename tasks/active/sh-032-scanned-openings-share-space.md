@@ -7,15 +7,13 @@ title: "Scanned openings share leftover space"
 
 ## Summary
 A unit modeled outside this workbench scans with every opening fixed at
-its measured size whenever no two openings in a row match, so nothing can
-absorb a change: typing a size, dragging a shelf, thinning a board and
-Resize Unit are all refused (bug-012). After this task every opening in a
-scanned unit shares leftover space in proportion to its scanned size, so
-the scan moves nothing but every edit has somewhere to go, the same as a
-unit built in the editor. A void, such as a plinth gap, keeps its size
-unless nothing else in its row can change. It also fixes a sideways board's run
-being a fraction of a millimeter off, which kept the scanned two-unit
-fixture from ever solving. sh-031's stock swap depends on both.
+its measured size whenever no two openings in a row match, so typing a
+size, dragging a shelf, thinning a board and Resize Unit are all refused
+(bug-012). After this task each opening shares leftover space in
+proportion to its scanned size, as in a unit built in the editor, while a
+void such as a plinth gap keeps its size unless nothing else in its row
+can change. It also snaps a sideways board's run to the scan grid, which
+lets the scanned two-unit fixture solve; sh-031's stock swap needs both.
 
 ## Must Have
 - [ ] `pixi run tests` green.
@@ -68,12 +66,12 @@ DECISIONS (user, 2026-10-09):
   next entry), so a plinth gap grows and shrinks with the unit, and the
   void above a stair-step's short column lets the unit grow taller.
 - **A void shares only as a last resort** (user, 2026-10-10, during
-  `/work`, superseding the previous entry): it keeps its size unless nothing else in its run can change.
-  Sharing it like a compartment moved Magic Start's floor on every edit
-  inside the unit, and a 30 mm shelf drag landed 6.6 mm short because the
-  plinth gap gave up part of the space. The void above a stair-step's
-  short column is alone in its run, so it still shares, and the unit can
-  grow taller.
+  `/work`, superseding the previous entry): it keeps its size unless
+  nothing else in its run can change. Sharing it like a compartment moved
+  Magic Start's floor on every edit inside the unit, and a 30 mm shelf
+  drag landed 6.6 mm short because the plinth gap gave up part of the
+  space. The void above a stair-step's short column is alone in its run,
+  so it still shares, and the unit can grow taller.
 - **The sideways-board slot fix belongs here**: the same cause class
   (scan produces a unit the solver refuses), the same file. Widening the
   two-unit fixture along its horizontal axis stays refused: its two tops

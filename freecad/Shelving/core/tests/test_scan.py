@@ -848,9 +848,9 @@ def test_real_stair_step_solves_to_three_distinct_divider_heights() -> None:
     """``panelZX012``/``panelZX007``/``panelZX008`` each solve to their own
     measured Z height (330.2 / 940.5874 / 1480.3374 mm) rather than being
     stretched to the tallest's height, with each wrapped divider's solved
-    Z-extent matching its ``rule``; each wrapped divider's and each
-    column body's own cross-axis (Y) size stays its own true width too,
-    rather than being equalized with its near-equal-width siblings.
+    Z-extent matching its ``rule``. Along the cross axis (Y) each wrapped
+    divider keeps its own width, and the two column bodies, one size within
+    the snap tolerance, share the rest equally.
     """
     boxes = boxes_from_json(REAL_STAIR_STEP.read_text(encoding="utf-8"))
     result = scan(boxes)
@@ -976,12 +976,9 @@ def _stepped_columns_boxes() -> list[Box]:
         # Splits the left bay only, giving the shell one enclosed Bay so
         # scan accepts it as a tree.
         _box("Shelf", (18.0, 0.0, 500.0), (381.0, 300.0, 18.0)),
-        # Mirrors RightSide's own gap, giving the outer "body" Division
-        # several near-equal-width wraps (three 18 mm dividers) and voids
-        # (two 379 mm gaps) beside its compartment. Only the wraps'
-        # exclusion from _finalize_items's rule recovery keeps each divider
-        # at its own height (see sh-025 Frontier Advice, "ROOT CAUSE,
-        # PART 3").
+        # Mirrors RightSide's own gap, giving the outer "body" Division three
+        # wraps (18 mm dividers) and two voids (379 mm gaps) beside its one
+        # compartment (see sh-025 Frontier Advice, "ROOT CAUSE, PART 3").
         _box("Divider2", (1193.0, 0.0, 18.0), (18.0, 300.0, 582.0)),
     ]
 
@@ -989,10 +986,10 @@ def _stepped_columns_boxes() -> list[Box]:
 def test_short_divider_between_differently_sized_bays_keeps_its_own_height() -> None:
     """A divider shorter than its taller neighbor solves to its own true
     height, wrapped in a nested ``Division``+``Void`` for the shortfall,
-    rather than being stretched to the taller bay's height, and every
-    region's own cross-axis size (the axis the outer "body" ``Division``
-    itself runs along) is its own true width too, not equalized with its
-    near-equal-width siblings by ``Fill``.
+    rather than being stretched to the taller bay's height. Along the axis
+    the outer "body" ``Division`` runs, each wrap is its divider's slot:
+    ``Fixed`` at 18 mm and excluded from rule recovery, so when the unit
+    widens it stays 18 mm and the compartment takes the growth.
     """
     boxes = _stepped_columns_boxes()
     result = scan(boxes)
@@ -1033,18 +1030,28 @@ def test_short_divider_between_differently_sized_bays_keeps_its_own_height() -> 
     assert isinstance(left_side, Board) and left_side.role == "LeftSide"
     assert spaces[left_side.id].size.z_mm == pytest.approx(982.0)
 
-    # Cross-axis (X): the left bay (381 mm) and the two void gaps beside the
-    # dividers (both bays' own space, 379 mm each) keep their own true
-    # width, and each wrap keeps its own 18 mm too, none of them the
-    # wrongly-equalized 162.4 mm all five non-Board, non-bay-division
-    # siblings would share if the wrap exclusion in `_finalize_items` were
-    # missing.
+    # Cross-axis (X): the left bay (381 mm), the two void gaps beside the
+    # dividers (379 mm each) and each wrap (18 mm) keep their own width.
     assert spaces[bay_division.id].size.x_mm == pytest.approx(381.0)
-    assert spaces[divider_wrap.id].size.x_mm == pytest.approx(18.0)
-    assert spaces[right_side_wrap.id].size.x_mm == pytest.approx(18.0)
-    assert spaces[divider2_wrap.id].size.x_mm == pytest.approx(18.0)
     assert spaces[void_gap_1.id].size.x_mm == pytest.approx(379.0)
     assert spaces[void_gap_2.id].size.x_mm == pytest.approx(379.0)
+    wraps = (divider_wrap, right_side_wrap, divider2_wrap)
+    for wrap in wraps:
+        assert isinstance(wrap.rule, Fixed)
+        assert wrap.rule.size_mm == pytest.approx(18.0)
+        assert spaces[wrap.id].size.x_mm == pytest.approx(18.0)
+
+    # A wrap that shared space like a compartment would widen with it.
+    wider = dataclasses.replace(
+        result.unit,
+        size_mm=dataclasses.replace(
+            result.unit.size_mm, x_mm=result.unit.size_mm.x_mm + 60.0
+        ),
+    )
+    wider_spaces = solve(wider)
+    assert wider_spaces[bay_division.id].size.x_mm == pytest.approx(441.0)
+    for wrap in wraps:
+        assert wider_spaces[wrap.id].size.x_mm == pytest.approx(18.0)
 
 
 def _find_pad(nodes: list[dict[str, object]]) -> dict[str, object] | None:

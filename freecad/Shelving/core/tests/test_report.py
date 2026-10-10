@@ -30,10 +30,9 @@ def test_stair_step_report_shows_plane_facing_and_tree() -> None:
     # panelZX012 (330.2 mm) is shorter than its tallest neighbor panelZX008
     # (1480.3374 mm), so it is nested a level deeper, under its own void, as
     # the wrapping division directly above its own board line. `_finalize_items`
-    # excludes the wrap division from rule recovery and gives it its own grid
-    # width (see sh-025 Frontier Advice, "ROOT CAUSE, PART 3"), so it prints
-    # its own clear size rather than the bare, size-less line a `Fill`
-    # division would print.
+    # excludes the wrap division from rule recovery and fixes it at its own
+    # grid width (see sh-025 Frontier Advice, "ROOT CAUSE, PART 3"), so it
+    # prints that clear size.
     divider_index = next(
         i for i, line in enumerate(lines) if line.startswith("      board panelZX012 (")
     )
