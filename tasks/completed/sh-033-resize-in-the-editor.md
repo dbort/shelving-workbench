@@ -14,11 +14,11 @@ step applies at once, so stepping a dimension shows the unit grow or shrink
 live. The separate Resize Unit command and its three dialogs go away.
 
 ## Must Have
-- [ ] `pixi run tests` green.
-- [ ] A core edit returns `unit` with a new outer size and its tree
+- [x] `pixi run tests` green.
+- [x] A core edit returns `unit` with a new outer size and its tree
       unchanged. It refuses, with `EditError`, a size that is not positive
       on any axis. Asserted in the core suite.
-- [ ] `Session` resizes its unit inside the session transaction and returns
+- [x] `Session` resizes its unit inside the session transaction and returns
       an `EditFailure` on refusal, changing nothing. Asserted headless:
       - on a fresh `create_unit` unit, resizing to 600 x 300 x 1000 mm
         writes boards whose sides are 964 mm tall, and `cancel` restores
@@ -29,7 +29,7 @@ live. The separate Resize Unit command and its three dialogs go away.
         `tests/freecad/fixtures/woodworking_magic_start_default.FCStd`,
         resizing 40 mm taller leaves the plinth gap 100 mm and every board
         18 mm thick.
-- [ ] In `tests/freecad_gui/`, the panel on a fresh unit:
+- [x] In `tests/freecad_gui/`, the panel on a fresh unit:
       - shows a Unit section with width 600 mm, depth 300 mm and height
         900 mm;
       - typing 1000 mm in height and pressing Return makes the sides
@@ -40,15 +40,15 @@ live. The separate Resize Unit command and its three dialogs go away.
         and the field shows the unit's current size again;
       - the fields show the new size after any resize, and stay correct
         after a split or a merge.
-- [ ] In `tests/freecad_gui/`, the elevation keeps at least its minimum
+- [x] In `tests/freecad_gui/`, the elevation keeps at least its minimum
       height when the panel is short, and takes most of a tall panel.
-- [ ] `freecad/Shelving/commands/resize_unit.py` no longer exists, and the
+- [x] `freecad/Shelving/commands/resize_unit.py` no longer exists, and the
       workbench registers no `Shelving_ResizeUnit` command.
       `unit_ops.resize_unit` and `unit_ops.unit_size_mm` remain.
-- [ ] `docs/manual-qa.md` has no case that runs Resize Unit; its M7 resize
+- [x] `docs/manual-qa.md` has no case that runs Resize Unit; its M7 resize
       cases use the panel's Unit section, and a new case steps a dimension
       with the spin arrows and watches the 3D view follow.
-- [ ] `mypy --strict` clean.
+- [x] `mypy --strict` clean.
 
 ## Advice
 
