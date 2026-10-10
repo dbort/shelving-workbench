@@ -30,7 +30,10 @@ suite, the repository-consistency checks, the workflow lint, a
 `freecadcmd` import check, and the headless and GUI FreeCAD test suites.
 It must be green before every review and on the merged result before
 `/ship` commits the merge. A check that needs live infrastructure becomes
-a durable test inside `pixi run tests`, never a one-off command.
+a durable test inside `pixi run tests`, never a one-off command. A check
+that needs the network follows the `SHELVING_OFFLINE` contract in
+`tools/check_action_pins.py`: skip on `1`, run when unset or empty, treat
+any other value as a usage error, and fail on any network error.
 
 ## Status
 

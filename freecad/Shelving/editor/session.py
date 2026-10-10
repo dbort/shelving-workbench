@@ -89,7 +89,10 @@ _UNPLACED_REASON = "not part of the layout"
 
 @dataclasses.dataclass(frozen=True)
 class EditFailure:
-    """A rejected session edit."""
+    """A rejected session edit, returned in place of raising. The edit that
+    produced it changed nothing: the document and the session's unit are as
+    they were before the call. ``message`` is plain words for the user and
+    names no internal id."""
 
     message: str
     # Whatever EditError or LayoutSolveError named: the region or board the

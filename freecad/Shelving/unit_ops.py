@@ -113,6 +113,9 @@ def unit_size_mm(container: FreeCAD.DocumentObject) -> Vec3:
     every part the scan sets aside, such as a back panel. Raises
     ``ScanError`` when the container does not scan, and ``ValueError`` when
     its stored rule record is malformed."""
+    # The size is measured from the boards on every call, never stored as a
+    # container property: nothing would recompute such a property after a
+    # hand edit, so it would become a second source of truth that lies.
     return _rescanned_unit(container).size_mm
 
 

@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "shelving-workbench"
 version = "0.0.1"
-description = "Parametric shelving workbench for FreeCAD 1.0, with a pure-Python layout core."
+description = "Parametric shelving workbench for FreeCAD 1.1, with a pure-Python layout core."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }

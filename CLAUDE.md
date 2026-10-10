@@ -7,7 +7,9 @@ Work is planned, implemented, and reviewed through the task pipeline:
 Doc placement: `docs/` is human-facing prose, swept by `doc-hygiene`;
 `.claude/docs/` is agent-contract material whose absolutes are never
 style-swept. Process rules, tool contracts, runtime notes and the logs go
-in `.claude/docs/`, even when a human also reads them.
+in `.claude/docs/`, even when a human also reads them. Start orienting in
+the code from `.claude/docs/code-map.md`, an index of layers only: a detail
+about one module goes in that module's docstring, never in the map.
 
 ## Invariants
 
