@@ -83,6 +83,23 @@ limit a task's total rounds. The log is append-only: it is the task's review rec
   log`. A decision the user makes during `/work` is appended to `## Advice`
   and binds the reviewer like any other.
 
+## Roadmap
+
+`docs/roadmap.md` lists open milestones only. Each carries a
+`**Status:**` line: `Planned` until a task file exists, then `Tasks
+sh-XXX, sh-YYY` naming every delivering task in dependency order, with a
+checklist directly below it:
+
+    **Status:** Tasks sh-009, sh-010
+
+    - [x] sh-009: material catalog
+    - [ ] sh-010: carcass expansion (blocked on sh-009)
+
+`/new-task` adds the task's checklist line and status id in the same
+commit as the task file. `/ship` ticks the task's box, and when it was the
+last box, deletes the milestone's section. No other step edits a status
+line or a box.
+
 ## Git
 
 - Task work happens on a branch named exactly `sh-XXX`, created from

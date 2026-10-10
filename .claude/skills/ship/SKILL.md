@@ -19,9 +19,9 @@ Invoking `/ship sh-XXX` is the user's sign-off. Pipeline rules:
    `--diff=main`. If it made edits and its checks passed, commit them
    (`doc-hygiene: pre-merge pass on sh-XXX`). If its checks failed, stop.
 3. **Finalize.** Tick every Must Have the review confirmed. If
-   `docs/roadmap.md` references this id, mark it done there (a `Task
-   sh-XXX` status becomes `Done sh-XXX`; a checklist box is ticked, and
-   the rollup status becomes `Done` when it was the last box). Stage the
+   `docs/roadmap.md` references this id, tick its box there, and delete
+   the milestone's section when it was the last box (`pipeline.md`
+   § Roadmap). Stage the
    edits, then `git mv tasks/active/sh-XXX-<slug>.md tasks/completed/`,
    and commit (`sh-XXX: mark task done`). Staging before the move matters:
    `git mv` moves the index's blob, not the file on disk.

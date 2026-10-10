@@ -33,8 +33,6 @@ check of installing from the repository on a clean profile. Milestone M10, part
 - [ ] `README.md` leads with what the workbench is for and links the guide, the
       scope document, and the roadmap. Its glossary stays, as the reference for
       the vocabulary.
-- [ ] `docs/architecture.md` is deleted; its supersession banner has served its
-      purpose and the code it described no longer exists.
 - [ ] `docs/manual-qa.md` carries a release section: install from the repository
       through the Addon Manager on a clean profile, model a unit, move it into a
       second document, confirm the guide's steps work as written.
@@ -74,12 +72,6 @@ side. Undocumented commands are how a guide rots, and this is the cheapest
 possible guard. Parse the guide for the ids rather than maintaining a second
 list.
 
-DELETE `docs/architecture.md` IN THIS TASK. It describes an object layer that no
-longer exists and a carcass model that no longer exists; its banner has done its
-job of pointing at the current design of record during the transition. Git
-history keeps it. Check every document for links to it first and repoint them at
-`scope-and-design.md`.
-
 `package.xml` VALIDATES AGAINST THE ADDON MANAGER SCHEMA. Do not guess the
 fields; the schema is published and the existing file is already close. The
 version becomes the release version rather than `0.0.1`.
@@ -107,8 +99,6 @@ full to every document this task writes, and `doc-hygiene` is the authority.
 
 - [ ] **Step 4** (`package.xml`, `README.md`): Finalize the package metadata against the Addon Manager schema: name, description matching the guide's opening, release version, icon path, maintainer, license, and FreeCAD minimum version. Rewrite the README's opening to lead with what the workbench is for and link the guide first, then the scope document, then the roadmap; keep the setup, tests and glossary sections.
 
-- [ ] **Step 5** (`docs/architecture.md`, repository-wide): Delete `docs/architecture.md`. First grep every document, task file and source comment for links or references to it and repoint each at `docs/scope-and-design.md`, or delete the reference where it only marked the supersession. Confirm nothing references the file afterwards.
-
-- [ ] **Step 6** (`docs/manual-qa.md`): Add a release section: install from the repository through the Addon Manager on a clean profile with no development symlink; create a unit; scan a unit modeled by hand; move a finished unit into a second document with an ordinary placement and confirm it is intact; and walk the user guide's steps exactly as written, confirming each does what it says. State that this section is the pre-release gate and is run once per release rather than per task.
+- [ ] **Step 5** (`docs/manual-qa.md`): Add a release section: install from the repository through the Addon Manager on a clean profile with no development symlink; create a unit; scan a unit modeled by hand; move a finished unit into a second document with an ordinary placement and confirm it is intact; and walk the user guide's steps exactly as written, confirming each does what it says. State that this section is the pre-release gate and is run once per release rather than per task.
 
 ## Review log
