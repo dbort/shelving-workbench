@@ -17,8 +17,8 @@ the SVG renderer and the `pixi run demo` tool, which predate FreeCAD's own 3D
 views. Changing stock in the editor is a separate, later task.
 
 ## Must Have
-- [ ] `pixi run tests` green.
-- [ ] `freecad/Shelving/core/materials.py`, `freecad/Shelving/core/materials.schema.json`,
+- [x] `pixi run tests` green.
+- [x] `freecad/Shelving/core/materials.py`, `freecad/Shelving/core/materials.schema.json`,
       `freecad/Shelving/catalog.py`, `freecad/Shelving/default_catalog.py`,
       `freecad/Shelving/commands/add_material.py`,
       `freecad/Shelving/commands/seed_catalog.py`,
@@ -31,15 +31,15 @@ views. Changing stock in the editor is a separate, later task.
       `git grep -E "core\.svg|core import svg|to_svg|layout_demo"` finds
       nothing there either. The workbench icon
       `freecad/Shelving/resources/shelving.svg` stays.
-- [ ] `solve`, `expand`, `scan`, `split_region` and `merge_at` take no
+- [x] `solve`, `expand`, `scan`, `split_region` and `merge_at` take no
       catalog argument, and the workbench registers no `Shelving_SeedCatalog`,
       `Shelving_AddMaterial` or `Shelving_ReflowAll` command.
-- [ ] A board's extent along its run is its own slot width in the scan grid.
+- [x] A board's extent along its run is its own slot width in the scan grid.
       Asserted in the core suite: `real_stair_step.boxes.json` at the default
       `snap_mm` scans and solves (sh-026's reproduction), and a box set mixing
       17.6 mm and 19 mm boards scans and solves with each board's solved
       extent within 1e-6 mm of its slot width.
-- [ ] A core function returns the source board for a new board, by the rule in
+- [x] A core function returns the source board for a new board, by the rule in
       Advice (SOURCE BOARD). Core tests cover each step:
       - a parallel interior board in the same opening wins over a nearer
         carcass board;
@@ -49,33 +49,33 @@ views. Changing stock in the editor is a separate, later task.
 
       Another test asserts that on the Magic Start fixture's tree the floor,
       top and sides are carcass and the shelf is interior.
-- [ ] On `tests/freecad/fixtures/woodworking_magic_start_default.FCStd` (a
+- [x] On `tests/freecad/fixtures/woodworking_magic_start_default.FCStd` (a
       copy), after the test gives the shelf a 12 mm thickness, a non-default
       `ShapeMaterial` and a `Grain` list, Add Shelf in the lower bay creates a
       board 12 mm thick with the shelf's `ShapeMaterial` name and `Grain`
       list.
-- [ ] On a fresh `create_unit` unit, the first Add Shelf creates a board
+- [x] On a fresh `create_unit` unit, the first Add Shelf creates a board
       copying the bottom board's thickness and `ShapeMaterial`.
-- [ ] In `tests/freecad_gui/`: a new board's `ShapeAppearance` equals its
+- [x] In `tests/freecad_gui/`: a new board's `ShapeAppearance` equals its
       source board's, per-face colours included; resizing a unit leaves a
       hand-set board colour unchanged; `create_unit`'s boards are 18 mm thick
       with diffuse colour (247, 185, 108).
-- [ ] A write never changes an existing board's `ShapeMaterial`, `Grain` or
+- [x] A write never changes an existing board's `ShapeMaterial`, `Grain` or
       appearance. Asserted headless for `ShapeMaterial` and `Grain` across a
       resize.
-- [ ] A container whose boards carry a leftover `ShelvingMaterial` property,
+- [x] A container whose boards carry a leftover `ShelvingMaterial` property,
       in a document holding a leftover catalog group, opens in Edit Unit and
       takes an Add Shelf. The catalog group and every object in it are
       unchanged afterwards.
-- [ ] `tasks/active/sh-022-appearance-and-errors.md` no longer plans
+- [x] `tasks/active/sh-022-appearance-and-errors.md` no longer plans
       `Shelving_RecolourUnit` or a material-to-colour mapping,
       `tasks/active/sh-023-preferences.md` no longer plans a default-material
       preference, and `docs/roadmap.md` marks M8 superseded by sh-030 under a
       legend entry for that status.
-- [ ] `docs/manual-qa.md` has no M8 section and no case that edits a catalog
+- [x] `docs/manual-qa.md` has no M8 section and no case that edits a catalog
       or runs Reflow All, and has a case for a new shelf copying a shelf of
       different stock from the carcass.
-- [ ] `mypy --strict` clean.
+- [x] `mypy --strict` clean.
 
 ## Advice
 
