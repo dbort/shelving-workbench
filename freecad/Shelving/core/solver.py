@@ -10,7 +10,7 @@ arithmetic never needs to know which is which. A layout that cannot be
 satisfied raises :class:`LayoutSolveError` with a machine-readable ``reason``
 and the id of the offending node.
 
-All lengths are float millimetres. There is no rounding or quantisation;
+All lengths are float millimeters. There is no rounding or quantization;
 :data:`EPS_MM` is the tolerance for the "does it fit" and "is it positive"
 comparisons only.
 """

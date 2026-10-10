@@ -4,7 +4,7 @@
 > document is the design of record. This one describes the design the code
 > implemented before the region-model rewrite (`docs/roadmap.md` M4), in
 > which the workbench owned its plank objects and drove them from a
-> serialised split-tree. It is kept because its decision table records why
+> serialized split-tree. It is kept because its decision table records why
 > several choices were made, not because the rest of the document still
 > matches the code. Where the two disagree, `scope-and-design.md` wins.
 
@@ -66,7 +66,7 @@ Sequenced roughly in this order:
 ### Explicitly out of scope for the foreseeable term
 
 Fabrication concerns are not part of the model. Kerf, saw and sheet
-optimisation, cost rollups, hardware, fasteners, edge banding, line
+optimization, cost rollups, hardware, fasteners, edge banding, line
 boring, doors, drawers, and face frames are all downstream of the "ideal
 form" the workbench produces.
 
@@ -87,10 +87,10 @@ form" the workbench produces.
 | Container | `App::Part`, for `App::Link` and built-in Assembly compatibility and a single rigid-body `Placement` |
 | Assembly | v1 uses plain `Placement`. The container stays compatible with the FreeCAD 1.0 built-in Assembly workbench |
 | Material model | Document-level catalog object. Required fields: actual thickness and material type. All other fields optional. Planks reference stock by UUID; unit has a default, any node may override |
-| Parameter storage | Full split-tree serialised to a hidden `App::PropertyString` (JSON) on the container. Common knobs (overall W/H/D, default material) also promoted to first-class properties |
+| Parameter storage | Full split-tree serialized to a hidden `App::PropertyString` (JSON) on the container. Common knobs (overall W/H/D, default material) also promoted to first-class properties |
 | 2.5D editor | Modal task panel, `QGraphicsView` elevation, live 3D preview, OK/Cancel wrapping one document transaction |
 | Coordinates | Front elevation on the XZ plane (X right, Z up); depth runs +Y away from the viewer. Unit origin at the front-bottom-left corner. One depth for the whole unit in v1; per-bay depth override reserved in the schema |
-| Units | Millimetres internally. Display follows the FreeCAD unit schema. The dimension field parses fractional-inch input (`3/4`, `12 1/2"`) |
+| Units | Millimeters internally. Display follows the FreeCAD unit schema. The dimension field parses fractional-inch input (`3/4`, `12 1/2"`) |
 | Platform | FreeCAD 1.1 or later, PySide6, Python 3.11 or later. Earlier FreeCAD versions are not supported |
 | Repo | GitHub `shelving-workbench`. Monorepo; `shelving_core/` is pure Python with no FreeCAD imports; the workbench vendors it |
 | License | MIT |
@@ -120,7 +120,7 @@ Lengths are plain `float` fields whose names carry an `_mm` suffix; there
 is no dedicated units type.
 
 Every node, the `Carcass` included, carries a UUID assigned at creation
-and preserved across all edits. Serialisation is a JSON object mirroring
+and preserved across all edits. Serialization is a JSON object mirroring
 this structure, stored on the container. A small schema version field
 allows later migration.
 
@@ -186,7 +186,7 @@ recomputing `App::Part` (see
   `Layout` `App::PropertyString` holding the split-tree JSON, and
   `execute`.
 
-The driver's `execute` deserialises `Layout`, overrides the four outer
+The driver's `execute` deserializes `Layout`, overrides the four outer
 scalars from the promoted properties, runs `shelving_core.expand` against
 the default catalog, rewrites `Layout` from the reconciled carcass only
 when it changed, then reconciles the `App::Part`'s plank children: for
@@ -228,7 +228,7 @@ objects inside that transaction rather than to a separate preview model.
 
 ### Appearance
 
-A ViewProvider colours each plank by its material's optional appearance
+A ViewProvider colors each plank by its material's optional appearance
 field, falling back to a default. No custom 3D widgets in v1.
 
 ### Assembly compatibility
@@ -253,7 +253,7 @@ it, triggering reflow.
 
 ```
 shelving_core/            pure Python, no FreeCAD imports
-  layout.py                 split-tree types + JSON (de)serialisation
+  layout.py                 split-tree types + JSON (de)serialization
   solver.py                 spacing solver
   expand.py                 carcass expansion -> PlankSpec list
   materials.py              catalog data model
@@ -284,10 +284,10 @@ recompute, assert plank count and bounding boxes; edit a property,
 recompute, assert the reflow. Editing a catalog thickness and asserting
 that dependent planks change arrives with M4, when the catalog becomes a
 document object. See [`freecad-notes.md`](../.claude/docs/freecad-notes.md) for the
-FreeCAD behaviours these tests depend on.
+FreeCAD behaviors these tests depend on.
 
 The core carries the load. Every geometric rule (solver distribution,
-lap-order effects, over-constraint failure, serialisation round-trips) is
+lap-order effects, over-constraint failure, serialization round-trips) is
 a core pytest. The FreeCAD checks confirm that the adapter wires the core
 to real objects and that reconciliation adds, updates, and removes the
 right children.

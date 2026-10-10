@@ -1,6 +1,6 @@
 # FreeCAD runtime notes
 
-FreeCAD behaviours this repo's tests and code depend on, each verified
+FreeCAD behaviors this repo's tests and code depend on, each verified
 directly. The pytest suites in `tests/freecad/` and `tests/freecad_gui/`
 import FreeCAD as a library from plain Python (the next section);
 `freecadcmd` runs only `tools/freecadcmd_import_check.py`, which covers the
@@ -175,7 +175,7 @@ plain Python). There is no 3D view for a `ViewObjectPy` to
 represent, so nothing headless can read or write view-only state such as
 `ShapeColor`.
 
-Consequence: a headless test cannot assert that a colour survives an
+Consequence: a headless test cannot assert that a color survives an
 operation; that case has to stay in `docs/manual-qa.md` instead
 (`tests/freecad/test_write.py`'s resize test does the same check for
 `Label`, which is ordinary `DocumentObject` state and unaffected).
@@ -200,12 +200,12 @@ exits 3), so the script must end in `os._exit(status)`. The GUI also routes
   FreeCAD-specific API is reached through Qt properties and string
   signatures, never Python attributes. `Gui::InputField` is also
   available.
-- The resolved value, in millimetres for a length, is
+- The resolved value, in millimeters for a length, is
   `widget.property("rawValue")`. `widget.property("value")` raises: PySide6
   has no converter for `Base::Quantity`. The `valueChanged(double)` signal
   is only reachable as
   `QtCore.QObject.connect(widget, QtCore.SIGNAL("valueChanged(double)"), slot)`.
-- With `widget.setProperty("unit", "mm")`, a bare number is millimetres,
+- With `widget.setProperty("unit", "mm")`, a bare number is millimeters,
   including inside a sum: `1 + 1/2"` resolves to 13.70 mm (1 mm plus
   12.70 mm), where `FreeCAD.Units.parseQuantity` gives 38.10 mm for the same
   text. `1" + 1/2"` resolves to 38.10 mm, `1-1/2"` to -11.70 mm, and
@@ -266,7 +266,7 @@ reach the Notification Area and the Report view, only without a popup.
 ## User-facing errors: the Notification Area
 
 `FreeCAD.Console.PrintTranslatedUserError("Shelving", message)` pops the
-message up briefly from the status bar's Notification Area, labelled with
+message up briefly from the status bar's Notification Area, labeled with
 the notifier `"Shelving"`, shows it in red in the status bar, and keeps it
 in the Report view. The user confirmed this in FreeCAD 1.1.1; 1.0.0 accepts
 the same call. freecad-stubs declares the function with one argument, so

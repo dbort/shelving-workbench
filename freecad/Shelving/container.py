@@ -92,7 +92,7 @@ def _enclosing_unit(obj: FreeCAD.DocumentObject) -> FreeCAD.DocumentObject | Non
         # InList also holds objects that only reference ``current`` (a Pad
         # referencing its Sketch); only group membership counts as enclosing.
         # Any group-like parent qualifies here, unlike ``_children``: a board
-        # modelled as a PartDesign Body is selected as its Body or a feature
+        # modeled as a PartDesign Body is selected as its Body or a feature
         # inside it, and the walk has to climb out through that Body.
         pending.extend(
             parent
@@ -620,7 +620,7 @@ def write_container(container: FreeCAD.DocumentObject, unit: Unit) -> WriteResul
     ``freecad.Shelving.core.scan.scan``). A match is written in place: its
     geometry always, and, if this is the first time this call finds it
     carrying no provenance (a part a user built directly and positioned
-    into a valid slot in the layout, such as a hand-modelled irregular
+    into a valid slot in the layout, such as a hand-modeled irregular
     board) or its provenance marks it a copy, fresh provenance too,
     reported in ``WriteResult.created`` alongside a genuinely new object
     since the workbench is adopting it for the first time either way. Only

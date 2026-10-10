@@ -26,7 +26,7 @@ a reasonable answer. Milestone M10, part 2 of 3.
       tolerances from preferences. No command reads a hard-coded constant for
       any of the five.
 - [ ] The defaults equal the constants those call sites use today, so a user who
-      never opens the page sees no behaviour change. Asserted by comparing each
+      never opens the page sees no behavior change. Asserted by comparing each
       reader's default against the core constant it replaces.
 - [ ] A non-positive dimension, a non-positive tolerance, and a snap tolerance at
       or above the joint clearance each fall back to the default and report once
@@ -46,7 +46,7 @@ diagnosing a refusal needs: the starter unit's three dimensions and the two
 tolerances. There is no default-material preference (user decision,
 2026-10-09, during sh-030's planning): Create Unit uses FreeCAD's Default
 material, and a board's material belongs to FreeCAD and the Woodworking
-workbench. Do NOT add preferences for colour behaviour, label style, or
+workbench. Do NOT add preferences for color behavior, label style, or
 anything else with one obviously right answer; that is how a preferences page
 becomes unmaintainable, and every added value is a branch every command carries
 forever.
@@ -61,7 +61,7 @@ A READER NEVER RAISES. FreeCAD's parameter store returns whatever was last
 written, including values written by a previous version or by hand. Every reader
 validates and falls back to its documented default on anything missing,
 malformed, or out of range, and reports once so a user learns their setting was
-ignored rather than silently getting different behaviour. A command must not
+ignored rather than silently getting different behavior. A command must not
 fail because a preference is bad.
 
 CROSS-VALIDATION MATTERS FOR THE TOLERANCES. A snap tolerance at or above the
@@ -105,6 +105,6 @@ Every length identifier carries `_mm`.
 
 - [ ] **Step 4** (`freecad/Shelving/resources/preferences.ui`, `freecad/Shelving/init_gui.py`): Create the page with FreeCAD's own preference widgets bound to the five parameter paths, grouped as starter unit and tolerances, each with a tooltip saying what it affects and, for the tolerances, what a refusal looks like when they are wrong. Register it from `init_gui` with `FreeCADGui.addPreferencePage` behind the headless-safe guard.
 
-- [ ] **Step 5** (`tools/freecad_prefs_smoke.py`, `tools/run-tests.sh`, `docs/manual-qa.md`): The headless check. Assert: the readers bound to FreeCAD's parameter store return the documented defaults on a clean profile; writing a value through `ParamGet` changes what Create Unit produces; writing a bad value leaves behaviour at the default and reports; the tolerance cross-validation fires when both are written incompatibly; and registering the page does not raise when the GUI is absent. Print `shelving prefs OK` and add a matching block to `tools/run-tests.sh`. Add a manual case for opening the page, changing the starter width, and creating a unit at the new size.
+- [ ] **Step 5** (`tools/freecad_prefs_smoke.py`, `tools/run-tests.sh`, `docs/manual-qa.md`): The headless check. Assert: the readers bound to FreeCAD's parameter store return the documented defaults on a clean profile; writing a value through `ParamGet` changes what Create Unit produces; writing a bad value leaves behavior at the default and reports; the tolerance cross-validation fires when both are written incompatibly; and registering the page does not raise when the GUI is absent. Print `shelving prefs OK` and add a matching block to `tools/run-tests.sh`. Add a manual case for opening the page, changing the starter width, and creating a unit at the new size.
 
 ## Review log

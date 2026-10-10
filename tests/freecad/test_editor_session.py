@@ -231,7 +231,7 @@ def _assert_session_matches_document(session: Session) -> None:
         # obj.Length/Width/Height are FreeCAD Quantity values at runtime
         # despite the Protocol's plain-float annotation; float() strips the
         # unit before arithmetic, which otherwise raises "Unit mismatch"
-        # against space.size's plain millimetre floats.
+        # against space.size's plain millimeter floats.
         assert abs(float(base.x) - space.origin.x_mm) <= tol_mm, (board_id, "origin.x")
         assert abs(float(base.y) - space.origin.y_mm) <= tol_mm, (board_id, "origin.y")
         assert abs(float(base.z) - space.origin.z_mm) <= tol_mm, (board_id, "origin.z")
@@ -527,7 +527,7 @@ def test_selection_permissions_and_split() -> None:
 def test_a_structurally_refused_edit_changes_nothing() -> None:
     """One refusal reason a session edit returns rather than raises: the core
     edit layer's own ``EditError``, here a merge on a board with no
-    neighbour on one side (the edge of a run). Leaves board count, names,
+    neighbor on one side (the edge of a run). Leaves board count, names,
     sizes and placements unchanged."""
     doc = FreeCAD.newDocument("editor_smoke_refused_structural")
     try:
@@ -538,7 +538,7 @@ def test_a_structurally_refused_edit_changes_nothing() -> None:
         session.open()
         try:
             # "bottom" sits first in its Division's items, so it has no
-            # neighbour before it: merge_at refuses it by construction.
+            # neighbor before it: merge_at refuses it by construction.
             boxes, _skipped, _record = read_container(container)
             bottom_name = next(b.name for b in boxes if b.name == "bottom")
             session.select(bottom_name)
@@ -678,7 +678,7 @@ def test_a_refused_edit_after_an_accepted_edit_changes_nothing() -> None:
             snapshot_after_split = _board_snapshot(container)
 
             # "bottom" sits first in its Division's items regardless of the
-            # split just made, so it still has no neighbour before it.
+            # split just made, so it still has no neighbor before it.
             boxes, _skipped, _record = read_container(container)
             bottom_name = next(b.name for b in boxes if b.name == "bottom")
             session.select(bottom_name)
@@ -833,7 +833,7 @@ def test_dimensions_drag_basis_and_untagged() -> None:
 
         session = Session(container)
         session.open()
-        cancelled = False
+        canceled = False
         try:
             probe = session.probe
             assert probe is not None
@@ -929,12 +929,12 @@ def test_dimensions_drag_basis_and_untagged() -> None:
             assert session.left_alone == ()
 
             session.cancel()
-            cancelled = True
+            canceled = True
             doc.recompute()
             assert _board_snapshot(container) == snapshot_open
             assert doc.getObject(probe_name) is None
         finally:
-            if not cancelled:
+            if not canceled:
                 session.cancel()
     finally:
         FreeCAD.closeDocument(doc.Name)

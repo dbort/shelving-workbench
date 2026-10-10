@@ -53,7 +53,7 @@ def test_is_carcass_refuses_an_unknown_board() -> None:
 
 
 def test_an_interior_board_in_the_same_run_wins_over_a_nearer_carcass_board() -> None:
-    """The 25 mm shelf's centre is 12.5 mm past the target bay's top edge,
+    """The 25 mm shelf's center is 12.5 mm past the target bay's top edge,
     the bottom's only 9 mm below its bottom edge, so the carcass bottom is
     nearer, and still loses."""
     unit = Unit(
@@ -100,7 +100,7 @@ def _two_column_unit(
 
 
 def test_an_interior_board_in_the_same_run_wins_over_a_nearer_one_elsewhere() -> None:
-    """``shelf_same``'s centre is 457 mm above the target bay's, while
+    """``shelf_same``'s center is 457 mm above the target bay's, while
     ``shelf_other``, across the divider in the next column, is about 191 mm
     from it."""
     unit = _two_column_unit(
@@ -128,7 +128,7 @@ def test_an_interior_board_in_the_same_run_wins_over_a_nearer_one_elsewhere() ->
 
 def test_with_no_interior_board_in_the_run_the_nearest_interior_board_wins() -> None:
     """The target bay sits on ``floor_b``, a carcass board raised over a
-    void, 332 mm from its centre. ``shelf_high`` in the other column is
+    void, 332 mm from its center. ``shelf_high`` in the other column is
     about 519 mm away and ``shelf_low`` farther still, and ``shelf_high``
     wins: any interior board ranks above every carcass board."""
     unit = _two_column_unit(
@@ -159,7 +159,7 @@ def test_with_no_interior_board_in_the_run_the_nearest_interior_board_wins() -> 
 def test_with_no_interior_board_at_all_the_nearest_carcass_board_wins() -> None:
     """The divider and the left side are not parallel to a new shelf, so
     they never count, though the left side is the nearest board of all; the
-    20 mm bottom's centre is 1 mm nearer than the 22 mm top's."""
+    20 mm bottom's center is 1 mm nearer than the 22 mm top's."""
     unit = Unit(
         size_mm=Vec3(1000.0, 300.0, 1000.0),
         root=Division(

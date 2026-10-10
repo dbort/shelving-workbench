@@ -10,14 +10,14 @@ own id is stable for as long as the board is (see
 :mod:`freecad.Shelving.core.scan`'s ``sh-018`` counterpart, which sets a
 board's id to its FreeCAD object name), so the key is stable across a rescan
 even though every region id is not. A region at either end of a run, or one
-whose neighbour on a side is itself a region rather than a board, has no
+whose neighbor on a side is itself a region rather than a board, has no
 bounding board on that side; :data:`NO_NEIGHBOR_SENTINEL` fills in rather than
 an empty string, so a key read back is never ambiguous about which case it
 is. Two regions in different divisions can never collide, because a board
 bounds at most one region on each side within one run.
 
 CONSEQUENCES of keying this way, because they are not obvious. Renaming or
-deleting a bounding board invalidates its neighbours' keys; the correct
+deleting a bounding board invalidates its neighbors' keys; the correct
 response, and what :func:`with_stored_rules` does, is to fall back to the
 region's scanned rule rather than raise. The geometry scanned is still
 correct, only the stored intent for that one region is lost, and the
@@ -73,7 +73,7 @@ NO_NEIGHBOR_SENTINEL: str = "~"
 def rule_key(before: str | None, after: str | None) -> str:
     """The record key for a region bounded by board ids ``before`` and
     ``after`` in its division's run, either of which is ``None`` when that
-    side has no bounding board (the end of the run, or a neighbour that is
+    side has no bounding board (the end of the run, or a neighbor that is
     itself a region rather than a board)."""
     before_part = before if before is not None else NO_NEIGHBOR_SENTINEL
     after_part = after if after is not None else NO_NEIGHBOR_SENTINEL

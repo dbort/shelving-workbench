@@ -153,7 +153,7 @@ def _fixed_and_weighted_merge_unit() -> Unit:
     """A flat ``Axis.X`` run whose ``merge_board`` sits between a ``Fixed``
     bay and a ``Weighted`` one, with two more ``Weighted`` bays of
     different weights further down the same run: the non-trivial
-    ``Weighted`` branch of ``_merged_rule`` (the two merging neighbours are
+    ``Weighted`` branch of ``_merged_rule`` (the two merging neighbors are
     not both ``Fixed``), anchored against an ``_other_driven_anchor`` that
     has more than one candidate to choose from."""
     return Unit(
@@ -433,7 +433,7 @@ def test_merge_at_refuses_an_unknown_id() -> None:
     assert "no-such-id" not in str(exc_info.value)
 
 
-def test_merge_at_refuses_a_board_with_no_neighbour_on_one_side() -> None:
+def test_merge_at_refuses_a_board_with_no_neighbor_on_one_side() -> None:
     edge_board = Board(thickness_mm=18.0, role="edge")
     unit = Unit(
         size_mm=Vec3(600.0, 300.0, 900.0),

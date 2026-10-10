@@ -370,5 +370,5 @@ def test_a_press_on_an_arrowhead_still_hits_what_is_under_it(
 ) -> None:
     scene = build_scene(_SPACING_UNIT, solve(_SPACING_UNIT))
     line = _dimension_line(scene, "bay1")
-    # The far arrowhead lies over board1's last few millimetres.
+    # The far arrowhead lies over board1's last few millimeters.
     assert hit_test(scene, QtCore.QPointF(457.0, line.y1())) == "board1"

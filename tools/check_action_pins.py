@@ -78,7 +78,7 @@ class MalformedPin(NamedTuple):
 
     # Repo-relative path, as on ``Pin``.
     file: str
-    # The offending line, normalised (leading ``- `` and whitespace stripped).
+    # The offending line, normalized (leading ``- `` and whitespace stripped).
     line: str
 
 
@@ -110,7 +110,7 @@ def _uses_lines(directory: Path) -> Iterator[tuple[str, str]]:
 
     ``- uses:`` list items and bare ``uses:`` keys both yield with the leading
     ``- `` and surrounding whitespace stripped, so ``workflow_pins`` and
-    ``malformed_version_comments`` match one normalised form and cannot drift
+    ``malformed_version_comments`` match one normalized form and cannot drift
     apart. Both ``.yml`` and ``.yaml`` are read so a ``.yaml`` workflow cannot
     slip past.
     """

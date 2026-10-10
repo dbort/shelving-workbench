@@ -113,7 +113,7 @@ The layout vocabulary and how each term maps onto the code in
 - **Local coordinate frame**: origin at the unit's front-bottom-left corner,
   `+X` right (width), `+Y` back (depth), `+Z` up (height). A board's
   placement in that frame is its minimum corner; its size is its extent
-  along each axis. All lengths are float millimetres.
+  along each axis. All lengths are float millimeters.
 - **depth axis**: the `Axis` a scan treats as running front to back, detected
   as the bounding-box axis with the smallest span unless given explicitly.
   Scanning divides only along the other two axes, never along the depth

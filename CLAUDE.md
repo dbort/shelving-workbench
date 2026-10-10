@@ -20,8 +20,8 @@ style-swept.
 
 - **Units in the name:** every identifier bound to a numeric quantity
   that has a physical unit carries that unit as a suffix — `_mm` for
-  millimetre lengths (`width_mm`, `thickness_mm`, `axis_span_mm`),
-  `_mm3` for cubic-millimetre volumes, and so on. This covers dataclass
+  millimeter lengths (`width_mm`, `thickness_mm`, `axis_span_mm`),
+  `_mm3` for cubic-millimeter volumes, and so on. This covers dataclass
   fields, function parameters, locals, and any helper whose return value
   is such a quantity (`_effective_thicknesses_mm`, never
   `_effective_thicknesses`). An identifier whose value is a `str` label
@@ -106,6 +106,9 @@ the rule set `doc-hygiene` enforces.
   narrate the body step by step. A maintainer note that earns its place
   goes inline at the line it explains. Document each field on its own
   declaration, not in the type's docstring.
+- American spelling (color, center, neighbor, behavior, millimeter,
+  modeled, -ize) in prose, user-facing text, and identifiers alike. A
+  name an outside API or file format fixes keeps its own spelling.
 - No em-dash asides or ` -- ` dashes; use a comma, colon, or separate
   sentence.
 - No filler adverbs (really, simply, actually, crucially, genuinely...)

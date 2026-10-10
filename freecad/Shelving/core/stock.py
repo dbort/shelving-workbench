@@ -54,7 +54,7 @@ def _is_carcass_path(path: tuple[tuple[Division, int], ...]) -> bool:
     high_clear = True
     # Only divisions along the board's own run lie between it and the unit's
     # edge in that direction; a division across it holds side-by-side
-    # neighbours, which are beside the board, not beyond its faces.
+    # neighbors, which are beside the board, not beyond its faces.
     for division, index in path:
         if division.axis is not axis:
             continue
@@ -97,7 +97,7 @@ def source_board(
     ``spaces`` is ``unit`` solved. A candidate is parallel to the new board
     when it runs along ``axis`` with no rule of its own, since a board with
     a rule is not thin along its run. The first non-empty tier wins, and
-    within a tier the board whose centre is nearest ``region_id``'s centre,
+    within a tier the board whose center is nearest ``region_id``'s center,
     the first in pre-order on a tie:
 
     1. a parallel interior board in the run the new board joins;

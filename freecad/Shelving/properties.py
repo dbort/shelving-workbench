@@ -314,7 +314,7 @@ def _appearance_view(obj: FreeCAD.DocumentObject) -> _AppearanceView | None:
 def copy_stock(source: FreeCAD.DocumentObject, target: FreeCAD.DocumentObject) -> None:
     """Give ``target`` ``source``'s ``ShapeMaterial``, its ``Grain`` when it
     has one, in the same property type and group, and with a GUI its whole
-    ``ShapeAppearance``, per-face colours included.
+    ``ShapeAppearance``, per-face colors included.
 
     Each property ``source`` lacks leaves ``target``'s own unchanged.
     """
@@ -336,7 +336,7 @@ def copy_stock(source: FreeCAD.DocumentObject, target: FreeCAD.DocumentObject) -
 
 
 def paint(obj: FreeCAD.DocumentObject, rgb: tuple[int, int, int]) -> None:
-    """Give every face of ``obj`` the diffuse colour ``rgb`` (0 to 255 per
+    """Give every face of ``obj`` the diffuse color ``rgb`` (0 to 255 per
     channel), keeping the rest of its appearance. Does nothing without a GUI.
     """
     view = _appearance_view(obj)
