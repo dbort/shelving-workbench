@@ -201,3 +201,10 @@ the TOML boundary noted above, no bare containers in signatures,
 - **N6: British spelling left on an edited line** (`tasks/active/sh-023-preferences.md:114`): "afterwards".
 
 Applied after this round: N1, N2, N3, N4 and N6. N5 left as is.
+
+### Round 3: REJECTED
+- **F1: Some instruction lines still hold several actions** (`freecad/Shelving/qa/cases/20-write.toml:46-48`, `freecad/Shelving/qa/cases/30-editor.toml:46`): "Restart FreeCAD and open the saved document; note what you see.", "Put the symlink back and restart FreeCAD.", "Open the QA Wizard and resume, to record what you saw." and "Click the bay and click Add Divider again." each hold more than one action; split them, and "Click Size and type =." (`30-editor.toml:100`) to match.
+- **N1: The case-authoring rules are not in the contract** (`.claude/docs/qa-wizard.md:20-24`): one action per line, omitting `instruction` when the button is the whole step, and no "or do it by hand" alternative belong there for later tasks.
+- **N2: Being the default button has no Enter-key effect in a dock** (`freecad/Shelving/qa/dock.py:249`).
+- **N3: The done mark survives a failed rerun** (`freecad/Shelving/qa/dock.py:279-282`).
+- **N4: A parenthetical holds two facts** (`freecad/Shelving/qa/model.py:4-5`).
