@@ -10,10 +10,11 @@ A dockable QA Wizard panel in FreeCAD walks a person through the manual QA
 cases one step at a time. Buttons put the document into each case's
 starting state, so there's no code to paste into the console, and Pass,
 Fail or Skip plus a comment record each step. At the end, one Save button
-writes a JSON report, with the Report view output of every step, and copies
-its path to paste into an LLM session. The cases move from prose in `docs/manual-qa.md` into
-TOML files the wizard reads, and the wizard is on by default for now
-behind a developer flag that the planned preferences page will expose.
+writes a JSON report, with the Report view output of every step, and
+copies its path to paste into an LLM session. The cases move from prose in
+`docs/manual-qa.md` into TOML files the wizard reads, and the wizard is on
+by default for now behind a developer flag that the planned preferences
+page will expose.
 
 ## Must Have
 - [ ] `pixi run tests` green.
@@ -259,3 +260,11 @@ Applied after this round: N3.
 - **N7: The round 6 feedback is covered and nothing regressed** (`git diff 5ecc5c9..HEAD`).
 
 Applied after this round: N1, N3, N4, N5 and N6. N2 left as is.
+
+### Round 8: APPROVED
+- **N1: The round 7 QA feedback is covered and nothing regressed** (`freecad/Shelving/qa/dock.py:345-358`, `tests/freecad_gui/test_qa_wizard.py:81-96`).
+- **N2: The test name is out of date** (`tests/freecad_gui/test_qa_wizard.py:107`).
+- **N3: Ragged line wrap in the Summary** (task file `:14`).
+- **N4: Superseded Advice text is still in place** (task file `:99,144`): fine as an audit record; no change needed.
+
+Applied after this round: N2 and N3.

@@ -104,7 +104,7 @@ def test_the_commit_falls_back_to_unknown(monkeypatch: pytest.MonkeyPatch) -> No
     assert dock._commit() == "unknown"
 
 
-def test_the_copied_note_clears_when_a_case_opens(wizard: dock.QAWizard) -> None:
+def test_the_saved_note_clears_when_a_case_opens(wizard: dock.QAWizard) -> None:
     wizard.save_report()
     assert wizard.report_label.text().startswith("Saved to ")
     wizard.open_case("scan.export-and-refusal")
