@@ -218,3 +218,10 @@ Applied after this round: N1, N2, N3, N4 and N6. N5 left as is.
 ### Round 5: REJECTED
 - **F1: The new resume line still holds two actions** (`freecad/Shelving/qa/cases/20-write.toml:53`): "Select this case in the list and click Open selected case." is select and then click; split it into "Select this case in the list." and "Click Open selected case."
 - **N1: Round 4's notes are applied** (`tests/freecad_gui/test_qa_wizard.py:35-43`, `.claude/docs/qa-wizard.md:27-28`): the failed-rerun reset is tested and the contract covers typing a value and pressing Return.
+
+### Round 6: APPROVED
+- **N1: Round 5's finding is fixed** (`freecad/Shelving/qa/cases/20-write.toml:53-54`): every instruction line now holds one action.
+- **N2: No regressions since round 2** (`git diff bc8156a..HEAD`): each change since has a test.
+- **N3: Ragged line wrap in the contract** (`.claude/docs/qa-wizard.md:28`).
+
+Applied after this round: N3.

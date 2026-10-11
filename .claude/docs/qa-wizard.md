@@ -25,11 +25,10 @@ code free of it. `tests/test_qa_guard_rails.py` enforces the first four.
   no automated test can assert.
 - **How a step reads.** `instruction` is a list with one action per line:
   "Select TestUnit." and "Run Scan Unit." are two lines, not one. Typing a
-  value and pressing Return counts as one action. A setup
-  button shows above the lines, so it must be the first thing the step
-  does, and no line says "press the button". A step whose button is the
-  whole step omits `instruction`. A step never offers an "or do it by
-  hand" alternative: the button does it, and its label says what it
-  does.
+  value and pressing Return counts as one action. A setup button shows
+  above the lines, so it must be the first thing the step does, and no
+  line says "press the button". A step whose button is the whole step
+  omits `instruction`. A step never offers an "or do it by hand"
+  alternative: the button does it, and its label says what it does.
 - **New wizard features need their own task.** A task that adds cases does
   not change the dock, the report, or the loader along the way.
