@@ -214,3 +214,7 @@ Applied after this round: N1, N2, N3, N4 and N6. N5 left as is.
 - **F2: "Finish case" is no longer the default button, against a binding QA-feedback decision** (`freecad/Shelving/qa/dock.py:244-248`): removing `setDefault` on round 3 N2 dropped the user's "bold and default" without their sign-off; Qt styles still draw a default button's emphasis outside a dialog.
 - **N1: The failed-rerun reset is untested** (`freecad/Shelving/qa/dock.py:278-281`).
 - **N2: "Type ... and press Return" lines** (`20-write.toml:21`, `30-editor.toml:81`): the contract could say typing a value and pressing Return counts as one action.
+
+### Round 5: REJECTED
+- **F1: The new resume line still holds two actions** (`freecad/Shelving/qa/cases/20-write.toml:53`): "Select this case in the list and click Open selected case." is select and then click; split it into "Select this case in the list." and "Click Open selected case."
+- **N1: Round 4's notes are applied** (`tests/freecad_gui/test_qa_wizard.py:35-43`, `.claude/docs/qa-wizard.md:27-28`): the failed-rerun reset is tested and the contract covers typing a value and pressing Return.
