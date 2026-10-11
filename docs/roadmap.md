@@ -7,12 +7,13 @@ task ships.
 
 ## M10: v1 polish
 
-**Status:** Tasks sh-022, sh-023, sh-024
+**Status:** Tasks sh-022, sh-035, sh-023, sh-024
 
-- [ ] sh-022: appearance and error surfacing
+- [ ] sh-022: refusals, and removing Scan Unit
+- [ ] sh-035: Relabel Unit (blocked on sh-022)
 - [ ] sh-023: the preferences page
-- [ ] sh-024: user documentation and the release (blocked on sh-022 and
-  sh-023)
+- [ ] sh-024: user documentation and the release (blocked on sh-022,
+  sh-035 and sh-023)
 
 A board takes a readable label and its source board's color when it is
 written, and an update rewrites neither, so a rename or a recolor survives
@@ -21,7 +22,9 @@ every resize. A command restores the label on request.
 Every refusal has one shape: a summary, the objects responsible, and a
 suggested next step, with the objects selected in the 3D view. The
 suggestion is data beside each reason, because a refusal a user cannot act
-on reads as a bug.
+on reads as a bug. With that in place, Edit Unit says everything about a
+hand-built unit that Scan Unit did, so Scan Unit is removed and Edit Unit is
+the one way in.
 
 The preferences page holds the starter unit's three dimensions and the snap
 and joint-clearance tolerances. Real geometry has coincident edges
@@ -111,5 +114,10 @@ Each of these is its own task when it comes up.
 - **A support check.** A board floating clear of its neighbors is a valid
   arrangement of straight cuts and is accepted today; whether a design is
   buildable is a separate question that nothing asks yet.
+- **Flipping a unit's facing in the editor.** A unit opened for the first
+  time may face the wrong way; the editor should offer turning it around to
+  the other side.
+- **A "generate bug report" command** that absorbs Export Boxes: the boxes
+  JSON plus whatever else a report needs, in one file to attach.
 - **Parametric joinery** with promote-to-Body, the cut-list spreadsheet,
   the TechDraw elevation, and assembly joints.

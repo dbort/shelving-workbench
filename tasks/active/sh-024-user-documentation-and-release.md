@@ -1,7 +1,7 @@
 ---
 id: sh-024
 title: "User documentation and the v1 release"
-blocked_by: [sh-022, sh-023]
+blocked_by: [sh-022, sh-035, sh-023]
 ---
 
 # sh-024: User documentation and the v1 release
@@ -92,7 +92,7 @@ full to every document this task writes, and `doc-hygiene` is the authority.
 
 ## Plan
 
-- [ ] **Step 1** (`docs/user-guide.md`): Write the guide. Open with a paragraph on what the workbench does and who it is for. Then, in order: scanning a unit you already modeled, including what a container is and why one is required; creating a unit from nothing; editing in the panel, covering selection, split, merge, typed sizes, dragging, and what the measurement basis means with the thickness-change example; board stock: where material, color and grain live, which board a new one copies them from, and changing them with the editor's stock swap (sh-031); working alongside other tools, naming what Woodworking's cut list and drilling do with the output and that a document opens without this workbench installed. Use the vocabulary the README glossary defines and no other.
+- [ ] **Step 1** (`docs/user-guide.md`): Write the guide. Open with a paragraph on what the workbench does and who it is for. Then, in order: scanning a unit you already modeled by opening it with Edit Unit, including what a container is and why one is required; creating a unit from nothing; editing in the panel, covering selection, split, merge, typed sizes, dragging, and what the measurement basis means with the thickness-change example; board stock: where material, color and grain live, which board a new one copies them from, and changing them with the editor's stock swap (sh-031); working alongside other tools, naming what Woodworking's cut list and drilling do with the output and that a document opens without this workbench installed. Use the vocabulary the README glossary defines and no other.
 
 - [ ] **Step 2** (`docs/user-guide.md`): Add the two sections that keep the guide honest. A refusals section, one subsection per common refusal, each saying what it means in terms of the user's geometry and what to do about it. A limits section stating rectangular boxes only, one elevation plane per unit, and guillotine layouts only, each with what happens when you exceed it. Keep both consistent with `docs/scope-and-design.md` without copying it.
 
@@ -100,6 +100,6 @@ full to every document this task writes, and `doc-hygiene` is the authority.
 
 - [ ] **Step 4** (`package.xml`, `README.md`): Finalize the package metadata against the Addon Manager schema: name, description matching the guide's opening, release version, icon path, maintainer, license, and FreeCAD minimum version. Rewrite the README's opening to lead with what the workbench is for and link the guide first, then the scope document, then the roadmap; keep the setup, tests and glossary sections.
 
-- [ ] **Step 5** (`freecad/Shelving/qa/cases/`): Add a release QA case: install from the repository through the Addon Manager on a clean profile with no development symlink; create a unit; scan a unit modeled by hand; move a finished unit into a second document with an ordinary placement and confirm it is intact; and walk the user guide's steps exactly as written, confirming each does what it says. State in the case that it is the pre-release gate and is run once per release rather than per task.
+- [ ] **Step 5** (`freecad/Shelving/qa/cases/`): Add a release QA case: install from the repository through the Addon Manager on a clean profile with no development symlink; create a unit; open a unit modeled by hand in Edit Unit; move a finished unit into a second document with an ordinary placement and confirm it is intact; and walk the user guide's steps exactly as written, confirming each does what it says. State in the case that it is the pre-release gate and is run once per release rather than per task.
 
 ## Review log
