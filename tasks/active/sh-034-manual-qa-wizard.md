@@ -9,9 +9,9 @@ title: "A manual QA wizard"
 A dockable QA Wizard panel in FreeCAD walks a person through the manual QA
 cases one step at a time. Buttons put the document into each case's
 starting state, so there's no code to paste into the console, and Pass,
-Fail or Skip plus a comment record each step. At the end, one Copy button
-gives a JSON report, with the Report view output of every step, to paste
-into an LLM session. The cases move from prose in `docs/manual-qa.md` into
+Fail or Skip plus a comment record each step. At the end, one Save button
+writes a JSON report, with the Report view output of every step, and copies
+its path to paste into an LLM session. The cases move from prose in `docs/manual-qa.md` into
 TOML files the wizard reads, and the wizard is on by default for now
 behind a developer flag that the planned preferences page will expose.
 
@@ -146,6 +146,12 @@ QA FEEDBACK (user, 2026-10-11, after round 6):
 - Export Boxes writing to the home folder for an unsaved document is
   bug-013, logged on this branch and fixed ad hoc after sh-034 ships.
 
+QA FEEDBACK (user, 2026-10-11, after round 7): reports are too big to
+paste, so the session reads the file. **Save report** replaces Copy report:
+it writes the report and puts the file's path, not the JSON, on the
+clipboard, with a "Saved to <path>" note that clears like the old one. This
+supersedes the clipboard part of "Report: verdicts plus logs".
+
 GUARD RAILS (user, 2026-10-10, after planning): keep the wizard small, and
 add no production complexity for it beyond plain design for testability.
 - Production code never depends on the wizard: only the QA Wizard command
@@ -192,7 +198,7 @@ the TOML boundary noted above, no bare containers in signatures,
 ## Plan
 - [x] **Step 1** (`freecad/Shelving/qa/`): The case model (typed records for cases and steps with stable ids), the TOML loader with validation, the registry of named setup actions and advisory checks, the pure report builder, and the progress file's save and load, with the core-free tests for the loader, name coverage, report and progress.
 - [x] **Step 2** (`freecad/Shelving/qa/cases/`, `freecad/Shelving/qa/actions.py`): Port every case from `docs/manual-qa.md` to TOML, with setup actions for each starting point and pasted code block, and advisory checks where the document can answer (at least case 2's Side 1 position).
-- [x] **Step 3** (`freecad/Shelving/qa/dock.py`, `freecad/Shelving/commands/qa_wizard.py`, `freecad/Shelving/init_gui.py`): The dock widget (case list with status, current step, setup button, check result, Pass/Fail/Skip, comment, restart case, Copy report), Report view capture, and the QA Wizard command registered in the Shelving menu only while the flag is on.
+- [x] **Step 3** (`freecad/Shelving/qa/dock.py`, `freecad/Shelving/commands/qa_wizard.py`, `freecad/Shelving/init_gui.py`): The dock widget (case list with status, current step, setup button, check result, Pass/Fail/Skip, comment, restart case, Save report), Report view capture, and the QA Wizard command registered in the Shelving menu only while the flag is on.
 - [x] **Step 4** (`tests/freecad/`, `tests/freecad_gui/`): Every setup action on a fresh document, headless where it can be, and the one GUI smoke test.
 - [x] **Step 5** (`tests/test_qa_guard_rails.py`, `.claude/docs/qa-wizard.md`, `CLAUDE.md`): The guard-rail tests (import direction, public API only, the line budget, closed case files) and the written contract, with `CLAUDE.md`'s one-line pointer.
 - [x] **Step 6** (`docs/manual-qa.md`, `README.md`, `.claude/docs/friction-log.md`, `tasks/active/sh-022-appearance-and-errors.md`, `tasks/active/sh-023-preferences.md`, `tasks/active/sh-024-user-documentation-and-release.md`, `tasks/active/sh-031-editor-stock-list-and-swap.md`): Shrink the doc to policy and how to run the wizard, keep the README link accurate, delete friction-024, add the Developer group to sh-023, and point the other tasks' manual QA at case files.

@@ -78,8 +78,9 @@ def test_a_recorded_step_reaches_the_report(
         "\u2705  A board moved by hand within the joint clearance is corrected" in rows
     )
 
-    report = json.loads(wizard.copy_report())
-    assert wizard.report_label.text().startswith("Copied")
+    report = json.loads(wizard.save_report())
+    assert wizard.report_label.text().startswith("Saved to ")
+    assert json.loads(wizard._report_path.read_text(encoding="utf-8")) == report
     assert wizard._report_path.parent == wizard._progress_path.parent == tmp_path
     (case,) = report["cases"]
     assert case["id"] == "write.moved-board-corrected"
@@ -92,7 +93,7 @@ def test_a_recorded_step_reaches_the_report(
     assert "qa-wizard-log-marker" in step["log"]
     assert re.fullmatch(r"[0-9a-f]{40}", report["commit"]), report["commit"]
     clipboard = QtWidgets.QApplication.clipboard()
-    assert clipboard is not None and json.loads(clipboard.text()) == report
+    assert clipboard is not None and clipboard.text() == str(wizard._report_path)
 
 
 def test_the_commit_falls_back_to_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -104,7 +105,7 @@ def test_the_commit_falls_back_to_unknown(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 def test_the_copied_note_clears_when_a_case_opens(wizard: dock.QAWizard) -> None:
-    wizard.copy_report()
-    assert wizard.report_label.text().startswith("Copied")
+    wizard.save_report()
+    assert wizard.report_label.text().startswith("Saved to ")
     wizard.open_case("scan.export-and-refusal")
     assert wizard.report_label.text() == ""

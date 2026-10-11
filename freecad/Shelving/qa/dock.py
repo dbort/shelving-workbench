@@ -31,7 +31,7 @@ from freecad.Shelving.qa.report import (
     save_progress,
 )
 
-# How long the "Copied" note stays under Copy report.
+# How long the "Saved" note stays under Save report.
 _NOTE_MS = 8000
 
 _FAIL_PROMPT = (
@@ -134,19 +134,19 @@ class QAWizard(QtWidgets.QDockWidget):
         layout.addWidget(self.case_list)
         self.start_button = QtWidgets.QPushButton("Start next case")
         self.open_button = QtWidgets.QPushButton("Open selected case")
-        self.copy_button = QtWidgets.QPushButton("Copy report")
+        self.save_button = QtWidgets.QPushButton("Save report")
         self.report_label = QtWidgets.QLabel("")
         self.report_label.setWordWrap(True)
         for widget in (
             self.start_button,
             self.open_button,
-            self.copy_button,
+            self.save_button,
             self.report_label,
         ):
             layout.addWidget(widget)
         self.start_button.clicked.connect(self._start_next)
         self.open_button.clicked.connect(self._open_selected)
-        self.copy_button.clicked.connect(self.copy_report)
+        self.save_button.clicked.connect(self.save_report)
         self._note_timer.timeout.connect(lambda: self.report_label.setText(""))
         return page
 
@@ -342,17 +342,18 @@ class QAWizard(QtWidgets.QDockWidget):
         save_progress(self.progress, self._progress_path)
         self._show_step()
 
-    def copy_report(self) -> str:
-        """Build the report, save it to the report path, put it on the
-        clipboard, and return it."""
+    def save_report(self) -> str:
+        """Build the report, save it to the report path, put that path on the
+        clipboard, and return the report. A report is too long to paste, so
+        a review session reads the file."""
         version = ".".join(str(part) for part in FreeCAD.Version()[:3])
         report = build_report(self.cases, self.progress, version, _commit(), _now())
         self._report_path.parent.mkdir(parents=True, exist_ok=True)
         self._report_path.write_text(report, encoding="utf-8")
         clipboard = QtWidgets.QApplication.clipboard()
         if clipboard is not None:
-            clipboard.setText(report)
-        self.report_label.setText(f"Copied, and saved to {self._report_path}")
+            clipboard.setText(str(self._report_path))
+        self.report_label.setText(f"Saved to {self._report_path} (path copied)")
         self._note_timer.start(_NOTE_MS)
         return report
 
