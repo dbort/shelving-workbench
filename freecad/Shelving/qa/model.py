@@ -1,7 +1,8 @@
 """QA cases read from the TOML files in ``cases/``.
 
 A file holds one or more ``[[case]]`` tables, each with ``id``, ``title``
-and ``[[case.step]]`` tables; a step has ``id``, ``instruction`` and
+and ``[[case.step]]`` tables; a step has ``id``, ``instruction`` (a list
+of lines, one action each, optional on a step with an ``action``) and
 ``expected``, and may name a setup ``action`` and an advisory ``check``
 from :mod:`freecad.Shelving.qa.registry`. Every other key is refused, so a
 case gains a field only when this loader learns it.
@@ -30,7 +31,9 @@ class CaseFileError(ValueError):
 class Step:
     # Stable within its case: saved progress and reports key on it.
     id: str
-    instruction: str
+    # One action per line, shown in order below the step's setup button.
+    # Empty only on a step whose button is the whole instruction.
+    instruction: tuple[str, ...]
     expected: str
     # A registry action name, shown as a button; None when the step needs
     # no setup.
@@ -52,6 +55,17 @@ def _text(table: Mapping[str, object], key: str, where: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise CaseFileError(f"{where}: '{key}' must be non-empty text")
     return value.strip()
+
+
+def _lines(table: Mapping[str, object], key: str, where: str) -> tuple[str, ...]:
+    value = table.get(key)
+    if (
+        not isinstance(value, list)
+        or not value
+        or not all(isinstance(line, str) and line.strip() for line in value)
+    ):
+        raise CaseFileError(f"{where}: '{key}' must be a list of non-empty lines")
+    return tuple(line.strip() for line in value)
 
 
 def _optional_text(table: Mapping[str, object], key: str, where: str) -> str | None:
@@ -92,12 +106,18 @@ def parse_cases(data: Mapping[str, object], source: str) -> list[Case]:
             _closed(step_table, _STEP_KEYS, step_where)
             if any(step.id == step_id for step in steps):
                 raise CaseFileError(f"{step_where}: repeated step id")
+            action = _optional_text(step_table, "action", step_where)
+            instruction = (
+                ()
+                if action is not None and "instruction" not in step_table
+                else _lines(step_table, "instruction", step_where)
+            )
             steps.append(
                 Step(
                     id=step_id,
-                    instruction=_text(step_table, "instruction", step_where),
+                    instruction=instruction,
                     expected=_text(step_table, "expected", step_where),
-                    action=_optional_text(step_table, "action", step_where),
+                    action=action,
                     check=_optional_text(step_table, "check", step_where),
                 )
             )

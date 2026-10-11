@@ -28,6 +28,7 @@ def test_a_recorded_step_reaches_the_report(wizard: dock.QAWizard) -> None:
     assert wizard.action_button.text() == "Create a fresh unit in a new document"
     wizard.action_button.click()
     QtWidgets.QApplication.processEvents()
+    assert wizard.action_button.text() == "\u2705 Create a fresh unit in a new document"
     assert FreeCAD.ActiveDocument is not None
     assert FreeCAD.ActiveDocument.getObject("ShelvingUnit") is not None
 
@@ -42,11 +43,21 @@ def test_a_recorded_step_reaches_the_report(wizard: dock.QAWizard) -> None:
     wizard.comment_edit.setPlainText("Four boards, as expected.")
     wizard.verdict_buttons["pass"].click()
     assert wizard.position_label.text() == "Step 2 of 3"
+    assert wizard.back_button.text() == "Back to cases"
+    wizard.verdict_buttons["skip"].click()
+    wizard.verdict_buttons["skip"].click()
+    assert wizard.back_button.text() == "Finish case"
+    assert wizard.back_button.font().bold()
+    wizard.back_button.click()
+    rows = [wizard.case_list.item(i).text() for i in range(wizard.case_list.count())]
+    assert (
+        "\u2705  A board moved by hand within the joint clearance is corrected" in rows
+    )
 
     report = json.loads(wizard.copy_report())
     (case,) = report["cases"]
     assert case["id"] == "write.moved-board-corrected"
-    (step,) = case["steps"]
+    step = case["steps"][0]
     assert step["id"] == "start"
     assert step["verdict"] == "pass"
     assert step["comment"] == "Four boards, as expected."

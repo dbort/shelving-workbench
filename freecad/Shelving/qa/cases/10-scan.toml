@@ -5,12 +5,11 @@ title = "Scan, export, and a refusal"
   [[case.step]]
   id = "start"
   action = "test_unit"
-  instruction = "Press the button to create TestUnit in a new document."
   expected = "A TestUnit part holding Bottom, Top, LeftSide, RightSide and Shelf appears."
 
   [[case.step]]
   id = "scan"
-  instruction = "Select TestUnit and run Scan Unit."
+  instruction = ["Select TestUnit.", "Run Scan Unit."]
   expected = """
 The Report view prints the depth axis and size, a facing warning, and an
 indented tree with two bays either side of Shelf. Nothing in the document
@@ -19,7 +18,7 @@ changes."""
   [[case.step]]
   id = "skipped-part"
   action = "add_skewed_box"
-  instruction = "Press the button to add an unreadable part, then select TestUnit and run Scan Unit again."
+  instruction = ["Select TestUnit.", "Run Scan Unit."]
   expected = """
 The same tree, followed by `skipped (1)` naming Skewed as not
 axis-aligned. The selection is untouched."""
@@ -28,7 +27,7 @@ axis-aligned. The selection is untouched."""
   id = "export"
   action = "save_to_temp"
   check = "boxes_json_beside_document"
-  instruction = "Press the button to save the document, then select TestUnit and run Export Boxes."
+  instruction = ["Select TestUnit.", "Run Export Boxes."]
   expected = """
 TestUnit.boxes.json appears beside the saved file, and the Report view
 prints its path and how many boxes and skipped parts it holds."""
@@ -36,7 +35,7 @@ prints its path and how many boxes and skipped parts it holds."""
   [[case.step]]
   id = "refusal"
   action = "add_overlap_box"
-  instruction = "Press the button to add a box overlapping a side, then select TestUnit and run Scan Unit."
+  instruction = ["Select TestUnit.", "Run Scan Unit."]
   expected = """
 `REFUSED: Overlap overlaps LeftSide`, and the 3D view's selection changes
 to Overlap and LeftSide, both visibly highlighted."""

@@ -5,7 +5,7 @@ title = "One editing session"
   [[case.step]]
   id = "start"
   action = "fresh_unit"
-  instruction = "Press the button to create a fresh unit, select its container, and run Edit Unit."
+  instruction = ["Select the container.", "Run Edit Unit."]
   expected = """
 A panel titled Edit Unit docks in the Tasks tab and shows an elevation
 matching the 3D view's shape and proportions. Add Divider, Add Shelf and
@@ -13,14 +13,14 @@ Delete are disabled."""
 
   [[case.step]]
   id = "select-bay"
-  instruction = "Click the open bay."
+  instruction = ["Click the open bay."]
   expected = """
 Its outline draws distinctly until something else is clicked. The two Add
 buttons enable; Delete stays disabled."""
 
   [[case.step]]
   id = "add-divider"
-  instruction = "Click Add Divider."
+  instruction = ["Click Add Divider."]
   expected = """
 A vertical divider splits the bay in the elevation, and the 3D view shows
 it as a real box while the panel is still open. Dimensions overlapping in a
@@ -28,7 +28,10 @@ crowded elevation are a known defect (bug-009), not a failure."""
 
   [[case.step]]
   id = "refused-delete"
-  instruction = "Click an outer board (a side, the top or the bottom) and click Delete."
+  instruction = [
+    "Click an outer board (a side, the top or the bottom).",
+    "Click Delete.",
+  ]
   expected = """
 A Shelving error pops up from the Notification Area and shows in red in
 the status bar, saying in plain words, with no internal ids, that removing
@@ -37,7 +40,12 @@ usable."""
 
   [[case.step]]
   id = "merge-and-ok"
-  instruction = "Click the new divider and click Delete, then add it again and click OK."
+  instruction = [
+    "Click the new divider.",
+    "Click Delete.",
+    "Click the bay and click Add Divider again.",
+    "Click OK.",
+  ]
   expected = """
 The merge redraws one bay; after OK the panel closes with the divider in
 place."""
@@ -45,7 +53,7 @@ place."""
   [[case.step]]
   id = "undo"
   check = "four_boards"
-  instruction = "Run Edit, Undo once."
+  instruction = ["Run Edit, Undo once."]
   expected = "The whole session reverses in one step: the unit has its four boards again."
 
 [[case]]
@@ -55,12 +63,12 @@ title = "Dimensions"
   [[case.step]]
   id = "start"
   action = "shelf_unit_with_varset"
-  instruction = "Press the button, then select the container (ShelvingUnit) and run Edit Unit."
+  instruction = ["Select the container (ShelvingUnit).", "Run Edit Unit."]
   expected = "The panel shows one shelf between two equal bays."
 
   [[case.step]]
   id = "select-lower"
-  instruction = "Click the lower bay."
+  instruction = ["Click the lower bay."]
   expected = """
 A dimension over each bay: a line with an arrowhead at each end touching
 short witness lines, labeled with its value, the other basis's value beside
@@ -69,33 +77,37 @@ crowded elevation are a known defect (bug-009), not a failure."""
 
   [[case.step]]
   id = "type-size"
-  instruction = "Type 300 in Size and press Return."
+  instruction = ["Type 300 in Size and press Return."]
   expected = """
 The shelf moves in the elevation and the 3D view, and the upper bay's
 dimension absorbs the difference."""
 
   [[case.step]]
   id = "spacing-basis"
-  instruction = "Choose Spacing (through the next board)."
+  instruction = ["Choose Spacing (through the next board)."]
   expected = """
 Nothing moves; the dimension now runs through the shelf and reads 318, with
 clear 300 beside it."""
 
   [[case.step]]
   id = "drag"
-  instruction = "Drag the shelf up a few centimeters with the mouse and release."
+  instruction = ["Drag the shelf up a few centimeters with the mouse.", "Release."]
   expected = "The shelf follows the pointer, and the basis still reads Spacing."
 
   [[case.step]]
   id = "expression"
-  instruction = "Click Size, type =, enter VarSet.Len - 20 mm in the f(x) dialog, and accept."
+  instruction = [
+    "Click Size and type =.",
+    "Enter VarSet.Len - 20 mm in the f(x) dialog.",
+    "Accept the dialog.",
+  ]
   expected = """
 The lower bay follows to 280 mm. While the panel is open a Shelving
 dimension (temporary) object sits in the tree."""
 
   [[case.step]]
   id = "cancel"
-  instruction = "Click Cancel."
+  instruction = ["Click Cancel."]
   expected = """
 The unit is back to one shelf between two equal bays, and the temporary
 object is gone."""
@@ -107,16 +119,12 @@ title = "Objects this workbench did not create"
   [[case.step]]
   id = "start"
   action = "fresh_unit"
-  instruction = "Press the button to create a fresh unit."
   expected = "A ShelvingUnit with four boards appears."
 
   [[case.step]]
   id = "add-cube"
   action = "add_untagged_cube"
-  instruction = """
-Press the button, or add a Part, Cube sized 400 x 5 x 400 mm and drag it
-onto the unit's container yourself. Then select the container and run Edit
-Unit."""
+  instruction = ["Select the container.", "Run Edit Unit."]
   expected = """
 A box titled Objects this workbench did not create lists the cube,
 unchecked, with a reason that wraps onto several lines rather than making
@@ -129,19 +137,22 @@ title = "Unit size controls"
   [[case.step]]
   id = "start"
   action = "fresh_unit"
-  instruction = "Press the button to create a fresh unit, select its container, and run Edit Unit."
+  instruction = ["Select the container.", "Run Edit Unit."]
   expected = "The Unit section shows width 600 mm, depth 300 mm and height 900 mm."
 
   [[case.step]]
   id = "step-and-wheel"
-  instruction = "Hold the Height field's up arrow, then turn the mouse wheel over Width."
+  instruction = [
+    "Hold the Height field's up arrow for a moment.",
+    "Turn the mouse wheel over Width.",
+  ]
   expected = """
 The unit grows in the 3D view at every step of the held arrow and changes
 with every notch of the wheel."""
 
   [[case.step]]
   id = "limit"
-  instruction = "Hold the Height down arrow until the unit stops shrinking."
+  instruction = ["Hold the Height down arrow until the unit stops shrinking."]
   expected = """
 A single error in the Notification Area, and the field shows the last
 height that worked."""
@@ -149,5 +160,5 @@ height that worked."""
   [[case.step]]
   id = "cancel"
   check = "fresh_unit_size"
-  instruction = "Click Cancel."
+  instruction = ["Click Cancel."]
   expected = "The unit is back to 600 x 300 x 900 mm."

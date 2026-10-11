@@ -52,7 +52,7 @@ def test_a_missing_field_and_a_repeated_id_are_refused(tmp_path: Path) -> None:
                     {
                         "id": "c",
                         "title": "C",
-                        "step": [{"id": "s", "instruction": "Do."}],
+                        "step": [{"id": "s", "instruction": ["Do."]}],
                     }
                 ]
             },
@@ -60,7 +60,7 @@ def test_a_missing_field_and_a_repeated_id_are_refused(tmp_path: Path) -> None:
         )
     text = (
         '[[case]]\nid = "c"\ntitle = "C"\n[[case.step]]\nid = "s"\n'
-        'instruction = "Do."\nexpected = "Done."\n'
+        'instruction = ["Do."]\nexpected = "Done."\n'
     )
     first = tmp_path / "a.toml"
     second = tmp_path / "b.toml"
@@ -121,7 +121,7 @@ def test_a_file_that_is_not_progress_is_refused(tmp_path: Path) -> None:
 
 
 def test_a_repeated_step_id_is_refused() -> None:
-    step = {"id": "s", "instruction": "Do.", "expected": "Done."}
+    step = {"id": "s", "instruction": ["Do."], "expected": "Done."}
     with pytest.raises(CaseFileError, match="step 's': repeated step id"):
         parse_cases({"case": [{"id": "c", "title": "C", "step": [step, step]}]}, "x")
 
@@ -130,3 +130,12 @@ def test_case_2s_restore_step_carries_the_side_1_check() -> None:
     (case,) = [c for c in load_cases() if c.id == "write.moved-board-corrected"]
     (step,) = [s for s in case.steps if s.id == "edit-and-resize"]
     assert step.check == "side_1_at_x_zero"
+
+
+def test_only_a_step_with_a_button_may_omit_its_instruction() -> None:
+    step: dict[str, object] = {"id": "s", "action": "fresh_unit", "expected": "Done."}
+    (case,) = parse_cases({"case": [{"id": "c", "title": "C", "step": [step]}]}, "x")
+    assert case.steps[0].instruction == ()
+    del step["action"]
+    with pytest.raises(CaseFileError, match="'instruction' must be a list"):
+        parse_cases({"case": [{"id": "c", "title": "C", "step": [step]}]}, "x")

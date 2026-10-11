@@ -113,6 +113,22 @@ DECISIONS (user, 2026-10-10):
 - **Forward only.** Recording a verdict moves to the next step and is
   final. Restarting a case clears its verdicts and comments.
 
+QA FEEDBACK (user, 2026-10-11, after round 2):
+- A setup button gains a check mark once it has run, and stays pressable.
+- Once every step is recorded, the exit button reads **Finish case**, bold
+  and default; mid-case it reads **Back to cases**. **Restart case** sits
+  on the same row at a quarter of its width, like Cancel beside OK.
+- The case list starts each row with a status emoji (not run, in progress,
+  passed, failed, skipped), so it scans by state.
+- A step's `instruction` is a list with one action per line, shown as
+  bullets below its setup button. Every current setup action is the first
+  thing its step does, so button-first gives the right order without
+  interleaving a button between lines; that needs a richer format and
+  waits until a case needs it. A step whose button is the whole
+  instruction omits `instruction`.
+- A step offers no "or do it by hand" alternative: the button does it, and
+  its text says what it does.
+
 GUARD RAILS (user, 2026-10-10, after planning): keep the wizard small, and
 add no production complexity for it beyond plain design for testability.
 - Production code never depends on the wizard: only the QA Wizard command

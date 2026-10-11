@@ -97,7 +97,12 @@ def test_case_files_are_closed_data() -> None:
                 "id": "c",
                 "title": "C",
                 "step": [
-                    {"id": "s", "instruction": "Do.", "expected": "Done.", "code": "x"}
+                    {
+                        "id": "s",
+                        "instruction": ["Do."],
+                        "expected": "Done.",
+                        "code": "x",
+                    }
                 ],
             }
         ]

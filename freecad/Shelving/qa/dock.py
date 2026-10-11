@@ -72,6 +72,17 @@ def _status(case: Case, progress: Progress) -> str:
     return "passed" if "pass" in verdicts else "skipped"
 
 
+# At the start of each case's row, so the list scans by state.
+_STATUS_MARKS = {
+    "not run": "\u2b1c",
+    "in progress": "\U0001f504",
+    "passed": "\u2705",
+    "failed": "\u274c",
+    "skipped": "\u23ed\ufe0f",
+}
+_DONE_MARK = "\u2705"
+
+
 class QAWizard(QtWidgets.QDockWidget):
     """The dock. ``ask_resume`` is asked whether to continue saved progress
     found at ``progress_path``; ``read_log`` returns the Report view's text,
@@ -162,10 +173,10 @@ class QAWizard(QtWidgets.QDockWidget):
         for widget in (
             self.title_label,
             self.position_label,
-            self.instruction_label,
-            self.expected_label,
             self.action_button,
             self.action_label,
+            self.instruction_label,
+            self.expected_label,
             self.check_button,
             self.check_label,
             self.comment_edit,
@@ -175,8 +186,12 @@ class QAWizard(QtWidgets.QDockWidget):
                 widget.setWordWrap(True)
             layout.addWidget(widget)
         layout.addLayout(verdict_row)
-        layout.addWidget(self.restart_button)
-        layout.addWidget(self.back_button)
+        # Leaving the case is the usual next move; restarting it is rare, so
+        # it gets a quarter of the row, like Cancel beside OK.
+        exit_row = QtWidgets.QHBoxLayout()
+        exit_row.addWidget(self.back_button, 3)
+        exit_row.addWidget(self.restart_button, 1)
+        layout.addLayout(exit_row)
         self.action_button.clicked.connect(self.run_action)
         self.check_button.clicked.connect(self._show_check)
         self.restart_button.clicked.connect(self._restart_case)
@@ -187,7 +202,10 @@ class QAWizard(QtWidgets.QDockWidget):
         self._case = None
         self.case_list.clear()
         for case in self.cases:
-            self.case_list.addItem(f"{case.title}: {_status(case, self.progress)}")
+            status = _status(case, self.progress)
+            item = QtWidgets.QListWidgetItem(f"{_STATUS_MARKS[status]}  {case.title}")
+            item.setToolTip(status)
+            self.case_list.addItem(item)
         self.pages.setCurrentIndex(0)
 
     def _start_next(self) -> None:
@@ -223,6 +241,12 @@ class QAWizard(QtWidgets.QDockWidget):
         self._fail_prompted = False
         for button in self.verdict_buttons.values():
             button.setEnabled(step is not None)
+        # Once every step is recorded, leaving is the one thing left to do.
+        self.back_button.setText("Back to cases" if step is not None else "Finish case")
+        font = self.back_button.font()
+        font.setBold(step is None)
+        self.back_button.setFont(font)
+        self.back_button.setDefault(step is None)
         if step is None:
             self.position_label.setText("Every step is recorded.")
             for widget in (
@@ -235,7 +259,9 @@ class QAWizard(QtWidgets.QDockWidget):
             return
         index = self._case.steps.index(step) + 1
         self.position_label.setText(f"Step {index} of {len(self._case.steps)}")
-        self.instruction_label.setText(step.instruction)
+        self.instruction_label.setText(
+            "\n".join(f"\u2022 {line}" for line in step.instruction)
+        )
         self.expected_label.setText(f"Expected: {step.expected}")
         self.action_button.setVisible(step.action is not None)
         if step.action is not None:
@@ -247,11 +273,14 @@ class QAWizard(QtWidgets.QDockWidget):
         step = self._current_step()
         if step is None or step.action is None:
             return
+        action = ACTIONS[step.action]
         try:
-            message = ACTIONS[step.action].run()
+            message = action.run()
         except Exception as err:  # noqa: BLE001 - shown, the step carries on
-            message = f"The action failed: {err}"
-        self.action_label.setText(message or "Done.")
+            self.action_label.setText(f"The action failed: {err}")
+            return
+        self.action_button.setText(f"{_DONE_MARK} {action.label}")
+        self.action_label.setText(message or "")
 
     def _run_check(self, step: Step) -> CheckResult | None:
         if step.check is None:
