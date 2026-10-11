@@ -49,7 +49,8 @@ title = "A document opens without the workbench"
     "Put the symlink back.",
     "Restart FreeCAD.",
     "Open the QA Wizard.",
-    "Answer Yes to resume, and record what you saw.",
+    "Answer Yes to resume.",
+    "Select this case in the list and click Open selected case.",
   ]
   expected = """
 No error dialog and no Report view warning about a missing module; every

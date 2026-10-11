@@ -246,6 +246,9 @@ class QAWizard(QtWidgets.QDockWidget):
         font = self.back_button.font()
         font.setBold(step is None)
         self.back_button.setFont(font)
+        # Enter does nothing outside a dialog, but styles still draw a default
+        # button with the emphasis the user asked for.
+        self.back_button.setDefault(step is None)
         if step is None:
             self.position_label.setText("Every step is recorded.")
             for widget in (

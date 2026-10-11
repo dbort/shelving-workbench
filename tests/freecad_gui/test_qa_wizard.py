@@ -12,6 +12,7 @@ import pytest
 from PySide6 import QtWidgets
 
 from freecad.Shelving.qa import dock
+from freecad.Shelving.qa.registry import ACTIONS, Action
 
 
 @pytest.fixture
@@ -25,10 +26,21 @@ def wizard() -> Iterator[dock.QAWizard]:
 def test_a_recorded_step_reaches_the_report(wizard: dock.QAWizard) -> None:
     assert wizard.parent() is FreeCADGui.getMainWindow()
     wizard.open_case("write.moved-board-corrected")
-    assert wizard.action_button.text() == "Create a fresh unit in a new document"
+    label = "Create a fresh unit in a new document"
+    assert wizard.action_button.text() == label
     wizard.action_button.click()
     QtWidgets.QApplication.processEvents()
     assert wizard.action_button.text() == "\u2705 Create a fresh unit in a new document"
+
+    # A rerun that fails takes the done mark back off.
+    def fails() -> None:
+        raise RuntimeError("broken")
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setitem(ACTIONS, "fresh_unit", Action(label=label, run=fails))
+        wizard.action_button.click()
+    assert wizard.action_button.text() == label
+    assert wizard.action_label.text() == "The action failed: broken"
     assert FreeCAD.ActiveDocument is not None
     assert FreeCAD.ActiveDocument.getObject("ShelvingUnit") is not None
 
@@ -48,6 +60,7 @@ def test_a_recorded_step_reaches_the_report(wizard: dock.QAWizard) -> None:
     wizard.verdict_buttons["skip"].click()
     assert wizard.back_button.text() == "Finish case"
     assert wizard.back_button.font().bold()
+    assert wizard.back_button.isDefault()
     wizard.back_button.click()
     rows = [wizard.case_list.item(i).text() for i in range(wizard.case_list.count())]
     assert (
