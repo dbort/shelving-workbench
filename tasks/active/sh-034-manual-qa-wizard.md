@@ -208,3 +208,9 @@ Applied after this round: N1, N2, N3, N4 and N6. N5 left as is.
 - **N2: Being the default button has no Enter-key effect in a dock** (`freecad/Shelving/qa/dock.py:249`).
 - **N3: The done mark survives a failed rerun** (`freecad/Shelving/qa/dock.py:279-282`).
 - **N4: A parenthetical holds two facts** (`freecad/Shelving/qa/model.py:4-5`).
+
+### Round 4: REJECTED
+- **F1: The resume line still holds two actions and leaves out the one the tester needs** (`freecad/Shelving/qa/cases/20-write.toml:52`): "Answer Yes to resume, and record what you saw." is two actions, and after resuming the dock shows the case list, where Start next case skips this case because it has results. Split it into "Answer Yes to resume." and a line to open this case from the list.
+- **F2: "Finish case" is no longer the default button, against a binding QA-feedback decision** (`freecad/Shelving/qa/dock.py:244-248`): removing `setDefault` on round 3 N2 dropped the user's "bold and default" without their sign-off; Qt styles still draw a default button's emphasis outside a dialog.
+- **N1: The failed-rerun reset is untested** (`freecad/Shelving/qa/dock.py:278-281`).
+- **N2: "Type ... and press Return" lines** (`20-write.toml:21`, `30-editor.toml:81`): the contract could say typing a value and pressing Return counts as one action.
