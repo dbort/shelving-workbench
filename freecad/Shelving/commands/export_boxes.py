@@ -16,6 +16,7 @@ import FreeCAD
 
 from freecad.Shelving.container import read_container
 from freecad.Shelving.core.scan import ScanError
+from freecad.Shelving.temp_dirs import export_path
 
 _RESOURCE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources")
 _ICON = os.path.join(_RESOURCE_DIR, "shelving.svg")
@@ -66,18 +67,10 @@ def _selected_container() -> FreeCAD.DocumentObject:
     )
 
 
-def _export_path(obj: FreeCAD.DocumentObject) -> str:
-    doc = obj.Document
-    directory = (
-        os.path.dirname(doc.FileName) if doc.FileName else os.path.expanduser("~")
-    )
-    safe = "".join(c if c.isalnum() else "_" for c in obj.Label).strip("_")
-    return os.path.join(directory, f"{safe or 'boxes'}.boxes.json")
-
-
 class ExportBoxesCommand:
     """`Gui.Command` that writes the selected container's boards and
-    unreadable parts to a ``<label>.boxes.json`` file beside the document."""
+    unreadable parts to a ``<label>.boxes.json`` file in the user's exports
+    folder (:func:`freecad.Shelving.temp_dirs.export_path`)."""
 
     def GetResources(self) -> _CommandResources:
         return {
@@ -119,7 +112,8 @@ class ExportBoxesCommand:
                 for part in skipped
             ],
         }
-        path = _export_path(container)
+        path = export_path(container)
+        path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "w", encoding="utf-8") as handle:
             json.dump(export, handle, indent=2)
         print(f"exported {len(boxes)} box(es), skipped {len(skipped)}: {path}")

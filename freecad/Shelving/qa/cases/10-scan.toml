@@ -25,12 +25,12 @@ axis-aligned. The selection is untouched."""
 
   [[case.step]]
   id = "export"
-  action = "save_to_temp"
-  check = "boxes_json_beside_document"
+  check = "boxes_json_in_exports_folder"
   instruction = ["Select TestUnit.", "Run Export Boxes."]
   expected = """
-TestUnit.boxes.json appears beside the saved file, and the Report view
-prints its path and how many boxes and skipped parts it holds."""
+The Report view prints how many boxes and skipped parts were exported and
+the path of TestUnit.boxes.json, in a shelving-exports-<your user name>
+folder under FreeCAD's temp directory, though the document is unsaved."""
 
   [[case.step]]
   id = "refusal"

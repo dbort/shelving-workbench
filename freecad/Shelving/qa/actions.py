@@ -174,11 +174,14 @@ def side_1_at_x_zero(doc: FreeCAD.Document | None) -> CheckResult:
     return CheckResult(passed=abs(x_mm) < 1e-6, detail=f"Side 1 x = {x_mm:g} mm")
 
 
-@check("boxes_json_beside_document")
-def boxes_json_beside_document(doc: FreeCAD.Document | None) -> CheckResult:
-    if doc is None or not doc.FileName:
-        return CheckResult(passed=False, detail="the document is not saved")
-    path = Path(doc.FileName).parent / f"{_TEST_UNIT}.boxes.json"
+@check("boxes_json_in_exports_folder")
+def boxes_json_in_exports_folder(doc: FreeCAD.Document | None) -> CheckResult:
+    from freecad.Shelving.temp_dirs import export_path
+
+    container = None if doc is None else doc.getObject(_TEST_UNIT)
+    if container is None:
+        return CheckResult(passed=False, detail=f"no {_TEST_UNIT} found")
+    path = export_path(container)
     return CheckResult(passed=path.is_file(), detail=f"looked for {path}")
 
 
