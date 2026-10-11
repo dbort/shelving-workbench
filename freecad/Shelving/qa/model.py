@@ -2,10 +2,11 @@
 
 A file holds one or more ``[[case]]`` tables, each with ``id``, ``title``
 and ``[[case.step]]`` tables; a step has ``id``, ``instruction`` (a list
-of lines, one action each, optional on a step with an ``action``) and
-``expected``, and may name a setup ``action`` and an advisory ``check``
-from :mod:`freecad.Shelving.qa.registry`. Every other key is refused, so a
-case gains a field only when this loader learns it.
+of lines, one action each) and ``expected``, and may name a setup
+``action`` and an advisory ``check`` from
+:mod:`freecad.Shelving.qa.registry`. A step with an ``action`` may omit
+``instruction`` when its button is the whole step. Every other key is
+refused, so a case gains a field only when this loader learns it.
 """
 
 from __future__ import annotations

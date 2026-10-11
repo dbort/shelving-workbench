@@ -246,7 +246,6 @@ class QAWizard(QtWidgets.QDockWidget):
         font = self.back_button.font()
         font.setBold(step is None)
         self.back_button.setFont(font)
-        self.back_button.setDefault(step is None)
         if step is None:
             self.position_label.setText("Every step is recorded.")
             for widget in (
@@ -277,6 +276,7 @@ class QAWizard(QtWidgets.QDockWidget):
         try:
             message = action.run()
         except Exception as err:  # noqa: BLE001 - shown, the step carries on
+            self.action_button.setText(action.label)
             self.action_label.setText(f"The action failed: {err}")
             return
         self.action_button.setText(f"{_DONE_MARK} {action.label}")

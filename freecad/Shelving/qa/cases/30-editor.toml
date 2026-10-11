@@ -43,7 +43,8 @@ usable."""
   instruction = [
     "Click the new divider.",
     "Click Delete.",
-    "Click the bay and click Add Divider again.",
+    "Click the bay.",
+    "Click Add Divider.",
     "Click OK.",
   ]
   expected = """
@@ -97,7 +98,8 @@ clear 300 beside it."""
   [[case.step]]
   id = "expression"
   instruction = [
-    "Click Size and type =.",
+    "Click Size.",
+    "Type =.",
     "Enter VarSet.Len - 20 mm in the f(x) dialog.",
     "Accept the dialog.",
   ]

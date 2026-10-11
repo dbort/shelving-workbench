@@ -43,9 +43,13 @@ title = "A document opens without the workbench"
   instruction = [
     "Quit FreeCAD.",
     "Move the shelving-workbench symlink out of Mod/.",
-    "Restart FreeCAD and open the saved document; note what you see.",
-    "Put the symlink back and restart FreeCAD.",
-    "Open the QA Wizard and resume, to record what you saw.",
+    "Restart FreeCAD.",
+    "Open the saved document.",
+    "Note what you see.",
+    "Put the symlink back.",
+    "Restart FreeCAD.",
+    "Open the QA Wizard.",
+    "Answer Yes to resume, and record what you saw.",
   ]
   expected = """
 No error dialog and no Report view warning about a missing module; every
