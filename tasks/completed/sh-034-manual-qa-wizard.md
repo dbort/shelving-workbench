@@ -17,37 +17,37 @@ by default for now behind a developer flag that the planned preferences
 page will expose.
 
 ## Must Have
-- [ ] `pixi run tests` green.
-- [ ] Every case now in `docs/manual-qa.md` (Scan, export and a refusal; a
+- [x] `pixi run tests` green.
+- [x] Every case now in `docs/manual-qa.md` (Scan, export and a refusal; a
       board moved within the joint clearance; a document opening without
       the workbench; one editing session; dimensions; objects this
       workbench did not create; unit size controls) exists as a case in a
       TOML file under `freecad/Shelving/qa/cases/`. `docs/manual-qa.md`
       holds no case steps and no ```` ```python ```` block: only what
       manual QA is for and how to run the wizard.
-- [ ] In the core-free suite, every case file loads into typed case
+- [x] In the core-free suite, every case file loads into typed case
       records; case and step ids are unique; every setup action and check
       a case names exists in the registry, and every registered action and
       check is named by some case. A test fails on each of those.
-- [ ] Every setup action that needs no GUI runs without error on a fresh
+- [x] Every setup action that needs no GUI runs without error on a fresh
       document in `tests/freecad/`; every action that needs the GUI runs
       without error in `tests/freecad_gui/`.
-- [ ] Building the JSON report from recorded step results is a pure
+- [x] Building the JSON report from recorded step results is a pure
       function, unit-tested: for each step, its verdict (`pass`, `fail` or
       `skip`), comment, advisory check result, and Report view text; for
       the run, the FreeCAD version, the checkout's git commit (or
       `unknown`), and start and end times. The output passes `json.loads`.
-- [ ] Saving progress and loading it back restores every case's step
+- [x] Saving progress and loading it back restores every case's step
       verdicts and comments, asserted with a temporary file.
-- [ ] Case 2's step that restores **Side 1** carries an advisory check that
+- [x] Case 2's step that restores **Side 1** carries an advisory check that
       it is back at x = 0, and its result appears in the report.
-- [ ] In `tests/freecad_gui/`, one test opens the wizard dock, starts a
+- [x] In `tests/freecad_gui/`, one test opens the wizard dock, starts a
       case, presses a step's setup button, records Pass with a comment, and
       gets a JSON report holding that verdict and comment.
-- [ ] The QA Wizard command is in the Shelving menu, not the toolbar, while
+- [x] The QA Wizard command is in the Shelving menu, not the toolbar, while
       the wizard's developer flag is on, and absent while it is off. The
       flag is on by default.
-- [ ] Guard rails, each a test in the core-free suite with a failure
+- [x] Guard rails, each a test in the core-free suite with a failure
       message that names the rule:
       - no module under `freecad/Shelving/` outside `qa/` imports
         `freecad.Shelving.qa`, except the QA Wizard command module and
@@ -60,16 +60,16 @@ page will expose.
         the user;
       - loading a case file with a key the loader does not know fails,
         naming the key and the file.
-- [ ] `.claude/docs/qa-wizard.md` states the wizard's contract (Advice,
+- [x] `.claude/docs/qa-wizard.md` states the wizard's contract (Advice,
       GUARD RAILS), and `CLAUDE.md` points to it in one line.
-- [ ] `tasks/active/sh-023-preferences.md` plans a Developer group with the
+- [x] `tasks/active/sh-023-preferences.md` plans a Developer group with the
       timing log and QA wizard toggles, both off by default.
       `tasks/active/sh-022-appearance-and-errors.md`,
       `tasks/active/sh-024-user-documentation-and-release.md` and
       `tasks/active/sh-031-editor-stock-list-and-swap.md` plan their manual
       QA as cases in `freecad/Shelving/qa/cases/`, and friction-024 is
       deleted from `.claude/docs/friction-log.md`.
-- [ ] `mypy --strict` clean.
+- [x] `mypy --strict` clean.
 
 ## Advice
 
