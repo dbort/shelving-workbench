@@ -118,7 +118,7 @@ def test_the_report_holds_each_recorded_step_and_the_run() -> None:
 
 
 def test_progress_survives_a_save_and_load(tmp_path: Path) -> None:
-    path = tmp_path / "Shelving" / "qa-progress.json"
+    path = tmp_path / "shelving-qa-user" / "progress.json"
     save_progress(_progress(), path)
     assert load_progress(path) == _progress()
 

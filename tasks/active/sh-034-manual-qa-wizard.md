@@ -242,3 +242,14 @@ Applied after this round: N1, N2, N3, N4 and N6. N5 left as is.
 - **N3: Ragged line wrap in the contract** (`.claude/docs/qa-wizard.md:28`).
 
 Applied after this round: N3.
+
+### Round 7: APPROVED
+- **N1: No test ties `show()` to the run folder** (`tests/freecad_gui/test_qa_wizard.py:78`): assert the progress path's parent is the test's `tmp_path`.
+- **N2: The timed clear of the "Copied" note is untested** (`freecad/Shelving/qa/dock.py:150,356`): a note only, under the no-per-button-tests decision.
+- **N3: The GUI fixture leaves each wizard docked** (`tests/freecad_gui/test_qa_wizard.py:19-27`).
+- **N4: "never share a run" overclaims** (`freecad/Shelving/qa/__init__.py:26`): name cleanup can map two names to one folder.
+- **N5: bug-013 does not say why the fix is ad hoc** (`.claude/docs/bug-log.md:92`).
+- **N6: Old file name in a test path** (`tests/test_qa_cases.py:121`).
+- **N7: The round 6 feedback is covered and nothing regressed** (`git diff 5ecc5c9..HEAD`).
+
+Applied after this round: N1, N3, N4, N5 and N6. N2 left as is.

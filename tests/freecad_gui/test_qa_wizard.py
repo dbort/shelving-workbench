@@ -25,11 +25,15 @@ def wizard(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[dock.QAW
     monkeypatch.setattr(dock, "_open", None)
     shown = dock.show()
     yield shown
+    FreeCADGui.getMainWindow().removeDockWidget(shown)
+    shown.deleteLater()
     for name in list(FreeCAD.listDocuments()):
         FreeCAD.closeDocument(name)
 
 
-def test_a_recorded_step_reaches_the_report(wizard: dock.QAWizard) -> None:
+def test_a_recorded_step_reaches_the_report(
+    wizard: dock.QAWizard, tmp_path: Path
+) -> None:
     assert wizard.parent() is FreeCADGui.getMainWindow()
     wizard.open_case("write.moved-board-corrected")
     label = "Create a fresh unit in a new document"
@@ -76,7 +80,7 @@ def test_a_recorded_step_reaches_the_report(wizard: dock.QAWizard) -> None:
 
     report = json.loads(wizard.copy_report())
     assert wizard.report_label.text().startswith("Copied")
-    assert wizard._report_path.parent == wizard._progress_path.parent
+    assert wizard._report_path.parent == wizard._progress_path.parent == tmp_path
     (case,) = report["cases"]
     assert case["id"] == "write.moved-board-corrected"
     step = case["steps"][0]

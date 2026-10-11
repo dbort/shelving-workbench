@@ -24,7 +24,7 @@ def temp_dir() -> Path:
     """The folder for this user's QA run: progress, report, and the
     documents setup buttons save. Under FreeCAD's temp directory, which the
     system cleans up, and named for the user, so two people on one machine
-    never share a run. Not created here."""
+    do not share a run. Not created here."""
     import FreeCAD
 
     try:

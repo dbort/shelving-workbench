@@ -89,7 +89,8 @@ log happens only when the user asks.
   (`freecad/Shelving/commands/export_boxes.py`), so an export can litter
   `~` with `<label>.boxes.json` files. Found in sh-034's manual QA, where
   an export run before the QA wizard's save button wrote
-  `~/TestUnit.boxes.json`. Fix: `ad hoc`, right after sh-034 ships: always
+  `~/TestUnit.boxes.json`. Fix: `ad hoc`, since the change is small and
+  local and the right behavior is settled, right after sh-034 ships: always
   write under a per-user folder in FreeCAD's temp directory
   (`FreeCAD.getTempPath()`, qualified by the user name), saved document or
   not, and print the path as today. The QA wizard's scan case and its
