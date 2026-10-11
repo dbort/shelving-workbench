@@ -12,6 +12,7 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, cast
 
+from freecad.Shelving import qa
 from freecad.Shelving.qa.registry import CheckResult, action, check
 
 if TYPE_CHECKING:
@@ -94,7 +95,9 @@ def add_overlap_box() -> None:
 @action("save_to_temp", label="Save the document to a temporary folder")
 def save_to_temp() -> str:
     doc = _active_document()
-    path = Path(tempfile.mkdtemp(prefix="shelving-qa-")) / f"{doc.Name}.FCStd"
+    run_dir = qa.temp_dir()
+    run_dir.mkdir(parents=True, exist_ok=True)
+    path = Path(tempfile.mkdtemp(prefix="document-", dir=run_dir)) / f"{doc.Name}.FCStd"
     doc.saveAs(str(path))
     return f"Saved to {path}"
 

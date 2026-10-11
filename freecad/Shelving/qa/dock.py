@@ -18,6 +18,7 @@ import FreeCAD
 import FreeCADGui
 from PySide6 import QtCore, QtWidgets
 
+from freecad.Shelving import qa
 from freecad.Shelving.qa import actions as _register_actions  # noqa: F401
 from freecad.Shelving.qa.model import Case, Step, load_cases
 from freecad.Shelving.qa.registry import ACTIONS, CHECKS, CheckResult
@@ -29,6 +30,9 @@ from freecad.Shelving.qa.report import (
     load_progress,
     save_progress,
 )
+
+# How long the "Copied" note stays under Copy report.
+_NOTE_MS = 8000
 
 _FAIL_PROMPT = (
     "Add a comment on what you saw, or press Fail again to record it without one."
@@ -113,6 +117,9 @@ class QAWizard(QtWidgets.QDockWidget):
         self._case: Case | None = None
         self._log_start = 0
         self._fail_prompted = False
+        self._presses: list[str] = []
+        self._note_timer = QtCore.QTimer(self)
+        self._note_timer.setSingleShot(True)
 
         self.pages = QtWidgets.QStackedWidget()
         self.setWidget(self.pages)
@@ -140,6 +147,7 @@ class QAWizard(QtWidgets.QDockWidget):
         self.start_button.clicked.connect(self._start_next)
         self.open_button.clicked.connect(self._open_selected)
         self.copy_button.clicked.connect(self.copy_report)
+        self._note_timer.timeout.connect(lambda: self.report_label.setText(""))
         return page
 
     def _build_step_page(self) -> QtWidgets.QWidget:
@@ -220,6 +228,7 @@ class QAWizard(QtWidgets.QDockWidget):
             self.open_case(self.cases[row].id)
 
     def open_case(self, case_id: str) -> None:
+        self.report_label.setText("")
         self._case = next(case for case in self.cases if case.id == case_id)
         self.pages.setCurrentIndex(1)
         self._show_step()
@@ -239,6 +248,7 @@ class QAWizard(QtWidgets.QDockWidget):
         self.prompt_label.setText("")
         self.comment_edit.clear()
         self._fail_prompted = False
+        self._presses = []
         for button in self.verdict_buttons.values():
             button.setEnabled(step is not None)
         # Once every step is recorded, leaving is the one thing left to do.
@@ -279,9 +289,11 @@ class QAWizard(QtWidgets.QDockWidget):
         try:
             message = action.run()
         except Exception as err:  # noqa: BLE001 - shown, the step carries on
+            self._presses.append(f"failed: {err}")
             self.action_button.setText(action.label)
             self.action_label.setText(f"The action failed: {err}")
             return
+        self._presses.append(message or "done")
         self.action_button.setText(f"{_DONE_MARK} {action.label}")
         self.action_label.setText(message or "")
 
@@ -314,7 +326,11 @@ class QAWizard(QtWidgets.QDockWidget):
         text = self._read_log()
         log = text[self._log_start :] if len(text) >= self._log_start else text
         self.progress.results.setdefault(self._case.id, {})[step.id] = StepResult(
-            verdict=verdict, comment=comment, check=self._run_check(step), log=log
+            verdict=verdict,
+            comment=comment,
+            check=self._run_check(step),
+            log=log,
+            presses=tuple(self._presses),
         )
         save_progress(self.progress, self._progress_path)
         self._show_step()
@@ -337,6 +353,7 @@ class QAWizard(QtWidgets.QDockWidget):
         if clipboard is not None:
             clipboard.setText(report)
         self.report_label.setText(f"Copied, and saved to {self._report_path}")
+        self._note_timer.start(_NOTE_MS)
         return report
 
 
@@ -357,11 +374,11 @@ def show() -> QAWizard:
     first time, and return it."""
     global _open
     if _open is None:
-        data_dir = Path(FreeCAD.getUserAppDataDir()) / "Shelving"
+        run_dir = qa.temp_dir()
         _open = QAWizard(
             load_cases(),
-            data_dir / "qa-progress.json",
-            data_dir / "qa-report.json",
+            run_dir / "progress.json",
+            run_dir / "report.json",
             _ask_resume,
         )
         FreeCADGui.getMainWindow().addDockWidget(

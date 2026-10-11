@@ -50,8 +50,9 @@ area, and the QA wizard walks through them.
    anything to say. A verdict is final and moves to the next step; to redo
    a case, click **Restart case**.
 4. Back in the case list, click **Copy report**. The JSON report goes to
-   the clipboard and to `qa-report.json` in FreeCAD's user data directory,
-   holding each step's verdict, comment, check result and Report view
+   the clipboard and to `report.json` in `shelving-qa-<your user name>/`
+   under FreeCAD's temp directory (`App.getTempPath()`), holding each
+   step's verdict, comment, check result, button presses and Report view
    output, ready to paste into a review session.
 
 Progress is saved after every verdict. Reopening the wizard, even after

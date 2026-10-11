@@ -129,6 +129,23 @@ QA FEEDBACK (user, 2026-10-11, after round 2):
 - A step offers no "or do it by hand" alternative: the button does it, and
   its text says what it does.
 
+QA FEEDBACK (user, 2026-10-11, after round 6):
+- The QA run's files live in `shelving-qa-<user>/` under FreeCAD's temp
+  directory (`FreeCAD.getTempPath()`), not under FreeCAD's user data
+  directory: progress, the report, and the documents setup buttons save.
+  The user name keeps two people on one machine from sharing a run.
+  Progress survives a FreeCAD restart, which the remove-the-workbench case
+  needs; on Linux a reboot clears it, which a QA run can afford. This
+  supersedes the "Save and resume" decision's location.
+- The report records each step's setup action by name, and every press of
+  its button: what the action printed, "done", or "failed: <error>".
+- The report keeps every Report view line, the workbench's timing lines
+  included, for simplicity.
+- The "Copied" note under Copy report clears after a few seconds and when a
+  case opens.
+- Export Boxes writing to the home folder for an unsaved document is
+  bug-013, logged on this branch and fixed ad hoc after sh-034 ships.
+
 GUARD RAILS (user, 2026-10-10, after planning): keep the wizard small, and
 add no production complexity for it beyond plain design for testability.
 - Production code never depends on the wizard: only the QA Wizard command

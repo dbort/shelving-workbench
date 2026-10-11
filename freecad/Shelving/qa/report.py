@@ -26,6 +26,9 @@ class StepResult:
     check: CheckResult | None
     # The Report view text printed while the step was current.
     log: str
+    # One entry per press of the step's setup button, in order: what the
+    # action printed, "done" when it printed nothing, or "failed: <error>".
+    presses: tuple[str, ...] = ()
 
 
 @dataclass
@@ -47,6 +50,7 @@ class _StepJson(TypedDict):
     comment: str
     check: _CheckJson | None
     log: str
+    presses: list[str]
 
 
 def _step_json(result: StepResult) -> _StepJson:
@@ -60,6 +64,7 @@ def _step_json(result: StepResult) -> _StepJson:
         "comment": result.comment,
         "check": check,
         "log": result.log,
+        "presses": list(result.presses),
     }
 
 
@@ -86,6 +91,9 @@ def _step_result(data: object, where: str) -> StepResult:
         raise ValueError(f"{where}: bad verdict or comment")
     if not isinstance(log, str):
         raise ValueError(f"{where}: bad log")
+    presses = data.get("presses", [])
+    if not isinstance(presses, list) or not all(isinstance(p, str) for p in presses):
+        raise ValueError(f"{where}: bad presses")
     check_result: CheckResult | None = None
     if check is not None:
         if not isinstance(check, dict):
@@ -96,7 +104,11 @@ def _step_result(data: object, where: str) -> StepResult:
             raise ValueError(f"{where}: bad check")
         check_result = CheckResult(passed=passed, detail=detail)
     return StepResult(
-        verdict=cast("Verdict", verdict), comment=comment, check=check_result, log=log
+        verdict=cast("Verdict", verdict),
+        comment=comment,
+        check=check_result,
+        log=log,
+        presses=tuple(presses),
     )
 
 
@@ -129,8 +141,9 @@ def build_report(
 ) -> str:
     """The run as indented JSON: the FreeCAD version, the checkout's commit,
     start and end times, and every case with at least one recorded step, in
-    ``cases`` order, each step in its case's order with its verdict,
-    comment, check result and log. Steps not yet recorded are left out."""
+    ``cases`` order, each step in its case's order with its setup action's
+    name (null when it has none), verdict, comment, check result, log and
+    button presses. Steps not yet recorded are left out."""
     report_cases = []
     for case in cases:
         recorded = progress.results.get(case.id, {})
@@ -141,7 +154,11 @@ def build_report(
                 "id": case.id,
                 "title": case.title,
                 "steps": [
-                    {"id": step.id, **_step_json(recorded[step.id])}
+                    {
+                        "id": step.id,
+                        "action": step.action,
+                        **_step_json(recorded[step.id]),
+                    }
                     for step in case.steps
                     if step.id in recorded
                 ],

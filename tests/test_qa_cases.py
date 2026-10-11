@@ -82,6 +82,9 @@ def _progress() -> Progress:
                     CheckResult(passed=False, detail="Side 1 x = 2 mm"),
                     "[shelving] edit unit\n",
                 ),
+                "nudge-side": StepResult(
+                    "pass", "", None, "", presses=("done", "failed: no unit")
+                ),
             }
         },
     )
@@ -99,8 +102,15 @@ def test_the_report_holds_each_recorded_step_and_the_run() -> None:
     assert report["finished"] == "2026-10-10 09:05:00"
     (case,) = report["cases"]
     assert case["id"] == "write.moved-board-corrected"
-    assert [step["id"] for step in case["steps"]] == ["start", "edit-and-resize"]
-    failed = case["steps"][1]
+    assert [step["id"] for step in case["steps"]] == [
+        "start",
+        "nudge-side",
+        "edit-and-resize",
+    ]
+    assert case["steps"][1]["action"] == "nudge_side_1"
+    assert case["steps"][1]["presses"] == ["done", "failed: no unit"]
+    assert case["steps"][2]["action"] is None
+    failed = case["steps"][2]
     assert failed["verdict"] == "fail"
     assert failed["comment"] == "Side 1 stayed at 2 mm"
     assert failed["check"] == {"passed": False, "detail": "Side 1 x = 2 mm"}

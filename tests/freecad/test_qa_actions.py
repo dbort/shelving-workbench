@@ -1,6 +1,7 @@
 """The QA wizard's setup actions and checks against a real FreeCAD
 document: each case's actions run in step order from a clean slate."""
 
+import getpass
 import tempfile
 from collections.abc import Iterator
 from pathlib import Path
@@ -16,9 +17,10 @@ from freecad.Shelving.qa.registry import ACTIONS, CHECKS
 
 @pytest.fixture(autouse=True)
 def no_documents(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    """Saves land in ``tmp_path``, and every document an action opened is
-    closed afterward."""
-    monkeypatch.setattr(tempfile, "mkdtemp", lambda prefix: str(tmp_path))
+    """The run folder and every save land in ``tmp_path``, and every
+    document an action opened is closed afterward."""
+    monkeypatch.setattr(qa, "temp_dir", lambda: tmp_path)
+    monkeypatch.setattr(tempfile, "mkdtemp", lambda **kwargs: str(tmp_path))
     yield
     for name in list(FreeCAD.listDocuments()):
         FreeCAD.closeDocument(name)
@@ -68,3 +70,13 @@ def test_the_fresh_unit_checks_pass_on_a_fresh_unit() -> None:
     for name in ("four_boards", "fresh_unit_size", "side_1_at_x_zero"):
         result = CHECKS[name](FreeCAD.ActiveDocument)
         assert result.passed, (name, result.detail)
+
+
+def test_the_run_folder_is_per_user_under_freecads_temp_directory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.undo()
+    monkeypatch.setattr(getpass, "getuser", lambda: "dave b/ort")
+    run_dir = qa.temp_dir()
+    assert run_dir.parent == Path(FreeCAD.getTempPath())
+    assert run_dir.name == "shelving-qa-dave_b_ort"
