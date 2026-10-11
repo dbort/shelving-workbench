@@ -50,7 +50,8 @@ title = "A document opens without the workbench"
     "Restart FreeCAD.",
     "Open the QA Wizard.",
     "Answer Yes to resume.",
-    "Select this case in the list and click Open selected case.",
+    "Select this case in the list.",
+    "Click Open selected case.",
   ]
   expected = """
 No error dialog and no Report view warning about a missing module; every
