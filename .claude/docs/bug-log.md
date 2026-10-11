@@ -1,5 +1,5 @@
 ---
-next_id: bug-013
+next_id: bug-014
 ---
 
 # Bug log
@@ -83,3 +83,15 @@ log happens only when the user asks.
   `AncestorWatch` in `editor/panel.py` logs the hidden ancestors. Fix:
   `ad hoc`, once a slow run's log confirms the ancestor: raise the overlay
   through FreeCAD's API, or document the setting.
+- `bug-013` - **Export Boxes writes into the home folder when the document is
+  unsaved**: the boxes file goes beside the saved document, or, for a
+  document never saved, into the user's home folder
+  (`freecad/Shelving/commands/export_boxes.py`), so an export can litter
+  `~` with `<label>.boxes.json` files. Found in sh-034's manual QA, where
+  an export run before the QA wizard's save button wrote
+  `~/TestUnit.boxes.json`. Fix: `ad hoc`, since the change is small and
+  local and the right behavior is settled, right after sh-034 ships: always
+  write under a per-user folder in FreeCAD's temp directory
+  (`FreeCAD.getTempPath()`, qualified by the user name), saved document or
+  not, and print the path as today. The QA wizard's scan case and its
+  `boxes_json_beside_document` check follow that path.

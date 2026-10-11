@@ -51,7 +51,7 @@ materials, and puts it in the editor, scoped to one unit and undone by Cancel.
         Size and the basis control are disabled, and Change stock… is enabled;
       - a plain click returns to single selection.
 - [ ] A swap never changes a board's `Grain`. Asserted headless.
-- [ ] `docs/manual-qa.md` has cases for:
+- [ ] QA cases in `freecad/Shelving/qa/cases/` cover:
       - selecting by stock row and by Ctrl-click;
       - a material swap recoloring boards;
       - a thickness swap in which a spacing-based shelf holds and a
@@ -118,6 +118,6 @@ shell.
 - [ ] **Step 2** (`freecad/Shelving/editor/session.py`): Multi-board selection alongside the existing single selection, the stock groups (reading `ShapeMaterial` and, with a GUI, the dominant face color), and the stock swap (thickness through the core edit and the write path; `ShapeMaterial` from a library UUID; color repainting every face).
 - [ ] **Step 3** (`freecad/Shelving/editor/panel.py`, `freecad/Shelving/editor/scene.py`): The Stock section with its rows, Ctrl-click in the view, selection highlighting for several boards, single-item controls disabled during a multi-selection, and the "Change stock…" dialog with its three optional fields and FreeCAD's material list.
 - [ ] **Step 4** (`tests/freecad/`, `tests/freecad_gui/`): The headless and GUI Must Have tests.
-- [ ] **Step 5** (`docs/manual-qa.md`, `README.md`): The manual QA cases, and glossary entries for a stock and the stock swap.
+- [ ] **Step 5** (`freecad/Shelving/qa/cases/`, `README.md`): The QA cases, and glossary entries for a stock and the stock swap.
 
 ## Review log

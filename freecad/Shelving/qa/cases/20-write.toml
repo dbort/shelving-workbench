@@ -1,0 +1,58 @@
+[[case]]
+id = "write.moved-board-corrected"
+title = "A board moved by hand within the joint clearance is corrected"
+
+  [[case.step]]
+  id = "start"
+  action = "fresh_unit"
+  expected = "A ShelvingUnit holding Bottom, Top, Side 1 and Side 2 appears."
+
+  [[case.step]]
+  id = "nudge-side"
+  action = "nudge_side_1"
+  expected = "Side 1 sits 2 mm in from the unit's edge."
+
+  [[case.step]]
+  id = "edit-and-resize"
+  check = "side_1_at_x_zero"
+  instruction = [
+    "Select the container.",
+    "Run Edit Unit.",
+    "Type 1010 into Height and press Return.",
+    "Click OK.",
+  ]
+  expected = "Side 1 is back at x = 0, without being moved back by hand."
+
+[[case]]
+id = "write.opens-without-workbench"
+title = "A document opens without the workbench"
+
+  [[case.step]]
+  id = "start"
+  action = "fresh_unit"
+  expected = "A ShelvingUnit with four boards appears."
+
+  [[case.step]]
+  id = "save"
+  action = "save_to_temp"
+  instruction = ["Note the path shown under the button."]
+  expected = "The path of the saved document appears under the button."
+
+  [[case.step]]
+  id = "reopen"
+  instruction = [
+    "Quit FreeCAD.",
+    "Move the shelving-workbench symlink out of Mod/.",
+    "Restart FreeCAD.",
+    "Open the saved document.",
+    "Note what you see.",
+    "Put the symlink back.",
+    "Restart FreeCAD.",
+    "Open the QA Wizard.",
+    "Answer Yes to resume.",
+    "Select this case in the list.",
+    "Click Open selected case.",
+  ]
+  expected = """
+No error dialog and no Report view warning about a missing module; every
+board is present, correctly sized, where it was."""

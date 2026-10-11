@@ -29,7 +29,7 @@ which objects, and what to do. Milestone M10, part 1 of 3.
 - [ ] An over-constrained edit leaves no stale geometry: the document is at the
       last state that solved, asserted by comparing board sizes and placements
       before and after a refused operation.
-- [ ] `docs/manual-qa.md` gains cases for relabel and a refusal's
+- [ ] QA cases in `freecad/Shelving/qa/cases/` cover relabel and a refusal's
       appearance.
 - [ ] `mypy --strict` clean.
 
@@ -88,8 +88,8 @@ Every length identifier carries `_mm`.
 
 - [ ] **Step 2** (`freecad/Shelving/report.py`): Create the shared refusal helper in the FreeCAD layer. `report_refusal(summary, objects, suggestion)` printing the three parts to the report view in a fixed order and selecting the named objects in the 3D view, guarded for a missing GUI. A table mapping each known refusal reason, the solver's and the scanner's, to its suggested next step, so a suggestion is data rather than prose repeated in every command. Route every existing command's failure path through it.
 
-- [ ] **Step 3** (`freecad/Shelving/commands/`, `freecad/Shelving/init_gui.py`): Add `Shelving_RelabelUnit` in the established shape, requiring exactly one selected container, opening one transaction, calling `relabel_unit`, committing, and reporting the count changed. Add its id to `init_gui`'s `command_ids`.
+- [ ] **Step 3** (`freecad/Shelving/commands/`, `freecad/Shelving/init_gui.py`): Add `Shelving_RelabelUnit` in the established shape, requiring exactly one selected container, opening one transaction, calling `relabel_unit`, committing, and reporting the count changed. Add its id to `init_gui`'s `TOOLBAR_COMMANDS`.
 
-- [ ] **Step 4** (`tests/freecad/test_write.py`, `docs/manual-qa.md`): Extend the write tests: a board renamed by hand keeps its name through a resize and `relabel_unit` overwrites it and reports one changed; `relabel_unit` produces neutral side names with no facing set and left and right names after setting `ShelvingFacing`; and a refused operation leaves every board's size and placement unchanged. Add cases to `docs/manual-qa.md` for relabel and for a refusal showing its summary, objects and suggestion while selecting the objects in the 3D view.
+- [ ] **Step 4** (`tests/freecad/test_write.py`, `freecad/Shelving/qa/cases/`): Extend the write tests: a board renamed by hand keeps its name through a resize and `relabel_unit` overwrites it and reports one changed; `relabel_unit` produces neutral side names with no facing set and left and right names after setting `ShelvingFacing`; and a refused operation leaves every board's size and placement unchanged. Add QA cases in `freecad/Shelving/qa/cases/` for relabel and for a refusal showing its summary, objects and suggestion while selecting the objects in the 3D view.
 
 ## Review log
