@@ -39,7 +39,8 @@ class Step:
     # A registry action name, shown as a button; None when the step needs
     # no setup.
     action: str | None = None
-    # A registry check name, run and shown beside the verdict buttons.
+    # A registry check name: run on demand from the step's Run check button,
+    # and again when a verdict is recorded.
     check: str | None = None
 
 

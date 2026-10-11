@@ -1,5 +1,5 @@
 """Recorded QA results: the progress file that survives a restart, and the
-JSON report a person pastes back into an LLM session.
+JSON report a review session reads from the saved file.
 
 Imports no FreeCAD; the dock supplies the version, commit and times.
 """
