@@ -321,6 +321,18 @@ view (`freecad/Shelving/spikes/`). It logs to
   Label placement and hit priority need design.
 - **OpenInventor navigation** consumes the press of the first Ctrl+click,
   so only its release arrives.
+- **Destroying a dragger that has been dragged crashes FreeCAD on macOS.**
+  The first drag makes Coin's `SoDragger::getViewVolume` create an
+  `SoCallbackAction` with callbacks for two node types, which leaves null
+  entries in its per-type lists. Coin before 4.0.4 calls `deleteAll()` on
+  those entries when the action is deleted (coin3d/coin#556, fixed in
+  4.0.4). The macOS FreeCAD 1.1 bundle ships Coin 4.0.3, and its clang
+  build drops the null check, so it segfaults at address `0x10` (seen on
+  the user's Mac). Linux builds do not crash, so neither Xvfb nor a pivy
+  repro on Coin 4.0.3 here could reproduce it. The spike keeps one dragger
+  for the whole session, moves and hides it instead of rebuilding it, and
+  on Coin before 4.0.4 never lets it be destroyed, leaking one small
+  dragger per session. The real editor needs the same rule.
 
 ### Testing on your laptop
 

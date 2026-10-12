@@ -15,6 +15,7 @@ drag leaves alone.
 from __future__ import annotations
 
 import math
+import re
 import time
 import traceback
 from collections.abc import Callable, Iterator, Mapping
@@ -316,7 +317,24 @@ class ViewportEditor:
         scene_graph.addChild(self._root)
 
         self._labels: list[_Label] = []
-        self._dragger: _Coin = None
+        # One dragger for the whole session, moved and shown or hidden per
+        # selection and never destroyed while the view is open: on Coin
+        # before 4.0.4, destroying a dragger that has been dragged crashes
+        # FreeCAD (coin3d/coin#556, see _KEPT_ALIVE).
+        self._dragger: _Coin = coin.SoTranslate1Dragger()
+        self._dragger_transform: _Coin = coin.SoTransform()
+        self._dragger_switch: _Coin = coin.SoSwitch()
+        self._dragger_switch.ref()
+        pick_style = coin.SoPickStyle()
+        pick_style.style = coin.SoPickStyle.SHAPE
+        # A switch shows one child, so the three go in one separator.
+        dragger_group = coin.SoSeparator()
+        dragger_group.addChild(pick_style)
+        dragger_group.addChild(self._dragger_transform)
+        dragger_group.addChild(self._dragger)
+        self._dragger_switch.addChild(dragger_group)
+        self._dragger_switch.whichChild.setValue(coin.SO_SWITCH_NONE)
+        self._dragger_holder.addChild(self._dragger_switch)
         self._dragger_callbacks: list[tuple[str, Callable[[_Coin], None]]] = []
         self._dragger_board: str | None = None
         self._dragger_scale_mm = 1.0
@@ -337,6 +355,13 @@ class ViewportEditor:
         self._observer = _SelectionObserver(self)
         self._native_active = False
 
+        for kind, callback in (
+            ("addStartCallback", self._drag_started),
+            ("addMotionCallback", self._drag_moved),
+            ("addFinishCallback", self._drag_finished),
+        ):
+            handle = self.view.addDraggerCallback(self._dragger, kind, callback)
+            self._dragger_callbacks.append((kind, handle))
         self._mouse_callback = self.view.addEventCallbackPivy(
             coin.SoMouseButtonEvent.getClassTypeId(), self._on_mouse
         )
@@ -371,6 +396,10 @@ class ViewportEditor:
             f"dpr {screen.devicePixelRatio()}"
         )
         log(f"navigation style: {self.view.getNavigationType()}")
+        log(
+            f"Coin {coin.SoDB.getVersion()}, destroys draggers safely: "
+            f"{_coin_destroys_draggers_safely()}"
+        )
         unit = self._host.session.unit
         log(
             f"unit {unit.id}: size {unit.size_mm}, depth axis {unit.depth_axis}, "
@@ -439,7 +468,9 @@ class ViewportEditor:
         self._closed = True
         self._close_field("editor closed")
         self.set_hide_others(False)
-        self._remove_dragger()
+        for kind, callback in self._dragger_callbacks:
+            self.view.removeDraggerCallback(self._dragger, kind, callback)
+        self._dragger_callbacks = []
         self._set_native(False)
         self._selection_field.setValue(self._saved_selection_enabled)
         self.view.removeEventCallbackPivy(
@@ -452,6 +483,11 @@ class ViewportEditor:
             self._camera_sensor.detach()
             self._camera_sensor = None
         self.view.getSceneGraph().removeChild(self._root)
+        if _coin_destroys_draggers_safely():
+            self._dragger_switch.unref()
+        else:
+            _KEPT_ALIVE.append(self._dragger_switch)
+            log(f"Coin {coin.SoDB.getVersion()}: dragger kept alive (coin3d/coin#556)")
         self.view.setCamera(self._saved_camera)
         log(f"close: camera restored, undo names {self._container.Document.UndoNames}")
 
@@ -482,10 +518,10 @@ class ViewportEditor:
         self.on_top = on_top
         self._root.removeChild(self._drawing)
         self._root.removeChild(self._dragger_holder)
-        self._remove_dragger()
         holder_type = coin.SoAnnotation if on_top else coin.SoSeparator
         self._drawing = holder_type()
         self._dragger_holder = holder_type()
+        self._dragger_holder.addChild(self._dragger_switch)
         self._root.addChild(self._drawing)
         self._root.addChild(self._dragger_holder)
         log(f"overlay on top: {on_top}")
@@ -673,19 +709,14 @@ class ViewportEditor:
                 _Label(item.id, (p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2)
             )
 
-    def _remove_dragger(self) -> None:
-        if self._dragger is not None:
-            for kind, callback in self._dragger_callbacks:
-                self.view.removeDraggerCallback(self._dragger, kind, callback)
-        self._dragger_callbacks = []
-        self._dragger = None
+    def _hide_dragger(self) -> None:
+        self._dragger_switch.whichChild.setValue(coin.SO_SWITCH_NONE)
         self._dragger_board = None
-        self._dragger_holder.removeAllChildren()
 
     def _rebuild_dragger(self) -> None:
-        """An arrow on the selected board along its run, when it has a
-        region before it to resize."""
-        self._remove_dragger()
+        """Put the arrow on the selected board, along its run, when it has a
+        region before it to resize; hide it otherwise."""
+        self._hide_dragger()
         session = self._host.session
         board_id = session.selected_id
         if board_id is None or not session.can_merge():
@@ -707,19 +738,14 @@ class ViewportEditor:
             unit.size_mm.component_mm(self._frame.vertical.component_index),
         )
         self._dragger_scale_mm = _DRAGGER_FRACTION * longest_mm
-        placement = coin.SoTransform()
+        placement = self._dragger_transform
         placement.translation.setValue((h0 + h1) / 2, (v0 + v1) / 2, 4 * _LIFT_MM)
-        if axis == self._frame.vertical:
-            placement.rotation.setValue(coin.SbVec3f(0, 0, 1), math.pi / 2)
+        angle = math.pi / 2 if axis == self._frame.vertical else 0.0
+        placement.rotation.setValue(coin.SbVec3f(0, 0, 1), angle)
         scale = self._dragger_scale_mm
         placement.scaleFactor.setValue(scale, scale, scale)
-        pick_style = coin.SoPickStyle()
-        pick_style.style = coin.SoPickStyle.SHAPE
-        dragger = coin.SoTranslate1Dragger()
-        self._dragger_holder.addChild(pick_style)
-        self._dragger_holder.addChild(placement)
-        self._dragger_holder.addChild(dragger)
-        self._dragger = dragger
+        self._dragger.translation.setValue(0, 0, 0)
+        self._dragger_switch.whichChild.setValue(0)
         self._dragger_board = board_id
         center = space.origin
         self._drag_center = Vec3(
@@ -728,13 +754,6 @@ class ViewportEditor:
             center.z_mm + space.size.z_mm / 2,
         )
         self._run_index = axis.component_index
-        for kind, callback in (
-            ("addStartCallback", self._drag_started),
-            ("addMotionCallback", self._drag_moved),
-            ("addFinishCallback", self._drag_finished),
-        ):
-            handle = self.view.addDraggerCallback(dragger, kind, callback)
-            self._dragger_callbacks.append((kind, handle))
 
     # Dragging
 
@@ -1026,6 +1045,23 @@ class ViewportEditor:
         if Shiboken.isValid(host):
             host.hide()
             host.deleteLater()
+
+
+# Draggers kept from destruction for the life of the process. Coin before
+# 4.0.4 crashes deleting the SoCallbackAction a dragger creates the first
+# time it is dragged (coin3d/coin#556, fixed in 4.0.4); FreeCAD 1.1's macOS
+# bundle ships Coin 4.0.3. One small dragger per editing session.
+_KEPT_ALIVE: list[_Coin] = []
+
+
+def _coin_destroys_draggers_safely() -> bool:
+    """Whether this Coin has the coin3d/coin#556 fix (4.0.4 or later)."""
+    # The string reads like "SIM Coin 4.0.3".
+    found = re.search(r"(\d+)\.(\d+)\.(\d+)", str(coin.SoDB.getVersion()))
+    if found is None:
+        return False
+    major, minor, patch = (int(part) for part in found.groups())
+    return (major, minor, patch) >= (4, 0, 4)
 
 
 def _box_error_mm(a: FreeCAD.BoundBox, b: FreeCAD.BoundBox) -> float:

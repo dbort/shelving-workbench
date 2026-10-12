@@ -68,6 +68,13 @@ xvfb-run -a -s "-screen 0 1600x1000x24" \
   main window and maximizing the MDI subwindows. At that size an 18 mm
   board is about 6 pixels tall, so aim clicks with margin, and expect
   overlapping labels the user's screen would not show.
+- **Platform-specific native crashes.** The dev VM's Linux builds are not
+  the macOS FreeCAD bundle: different Coin and Qt versions, and a
+  different compiler. A crash from destroying a dragged dragger
+  (coin3d/coin#556) hit only on macOS, where clang drops a null check the
+  Linux build keeps. Compare library versions with the user's crash report
+  (`libCoin.80.0.3` there, `libCoin.so.80.0.10` here) before trusting a
+  clean Xvfb run.
 - **Feel and render speed.** llvmpipe renders in software. Python-side
   timings (solve, write, scene rebuild) are representative; frame rates
   are not.
