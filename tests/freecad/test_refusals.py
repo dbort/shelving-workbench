@@ -31,9 +31,9 @@ def test_every_reason_has_a_suggestion() -> None:
 def test_a_refusal_prints_summary_objects_and_suggestion_in_order(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Under ``freecadcmd`` there is no 3D view to select in, so a refusal
-    prints and selects nothing rather than raising. A labeled object is
-    shown by its label with its name beside it."""
+    """Under ``freecadcmd`` a refusal prints all three parts, and with no 3D
+    view to select in it selects nothing rather than raising. A labeled
+    object is shown by its label with its name beside it."""
     doc = FreeCAD.newDocument("refusal_print")
     try:
         labeled = doc.addObject("Part::Box", "left_side")

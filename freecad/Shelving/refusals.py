@@ -39,9 +39,9 @@ SUGGESTIONS: Mapping[RefusalReason, str] = {
         "unit's container so the unit is read without it."
     ),
     "no_thin_axis": (
-        "A board is thinner in one direction than in the other two. Simplify "
-        "the part to a plain board, or move it out of the unit's container, "
-        "into a group of its own, so the unit is read without it."
+        "A board must be thinner in one direction than in the other two. "
+        "Simplify the part to a plain board, or move it out of the unit's "
+        "container, into a group of its own, so the unit is read without it."
     ),
     "collapses_at_snap": (
         "The part is smaller than the snap tolerance in the elevation. Make "
@@ -76,9 +76,9 @@ SUGGESTIONS: Mapping[RefusalReason, str] = {
         "which moves the boards around them."
     ),
     "no_slack_absorber": (
-        "The boards were moved by hand so the unit's stored sizes no longer "
-        "fill the space between them. Undo that move, then change the sizes "
-        "in Edit Unit, which moves the boards around them."
+        "These sizes were stored before the boards were moved by hand. Undo "
+        "that move so Edit Unit opens, then change a size or leave one "
+        "opening free there."
     ),
     "nonpositive_opening": (
         "The boards were moved by hand so an opening has no room left. Undo "
