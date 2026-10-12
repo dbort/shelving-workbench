@@ -28,12 +28,26 @@ def test_every_reason_has_a_suggestion() -> None:
     assert all(text.strip() for text in refusals.SUGGESTIONS.values())
 
 
-def test_a_refusal_prints_summary_objects_and_suggestion_in_order(
-    capsys: pytest.CaptureFixture[str],
+@pytest.fixture
+def notified(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str]]:
+    """Every (notifier, message) pair sent to FreeCAD's user-error console,
+    which feeds the Notification Area."""
+    calls: list[tuple[str, str]] = []
+
+    def record(notifier: str, message: str) -> None:
+        calls.append((notifier, message))
+
+    monkeypatch.setattr(refusals, "_print_user_error", record)
+    return calls
+
+
+def test_a_refusal_is_one_notification_of_summary_objects_and_suggestion(
+    notified: list[tuple[str, str]],
 ) -> None:
-    """Under ``freecadcmd`` a refusal prints all three parts, and with no 3D
-    view to select in it selects nothing rather than raising. A labeled
-    object is shown by its label with its name beside it."""
+    """Under ``freecadcmd`` a refusal sends all three parts as one Shelving
+    error, and with no 3D view to select in it selects nothing rather than
+    raising. A labeled object is shown by its label with its name beside
+    it."""
     doc = FreeCAD.newDocument("refusal_print")
     try:
         labeled = doc.addObject("Part::Box", "left_side")
@@ -44,21 +58,26 @@ def test_a_refusal_prints_summary_objects_and_suggestion_in_order(
         )
     finally:
         FreeCAD.closeDocument(doc.Name)
-    assert capsys.readouterr().out.splitlines() == [
-        "REFUSED: Overlap overlaps left_side",
-        "  Objects: Overlap, Side 1 (left_side), Gone",
-        "  Next: Fix it.",
+    assert notified == [
+        (
+            "Shelving",
+            "REFUSED: Overlap overlaps left_side\n"
+            "  Objects: Overlap, Side 1 (left_side), Gone\n"
+            "  Next: Fix it.\n",
+        )
     ]
 
 
-def test_a_refusal_naming_no_objects_prints_no_objects_line(
-    capsys: pytest.CaptureFixture[str],
+def test_a_refusal_naming_no_objects_has_no_objects_line(
+    notified: list[tuple[str, str]],
 ) -> None:
     refusals.report_refusal("Nothing to do.", (), "Try again.")
-    assert capsys.readouterr().out.splitlines() == [
-        "REFUSED: Nothing to do.",
-        "  Next: Try again.",
-    ]
+    assert notified == [("Shelving", "REFUSED: Nothing to do.\n  Next: Try again.\n")]
+
+
+def test_report_error_reaches_freecads_console() -> None:
+    """The real call, unpatched: the two-argument form the stubs omit."""
+    refusals.report_error("refusals smoke: report_error reached the console")
 
 
 def _unit() -> tuple[Unit, Division, Bay, Board, Board]:

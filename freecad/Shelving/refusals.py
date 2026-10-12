@@ -5,11 +5,11 @@ The suggested next step is data in :data:`SUGGESTIONS`, keyed by the same
 reason codes :class:`~freecad.Shelving.core.scan.ScanError` and
 :class:`~freecad.Shelving.core.solver.LayoutSolveError` carry, so a reason
 reads the same whichever command reports it. The editor's own refused edits
-are reported by :func:`freecad.Shelving.editor.panel.report_error` instead.
+go through :func:`report_error` alone, with no suggestion or selection.
 """
 
-from collections.abc import Iterable, Mapping
-from typing import Literal
+from collections.abc import Callable, Iterable, Mapping
+from typing import Literal, cast
 
 import FreeCAD
 
@@ -25,6 +25,13 @@ CommandRefusalReason = Literal[
 ]
 
 RefusalReason = ScanErrorReason | SolveErrorReason | CommandRefusalReason
+
+# freecad-stubs declares PrintTranslatedUserError with one argument, but
+# FreeCAD 1.0 and 1.1 accept (notifier, message), and the notifier is what
+# labels the popup in the Notification Area.
+_print_user_error = cast(
+    "Callable[[str, str], None]", FreeCAD.Console.PrintTranslatedUserError
+)
 
 # A solver reason surfaces from a command only when Edit Unit opens a unit
 # whose stored sizes no longer fit boards moved by hand, so each solver
@@ -112,21 +119,29 @@ SUGGESTIONS: Mapping[RefusalReason, str] = {
 }
 
 
-def report_refusal(summary: str, objects: Iterable[str], suggestion: str) -> None:
-    """Print ``summary``, the objects ``objects`` names and ``suggestion`` to
-    the Report view, in that order, then select in the 3D view each named
-    object the active document holds, replacing the selection.
+def report_error(message: str) -> None:
+    """Show ``message`` as a Shelving error in FreeCAD's Notification Area,
+    which pops it up briefly and keeps it in the Report view."""
+    _print_user_error("Shelving", message + "\n")
 
-    With no objects named, prints no objects line and leaves the selection
-    alone. A name the document does not hold is printed as given and not
-    selected. Selection is skipped without a GUI.
+
+def report_refusal(summary: str, objects: Iterable[str], suggestion: str) -> None:
+    """Report ``summary``, the objects ``objects`` names and ``suggestion``
+    through :func:`report_error` as one message, a line each in that order,
+    then select in the 3D view each named object the active document holds,
+    replacing the selection.
+
+    With no objects named, the message has no objects line and the selection
+    is left alone. A name the document does not hold is shown as given and
+    not selected. Selection is skipped without a GUI.
     """
     names = tuple(objects)
     doc = FreeCAD.ActiveDocument
-    print(f"REFUSED: {summary}")
+    lines = [f"REFUSED: {summary}"]
     if names:
-        print("  Objects: " + ", ".join(_describe(doc, name) for name in names))
-    print(f"  Next: {suggestion}")
+        lines.append("  Objects: " + ", ".join(_describe(doc, name) for name in names))
+    lines.append(f"  Next: {suggestion}")
+    report_error("\n".join(lines))
     if names and FreeCAD.GuiUp:
         _select(doc, names)
 

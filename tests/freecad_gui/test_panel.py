@@ -448,11 +448,6 @@ def test_a_drag_past_its_limit_reports_once(
     assert "cannot move past" in message, message
 
 
-def test_report_error_reaches_freecads_console() -> None:
-    """The real call, unpatched: the two-argument form the stubs omit."""
-    panel_module.report_error("panel smoke: report_error reached the console")
-
-
 def test_ancestor_watch_names_the_container_hiding_the_form() -> None:
     """A form on a background tab: the snapshot shows which ancestor hides
     it, bringing the tab forward reports the Show that reveals it, and once

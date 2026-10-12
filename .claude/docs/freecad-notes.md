@@ -171,5 +171,5 @@ run installs that file. (On this aarch64 VM, `gdb` cannot attach; use
 `FreeCAD.Console.PrintTranslatedUserError("Shelving", message)` pops the
 message from the status bar's Notification Area, shows it in red in the
 status bar, and keeps it in the Report view (1.1.1; 1.0.0 accepts the
-call). The stubs declare one argument, so `report_error` casts. An
+call). The stubs declare one argument, so `refusals.report_error` casts. An
 offscreen GUI records nothing in the Notification Area.

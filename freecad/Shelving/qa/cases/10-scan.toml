@@ -38,7 +38,9 @@ folder under FreeCAD's temp directory, though the document is unsaved."""
   action = "add_overlap_box"
   instruction = ["Select TestUnit.", "Run Edit Unit."]
   expected = """
-No panel opens. The Report view prints three lines in this order:
-`REFUSED: Overlap overlaps LeftSide`, `Objects: Overlap, LeftSide`, and a
-`Next:` line saying to move or shrink one so they only touch. The 3D view's
-selection changes to Overlap and LeftSide, both visibly highlighted."""
+No panel opens. A Shelving error pops up from the Notification Area and
+shows in red in the status bar. The Report view holds the same error as
+three lines in this order: `REFUSED: Overlap overlaps LeftSide`,
+`Objects: Overlap, LeftSide`, and a `Next:` line saying to move or shrink
+one so they only touch. The 3D view's selection changes to Overlap and
+LeftSide, both visibly highlighted."""

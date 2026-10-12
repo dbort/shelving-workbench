@@ -84,6 +84,12 @@ drag inside the open editor keeps sh-021's Notification Area popup through
 `report_error`, with no suggestion line and no 3D selection: a refused edit
 often names a region, which has no document object to select.
 
+A REFUSAL POPS UP (user decision, 2026-10-11, after manual QA). A command's
+refusal is easy to miss in the Report view alone, so `report_refusal` sends
+its three lines as one message through `report_error`, the editor's
+Notification Area call, which now lives in `refusals.py`. The message still
+lands in the Report view; the selection is unchanged.
+
 STANDING OBLIGATIONS (`CLAUDE.md`). Typed Python in full: no bare `Any`, no bare
 containers in signatures or public attributes, `mypy --strict` clean. Shell
 stays simple does not apply; this task adds no shell.
