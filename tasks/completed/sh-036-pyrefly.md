@@ -13,21 +13,21 @@ things mypy --strict misses on today's tree (overriding methods without
 `str`), and those are fixed as part of the switch.
 
 ## Must Have
-- [ ] `pixi run tests` green, with `tools/run-tests.sh` running pyrefly
+- [x] `pixi run tests` green, with `tools/run-tests.sh` running pyrefly
       where it ran mypy, and no mypy invocation left in it.
-- [ ] `pixi.toml` lists `pyrefly` and not `mypy`; `pyproject.toml` has a
+- [x] `pixi.toml` lists `pyrefly` and not `mypy`; `pyproject.toml` has a
       `[tool.pyrefly]` table setting `preset = "strict"` and no
       `[tool.mypy]` table; `.gitignore` has no `.mypy_cache/` line.
-- [ ] The pyrefly config disables no error kind and lowers none below its
+- [x] The pyrefly config disables no error kind and lowers none below its
       preset severity.
-- [ ] Pyrefly honors only its own ignore comments (`enabled-ignores` set to
+- [x] Pyrefly honors only its own ignore comments (`enabled-ignores` set to
       `pyrefly` alone), and no tracked `.py` file contains `# type: ignore`.
-- [ ] The strict preset is in force: deleting one of the new `@override`
+- [x] The strict preset is in force: deleting one of the new `@override`
       decorators, or annotating a function parameter away, makes
       `pixi run tests` fail at the pyrefly step.
-- [ ] `git grep -n -i mypy -- ':!tasks/completed/' ':!pixi.lock'` prints
+- [x] `git grep -n -i mypy -- ':!tasks/completed/' ':!pixi.lock'` prints
       nothing.
-- [ ] `CLAUDE.md` § Typed Python names pyrefly's strict preset as the
+- [x] `CLAUDE.md` § Typed Python names pyrefly's strict preset as the
       required check, and each active task file's "`mypy --strict` clean"
       Must Have and Advice line names pyrefly instead.
 
