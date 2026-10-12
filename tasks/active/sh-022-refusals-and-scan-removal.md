@@ -112,3 +112,6 @@ Every length identifier carries `_mm`.
 - **N3: Two next steps for no_slack_absorber** (`freecad/Shelving/refusals.py:78`): `describe_solve_error`'s summary already advises "Change a size, or leave one opening free" (`freecad/Shelving/core/solver.py:318-323`), and the `Next:` line then says to undo the hand move and resize in Edit Unit.
 - **N4: no_thin_axis suggestion reads as describing the refused part** (`freecad/Shelving/refusals.py:42`): "A board is thinner in one direction than in the other two." reads as a claim about the part; "A board must be thinner..." states the rule.
 - **N5: Ambiguous test docstring** (`tests/freecad/test_refusals.py`): "a refusal prints and selects nothing" can read as "prints nothing"; the test asserts it prints all three lines and selects nothing.
+
+### Round 2: APPROVED
+- **N1: Roadmap box still names Scan Unit** (`docs/roadmap.md:12`): carried over from round 1 and still correctly deferred to `/ship`, which ticks or renames the box; the Must Have's grep is clean once it does and the task file moves to `tasks/completed/`.
