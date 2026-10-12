@@ -117,8 +117,9 @@ def test_identical_duplicate_names_collapse() -> None:
 
 
 def test_scan_error_carries_offending_object_names() -> None:
-    err = ScanError("two boards overlap", ["A", "B"])
+    err = ScanError("overlap", "two boards overlap", ["A", "B"])
     assert err.objects == ("A", "B")
+    assert err.reason == "overlap"
 
 
 def _uniform_depth_boxes() -> list[Box]:
@@ -292,6 +293,7 @@ def test_overlap_is_refused_naming_both() -> None:
     with pytest.raises(ScanError, match="overlaps") as info:
         scan(boxes)
     assert sorted(info.value.objects) == ["ShelfA", "ShelfB"]
+    assert info.value.reason == "overlap"
 
 
 def test_board_crossing_a_bay_boundary_is_refused() -> None:
@@ -313,6 +315,7 @@ def test_board_crossing_a_bay_boundary_is_refused() -> None:
     ) as info:
         _contained(grid, i0, i1, j0, j1)
     assert info.value.objects == ("A",)
+    assert info.value.reason == "crosses_bay"
 
 
 def test_pinwheel_is_refused_naming_the_cycle() -> None:
@@ -328,6 +331,7 @@ def test_pinwheel_is_refused_naming_the_cycle() -> None:
     with pytest.raises(ScanError, match="not a tree") as info:
         scan(pinwheel)
     assert sorted(info.value.objects) == ["A", "B", "C", "D"]
+    assert info.value.reason == "not_a_tree"
 
 
 def test_partly_enclosed_partly_open_region_is_refused() -> None:
@@ -350,8 +354,9 @@ def test_partly_enclosed_partly_open_region_is_refused() -> None:
     grid = _Grid(elevated, 0.5)
     i0, i1 = grid.hs_mm.index(18.0), grid.hs_mm.index(1082.0)
     j0, j1 = grid.vs_mm.index(18.0), grid.vs_mm.index(118.0)
-    with pytest.raises(ScanError, match="partly enclosed and partly open"):
+    with pytest.raises(ScanError, match="partly enclosed and partly open") as info:
         _empty(grid, i0, i1, j0, j1)
+    assert info.value.reason == "partly_enclosed"
 
 
 def test_no_enclosed_bay_is_refused() -> None:
@@ -362,8 +367,9 @@ def test_no_enclosed_bay_is_refused() -> None:
         _box("LeftSide", (0.0, 0.0, 18.0), (18.0, depth_mm, 964.0)),
         _box("RightSide", (982.0, 0.0, 18.0), (18.0, depth_mm, 964.0)),
     ]
-    with pytest.raises(ScanError, match="no enclosed bay"):
+    with pytest.raises(ScanError, match="no enclosed bay") as info:
         scan(boxes)
+    assert info.value.reason == "no_enclosed_bay"
 
 
 def test_square_section_box_is_refused() -> None:
@@ -371,6 +377,7 @@ def test_square_section_box_is_refused() -> None:
     with pytest.raises(ScanError, match="no single thin axis") as info:
         scan(boxes)
     assert info.value.objects == ("Post",)
+    assert info.value.reason == "no_thin_axis"
 
 
 def _find_board(region: Region, role: str) -> Board | None:

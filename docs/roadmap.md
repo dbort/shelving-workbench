@@ -23,8 +23,8 @@ Every refusal has one shape: a summary, the objects responsible, and a
 suggested next step, with the objects selected in the 3D view. The
 suggestion is data beside each reason, because a refusal a user cannot act
 on reads as a bug. With that in place, Edit Unit says everything about a
-hand-built unit that Scan Unit did, so Scan Unit is removed and Edit Unit is
-the one way in.
+hand-built unit that the separate scan command did, so that command is
+removed and Edit Unit is the one way in.
 
 The preferences page holds the starter unit's three dimensions and the snap
 and joint-clearance tolerances. Real geometry has coincident edges

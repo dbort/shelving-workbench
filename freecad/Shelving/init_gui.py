@@ -28,7 +28,6 @@ else:
 _RESOURCE_DIR = os.path.join(os.path.dirname(__file__), "resources")
 
 TOOLBAR_COMMANDS = (
-    "Shelving_Scan",
     "Shelving_ExportBoxes",
     "Shelving_CreateUnit",
     "Shelving_EditUnit",
@@ -58,7 +57,6 @@ class ShelvingWorkbench(_WorkbenchBase):
             edit_unit,
             export_boxes,
             qa_wizard,
-            scan,
         )
 
         self.appendToolbar("Shelving", list(TOOLBAR_COMMANDS))

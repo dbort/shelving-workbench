@@ -693,6 +693,42 @@ def test_a_refused_edit_after_an_accepted_edit_changes_nothing() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
+def test_an_over_constrained_edit_leaves_the_last_solved_state() -> None:
+    """A size, and a unit size, that the boards cannot fit are refused by
+    the solver after an accepted split, and every board keeps the size and
+    placement that split gave it: no partial write of the refused layout."""
+    doc = FreeCAD.newDocument("editor_smoke_over_constrained")
+    try:
+        container = create_unit(doc)
+        doc.recompute()
+
+        session = Session(container)
+        session.open()
+        try:
+            session.select(_find_bay_id(session.unit.root))
+            assert session.split("vertical") is None
+            doc.recompute()
+            snapshot_after_split = _board_snapshot(container)
+            unit_after_split = session.unit
+
+            session.select(_find_bay_ids_in_order(session.unit.root)[0])
+            too_tall = session.set_size(5000.0)
+            assert isinstance(too_tall, EditFailure), too_tall
+            assert "more than" in too_tall.message, too_tall.message
+            doc.recompute()
+            assert _board_snapshot(container) == snapshot_after_split
+
+            too_narrow = session.resize("width", 20.0)
+            assert isinstance(too_narrow, EditFailure), too_narrow
+            doc.recompute()
+            assert _board_snapshot(container) == snapshot_after_split
+            assert session.unit is unit_after_split
+        finally:
+            session.cancel()
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
 def test_split_direction_follows_the_units_depth_axis() -> None:
     """A unit whose depth axis is X, not Y. Add Divider and Add Shelf
     must resolve their model axis from

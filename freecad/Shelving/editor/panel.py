@@ -560,7 +560,15 @@ class EditUnitPanel:
         watch.lap("session")
         self.session.open()
         watch.lap("open transaction")
+        # Without this, a failure building the form would leave the
+        # transaction open with no dialog to commit or abort it.
+        try:
+            self._build(watch)
+        except BaseException:
+            self.session.cancel()
+            raise
 
+    def _build(self, watch: Stopwatch) -> None:
         self.form = QtWidgets.QWidget()
         self.form.setWindowTitle("Edit Unit")
         layout = QtWidgets.QVBoxLayout(self.form)

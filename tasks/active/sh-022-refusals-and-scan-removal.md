@@ -78,6 +78,12 @@ line. A refused operation changes nothing: the session and the commands both
 reject an edit whole rather than writing part of it, so the document is always
 at a state that solved.
 
+THE EDITOR'S OWN EDIT REFUSALS STAY AS THEY ARE (user decision, 2026-10-11).
+The helper covers the toolbar commands only. A refused split, merge, resize or
+drag inside the open editor keeps sh-021's Notification Area popup through
+`report_error`, with no suggestion line and no 3D selection: a refused edit
+often names a region, which has no document object to select.
+
 STANDING OBLIGATIONS (`CLAUDE.md`). Typed Python in full: no bare `Any`, no bare
 containers in signatures or public attributes, `mypy --strict` clean. Shell
 stays simple does not apply; this task adds no shell.
@@ -86,16 +92,16 @@ Every length identifier carries `_mm`.
 
 ## Plan
 
-- [ ] **Step 1** (`freecad/Shelving/refusals.py`, `.claude/docs/code-map.md`): Create the shared refusal helper in the FreeCAD layer. `report_refusal(summary, objects, suggestion)` printing the three parts to the report view in a fixed order and selecting the named objects in the 3D view, guarded for a missing GUI. A table mapping each known refusal reason, the solver's and the scanner's, to its suggested next step, so a suggestion is data rather than prose repeated in every command. List the module in the code map, which `tests/test_code_map.py` requires.
+- [x] **Step 1** (`freecad/Shelving/refusals.py`, `.claude/docs/code-map.md`): Create the shared refusal helper in the FreeCAD layer. `report_refusal(summary, objects, suggestion)` printing the three parts to the report view in a fixed order and selecting the named objects in the 3D view, guarded for a missing GUI. A table mapping each known refusal reason, the solver's and the scanner's, to its suggested next step, so a suggestion is data rather than prose repeated in every command. List the module in the code map, which `tests/test_code_map.py` requires.
 
-- [ ] **Step 2** (`freecad/Shelving/commands/edit_unit.py`, `export_boxes.py`, `create_unit.py`): Route every command's failure path through the helper. Edit Unit passes a `ScanError`'s objects from building the panel, so a hand-built unit that does not scan is refused with its offenders selected.
+- [x] **Step 2** (`freecad/Shelving/commands/edit_unit.py`, `export_boxes.py`, `create_unit.py`): Route every command's failure path through the helper. Edit Unit passes a `ScanError`'s objects from building the panel, so a hand-built unit that does not scan is refused with its offenders selected.
 
-- [ ] **Step 3** (`freecad/Shelving/commands/scan.py`, `freecad/Shelving/core/report.py`, `freecad/Shelving/core/tests/test_report.py`, `freecad/Shelving/init_gui.py`): Delete the three files. Remove `Shelving_Scan` from `TOOLBAR_COMMANDS` and `scan` from `Initialize`'s deferred imports.
+- [x] **Step 3** (`freecad/Shelving/commands/scan.py`, `freecad/Shelving/core/report.py`, `freecad/Shelving/core/tests/test_report.py`, `freecad/Shelving/init_gui.py`): Delete the three files. Remove `Shelving_Scan` from `TOOLBAR_COMMANDS` and `scan` from `Initialize`'s deferred imports.
 
-- [ ] **Step 4** (`tests/freecad/test_scan.py`, `.claude/docs/qa-wizard.md`): Update the remaining mentions. `test_scan.py`'s depth-axis test docstring (about line 405) cites `ScanCommand.Activated` and Scan Unit; restate it against the editor session's read and `resize_unit`, keeping the discrepancy it pins. The qa-wizard contract's instruction-line example becomes "Run Edit Unit.". Grep afterward for the names in the Must Have.
+- [x] **Step 4** (`tests/freecad/test_scan.py`, `.claude/docs/qa-wizard.md`): Update the remaining mentions. `test_scan.py`'s depth-axis test docstring (about line 405) cites `ScanCommand.Activated` and Scan Unit; restate it against the editor session's read and `resize_unit`, keeping the discrepancy it pins. The qa-wizard contract's instruction-line example becomes "Run Edit Unit.". Grep afterward for the names in the Must Have.
 
-- [ ] **Step 5** (`tests/freecad/`, `tests/freecad_gui/`): The every-command refusal test; the Edit Unit refusal test on overlapping boards, asserting the summary, the named objects, the suggestion and the 3D selection; and a refused operation leaving every board's size and placement unchanged.
+- [x] **Step 5** (`tests/freecad/`, `tests/freecad_gui/`): The every-command refusal test; the Edit Unit refusal test on overlapping boards, asserting the summary, the named objects, the suggestion and the 3D selection; and a refused operation leaving every board's size and placement unchanged.
 
-- [ ] **Step 6** (`freecad/Shelving/qa/cases/10-scan.toml`, `freecad/Shelving/qa/actions.py`): Move the case onto Edit Unit, keeping its id. The "scan" step opens the editor on TestUnit, showing two bays either side of Shelf; the "skipped-part" step shows Skewed in the left-alone list with its reason; the export step is unchanged; the "refusal" step runs Edit Unit and expects the summary, objects and suggestion in the Report view with Overlap and LeftSide selected. Follow `.claude/docs/qa-wizard.md`.
+- [x] **Step 6** (`freecad/Shelving/qa/cases/10-scan.toml`, `freecad/Shelving/qa/actions.py`): Move the case onto Edit Unit, keeping its id. The "scan" step opens the editor on TestUnit, showing two bays either side of Shelf; the "skipped-part" step shows Skewed in the left-alone list with its reason; the export step is unchanged; the "refusal" step runs Edit Unit and expects the summary, objects and suggestion in the Report view with Overlap and LeftSide selected. Follow `.claude/docs/qa-wizard.md`.
 
 ## Review log

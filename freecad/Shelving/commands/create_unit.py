@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, TypedDict
 
 import FreeCAD
 
+from freecad.Shelving import refusals
 from freecad.Shelving.unit_ops import create_unit
 
 _RESOURCE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources")
@@ -52,7 +53,7 @@ class CreateUnitCommand:
             doc.recompute()
         except Exception as err:  # noqa: BLE001 - report, don't crash the GUI
             doc.abortTransaction()  # type: ignore[no-untyped-call]
-            print(f"REFUSED: {err}")
+            refusals.report_refusal(str(err), (), refusals.SUGGESTIONS["unexpected"])
             return
         doc.commitTransaction()  # type: ignore[no-untyped-call]
         board_count = len(getattr(container, "Group", []))

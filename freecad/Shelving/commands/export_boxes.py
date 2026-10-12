@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING, TypedDict, cast
 
 import FreeCAD
 
+from freecad.Shelving import refusals
 from freecad.Shelving.container import read_container
-from freecad.Shelving.core.scan import ScanError
 from freecad.Shelving.temp_dirs import export_path
 
 _RESOURCE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources")
@@ -48,11 +48,12 @@ class _Export(TypedDict):
     skipped: list[_SkippedRecord]
 
 
-def _selected_container() -> FreeCAD.DocumentObject:
-    """The one selected container the command reads, or ``ScanError`` naming
-    the current selection: anything other than exactly one ``App::Part``,
-    ``App::LinkGroup``, or ``App::DocumentObjectGroup`` is refused, because
-    the container is what decides which boards form one unit."""
+def _selected_container() -> FreeCAD.DocumentObject | None:
+    """The one selected container the command reads, or ``None`` after
+    refusing the current selection: anything other than exactly one
+    ``App::Part``, ``App::LinkGroup``, or ``App::DocumentObjectGroup`` is
+    refused, because the container is what decides which boards form one
+    unit."""
     import FreeCADGui as Gui
 
     selection = cast("list[FreeCAD.DocumentObject]", Gui.Selection.getSelection())
@@ -60,11 +61,12 @@ def _selected_container() -> FreeCAD.DocumentObject:
         selection[0].isDerivedFrom(kind) for kind in _CONTAINERS
     ):
         return selection[0]
-    raise ScanError(
-        "select exactly one App::Part, App::LinkGroup, or group to export; "
-        "group the boards into one first",
+    refusals.report_refusal(
+        "Export Boxes needs exactly one container selected.",
         (obj.Name for obj in selection),
+        refusals.SUGGESTIONS["not_one_container"],
     )
+    return None
 
 
 class ExportBoxesCommand:
@@ -83,10 +85,8 @@ class ExportBoxesCommand:
         return bool(FreeCAD.ActiveDocument)
 
     def Activated(self) -> None:
-        try:
-            container = _selected_container()
-        except ScanError as err:
-            print(f"REFUSED: {err}")
+        container = _selected_container()
+        if container is None:
             return
         boxes, skipped, _record = read_container(container)
         export: _Export = {
