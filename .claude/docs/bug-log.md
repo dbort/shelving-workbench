@@ -1,5 +1,5 @@
 ---
-next_id: bug-014
+next_id: bug-015
 ---
 
 # Bug log
@@ -83,3 +83,15 @@ log happens only when the user asks.
   `AncestorWatch` in `editor/panel.py` logs the hidden ancestors. Fix:
   `ad hoc`, once a slow run's log confirms the ancestor: raise the overlay
   through FreeCAD's API, or document the setting.
+- `bug-014` - **Edit Unit is disabled for boxes selected inside a
+  hand-built group that has never been saved as a unit**: selecting one or
+  more boxes in the QA case's TestUnit leaves Edit Unit disabled, while
+  selecting the group itself works. `container.unit_for_selection` maps
+  each selected object to the nearest group carrying a `ShelvingUnitId`,
+  and only Create Unit or an Edit Unit OK (`container.write_container`)
+  writes one, so a never-saved group is reachable only by selecting it.
+  Found in sh-022's manual QA; `main` behaves the same. Fix: `sh-XXX task`.
+  The fallback when no selected object has a saved unit above it is a
+  design question: the group directly holding every selection is the
+  obvious answer, but a box nested in a subgroup or a PartDesign Body
+  makes that group the subgroup rather than the unit.
