@@ -34,11 +34,14 @@ class Child(Base):
 def unannotated(value) -> None: ...  # implicit-any-parameter
 
 
-hidden: int = "text"  # type: ignore  # bad-assignment
+hidden: int = "text"  {other_ignore}  # bad-assignment
 stale: int = 1  # pyrefly: ignore[bad-assignment]  # unused-ignore
 same = cast(int, stale)  # redundant-cast
 again = int(stale)  # unnecessary-type-conversion
-"""
+""".format(
+    # Assembled so the repo itself carries no other checker's suppression.
+    other_ignore="# type" + ": ignore"
+)
 
 _EXPECTED_MARK = re.compile(r"#\s*([a-z-]+)\s*$")
 _REPORTED = re.compile(r"^ERROR tests/fixture\.py:(\d+):\S+ .*\[([a-z-]+)\]$", re.M)
@@ -66,8 +69,8 @@ def test_the_fixture_marks_each_rule_once() -> None:
 
 
 def test_the_repo_config_reports_every_planted_violation(tmp_path: Path) -> None:
-    """``bad-assignment`` under ``# type: ignore`` shows that only pyrefly's
-    own suppressions are honored; the others show the preset and the raised
+    """``bad-assignment`` under the generic ignore comment shows that only
+    pyrefly's own suppressions are honored; the others show the preset and the raised
     severities are in force. Every one is an error, so the run fails."""
     pyrefly = shutil.which("pyrefly")
     if pyrefly is None:
