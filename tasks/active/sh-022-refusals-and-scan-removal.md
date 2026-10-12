@@ -105,3 +105,10 @@ Every length identifier carries `_mm`.
 - [x] **Step 6** (`freecad/Shelving/qa/cases/10-scan.toml`, `freecad/Shelving/qa/actions.py`): Move the case onto Edit Unit, keeping its id. The "scan" step opens the editor on TestUnit, showing two bays either side of Shelf; the "skipped-part" step shows Skewed in the left-alone list with its reason; the export step is unchanged; the "refusal" step runs Edit Unit and expects the summary, objects and suggestion in the Report view with Overlap and LeftSide selected. Follow `.claude/docs/qa-wizard.md`.
 
 ## Review log
+
+### Round 1: APPROVED
+- **N1: Roadmap box still names Scan Unit** (`docs/roadmap.md:12`): correctly left, since `pipeline.md` § Roadmap reserves box edits for `/ship`; `/ship` must tick or rename it, or the "no file names `Scan Unit`" Must Have stays false once the task file moves to `tasks/completed/`.
+- **N2: Two Edit Unit refusal paths have no test** (`freecad/Shelving/commands/edit_unit.py:108`, `:152`): the `unexpected` catch and the `showDialog` failure (`task_panel_open`, which also cancels the session) go through the helper untested, as does the `_build` guard that cancels the transaction when building the form fails (`freecad/Shelving/editor/panel.py:565`). The Must Have is met at one path per command.
+- **N3: Two next steps for no_slack_absorber** (`freecad/Shelving/refusals.py:78`): `describe_solve_error`'s summary already advises "Change a size, or leave one opening free" (`freecad/Shelving/core/solver.py:318-323`), and the `Next:` line then says to undo the hand move and resize in Edit Unit.
+- **N4: no_thin_axis suggestion reads as describing the refused part** (`freecad/Shelving/refusals.py:42`): "A board is thinner in one direction than in the other two." reads as a claim about the part; "A board must be thinner..." states the rule.
+- **N5: Ambiguous test docstring** (`tests/freecad/test_refusals.py`): "a refusal prints and selects nothing" can read as "prints nothing"; the test asserts it prints all three lines and selects nothing.
