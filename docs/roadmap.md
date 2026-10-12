@@ -9,7 +9,7 @@ task ships.
 
 **Status:** Tasks sh-022, sh-035, sh-023, sh-024
 
-- [ ] sh-022: refusals, and removing Scan Unit
+- [x] sh-022: one refusal shape, and Edit Unit as the one way in
 - [ ] sh-035: Relabel Unit (blocked on sh-022)
 - [ ] sh-023: the preferences page
 - [ ] sh-024: user documentation and the release (blocked on sh-022,

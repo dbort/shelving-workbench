@@ -14,28 +14,28 @@ unit, so Scan Unit and its text report are removed and Edit Unit is the one
 way in. Milestone M10, part 1.
 
 ## Must Have
-- [ ] `pixi run tests` green.
-- [ ] Every command reports a refusal through one shared helper carrying a
+- [x] `pixi run tests` green.
+- [x] Every command reports a refusal through one shared helper carrying a
       summary line, the offending object names, and a suggested next step.
       A test asserts each command's refusal path goes through it.
-- [ ] A refusal selects its named objects in the 3D view. Extended to every
+- [x] A refusal selects its named objects in the 3D view. Extended to every
       command that names objects.
-- [ ] Edit Unit on a hand-built container that does not scan refuses through
+- [x] Edit Unit on a hand-built container that does not scan refuses through
       the helper, naming and selecting the objects the scanner names, with a
       suggested next step. Asserted in `tests/freecad_gui/` on a container
       holding two overlapping boards.
-- [ ] `Shelving_Scan` is not registered: absent from `init_gui`'s
+- [x] `Shelving_Scan` is not registered: absent from `init_gui`'s
       `TOOLBAR_COMMANDS` and the Shelving menu. `freecad/Shelving/commands/scan.py`,
       `freecad/Shelving/core/report.py` and
       `freecad/Shelving/core/tests/test_report.py` are deleted, and no file
       outside `tasks/completed/` names `Shelving_Scan`, `ScanCommand`,
       `Scan Unit` or `core.report`.
-- [ ] An over-constrained edit leaves no stale geometry: the document is at the
+- [x] An over-constrained edit leaves no stale geometry: the document is at the
       last state that solved, asserted by comparing board sizes and placements
       before and after a refused operation.
-- [ ] `freecad/Shelving/qa/cases/10-scan.toml` runs on Edit Unit instead of
+- [x] `freecad/Shelving/qa/cases/10-scan.toml` runs on Edit Unit instead of
       Scan Unit, and QA cases cover a refusal's appearance.
-- [ ] `mypy --strict` clean.
+- [x] `mypy --strict` clean.
 
 ## Advice
 
