@@ -8,11 +8,11 @@ spike switches sits on top.
 from __future__ import annotations
 
 import time
-from typing import override
 
 import FreeCAD
 from PySide6 import QtWidgets
 
+from freecad.Shelving.compat import override
 from freecad.Shelving.editor.panel import EditUnitPanel
 from freecad.Shelving.editor.session import EditFailure
 from freecad.Shelving.spikes.spike_log import LOG_PATH, log

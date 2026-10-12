@@ -19,7 +19,7 @@ import time
 import traceback
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
-from typing import Any, Literal, Protocol, TypeAlias, cast, override
+from typing import Any, Literal, Protocol, TypeAlias, cast
 
 import FreeCAD
 import FreeCADGui
@@ -27,6 +27,7 @@ from pivy import coin
 from PySide6 import QtCore, QtGui, QtWidgets
 from shiboken6 import Shiboken
 
+from freecad.Shelving.compat import override
 from freecad.Shelving.core.geometry import Space, Vec3
 from freecad.Shelving.core.layout import (
     Axis,
