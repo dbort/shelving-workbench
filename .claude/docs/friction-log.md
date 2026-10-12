@@ -1,5 +1,5 @@
 ---
-next_id: friction-025
+next_id: friction-026
 ---
 
 # Friction log
@@ -41,3 +41,11 @@ the papercut and its fix in its message.
   stubbed `agent`/`pipeline`, and ran it under `pixi exec -s nodejs node`.
   Simpler if: `pixi run tests` extracted the block, stubbed the workflow
   API, and dry-ran it in full-tree and diff-scoped modes.
+- `friction-025` - **a test harness that can drive FreeCAD's 3D view**:
+  on `research/viewport-editing`, checking the viewport spike needed the
+  scene graph, picking and navigation styles, but the GUI suite runs on
+  offscreen Qt, which cannot create the 3D view. The workaround was a
+  hand-rolled driver script run under `xvfb-run` with
+  `QT_QPA_PLATFORM=xcb` (`.claude/docs/xvfb-gui-testing.md`). Simpler if:
+  a pytest marker or separate GUI directory ran its modules under Xvfb,
+  with fixtures for clicking and dragging at model points.

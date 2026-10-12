@@ -254,47 +254,106 @@ this pass.
 Every capability the designs above need has a Python route. Stay in
 Python.
 
-## Risks, ranked, and how to retire each
+## Risks, and where the spike left them
 
-Most open questions are about event routing and focus, which a screenshot
-cannot show. A macro the user runs on their own machine, which prints what
-happened as text, retires them more cheaply than screenshots parsed here.
-Screenshots help in two places only, marked below, and the user judging
-them by eye beats sending them back.
+Each risk was first ranked by desk research. The spike below then ran under
+Xvfb on the dev VM (`.claude/docs/xvfb-gui-testing.md`), driven by
+`research/spikes/drive_viewport_spike.py`, which sends real Qt mouse and
+key events into the 3D view. "Retired" means the driver showed it working;
+"open" means only a person at a real screen can settle it.
 
-| # | Risk | Confidence now | Retire with |
-|---|---|---|---|
-| 1 | Board drag through a dragger works in Gesture, CAD, OpenInventor and Touchpad navigation, outside edit mode | Medium | Macro: a dragger on a box, tried in each style, printing callback events |
-| 2 | Clicks on overlay faces and solids reach our callback, and native selection can be switched off through the `selectionEnabled` field from pivy, or gated to the unit | Medium | Same macro |
-| 3 | A floating `QuantitySpinBox` positions correctly on a HiDPI laptop (`getPointOnViewport` returns device pixels with y up; `toQPoint` in C++ flips and divides by the pixel ratio), takes focus, and Enter and Escape do not close the task dialog | Medium-low | Macro, run on the laptop |
-| 4 | The overlay on the front plane neither z-fights with the board faces nor shows through solids when orbited | Medium | Macro plus the user's eye; a screenshot only if it looks wrong |
-| 5 | Overlay rebuild plus the existing per-step solid rewrite stays smooth in a drag on a large unit | Medium | Macro with the existing `Stopwatch` timings printed |
-| 6 | Hiding or dimming other objects and restoring them leaves `Visibility` and the undo stack untouched | Medium | Macro, checking `Visibility` and undo names after cancel |
-| 7 | The overlay follows a container with a non-identity or nested `Placement` | High | Unit test on the geometry, no GUI |
-| 8 | Bay and void hit-testing from a 3D ray | High | Unit test, no GUI |
-| 9 | Camera save, front framing on the unit, restore | High | Folded into the first macro |
+| # | Risk | Status |
+|---|---|---|
+| 1 | Board drag through a dragger works in each navigation style, outside edit mode | Retired for CAD, Gesture, Touchpad and OpenSCAD. OpenInventor works with Ctrl held, which is how that style selects anyway |
+| 2 | Clicks reach our callback; native selection can be switched off from pivy, or gated to the unit | Retired for both picking modes. `getObjectInfo` names the board through the container (`SubName` `Board001.Face3`) |
+| 3 | The floating `QuantitySpinBox` lands on its label on a HiDPI screen and keeps focus; Return and Escape leave the task dialog open | Return and Escape retired. Position on HiDPI and focus behavior open: Xvfb has a pixel ratio of 1 and no window manager |
+| 4 | The overlay neither z-fights with board faces nor shows through solids when orbited | Renders correctly from the front, depth-tested and on top. From behind open: the eye judges it faster than a script |
+| 5 | Drag stays smooth | Solve and write about 12 ms a step, panel and overlay redraw about 3 ms, on a six-board unit. Large units and real frame rates open |
+| 6 | Hiding other objects and restoring them leaves `Visibility` and the undo stack untouched | Retired: undo names unchanged, visibility restored |
+| 7 | The overlay follows a moved, rotated container | Retired at 0 and 30 degrees: 0.0000 mm between each board's solid and its overlay. Nested containers untested |
+| 8 | Bay and void hit-testing from a 3D ray | Retired |
+| 9 | Camera save, front framing, restore | Retired: restored exactly, apart from the near and far planes Coin recomputes on every render |
 
-Items 1 to 3 decide whether the viewport editor is viable at all and
-belong in one spike macro. Items 4 to 6 belong in a second one if the
-first passes.
+## The spike
 
-This VM cannot run any of these: offscreen Qt cannot create FreeCAD's
-OpenGL view ("QOpenGLWidget is not supported on this platform"). An Xvfb
-plus Mesa display from conda-forge might let an agent run the macros for
-crashes and API errors, though not for feel or HiDPI behavior; it is worth
-trying only if spikes become frequent.
+**Spike: Edit Unit in 3D View** sits on its own "Shelving Spikes" toolbar.
+It is the Edit Unit panel with its elevation view hidden, so the panel is
+the slim panel this research settled on, plus an editor in the active 3D
+view (`freecad/Shelving/spikes/`). It logs to
+`/tmp/shelving-viewport-spike.log`, appending, with a line at each open.
+
+- The camera turns to the unit's front, orthographic, framed on it, and is
+  restored on OK or Cancel.
+- Bays and voids are translucent faces on the front plane; dimensions are
+  FreeCAD's own `SoDatumLabel`, as in the Sketcher.
+- A click picks a board by its real solid, otherwise the region under the
+  pointer on the front plane. A click within 24 px of a dimension's text
+  opens a size field there; Return applies, Escape closes it.
+- A selected inner board shows an arrow dragger along its run.
+- Delete merges the selected board.
+- Panel switches: who picks (ours, with FreeCAD's selection off, or
+  FreeCAD's, limited to the unit's boards), overlay drawn over the solids,
+  hide other objects, back to the front view, and a note box that writes a
+  line into the log.
+
+### Findings the spike added
+
+- **CAD navigation delays a quick second press.** A left press sooner than
+  the double-click interval after the previous one is held back and
+  replayed at the release (`NavigationStyle::processClickEvent`). Grabbing
+  a dragger right after the click that selected its board therefore does
+  nothing. A design that shows the dragger on hover, or on the same press,
+  would avoid it.
+- **`SoDatumLabel.norm` is in document coordinates.** The node compares it
+  with the camera direction to decide which way text reads; a local-frame
+  normal mirrors the text.
+- **The quantity field cannot be reparented directly.** `setParent` on the
+  `Gui::QuantitySpinBox` that `_DimensionField` builds destroys it at once.
+  Adding it to a layout in a frame parented to the view works, as the
+  panel's rows do.
+- **The floating field must consume Escape.** Unconsumed, Escape reaches
+  the task dialog and cancels the whole edit.
+- **A refused size was reported twice:** Return applied it, then the
+  focus-out at closing finished the same edit again. The spike guards it;
+  the real editor needs the same guard.
+- **Dimension labels compete with boards for clicks.** In a small view a
+  label sits on top of the shelf it measures past, and the label wins.
+  Label placement and hit priority need design.
+- **OpenInventor navigation** consumes the press of the first Ctrl+click,
+  so only its release arrives.
+
+### Testing on your laptop
+
+Open a real unit, select it, and run the spike. Use "Log note" to mark
+what you were doing; the log is what comes back here, so screenshots are
+needed only for something that looks wrong.
+
+1. Navigate the way you normally do: zoom, pan and orbit while editing,
+   with your usual navigation style and trackpad.
+2. Click a dimension and type a size right away. Does the field sit on the
+   text and keep the keyboard? Try Return, Escape, and the f(x) formula
+   button.
+3. Select a divider or shelf and drag its arrow. Is it smooth on your
+   largest unit? Try grabbing the arrow right after selecting the board.
+4. Compare the two picking modes. Is FreeCAD's hover highlight on boards
+   worth having?
+5. Orbit around to the back with "Draw overlay over the solids" on and
+   off. Which reads better?
+6. Tick "Hide other objects", then Cancel. Are your objects visible again,
+   and is the undo history clean?
+7. Press Escape in the 3D view with no field open. What happens?
+8. Is the panel now short enough that it never scrolls?
+
+Copy `/tmp/shelving-viewport-spike.log` into the VM afterward.
 
 ## Suggested next steps
 
-1. Spike macro 1 under `research/spikes/`, run by the user in FreeCAD 1.1
-   on the laptop: open a unit, turn the camera to its front, draw one bay
-   face and one board dragger, a clickable `SoDatumLabel` that opens a
-   floating `QuantitySpinBox`, and log each event as text. Covers risks 1
-   to 3 and 9.
-2. If it passes, spike macro 2 for risks 4 to 6 on a real unit with the
-   live `Session`.
-3. Then a `/new-task` plan for design A, with the spike findings in its
-   `## Advice`.
+1. Run the laptop test above and bring the log back.
+2. Fold the answers into this document, then plan design A with
+   `/new-task`, carrying the findings above into its `## Advice`.
+3. Before this branch merges, delete `freecad/Shelving/spikes/`, the
+   toolbar lines in `init_gui.py`, the spike line in
+   `.claude/docs/code-map.md`, and `research/spikes/`.
 
 ## Sources
 

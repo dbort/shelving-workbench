@@ -34,6 +34,8 @@ Each layer imports only the layers listed above it.
   `freecad/Shelving/commands/qa_wizard.py` and `init_gui.py` import it
   (`.claude/docs/qa-wizard.md`).
 - `freecad/Shelving/resources/`: the workbench icon.
+- `freecad/Shelving/spikes/`: temporary research spikes, deleted before
+  their branch merges.
 
 Outside the package: `tools/` holds the check scripts `pixi run tests`
 drives, through `tools/run-tests.sh`.

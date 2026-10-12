@@ -60,8 +60,13 @@ class ShelvingWorkbench(_WorkbenchBase):
             qa_wizard,
         )
 
+        # Temporary research spike (research/viewport-editing.md); delete
+        # before this branch merges.
+        from freecad.Shelving.spikes import command as _spike  # noqa: F401
+
         self.appendToolbar("Shelving", list(TOOLBAR_COMMANDS))
         self.appendMenu("Shelving", menu_commands())
+        self.appendToolbar("Shelving Spikes", ["Shelving_SpikeViewport"])
 
     @override
     def Activated(self) -> None:
