@@ -14,11 +14,12 @@ import os
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
 from collections.abc import Iterator, Mapping  # noqa: E402
-from typing import cast, override  # noqa: E402
+from typing import cast  # noqa: E402
 
 import pytest  # noqa: E402
 from PySide6 import QtCore, QtGui, QtTest, QtWidgets  # noqa: E402
 
+from freecad.Shelving.compat import override  # noqa: E402
 from freecad.Shelving.core.geometry import Space, Vec3  # noqa: E402
 from freecad.Shelving.core.layout import (  # noqa: E402
     Axis,

@@ -14,7 +14,8 @@ that run is open repeats the id, so one run can be cut out of a long log.
 import itertools
 import time
 from datetime import datetime
-from typing import override
+
+from freecad.Shelving.compat import override
 
 enabled = True
 
