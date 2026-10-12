@@ -124,3 +124,7 @@ Every length identifier carries `_mm`.
 
 ### Round 2: APPROVED
 - **N1: Roadmap box still names Scan Unit** (`docs/roadmap.md:12`): carried over from round 1 and still correctly deferred to `/ship`, which ticks or renames the box; the Must Have's grep is clean once it does and the task file moves to `tasks/completed/`.
+
+### Round 3: APPROVED
+- **N1: Roadmap box still names Scan Unit** (`docs/roadmap.md:12`): carried over from rounds 1 and 2 and still deferred to `/ship`, which ticks or renames the box; no other file outside `tasks/` names `Shelving_Scan`, `ScanCommand`, `Scan Unit` or `core.report`.
+- **N2: Code map entry omits the editor's use of the module** (`.claude/docs/code-map.md:22`): `refusals.py` now also holds `report_error`, which the editor's panel imports for its refused edits; one clause would make the entry accurate.

@@ -20,7 +20,8 @@ Each layer imports only the layers listed above it.
   `tests/test_editor_scene.py`, `tests/freecad/test_editor_session.py`
   and `tests/freecad_gui/`.
 - `freecad/Shelving/refusals.py`: the one way a command reports a
-  refusal, with the suggested next step for each reason. Tested in
+  refusal, with the suggested next step for each reason, and the
+  Notification Area error that it and the editor's refused edits use. Tested in
   `tests/freecad/test_refusals.py` and `tests/freecad_gui/test_refusals.py`.
 - `freecad/Shelving/commands/`: one thin module per toolbar command.
 - `freecad/Shelving/init_gui.py`: workbench registration.
