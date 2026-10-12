@@ -141,3 +141,9 @@ STANDING OBLIGATIONS (`CLAUDE.md`).
       Restore both.
 
 ## Review log
+
+### Round 1: REJECTED
+- **F1: The strict preset and ignore policy are confirmed only by a manual check** (`pyproject.toml:34-49`, Plan Step 5): Must Haves 3-5 hold today, but nothing in `pixi run tests` keeps them true; disabling `missing-override-decorator`, dropping `preset = "strict"` or `enabled-ignores` would leave the gate green. Add a pytest that checks a fixture in `tmp_path` against the repo's `[tool.pyrefly]` table and asserts `missing-override-decorator`, `implicit-any-parameter` and `unused-ignore` fire, `# type: ignore` is not honored, and the run exits non-zero.
+- **N1: Five strict-preset warnings stay in the tree, hidden by default** (`editor/panel.py:809`, `qa/report.py:107`, `properties.py:214`, `qa/dock.py:354`, `tools/check_action_pins.py:290`): two are `redundant-cast`, which `mypy --strict` reported as errors, so the gate is weaker there. Fix the five, or raise `redundant-cast` to error.
+- **N2: `tools/__init__.py` docstring points at a whole table** (`tools/__init__.py:2`): name `[tool.pyrefly].project-includes`, the exact key, as the old text named `[tool.mypy].files`.
+
