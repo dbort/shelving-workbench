@@ -33,7 +33,7 @@ fi
 python3 tools/check_lock_paths.py
 ruff check .
 ruff format --check .
-mypy
+pyrefly check
 shellcheck tools/*.sh
 pytest freecad/Shelving/core tests --ignore=tests/freecad --ignore=tests/freecad_gui
 bash tools/lint-workflows.sh

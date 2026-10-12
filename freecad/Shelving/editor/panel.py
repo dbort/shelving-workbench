@@ -26,7 +26,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable, Mapping
 from functools import partial
-from typing import Protocol, cast
+from typing import Protocol, cast, override
 
 import FreeCAD
 import FreeCADGui
@@ -96,6 +96,7 @@ class _FieldEventFilter(QtCore.QObject):
         self._on_return = on_return
         self._on_focus_out = on_focus_out
 
+    @override
     def eventFilter(self, watched: QtCore.QObject, event: QtCore.QEvent) -> bool:
         if event.type() == QtCore.QEvent.Type.FocusOut:
             self._on_focus_out()
@@ -137,6 +138,7 @@ class _StepWatch(QtCore.QObject):
         self.bursts = 0
         self._last_wheel_s: float | None = None
 
+    @override
     def eventFilter(self, watched: QtCore.QObject, event: QtCore.QEvent) -> bool:
         kind = event.type()
         if kind == QtCore.QEvent.Type.KeyPress:
@@ -369,6 +371,7 @@ class _EditorView(QtWidgets.QGraphicsView):
         # the elevation; the Edit Unit run's debug_log timing ends there.
         self.on_first_paint: Callable[[float], None] | None = None
 
+    @override
     def paintEvent(self, event: QtGui.QPaintEvent) -> None:
         callback = self.on_first_paint
         if callback is None:
@@ -379,6 +382,7 @@ class _EditorView(QtWidgets.QGraphicsView):
         super().paintEvent(event)
         callback((time.perf_counter() - start_s) * 1000)
 
+    @override
     def mousePressEvent(self, event: QtGui.QMouseEvent) -> None:
         super().mousePressEvent(event)
         scene = self.scene()
@@ -387,6 +391,7 @@ class _EditorView(QtWidgets.QGraphicsView):
             self._drag_started = False
             self._on_click(self.mapToScene(self._press_pos))
 
+    @override
     def mouseMoveEvent(self, event: QtGui.QMouseEvent) -> None:
         super().mouseMoveEvent(event)
         if not event.buttons() & QtCore.Qt.MouseButton.LeftButton:
@@ -401,6 +406,7 @@ class _EditorView(QtWidgets.QGraphicsView):
             self._drag_started = True
         self._on_drag(self.mapToScene(pos))
 
+    @override
     def mouseReleaseEvent(self, event: QtGui.QMouseEvent) -> None:
         super().mouseReleaseEvent(event)
         self._press_pos = None
@@ -428,6 +434,7 @@ class FirstEvents(QtCore.QObject):
         self._on_event = on_event
         target.installEventFilter(self)
 
+    @override
     def eventFilter(self, watched: QtCore.QObject, event: QtCore.QEvent) -> bool:
         name = self._pending.pop(event.type(), None)
         if name is not None:
@@ -507,6 +514,7 @@ class AncestorWatch(QtCore.QObject):
             child, parent = parent, parent.parentWidget()
             depth += 1
 
+    @override
     def eventFilter(self, watched: QtCore.QObject, event: QtCore.QEvent) -> bool:
         kind = event.type()
         if kind not in (QtCore.QEvent.Type.Show, QtCore.QEvent.Type.Hide):
@@ -795,10 +803,8 @@ class EditUnitPanel:
             QtWidgets.QDialogButtonBox.StandardButton.Ok
             | QtWidgets.QDialogButtonBox.StandardButton.Cancel
         )
-        # PySide6-stubs types enum.Flag.value as the flag's own class rather
-        # than int: reveal_type shows StandardButton, though the runtime value
-        # is a plain int. FreeCAD's own C++ side only accepts a real int here.
-        return cast("int", buttons.value)
+        # FreeCAD's C++ side accepts only a real int here, not the flag.
+        return buttons.value
 
     def accept(self) -> bool:
         self.session.commit()

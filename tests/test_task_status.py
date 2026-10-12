@@ -85,7 +85,7 @@ def test_compute_next_id(ids: list[str], expected: str) -> None:
 
 
 def test_layered_topological_order() -> None:
-    graph = {
+    graph: dict[str, list[str]] = {
         "sh-3": ["sh-1", "sh-2"],
         "sh-2": ["sh-1", "sh-0"],
         "sh-1": [],

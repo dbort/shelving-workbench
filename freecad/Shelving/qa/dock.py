@@ -173,7 +173,7 @@ class QAWizard(QtWidgets.QDockWidget):
         )
         for verdict, text in choices:
             button = QtWidgets.QPushButton(text)
-            button.clicked.connect(lambda _=False, v=verdict: self.record(v))
+            button.clicked.connect(self._recorder(verdict))
             verdict_row.addWidget(button)
             self.verdict_buttons[verdict] = button
         self.restart_button = QtWidgets.QPushButton("Restart case")
@@ -312,6 +312,11 @@ class QAWizard(QtWidgets.QDockWidget):
             mark = "passes" if result.passed else "does not pass"
             self.check_label.setText(f"Check {mark}: {result.detail}")
 
+    def _recorder(self, verdict: Verdict) -> Callable[[], None]:
+        """A slot recording ``verdict``. A closure per button, since a lambda
+        in the loop would see only the loop's last verdict."""
+        return lambda: self.record(verdict)
+
     def record(self, verdict: Verdict) -> None:
         """Record ``verdict`` and the comment for the current step, save, and
         move on. The first Fail with no comment only prompts for one."""
@@ -346,7 +351,7 @@ class QAWizard(QtWidgets.QDockWidget):
         """Build the report, save it to the report path, put that path on the
         clipboard, and return the report. A report is too long to paste, so
         a review session reads the file."""
-        version = ".".join(str(part) for part in FreeCAD.Version()[:3])
+        version = ".".join(FreeCAD.Version()[:3])
         report = build_report(self.cases, self.progress, version, _commit(), _now())
         self._report_path.parent.mkdir(parents=True, exist_ok=True)
         self._report_path.write_text(report, encoding="utf-8")

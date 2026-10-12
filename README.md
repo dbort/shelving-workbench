@@ -34,9 +34,10 @@ To load the workbench from this checkout in the FreeCAD GUI, see
 ## Tests
 
 `pixi run tests` is the pre-merge gate and what CI runs. In one pass it
-covers ruff, strict mypy, the core unit suite, the `pixi.lock` path guard,
-the workflow-hardening lint, a `freecadcmd` import check, and the headless
-(`tests/freecad/`) and offscreen-GUI (`tests/freecad_gui/`) FreeCAD suites.
+covers ruff, pyrefly at its strict preset, the core unit suite, the
+`pixi.lock` path guard, the workflow-hardening lint, a `freecadcmd` import
+check, and the headless (`tests/freecad/`) and offscreen-GUI
+(`tests/freecad_gui/`) FreeCAD suites.
 `pixi run tests -- --offline` skips the checks that need the network.
 
 The FreeCAD suites use throwaway FreeCAD settings, never yours. Each needs

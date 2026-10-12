@@ -20,7 +20,11 @@ def no_documents(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[No
     """The run folder and every save land in ``tmp_path``, and every
     document an action opened is closed afterward."""
     monkeypatch.setattr(qa, "temp_dir", lambda: tmp_path)
-    monkeypatch.setattr(tempfile, "mkdtemp", lambda **kwargs: str(tmp_path))
+
+    def mkdtemp(**kwargs: object) -> str:
+        return str(tmp_path)
+
+    monkeypatch.setattr(tempfile, "mkdtemp", mkdtemp)
     yield
     for name in list(FreeCAD.listDocuments()):
         FreeCAD.closeDocument(name)

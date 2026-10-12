@@ -10,7 +10,7 @@ import json
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal, TypedDict, cast
+from typing import Literal, TypedDict
 
 from freecad.Shelving.qa.model import Case
 from freecad.Shelving.qa.registry import CheckResult
@@ -104,7 +104,7 @@ def _step_result(data: object, where: str) -> StepResult:
             raise ValueError(f"{where}: bad check")
         check_result = CheckResult(passed=passed, detail=detail)
     return StepResult(
-        verdict=cast("Verdict", verdict),
+        verdict=verdict,
         comment=comment,
         check=check_result,
         log=log,

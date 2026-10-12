@@ -31,21 +31,21 @@ select = ["E", "F", "I", "UP", "B"]
 # Pinning the classification makes the grouping identical on both.
 known-third-party = ["FreeCAD", "FreeCADGui", "Part"]
 
-[tool.mypy]
-strict = true
-files = [
+[tool.pyrefly]
+preset = "strict"
+project-includes = [
     "freecad/",
     "tools/",
     "tests/",
 ]
-# `freecad/` deliberately carries no `__init__.py` (a PEP 420 namespace-package
-# portion, see the wheel-packaging comment above), so mypy's default file-to-
-# module mapping (walk up through `__init__.py`-bearing ancestors) computes
-# `Shelving.core.X` for a source file here while also computing
-# `freecad.Shelving.core.X` for the same file via an import elsewhere,
-# raising "Source file found twice under different module names". Explicit
-# package bases fixes this: each source root below (`freecad/`, the repo
-# root implied by these relative paths) is used to compute module names
-# directly, rather than only the nearest `__init__.py` ancestor.
-explicit_package_bases = true
-mypy_path = "."
+# The repo root, so `freecad.Shelving` resolves as the namespace package it
+# is: `freecad/` carries no `__init__.py`.
+search-path = ["."]
+# A suppression aimed at another checker must not hide a pyrefly error.
+enabled-ignores = ["pyrefly"]
+
+[tool.pyrefly.errors]
+# The preset only warns on a cast or conversion to the type a value already
+# has, and a warning never fails the gate.
+redundant-cast = "error"
+unnecessary-type-conversion = "error"

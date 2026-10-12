@@ -13,7 +13,7 @@ these tests assert.
 import sys
 from collections.abc import Iterator
 from types import TracebackType
-from typing import Protocol, cast
+from typing import Protocol, cast, override
 
 import FreeCAD
 import FreeCADGui
@@ -205,6 +205,17 @@ def _press_move_release(fixture: _Fixture, dy_px: int) -> None:
     )
 
 
+def test_standard_buttons_are_a_plain_int(unit_panel: _Fixture) -> None:
+    """FreeCAD's task dialog rejects the Qt flag itself."""
+    buttons = unit_panel.panel.getStandardButtons()
+    assert type(buttons) is int
+    expected = (
+        QtWidgets.QDialogButtonBox.StandardButton.Ok
+        | QtWidgets.QDialogButtonBox.StandardButton.Cancel
+    )
+    assert buttons == expected.value
+
+
 def test_the_field_is_freecads_quantity_widget(unit_panel: _Fixture) -> None:
     widget = unit_panel.panel.size_field.quantity_widget
     assert widget is not None
@@ -374,6 +385,7 @@ class _KeyRecorder(QtWidgets.QWidget):
         super().__init__()
         self.returns = 0
 
+    @override
     def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
         if event.key() in (QtCore.Qt.Key.Key_Return, QtCore.Qt.Key.Key_Enter):
             self.returns += 1

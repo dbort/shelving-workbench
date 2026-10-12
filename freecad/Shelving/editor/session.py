@@ -238,7 +238,7 @@ class Session:
         """
         doc = self.container.Document
         doc.UndoMode = 1
-        doc.openTransaction("Edit Shelving Unit")  # type: ignore[no-untyped-call]
+        doc.openTransaction("Edit Shelving Unit")
         # Created inside the transaction, so the abort in cancel() removes it
         # and commit() only has to remove it before committing.
         probe = cast(
@@ -257,13 +257,13 @@ class Session:
         if self.probe is not None:
             doc.removeObject(self.probe.Name)
             self.probe = None
-        doc.commitTransaction()  # type: ignore[no-untyped-call]
+        doc.commitTransaction()
 
     def cancel(self) -> None:
         """End this session's transaction, reverting every edit made,
         including the probe object's creation."""
         self.probe = None
-        self.container.Document.abortTransaction()  # type: ignore[no-untyped-call]
+        self.container.Document.abortTransaction()
 
     def select(self, node_id: str | None) -> None:
         self.selected_id = node_id

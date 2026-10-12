@@ -42,20 +42,20 @@ class CreateUnitCommand:
 
     def Activated(self) -> None:
         doc = FreeCAD.ActiveDocument
-        # IsActive already required this; re-checked so mypy sees doc as
-        # non-None rather than trusting the GUI never calls Activated
+        # IsActive already required this; re-checked so the type checker sees
+        # doc as non-None rather than trusting the GUI never calls Activated
         # without it.
         if doc is None:
             return
-        doc.openTransaction("Create Shelving Unit")  # type: ignore[no-untyped-call]
+        doc.openTransaction("Create Shelving Unit")
         try:
             container = create_unit(doc)
             doc.recompute()
         except Exception as err:  # noqa: BLE001 - report, don't crash the GUI
-            doc.abortTransaction()  # type: ignore[no-untyped-call]
+            doc.abortTransaction()
             refusals.report_refusal(str(err), (), refusals.SUGGESTIONS["unexpected"])
             return
-        doc.commitTransaction()  # type: ignore[no-untyped-call]
+        doc.commitTransaction()
         board_count = len(getattr(container, "Group", []))
         print(f"created {container.Name!r} with {board_count} boards")
 

@@ -13,21 +13,21 @@ things mypy --strict misses on today's tree (overriding methods without
 `str`), and those are fixed as part of the switch.
 
 ## Must Have
-- [ ] `pixi run tests` green, with `tools/run-tests.sh` running pyrefly
+- [x] `pixi run tests` green, with `tools/run-tests.sh` running pyrefly
       where it ran mypy, and no mypy invocation left in it.
-- [ ] `pixi.toml` lists `pyrefly` and not `mypy`; `pyproject.toml` has a
+- [x] `pixi.toml` lists `pyrefly` and not `mypy`; `pyproject.toml` has a
       `[tool.pyrefly]` table setting `preset = "strict"` and no
       `[tool.mypy]` table; `.gitignore` has no `.mypy_cache/` line.
-- [ ] The pyrefly config disables no error kind and lowers none below its
+- [x] The pyrefly config disables no error kind and lowers none below its
       preset severity.
-- [ ] Pyrefly honors only its own ignore comments (`enabled-ignores` set to
+- [x] Pyrefly honors only its own ignore comments (`enabled-ignores` set to
       `pyrefly` alone), and no tracked `.py` file contains `# type: ignore`.
-- [ ] The strict preset is in force: deleting one of the new `@override`
+- [x] The strict preset is in force: deleting one of the new `@override`
       decorators, or annotating a function parameter away, makes
       `pixi run tests` fail at the pyrefly step.
-- [ ] `git grep -n -i mypy -- ':!tasks/completed/' ':!pixi.lock'` prints
+- [x] `git grep -n -i mypy -- ':!tasks/completed/' ':!pixi.lock'` prints
       nothing.
-- [ ] `CLAUDE.md` § Typed Python names pyrefly's strict preset as the
+- [x] `CLAUDE.md` § Typed Python names pyrefly's strict preset as the
       required check, and each active task file's "`mypy --strict` clean"
       Must Have and Advice line names pyrefly instead.
 
@@ -102,6 +102,21 @@ rationale survives:
 - `pixi.toml`'s `pyside6-stubs` comment.
 - `README.md` § Tests: "strict mypy".
 
+FOUND DURING WORK (2026-10-11).
+- `pyside6-stubs` declares a hard dependency on mypy, so `pixi.lock` still
+  installs mypy even though nothing runs it. The lock is excluded from the
+  grep Must Have for that reason.
+- Pyrefly's strict preset has no counterpart to mypy's
+  `disallow_untyped_calls`. A call into an unannotated freecad-stubs method
+  such as `openTransaction` passes silently, which is why the nine
+  `no-untyped-call` ignores had nothing left to suppress.
+- The strict preset already reports `unused-ignore` as an error, but only
+  warns on `redundant-cast` and `unnecessary-type-conversion`, and a warning
+  never fails the gate. Both are raised to error, so the gate matches
+  `mypy --strict`'s `warn_redundant_casts`. `tests/test_pyrefly_config.py`
+  keeps every setting in force by checking planted violations against the
+  repo's config.
+
 STANDING OBLIGATIONS (`CLAUDE.md`).
 - **Typed Python:** this task rewrites that obligation's last sentence to
   name pyrefly's strict preset. The task's own Python changes meet the rule.
@@ -111,15 +126,15 @@ STANDING OBLIGATIONS (`CLAUDE.md`).
   user-facing behavior.
 
 ## Plan
-- [ ] **Step 1** (`pixi.toml`, `pixi.lock`, `pyproject.toml`, `.gitignore`,
+- [x] **Step 1** (`pixi.toml`, `pixi.lock`, `pyproject.toml`, `.gitignore`,
       `tools/run-tests.sh`): pyrefly replaces mypy as a dependency, in the
       config and in the gate, per Advice § CONFIG and § IGNORE COMMENTS.
-- [ ] **Step 2** (the files listed in Advice § WHAT STRICT REPORTS TODAY):
+- [x] **Step 2** (the files listed in Advice § WHAT STRICT REPORTS TODAY):
       every strict finding fixed in code, none suppressed; `@override` on
       each overriding method.
-- [ ] **Step 3** (the files in Advice § IGNORE COMMENTS): no `# type:
+- [x] **Step 3** (the files in Advice § IGNORE COMMENTS): no `# type:
       ignore` remains; `Materials` carries the one pyrefly ignore.
-- [ ] **Step 4** (`CLAUDE.md`, `README.md`, `tools/__init__.py`,
+- [x] **Step 4** (`CLAUDE.md`, `README.md`, `tools/__init__.py`,
       `freecad/Shelving/commands/create_unit.py`,
       `freecad/Shelving/core/expand.py`, `pixi.toml` comments; the active
       task files `tasks/active/sh-023-preferences.md`,
@@ -127,8 +142,23 @@ STANDING OBLIGATIONS (`CLAUDE.md`).
       `sh-031-editor-stock-list-and-swap.md`, `sh-035-relabel-unit.md`):
       every mention of mypy names pyrefly, or goes, per Advice § COMMENTS
       THAT NAME MYPY. The `git grep` Must Have is clean.
-- [ ] **Step 5**: confirm the strict-preset Must Have by hand, once by
+- [x] **Step 5**: confirm the strict-preset Must Have by hand, once by
       deleting an `@override` and once by dropping a parameter annotation.
       Restore both.
 
 ## Review log
+
+### Round 1: REJECTED
+- **F1: The strict preset and ignore policy are confirmed only by a manual check** (`pyproject.toml:34-49`, Plan Step 5): Must Haves 3-5 hold today, but nothing in `pixi run tests` keeps them true; disabling `missing-override-decorator`, dropping `preset = "strict"` or `enabled-ignores` would leave the gate green. Add a pytest that checks a fixture in `tmp_path` against the repo's `[tool.pyrefly]` table and asserts `missing-override-decorator`, `implicit-any-parameter` and `unused-ignore` fire, `# type: ignore` is not honored, and the run exits non-zero.
+- **N1: Five strict-preset warnings stay in the tree, hidden by default** (`editor/panel.py:809`, `qa/report.py:107`, `properties.py:214`, `qa/dock.py:354`, `tools/check_action_pins.py:290`): two are `redundant-cast`, which `mypy --strict` reported as errors, so the gate is weaker there. Fix the five, or raise `redundant-cast` to error.
+- **N2: `tools/__init__.py` docstring points at a whole table** (`tools/__init__.py:2`): name `[tool.pyrefly].project-includes`, the exact key, as the old text named `[tool.mypy].files`.
+
+### Round 2: REJECTED
+- **F1: A tracked `.py` file contains `# type: ignore`, which a Must Have forbids** (`tests/test_pyrefly_config.py:37`): the planted fixture line and the docstring at line 69 carry the literal substring. Build the comment in the fixture from parts and reword the docstring, so the Must Have and any grep for stale suppressions stay clean.
+- **N1: `getStandardButtons` drops its cast with no test behind it** (`freecad/Shelving/editor/panel.py:807`): runtime is unchanged, but no test asserts it returns a plain `int`, the constraint its comment states.
+- **N2: `payload = None` for a non-JSON error body reads oddly** (`tools/check_action_pins.py:296`): same behavior as `{}` through `_as_mapping`; `dict[str, object]()` keeps the intent visible.
+
+### Round 3: APPROVED
+- **N1: The grep Must Have holds only after `/ship` moves the task file** (`tasks/active/sh-036-pyrefly.md:3`): the task file is the one match and leaves the grep's scope at `/ship`; confirm the grep is empty after the move.
+- **N2: Uneven docstring wrap** (`tests/test_pyrefly_config.py:77-79`): the second line of `test_the_repo_config_reports_every_planted_violation`'s docstring runs longer than its neighbors; cosmetic.
+

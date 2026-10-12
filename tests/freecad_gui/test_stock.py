@@ -53,8 +53,7 @@ def _appearance(view: _AppearanceView) -> list[_Appearance]:
 
 
 def _material(rgb: tuple[float, float, float]) -> FreeCAD.Material:
-    # freecad-stubs leaves the App.Material constructor unannotated.
-    material = FreeCAD.Material()  # type: ignore[no-untyped-call]
+    material = FreeCAD.Material()
     material.DiffuseColor = (*rgb, 1.0)
     return material
 
