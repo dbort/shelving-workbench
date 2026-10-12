@@ -69,8 +69,9 @@ wrong.
   what happened to their action (a refusal, a failure, where an export
   went) reaches them through the UI itself: a Notification Area popup, a
   dialog, or the task panel. Writing the same text to the log as well is
-  fine. Cases that do not fit cleanly are decided with the user and the
-  decision recorded in the task's `## Advice`.
+  fine. Debugging tools such as Export Boxes are exempt. Cases that do
+  not fit cleanly are decided with the user and the decision recorded in
+  the task's `## Advice`.
 
 <!-- Example shape for future entries:
 

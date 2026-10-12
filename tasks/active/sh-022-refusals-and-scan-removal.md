@@ -89,6 +89,9 @@ refusal is easy to miss in the Report view alone, so `report_refusal` sends
 its three lines as one message through `report_error`, the editor's
 Notification Area call, which now lives in `refusals.py`. The message still
 lands in the Report view; the selection is unchanged.
+Export Boxes is a debugging tool and exempt from the never-read-the-log
+obligation: its success line stays a Report view print. Create Unit's
+success line also stays a print, since the new unit appears in the tree.
 
 STANDING OBLIGATIONS (`CLAUDE.md`). Typed Python in full: no bare `Any`, no bare
 containers in signatures or public attributes, `mypy --strict` clean. Shell
