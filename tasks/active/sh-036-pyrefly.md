@@ -153,3 +153,8 @@ STANDING OBLIGATIONS (`CLAUDE.md`).
 - **N1: Five strict-preset warnings stay in the tree, hidden by default** (`editor/panel.py:809`, `qa/report.py:107`, `properties.py:214`, `qa/dock.py:354`, `tools/check_action_pins.py:290`): two are `redundant-cast`, which `mypy --strict` reported as errors, so the gate is weaker there. Fix the five, or raise `redundant-cast` to error.
 - **N2: `tools/__init__.py` docstring points at a whole table** (`tools/__init__.py:2`): name `[tool.pyrefly].project-includes`, the exact key, as the old text named `[tool.mypy].files`.
 
+### Round 2: REJECTED
+- **F1: A tracked `.py` file contains `# type: ignore`, which a Must Have forbids** (`tests/test_pyrefly_config.py:37`): the planted fixture line and the docstring at line 69 carry the literal substring. Build the comment in the fixture from parts and reword the docstring, so the Must Have and any grep for stale suppressions stay clean.
+- **N1: `getStandardButtons` drops its cast with no test behind it** (`freecad/Shelving/editor/panel.py:807`): runtime is unchanged, but no test asserts it returns a plain `int`, the constraint its comment states.
+- **N2: `payload = None` for a non-JSON error body reads oddly** (`tools/check_action_pins.py:296`): same behavior as `{}` through `_as_mapping`; `dict[str, object]()` keeps the intent visible.
+
