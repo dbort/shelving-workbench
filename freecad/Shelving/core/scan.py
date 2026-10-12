@@ -108,8 +108,8 @@ ScanErrorReason = Literal[
 
 
 class ScanError(ValueError):
-    """A refusal: ``reason`` says which check failed, machine-readable, and
-    ``objects`` names the boxes the diagnosis points at."""
+    """A refusal: ``reason`` is a machine-readable code for the check that
+    failed, and ``objects`` names the boxes the diagnosis points at."""
 
     def __init__(
         self, reason: ScanErrorReason, message: str, objects: Iterable[str] = ()

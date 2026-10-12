@@ -4,8 +4,8 @@ The command id is ``Shelving_CreateUnit``. ``Gui.addCommand`` runs behind a
 headless guard so ``import freecad.Shelving.commands.create_unit`` succeeds
 under ``freecadcmd``; the functional smoke calls
 ``freecad.Shelving.unit_ops.create_unit`` directly instead of the command,
-which does nothing beyond wrap that call in a transaction and print what it
-did.
+which does nothing beyond wrap that call in a transaction and report the
+outcome.
 """
 
 import os
