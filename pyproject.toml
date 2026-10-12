@@ -45,5 +45,7 @@ search-path = ["."]
 enabled-ignores = ["pyrefly"]
 
 [tool.pyrefly.errors]
-# Beyond the preset: a suppression that outlives its error fails the gate.
-unused-ignore = "error"
+# The preset only warns on a cast or conversion to the type a value already
+# has, and a warning never fails the gate.
+redundant-cast = "error"
+unnecessary-type-conversion = "error"

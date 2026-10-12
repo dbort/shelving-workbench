@@ -211,7 +211,7 @@ def read_board_irregular(obj: FreeCAD.DocumentObject) -> bool:
     """Whether ``obj`` is stored as geometrically irregular; ``False`` when
     the property is absent."""
     value = getattr(obj, IRREGULAR_PROP, False)
-    return bool(value) if isinstance(value, bool) else False
+    return value if isinstance(value, bool) else False
 
 
 def write_board_irregular(obj: BoardObject, irregular: bool) -> None:

@@ -803,10 +803,8 @@ class EditUnitPanel:
             QtWidgets.QDialogButtonBox.StandardButton.Ok
             | QtWidgets.QDialogButtonBox.StandardButton.Cancel
         )
-        # PySide6-stubs types enum.Flag.value as the flag's own class rather
-        # than int: reveal_type shows StandardButton, though the runtime value
-        # is a plain int. FreeCAD's own C++ side only accepts a real int here.
-        return cast("int", buttons.value)
+        # FreeCAD's C++ side accepts only a real int here, not the flag.
+        return buttons.value
 
     def accept(self) -> bool:
         self.session.commit()

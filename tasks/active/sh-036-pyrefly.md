@@ -110,6 +110,12 @@ FOUND DURING WORK (2026-10-11).
   `disallow_untyped_calls`. A call into an unannotated freecad-stubs method
   such as `openTransaction` passes silently, which is why the nine
   `no-untyped-call` ignores had nothing left to suppress.
+- The strict preset already reports `unused-ignore` as an error, but only
+  warns on `redundant-cast` and `unnecessary-type-conversion`, and a warning
+  never fails the gate. Both are raised to error, so the gate matches
+  `mypy --strict`'s `warn_redundant_casts`. `tests/test_pyrefly_config.py`
+  keeps every setting in force by checking planted violations against the
+  repo's config.
 
 STANDING OBLIGATIONS (`CLAUDE.md`).
 - **Typed Python:** this task rewrites that obligation's last sentence to

@@ -287,7 +287,7 @@ def _http_fetch(url: str, headers: Mapping[str, str]) -> FetchResult:
             status = int(response.status)
             raw = response.read()
     except urllib.error.HTTPError as error:
-        status = int(error.code)
+        status = error.code
         try:
             # json.loads' return is Any by construction (arbitrary external
             # JSON); it is pinned to `object` and narrowed by _as_mapping.
