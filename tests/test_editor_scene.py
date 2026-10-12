@@ -14,7 +14,7 @@ import os
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
 from collections.abc import Iterator, Mapping  # noqa: E402
-from typing import cast  # noqa: E402
+from typing import cast, override  # noqa: E402
 
 import pytest  # noqa: E402
 from PySide6 import QtCore, QtGui, QtTest, QtWidgets  # noqa: E402
@@ -106,6 +106,7 @@ class _RecordingView(QtWidgets.QGraphicsView):
         super().__init__(scene)
         self.last_scene_pos: QtCore.QPointF | None = None
 
+    @override
     def mousePressEvent(self, event: QtGui.QMouseEvent) -> None:
         self.last_scene_pos = self.mapToScene(event.position().toPoint())
         super().mousePressEvent(event)

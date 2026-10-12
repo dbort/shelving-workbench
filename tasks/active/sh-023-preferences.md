@@ -42,7 +42,7 @@ the QA wizard, both off by default. Milestone M10, part 2 of 3.
       `tools/run-tests.sh` greps for it.
 - [ ] A QA case in `freecad/Shelving/qa/cases/` covers changing a preference
       and seeing it take effect.
-- [ ] `mypy --strict` clean.
+- [ ] `pyrefly check` clean.
 
 ## Advice
 
@@ -99,7 +99,7 @@ registration call, and a manual case covers the page appearing.
 
 STANDING OBLIGATIONS (`CLAUDE.md`). Typed Python in full: no bare `Any`, no bare
 containers in signatures or public attributes, a `Protocol` for the injected
-parameter source rather than a bare `dict`, `mypy --strict` clean. Shell stays
+parameter source rather than a bare `dict`, `pyrefly check` clean. Shell stays
 simple applies: the only shell edit is adding a smoke block to
 `tools/run-tests.sh` in the same shape as the existing ones.
 

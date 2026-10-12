@@ -8,7 +8,7 @@ not raise.
 """
 
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 if TYPE_CHECKING:
     # The base is only referenced as a type here; the runtime branch below
@@ -49,6 +49,7 @@ class ShelvingWorkbench(_WorkbenchBase):
     ToolTip = "Parametric shelving layout"
     Icon = os.path.join(_RESOURCE_DIR, "shelving.svg")
 
+    @override
     def Initialize(self) -> None:
         # Deferred so a headless `import freecad.Shelving.init_gui` never reaches
         # GUI-only code: each command module runs `Gui.addCommand` at import.
@@ -60,15 +61,17 @@ class ShelvingWorkbench(_WorkbenchBase):
         )
 
         self.appendToolbar("Shelving", list(TOOLBAR_COMMANDS))
-        # freecad-stubs leaves `appendMenu` unannotated.
-        self.appendMenu("Shelving", menu_commands())  # type: ignore[no-untyped-call]
+        self.appendMenu("Shelving", menu_commands())
 
+    @override
     def Activated(self) -> None:
         pass
 
+    @override
     def Deactivated(self) -> None:
         pass
 
+    @override
     def GetClassName(self) -> str:
         return "Gui::PythonWorkbench"
 

@@ -56,7 +56,7 @@ materials, and puts it in the editor, scoped to one unit and undone by Cancel.
       - a material swap recoloring boards;
       - a thickness swap in which a spacing-based shelf holds and a
         clear-based one moves, the case sh-030 removed.
-- [ ] `mypy --strict` clean.
+- [ ] `pyrefly check` clean.
 
 ## Advice
 
@@ -110,7 +110,7 @@ as sh-030 leaves it.
 STANDING OBLIGATIONS (`CLAUDE.md`). Typed Python: no bare `Any`, no bare
 containers in signatures; the `Materials` module, `ShapeMaterial` and
 `ShapeAppearance` go through typed Protocols, since `freecad-stubs` may not
-cover them; `mypy --strict` clean. Shell stays simple: this task adds no
+cover them; `pyrefly check` clean. Shell stays simple: this task adds no
 shell.
 
 ## Plan

@@ -8,7 +8,7 @@ platforms = ["linux-64", "linux-aarch64"]
 freecad = "1.1.*"
 python = "3.12.*"
 ruff = "*"
-mypy = "*"
+pyrefly = "*"
 pytest = "*"
 # Imported by freecad/Shelving/core/tests/test_materials_schema.py to
 # validate the layout JSON schema.
@@ -50,5 +50,5 @@ shelving-workbench = { path = ".", editable = true }
 freecad-stubs = "*"
 # Type-check-only: the conda-forge pyside6 build ships no .pyi/py.typed of its
 # own (verified: zero .pyi files under site-packages/PySide6), so the editor
-# layer's mypy --strict pass depends on this pip-only stub package instead.
+# layer's type checking depends on this pip-only stub package instead.
 pyside6-stubs = "==6.7.3.0"

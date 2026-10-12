@@ -102,6 +102,15 @@ rationale survives:
 - `pixi.toml`'s `pyside6-stubs` comment.
 - `README.md` § Tests: "strict mypy".
 
+FOUND DURING WORK (2026-10-11).
+- `pyside6-stubs` declares a hard dependency on mypy, so `pixi.lock` still
+  installs mypy even though nothing runs it. The lock is excluded from the
+  grep Must Have for that reason.
+- Pyrefly's strict preset has no counterpart to mypy's
+  `disallow_untyped_calls`. A call into an unannotated freecad-stubs method
+  such as `openTransaction` passes silently, which is why the nine
+  `no-untyped-call` ignores had nothing left to suppress.
+
 STANDING OBLIGATIONS (`CLAUDE.md`).
 - **Typed Python:** this task rewrites that obligation's last sentence to
   name pyrefly's strict preset. The task's own Python changes meet the rule.
@@ -111,15 +120,15 @@ STANDING OBLIGATIONS (`CLAUDE.md`).
   user-facing behavior.
 
 ## Plan
-- [ ] **Step 1** (`pixi.toml`, `pixi.lock`, `pyproject.toml`, `.gitignore`,
+- [x] **Step 1** (`pixi.toml`, `pixi.lock`, `pyproject.toml`, `.gitignore`,
       `tools/run-tests.sh`): pyrefly replaces mypy as a dependency, in the
       config and in the gate, per Advice § CONFIG and § IGNORE COMMENTS.
-- [ ] **Step 2** (the files listed in Advice § WHAT STRICT REPORTS TODAY):
+- [x] **Step 2** (the files listed in Advice § WHAT STRICT REPORTS TODAY):
       every strict finding fixed in code, none suppressed; `@override` on
       each overriding method.
-- [ ] **Step 3** (the files in Advice § IGNORE COMMENTS): no `# type:
+- [x] **Step 3** (the files in Advice § IGNORE COMMENTS): no `# type:
       ignore` remains; `Materials` carries the one pyrefly ignore.
-- [ ] **Step 4** (`CLAUDE.md`, `README.md`, `tools/__init__.py`,
+- [x] **Step 4** (`CLAUDE.md`, `README.md`, `tools/__init__.py`,
       `freecad/Shelving/commands/create_unit.py`,
       `freecad/Shelving/core/expand.py`, `pixi.toml` comments; the active
       task files `tasks/active/sh-023-preferences.md`,
@@ -127,7 +136,7 @@ STANDING OBLIGATIONS (`CLAUDE.md`).
       `sh-031-editor-stock-list-and-swap.md`, `sh-035-relabel-unit.md`):
       every mention of mypy names pyrefly, or goes, per Advice § COMMENTS
       THAT NAME MYPY. The `git grep` Must Have is clean.
-- [ ] **Step 5**: confirm the strict-preset Must Have by hand, once by
+- [x] **Step 5**: confirm the strict-preset Must Have by hand, once by
       deleting an `@override` and once by dropping a parameter annotation.
       Restore both.
 

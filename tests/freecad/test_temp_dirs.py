@@ -69,9 +69,11 @@ def test_export_boxes_writes_an_unsaved_unit_to_the_exports_folder(
     try:
         container = create_unit(doc)
         doc.recompute()
-        monkeypatch.setattr(
-            temp_dirs, "user_temp_dir", lambda purpose: tmp_path / purpose
-        )
+
+        def user_temp_dir(purpose: str) -> Path:
+            return tmp_path / purpose
+
+        monkeypatch.setattr(temp_dirs, "user_temp_dir", user_temp_dir)
         monkeypatch.setattr(export_boxes, "_selected_container", lambda: container)
         export_boxes.ExportBoxesCommand().Activated()
         path = tmp_path / "exports" / "Export_Unsaved" / "ShelvingUnit.boxes.json"

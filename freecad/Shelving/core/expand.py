@@ -14,10 +14,7 @@ frame, the point a caller would extrude the box from before translating.
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from freecad.Shelving.core.geometry import Space
-
-# explicit "as" re-export: mypy --strict requires it
-from freecad.Shelving.core.geometry import Vec3 as Vec3
+from freecad.Shelving.core.geometry import Space, Vec3
 from freecad.Shelving.core.layout import Axis, Board, Division, Insets, Region, Unit
 from freecad.Shelving.core.solver import solve
 

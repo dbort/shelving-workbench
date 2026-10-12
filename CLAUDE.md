@@ -52,8 +52,8 @@ wrong.
   generics, `Mapping`/`Sequence`, and `Literal` instead. `Any` is
   allowed only where a boundary genuinely erases the type (parsing
   arbitrary external JSON, a third-party API that is itself untyped), and
-  then with a comment saying why. `mypy --strict` over the changed code
-  must pass.
+  then with a comment saying why. `pyrefly check`, at the strict preset
+  `pyproject.toml` sets, must pass over the changed code.
 
 - **Shell stays simple:** bash is only for a linear sequence of commands,
   simple conditionals, and thin wrappers (the `tools/run-tests.sh` /

@@ -14,6 +14,7 @@ that run is open repeats the id, so one run can be cut out of a long log.
 import itertools
 import time
 from datetime import datetime
+from typing import override
 
 enabled = True
 
@@ -82,6 +83,7 @@ class Invocation(Stopwatch):
         self.id = next(_next_id)
         self._open = True
 
+    @override
     def _emit(self, message: str) -> None:
         # A lap can arrive after this run ended or a newer run replaced it
         # (a late paint), so it carries its own id rather than the current one.

@@ -13,7 +13,7 @@ these tests assert.
 import sys
 from collections.abc import Iterator
 from types import TracebackType
-from typing import Protocol, cast
+from typing import Protocol, cast, override
 
 import FreeCAD
 import FreeCADGui
@@ -374,6 +374,7 @@ class _KeyRecorder(QtWidgets.QWidget):
         super().__init__()
         self.returns = 0
 
+    @override
     def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
         if event.key() in (QtCore.Qt.Key.Key_Return, QtCore.Qt.Key.Key_Enter):
             self.returns += 1

@@ -27,7 +27,7 @@ from (sh-030). Milestone M10.
 - [ ] `Shelving_RelabelUnit`'s refusal goes through sh-022's shared refusal
       helper, covered by sh-022's every-command test.
 - [ ] A QA case in `freecad/Shelving/qa/cases/` covers relabel.
-- [ ] `mypy --strict` clean.
+- [ ] `pyrefly check` clean.
 
 ## Advice
 
@@ -63,7 +63,7 @@ the shared refusal helper with a suggestion from its table, never a bare
 `print`, which is why sh-022 is a hard blocker.
 
 STANDING OBLIGATIONS (`CLAUDE.md`). Typed Python in full: no bare `Any`, no bare
-containers in signatures or public attributes, `mypy --strict` clean. Shell
+containers in signatures or public attributes, `pyrefly check` clean. Shell
 stays simple does not apply; this task adds no shell.
 
 Every length identifier carries `_mm`.

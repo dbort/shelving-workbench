@@ -293,7 +293,7 @@ def _http_fetch(url: str, headers: Mapping[str, str]) -> FetchResult:
             # JSON); it is pinned to `object` and narrowed by _as_mapping.
             payload: object = json.loads(error.read() or b"{}")
         except ValueError:
-            payload = {}
+            payload = None
         return FetchResult(status, _as_mapping(payload))
     try:
         payload = json.loads(raw)

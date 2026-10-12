@@ -173,7 +173,7 @@ class QAWizard(QtWidgets.QDockWidget):
         )
         for verdict, text in choices:
             button = QtWidgets.QPushButton(text)
-            button.clicked.connect(lambda _=False, v=verdict: self.record(v))
+            button.clicked.connect(self._recorder(verdict))
             verdict_row.addWidget(button)
             self.verdict_buttons[verdict] = button
         self.restart_button = QtWidgets.QPushButton("Restart case")
@@ -311,6 +311,11 @@ class QAWizard(QtWidgets.QDockWidget):
         if result is not None:
             mark = "passes" if result.passed else "does not pass"
             self.check_label.setText(f"Check {mark}: {result.detail}")
+
+    def _recorder(self, verdict: Verdict) -> Callable[[], None]:
+        """A slot recording ``verdict``. A closure per button, since a lambda
+        in the loop would see only the loop's last verdict."""
+        return lambda: self.record(verdict)
 
     def record(self, verdict: Verdict) -> None:
         """Record ``verdict`` and the comment for the current step, save, and

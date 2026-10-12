@@ -40,7 +40,7 @@ check of installing from the repository on a clean profile. Milestone M10, part
 - [ ] No document refers to a milestone as forthcoming that has shipped, and no
       document names a module, command or property that does not exist. Asserted
       by a check over the documents naming code identifiers.
-- [ ] `mypy --strict` clean.
+- [ ] `pyrefly check` clean.
 
 ## Advice
 
@@ -82,7 +82,7 @@ the deliverable. Images go stale faster than anything else in
 a document and nothing in this repository can regenerate them.
 
 STANDING OBLIGATIONS (`CLAUDE.md`). Typed Python applies to the one test this
-task adds: no bare `Any`, no bare containers in signatures, `mypy --strict`
+task adds: no bare `Any`, no bare containers in signatures, `pyrefly check`
 clean. Shell stays simple applies: if the document check needs more than a grep,
 write it as typed Python under `tools/` with its logic in importable functions,
 not as a shell pipeline.

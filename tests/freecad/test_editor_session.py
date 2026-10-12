@@ -649,7 +649,7 @@ def test_commit_then_one_undo_reverses_the_session() -> None:
         assert _board_names(container) == names_after_split
         assert doc.getObject(probe_name) is None
 
-        doc.undo()  # type: ignore[no-untyped-call]
+        doc.undo()
         doc.recompute()
         assert _board_names(container) == names_before
         assert doc.getObject(probe_name) is None
@@ -1254,7 +1254,7 @@ _ObjectSnapshot = tuple[str, str, tuple[tuple[str, _PropertyValue], ...]]
 def _property_value(value: object) -> _PropertyValue:
     if isinstance(value, FreeCAD.DocumentObject):
         return value.Name
-    if isinstance(value, list | tuple):
+    if isinstance(value, (list, tuple)):
         return tuple(_property_value(item) for item in value)
     return str(value)
 

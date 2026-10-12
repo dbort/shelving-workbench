@@ -17,7 +17,7 @@ def library_material(name: str) -> FreeCADMaterial:
     ``StopIteration`` when the library has none of that name."""
     # freecad-stubs has no stub for the Materials module; the Protocol cast
     # below types the one attribute read from it.
-    import Materials  # type: ignore[import-not-found]
+    import Materials  # pyrefly: ignore[missing-import]
 
     manager = cast("_MaterialManager", Materials.MaterialManager())
     return next(m for m in manager.Materials.values() if m.Name == name)
