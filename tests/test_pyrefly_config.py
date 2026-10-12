@@ -70,8 +70,9 @@ def test_the_fixture_marks_each_rule_once() -> None:
 
 def test_the_repo_config_reports_every_planted_violation(tmp_path: Path) -> None:
     """``bad-assignment`` under the generic ignore comment shows that only
-    pyrefly's own suppressions are honored; the others show the preset and the raised
-    severities are in force. Every one is an error, so the run fails."""
+    pyrefly's own suppressions are honored; the others show the preset and
+    the raised severities are in force. Every one is an error, so the run
+    fails."""
     pyrefly = shutil.which("pyrefly")
     if pyrefly is None:
         pytest.fail("pyrefly is not on PATH; run the checks with `pixi run tests`.")
