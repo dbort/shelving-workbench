@@ -12,7 +12,9 @@ from typing import TYPE_CHECKING, TypedDict, cast
 
 import FreeCAD
 
-from freecad.Shelving import debug_log
+from freecad.Shelving import debug_log, refusals
+from freecad.Shelving.core.scan import ScanError
+from freecad.Shelving.core.solver import describe_solve_error
 
 _RESOURCE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources")
 _ICON = os.path.join(_RESOURCE_DIR, "shelving.svg")
@@ -71,9 +73,10 @@ class EditUnitCommand:
         container = _selected_container()
         run.lap(f"resolve unit: {container.Name if container else None}")
         if container is None:
-            print(
-                "REFUSED: select one unit's container, or parts that all "
-                "belong to the same unit"
+            refusals.report_refusal(
+                "Edit Unit needs one unit selected.",
+                (),
+                refusals.SUGGESTIONS["no_unit_selected"],
             )
             run.end("refused")
             return
@@ -83,12 +86,27 @@ class EditUnitCommand:
         from PySide6 import QtCore
 
         from freecad.Shelving.editor.panel import EditUnitPanel
+        from freecad.Shelving.editor.session import UnsolvableUnit
 
         run.lap("import panel")
         try:
             panel = EditUnitPanel(container)
+        except ScanError as err:
+            refusals.report_refusal(
+                str(err), err.objects, refusals.SUGGESTIONS[err.reason]
+            )
+            run.end("refused")
+            return
+        except UnsolvableUnit as err:
+            refusals.report_refusal(
+                describe_solve_error(err.error),
+                refusals.solve_error_objects(err.unit, err.error),
+                refusals.SUGGESTIONS[err.error.reason],
+            )
+            run.end("refused")
+            return
         except Exception as err:  # noqa: BLE001 - report, don't crash the GUI
-            print(f"REFUSED: {err}")
+            refusals.report_refusal(str(err), (), refusals.SUGGESTIONS["unexpected"])
             run.end("refused")
             return
         run.lap("build panel")
@@ -131,7 +149,11 @@ class EditUnitCommand:
             # commit or abort it (showDialog raises RuntimeError when another
             # task dialog is already active).
             panel.session.cancel()
-            print(f"REFUSED: {err}")
+            refusals.report_refusal(
+                f"Edit Unit could not open its panel: {err}",
+                (),
+                refusals.SUGGESTIONS["task_panel_open"],
+            )
             run.end("refused")
             return
         run.lap("showDialog")

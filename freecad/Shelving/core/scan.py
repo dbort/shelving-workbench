@@ -33,6 +33,7 @@ import json
 from collections import deque
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from typing import Literal
 
 from freecad.Shelving.core.geometry import AxisIndex, Vec3
 from freecad.Shelving.core.layout import (
@@ -92,11 +93,29 @@ class Skipped:
     reason: str
 
 
-class ScanError(ValueError):
-    """A refusal: ``objects`` names the boxes the diagnosis points at."""
+ScanErrorReason = Literal[
+    "no_boxes",
+    "nonpositive_extent",
+    "no_thin_axis",
+    "collapses_at_snap",
+    "overlap",
+    "not_a_tree",
+    "partly_enclosed",
+    "crosses_bay",
+    "no_elevation",
+    "no_enclosed_bay",
+]
 
-    def __init__(self, message: str, objects: Iterable[str] = ()) -> None:
+
+class ScanError(ValueError):
+    """A refusal: ``reason`` is a machine-readable code for the check that
+    failed, and ``objects`` names the boxes the diagnosis points at."""
+
+    def __init__(
+        self, reason: ScanErrorReason, message: str, objects: Iterable[str] = ()
+    ) -> None:
         super().__init__(message)
+        self.reason = reason
         self.objects: tuple[str, ...] = tuple(objects)
 
 
@@ -202,6 +221,7 @@ def _classify_thin_axis(box: Box) -> Axis:
     sizes_mm = (box.size_mm.x_mm, box.size_mm.y_mm, box.size_mm.z_mm)
     if min(sizes_mm) <= 0:
         raise ScanError(
+            "nonpositive_extent",
             f"{box.name}: every extent must be positive, got "
             f"{sizes_mm[0]:g} x {sizes_mm[1]:g} x {sizes_mm[2]:g}",
             (box.name,),
@@ -210,6 +230,7 @@ def _classify_thin_axis(box: Box) -> Axis:
     thin_axes = [index for index in range(3) if sizes_mm[index] == smallest_mm]
     if len(thin_axes) != 1:
         raise ScanError(
+            "no_thin_axis",
             f"{box.name}: no single thin axis (extents "
             f"{sizes_mm[0]:g} x {sizes_mm[1]:g} x {sizes_mm[2]:g})",
             (box.name,),
@@ -224,7 +245,7 @@ def detect_depth_axis(boxes: Sequence[Box]) -> Axis:
     fool it. ``scan`` takes an explicit ``depth_axis`` for that case.
     """
     if not boxes:
-        raise ScanError("no boxes to scan")
+        raise ScanError("no_boxes", "no boxes to scan")
 
     def bounding_span_mm(axis_index: AxisIndex) -> float:
         spans_mm = [_span_mm(b, axis_index) for b in boxes]
@@ -418,6 +439,7 @@ class _Grid:
             j1 = _index_of(self.vs_mm, board.v1_mm, snap_mm)
             if i0 == i1 or j0 == j1:
                 raise ScanError(
+                    "collapses_at_snap",
                     f"{board.name}: an extent collapses at the {snap_mm:g} mm snap "
                     "tolerance",
                     (board.name,),
@@ -427,6 +449,7 @@ class _Grid:
                     other = self.cover[j][i]
                     if other != _EMPTY:
                         raise ScanError(
+                            "overlap",
                             f"{board.name} overlaps {self.boards[other].name}",
                             (board.name, self.boards[other].name),
                         )
@@ -500,6 +523,7 @@ def _region(
         ]
     else:
         raise ScanError(
+            "not_a_tree",
             f"no line crosses the region ({grid.hs_mm[i0]:g}, {grid.vs_mm[j0]:g})-"
             f"({grid.hs_mm[i1]:g}, {grid.vs_mm[j1]:g}) without cutting through a "
             "board; the layout is not a tree",
@@ -767,9 +791,10 @@ def _empty(grid: _Grid, i0: int, i1: int, j0: int, j1: int) -> Region:
     if outside_count == 0:
         return Bay()
     raise ScanError(
+        "partly_enclosed",
         f"the empty region ({grid.hs_mm[i0]:g}, {grid.vs_mm[j0]:g})-"
         f"({grid.hs_mm[i1]:g}, {grid.vs_mm[j1]:g}) is partly enclosed and partly open "
-        "to the outside; the outline is not a tree"
+        "to the outside; the outline is not a tree",
     )
 
 
@@ -830,6 +855,7 @@ def _contained(grid: _Grid, i0: int, i1: int, j0: int, j1: int) -> list[int]:
             continue
         if not (pi0 >= i0 and pi1 <= i1 and pj0 >= j0 and pj1 <= j1):
             raise ScanError(
+                "crosses_bay",
                 f"{grid.boards[index].name} crosses the boundary of the bay it lies in",
                 (grid.boards[index].name,),
             )
@@ -944,7 +970,7 @@ def scan(
     of the region edge it spans to without breaking the region into two.
     """
     if not boxes:
-        raise ScanError("no boxes to scan")
+        raise ScanError("no_boxes", "no boxes to scan")
     if depth_axis is None:
         depth_axis = detect_depth_axis(boxes)
     facing_evidence: FacingEvidence
@@ -961,6 +987,7 @@ def scan(
         (panels if thin_axis is depth_axis else members).append(box)
     if not members:
         raise ScanError(
+            "no_elevation",
             f"every box is thin through the depth axis ({depth_axis.value}); nothing "
             "forms an elevation",
             (b.name for b in boxes),
@@ -983,8 +1010,9 @@ def scan(
     root = _region(grid, ctx, 0, len(grid.hs_mm) - 1, 0, len(grid.vs_mm) - 1)
     if not _has_bay(root):
         raise ScanError(
+            "no_enclosed_bay",
             "no enclosed bay: the outside reaches every void, so the shell has a gap "
-            "wider than the clearance tolerance"
+            "wider than the clearance tolerance",
         )
 
     unit = Unit(

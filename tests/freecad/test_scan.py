@@ -17,7 +17,6 @@ import Part
 import pytest
 
 from freecad.Shelving.commands.export_boxes import ExportBoxesCommand
-from freecad.Shelving.commands.scan import ScanCommand
 from freecad.Shelving.container import read_container
 from freecad.Shelving.core.geometry import Vec3
 from freecad.Shelving.core.layout import (
@@ -212,9 +211,9 @@ def _add_notched_body(
 
 def test_init_gui_imports_cleanly() -> None:
     """The workbench registration module is the one part of the package
-    nothing else here imports as a side effect: `commands.scan` and
-    `commands.export_boxes` (imported at module level above) do not import
-    it, and it does not import them except deferred inside `Initialize`,
+    nothing else here imports as a side effect: `commands.export_boxes`
+    (imported at module level above) does not import it, and it does not
+    import the command modules except deferred inside `Initialize`,
     which a headless run never calls. Without FreeCAD's GUI, `import
     FreeCADGui` returns a stub without `Workbench`
     (.claude/docs/freecad-notes.md), so this also covers that the module's
@@ -223,14 +222,11 @@ def test_init_gui_imports_cleanly() -> None:
 
 
 def test_inactive_without_a_document() -> None:
-    """Both commands are inactive before any document exists, and active
-    once one does, regardless of whether the GUI ever registered them. Runs
-    before the `doc` fixture below creates one."""
+    """Export Boxes is inactive before any document exists, regardless of
+    whether the GUI ever registered it. Runs before the `doc` fixture below
+    creates one."""
     assert FreeCAD.ActiveDocument is None, FreeCAD.ActiveDocument
-    scan_cmd = ScanCommand()
-    export_cmd = ExportBoxesCommand()
-    assert scan_cmd.IsActive() is False
-    assert export_cmd.IsActive() is False
+    assert ExportBoxesCommand().IsActive() is False
 
 
 @pytest.fixture(scope="module")
@@ -404,16 +400,15 @@ def test_skewed_box_refusal(
 def test_scan_uses_the_stored_depth_axis_on_a_deep_unit(doc: FreeCAD.Document) -> None:
     """A unit resized deeper than it is tall still scans clean when the
     container's stored ``ShelvingDepthAxis`` is passed through, the same way
-    ``ScanCommand.Activated`` and ``resize_unit`` both do it (mirrored here
-    directly: ``Gui.Selection``, which ``Activated`` reads the container
-    through, does not exist under ``freecadcmd``, so the command itself
-    cannot run in this suite).
+    the editor session's read and ``resize_unit`` both do it (mirrored here
+    directly, so the scan's own refusal without the stored axis is visible
+    too).
 
     Pins down a real discrepancy found in manual QA: on a unit resized to
-    1600 x 700 x 450 mm (700 mm deep, 450 mm tall), Scan Unit refused while
-    Resize Unit, reading the same geometry, did not, because only
-    ``resize_unit`` passed the stored axis through. Confirmed below that
-    this unit is the case :func:`~freecad.Shelving.core.scan.
+    1600 x 700 x 450 mm (700 mm deep, 450 mm tall), a reader that guessed
+    the depth axis refused while ``resize_unit``, reading the same geometry,
+    did not, because only ``resize_unit`` passed the stored axis through.
+    Confirmed below that this unit is the case :func:`~freecad.Shelving.core.scan.
     detect_depth_axis`'s own docstring warns about (fooled by a unit deeper
     than it is tall, guessing ``z`` instead of ``y``), and that
     guessing wrong is what breaks the scan, not something else about this

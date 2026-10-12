@@ -44,6 +44,7 @@ from freecad.Shelving.editor.session import (
     SplitDirection,
     UnitDimension,
 )
+from freecad.Shelving.refusals import report_error
 
 # freecad-stubs declares UiLoader.createWidget without parameters and
 # ExpressionBinding with no methods at all, so these Protocols state the
@@ -56,20 +57,6 @@ class _UiLoader(Protocol):
 
 class _ExpressionBinding(Protocol):
     def bind(self, obj: FreeCAD.DocumentObject, property_name: str, /) -> None: ...
-
-
-# freecad-stubs declares PrintTranslatedUserError with one argument, but
-# FreeCAD 1.0 and 1.1 accept (notifier, message), and the notifier is what
-# labels the popup in the Notification Area.
-_print_user_error = cast(
-    "Callable[[str, str], None]", FreeCAD.Console.PrintTranslatedUserError
-)
-
-
-def report_error(message: str) -> None:
-    """Show ``message`` as a Shelving error in FreeCAD's Notification Area,
-    which pops it up briefly and keeps it in the Report view."""
-    _print_user_error("Shelving", message + "\n")
 
 
 # The elevation keeps at least this height, so the controls around it make
@@ -560,7 +547,15 @@ class EditUnitPanel:
         watch.lap("session")
         self.session.open()
         watch.lap("open transaction")
+        # Without this, a failure building the form would leave the
+        # transaction open with no dialog to commit or abort it.
+        try:
+            self._build(watch)
+        except BaseException:
+            self.session.cancel()
+            raise
 
+    def _build(self, watch: Stopwatch) -> None:
         self.form = QtWidgets.QWidget()
         self.form.setWindowTitle("Edit Unit")
         layout = QtWidgets.QVBoxLayout(self.form)

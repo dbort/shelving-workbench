@@ -1,6 +1,6 @@
 [[case]]
 id = "scan.export-and-refusal"
-title = "Scan, export, and a refusal"
+title = "A hand-built unit: open, export, and a refusal"
 
   [[case.step]]
   id = "start"
@@ -9,19 +9,20 @@ title = "Scan, export, and a refusal"
 
   [[case.step]]
   id = "scan"
-  instruction = ["Select TestUnit.", "Run Scan Unit."]
+  instruction = ["Select TestUnit.", "Run Edit Unit.", "Click Cancel."]
   expected = """
-The Report view prints the depth axis and size, a facing warning, and an
-indented tree with two bays either side of Shelf. Nothing in the document
-changes."""
+Edit Unit's panel opens with an elevation showing two bays either side of
+Shelf, and no objects left alone. Cancel closes it, and nothing in the
+document changed."""
 
   [[case.step]]
   id = "skipped-part"
   action = "add_skewed_box"
-  instruction = ["Select TestUnit.", "Run Scan Unit."]
+  instruction = ["Select TestUnit.", "Run Edit Unit.", "Click Cancel."]
   expected = """
-The same tree, followed by `skipped (1)` naming Skewed as not
-axis-aligned. The selection is untouched."""
+The same elevation, with Skewed in the list of objects left alone, its
+reason saying it is not axis-aligned. Cancel closes the panel and Skewed
+stays in TestUnit."""
 
   [[case.step]]
   id = "export"
@@ -35,7 +36,11 @@ folder under FreeCAD's temp directory, though the document is unsaved."""
   [[case.step]]
   id = "refusal"
   action = "add_overlap_box"
-  instruction = ["Select TestUnit.", "Run Scan Unit."]
+  instruction = ["Select TestUnit.", "Run Edit Unit."]
   expected = """
-`REFUSED: Overlap overlaps LeftSide`, and the 3D view's selection changes
-to Overlap and LeftSide, both visibly highlighted."""
+No panel opens. A Shelving error pops up from the Notification Area and
+shows in red in the status bar. The Report view holds the same error as
+three lines in this order: `REFUSED: Overlap overlaps LeftSide`,
+`Objects: Overlap, LeftSide`, and a `Next:` line saying to move or shrink
+one so they only touch. The 3D view's selection changes to Overlap and
+LeftSide, both visibly highlighted."""

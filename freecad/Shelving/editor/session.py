@@ -132,6 +132,18 @@ def _renamed_spaces(
     return {renames.get(node_id, node_id): space for node_id, space in spaces.items()}
 
 
+class UnsolvableUnit(Exception):
+    """:class:`Session` construction's refusal when the container scans but
+    its stored sizes do not solve against its boards as they stand."""
+
+    def __init__(self, error: LayoutSolveError, unit: Unit) -> None:
+        super().__init__(str(error))
+        self.error = error
+        # The unit as read: region ids are minted fresh on every scan, so
+        # only this copy holds the region error.node_id names.
+        self.unit = unit
+
+
 @dataclasses.dataclass(frozen=True)
 class LeftAlone:
     """An object in the container that this workbench did not write and
@@ -178,13 +190,19 @@ class Session:
     """One elevation-editing session against a selected container."""
 
     def __init__(self, container: FreeCAD.DocumentObject) -> None:
+        """Read and solve ``container``. Raises ``ScanError`` when it does
+        not scan and :class:`UnsolvableUnit` when its stored sizes do not
+        solve."""
         watch = Stopwatch("session")
         self.container = container
         # unit and spaces are the current, already-solved state, replaced
         # wholesale by every accepted edit.
         self.unit, self._set_aside_reasons = _read_unit(container)
         watch.lap("read unit")
-        self.spaces: Mapping[str, Space] = solve(self.unit)
+        try:
+            self.spaces: Mapping[str, Space] = solve(self.unit)
+        except LayoutSolveError as err:
+            raise UnsolvableUnit(err, self.unit) from err
         watch.lap("solve")
         # A region or board id. A split or merge clears it, since the id it
         # just edited no longer names anything the caller can act on.
