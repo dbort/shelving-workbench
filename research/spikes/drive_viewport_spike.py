@@ -183,11 +183,14 @@ def main() -> None:
     start = qt_point(point_in(board.id, z_mm=2.0))
     drag(start, start + delta)
     after = session.spaces[board.id].origin
-    # Up and down again, reselecting the board each time as a user does:
-    # the drag selects the region before it.
+    pump(300)
+    check(
+        "board and arrow stay selected after a drag",
+        session.selected_id == board.id and editor._dragger_board == board.id,
+        str(session.selected_id),
+    )
+    # Up and down again on the same arrow, with no reselecting.
     for back_and_forth in range(4):
-        pump(GESTURE_GAP_MS)
-        click(qt_point(point_in(board.id, frac=(0.08, 0.5))))
         pump(GESTURE_GAP_MS)
         start = qt_point(point_in(board.id, z_mm=2.0))
         drag(start, start + delta * (-1 if back_and_forth % 2 == 0 else 1))

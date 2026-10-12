@@ -264,11 +264,11 @@ key events into the 3D view. "Retired" means the driver showed it working;
 
 | # | Risk | Status |
 |---|---|---|
-| 1 | Board drag through a dragger works in each navigation style, outside edit mode | Retired for CAD, Gesture, Touchpad and OpenSCAD. OpenInventor works with Ctrl held, which is how that style selects anyway |
+| 1 | Board drag through a dragger works in each navigation style, outside edit mode | Retired for CAD, Gesture, Touchpad and OpenSCAD, and on the user's Mac trackpad with Touchpad navigation. OpenInventor works with Ctrl held, which is how that style selects anyway |
 | 2 | Clicks reach our callback; native selection can be switched off from pivy, or gated to the unit | Retired for both picking modes. `getObjectInfo` names the board through the container (`SubName` `Board001.Face3`) |
-| 3 | The floating `QuantitySpinBox` lands on its label on a HiDPI screen and keeps focus; Return and Escape leave the task dialog open | Return and Escape retired. Position on HiDPI and focus behavior open: Xvfb has a pixel ratio of 1 and no window manager |
+| 3 | The floating `QuantitySpinBox` lands on its label on a HiDPI screen and keeps focus; Return and Escape leave the task dialog open | Return and Escape retired. On the user's Retina Mac `getSize` reported device pixels (2880 by 1122 for a 1440 by 561 widget at ratio 2), as the placement math assumes. Where the field lands, and focus, still need the user's eye |
 | 4 | The overlay neither z-fights with board faces nor shows through solids when orbited | Renders correctly from the front, depth-tested and on top. From behind open: the eye judges it faster than a script |
-| 5 | Drag stays smooth | Solve and write about 12 ms a step, panel and overlay redraw about 3 ms, on a six-board unit. Large units and real frame rates open |
+| 5 | Drag stays smooth | On the user's Mac: solve and write 8.5 ms a step on average, 40 ms at worst, redraw under 2 ms, over drags of 60 to 150 steps on a default unit. Large units open |
 | 6 | Hiding other objects and restoring them leaves `Visibility` and the undo stack untouched | Retired: undo names unchanged, visibility restored |
 | 7 | The overlay follows a moved, rotated container | Retired at 0 and 30 degrees: 0.0000 mm between each board's solid and its overlay. Nested containers untested |
 | 8 | Bay and void hit-testing from a 3D ray | Retired |
@@ -316,6 +316,11 @@ view (`freecad/Shelving/spikes/`). It logs to
 - **A refused size was reported twice:** Return applied it, then the
   focus-out at closing finished the same edit again. The spike guards it;
   the real editor needs the same guard.
+- **A dragged board stays selected.** `Session.drag_to` selects the
+  region before the board, which suits the panel's size field; in the
+  viewport that hid the arrow after every drag. The user wants the arrow
+  to stay until something else is selected, so the spike reselects the
+  board after each step.
 - **Dimension labels compete with boards for clicks.** In a small view a
   label sits on top of the shelf it measures past, and the label wins.
   Label placement and hit priority need design.

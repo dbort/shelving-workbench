@@ -787,7 +787,14 @@ class ViewportEditor:
             ]
             components[self._run_index] += offset
             start_s = time.perf_counter()
-            failure = self._host.session.drag_to(Vec3(*components))
+            session = self._host.session
+            failure = session.drag_to(Vec3(*components))
+            # drag_to selects the region before the board, which the panel's
+            # size field shows; here the labels show sizes, and the board
+            # stays selected so its arrow stays until the user picks
+            # something else.
+            if self._dragger_board is not None:
+                session.select(self._dragger_board)
             solved_s = time.perf_counter()
             self._host.show_result(None)
             done_s = time.perf_counter()
