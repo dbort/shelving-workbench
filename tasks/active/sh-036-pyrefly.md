@@ -158,3 +158,7 @@ STANDING OBLIGATIONS (`CLAUDE.md`).
 - **N1: `getStandardButtons` drops its cast with no test behind it** (`freecad/Shelving/editor/panel.py:807`): runtime is unchanged, but no test asserts it returns a plain `int`, the constraint its comment states.
 - **N2: `payload = None` for a non-JSON error body reads oddly** (`tools/check_action_pins.py:296`): same behavior as `{}` through `_as_mapping`; `dict[str, object]()` keeps the intent visible.
 
+### Round 3: APPROVED
+- **N1: The grep Must Have holds only after `/ship` moves the task file** (`tasks/active/sh-036-pyrefly.md:3`): the task file is the one match and leaves the grep's scope at `/ship`; confirm the grep is empty after the move.
+- **N2: Uneven docstring wrap** (`tests/test_pyrefly_config.py:77-79`): the second line of `test_the_repo_config_reports_every_planted_violation`'s docstring runs longer than its neighbors; cosmetic.
+
