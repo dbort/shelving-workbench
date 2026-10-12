@@ -8,7 +8,9 @@ not raise.
 """
 
 import os
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING
+
+from freecad.Shelving.compat import override
 
 if TYPE_CHECKING:
     # The base is only referenced as a type here; the runtime branch below

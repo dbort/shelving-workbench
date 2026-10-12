@@ -26,13 +26,14 @@ from __future__ import annotations
 import time
 from collections.abc import Callable, Mapping
 from functools import partial
-from typing import Protocol, cast, override
+from typing import Protocol, cast
 
 import FreeCAD
 import FreeCADGui
 from PySide6 import QtCore, QtGui, QtWidgets
 from shiboken6 import Shiboken
 
+from freecad.Shelving.compat import override
 from freecad.Shelving.core.layout import Basis
 from freecad.Shelving.debug_log import Stopwatch
 from freecad.Shelving.editor.scene import build_scene, elevation_point_mm, hit_test
