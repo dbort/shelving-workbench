@@ -407,6 +407,28 @@ view (`freecad/Shelving/spikes/`). It logs to
   for the whole session, moves and hides it instead of rebuilding it, and
   on Coin before 4.0.4 never lets it be destroyed, leaking one small
   dragger per session. The real editor needs the same rule.
+- **Undo during an edit must be FreeCAD's own Undo, one step per edit.**
+  Std_Undo reaches the document from its shortcut, the Edit menu, the
+  toolbar and its drop-down list; it is always enabled, task dialog or
+  not, and a Python panel can intercept none of those routes. With the
+  main editor's one transaction open, Undo commits that transaction and
+  undoes it whole, then undoes whatever came before: on the user's Mac,
+  two presses removed the session's edits and then the unit itself, with
+  the panel still open over a stale session. The spike instead makes each
+  edit its own transaction (a drag is one), and a document observer's
+  `slotUndoDocument` and `slotRedoDocument` read the unit back from the
+  document after every Undo or Redo; the scan reproduces the session's
+  unit, so selection and dimensions carry on. The session's first step
+  holds only the probe object's creation, so an Undo past the first edit
+  removes nothing the user made; the observer redoes it at once and shows
+  "Nothing left to undo in this edit". OK undoes the session's steps and
+  writes the final unit back as one "Edit Shelving Unit" step, so the
+  history after OK matches the main editor's. Cancel undoes them and
+  clears the Redo list, which takes a transaction that records a change
+  and is then aborted: opening one, or setting `Label` to itself, clears
+  nothing. Verified under Xvfb through `Std_Undo` and `Std_Redo`. One
+  cost: OK and Cancel also undo any step the user made elsewhere in
+  FreeCAD during the session, such as a property edit on another object.
 
 ### Requests for the real task
 
@@ -441,6 +463,13 @@ spike unless it carries a risk the spike can retire.
   message, or remove that side of the carcass.
 - **Later:** select several parallel sibling boards and redistribute them
   at a common spacing.
+- **Undo and Redo inside the edit,** stepping through the edits made
+  since the panel opened (finding above).
+- **Add boards from the view:** with an opening selected, buttons over it
+  add a shelf or a divider, and the board appears where it would go while
+  the pointer is over its button. The spike tries Qt buttons floating at
+  the opening's center; adding selects the new board, so its arrow is
+  ready to move it.
 - **The mouse wheel must not change a field it merely passes over.** Today
   scrolling the panel with the pointer over a size field changes the size,
   and the unit fields apply every wheel step at once. FreeCAD behaves this
@@ -473,6 +502,11 @@ needed only for something that looks wrong.
    and is the undo history clean?
 7. Press Escape in the 3D view with no field open. What happens?
 8. Is the panel now short enough that it never scrolls?
+9. Make a few edits, then press Cmd-Z and Shift-Cmd-Z, and try the Edit
+   menu's Undo too. Does each step back one edit? Keep pressing Cmd-Z past
+   the first edit. After OK, does one Cmd-Z take back the whole session?
+10. Select an opening and use the two buttons over it. Is the preview
+    clear, and do the buttons get in the way?
 
 Copy `/tmp/shelving-viewport-spike.log` into the VM afterward.
 
@@ -488,7 +522,7 @@ because the spike's own controls go away.
    `SoTranslate1Dragger` to retire the typed-move and step-size request.
 3. Plan design A with `/new-task`, carrying the findings and requests
    above into its `## Advice`.
-3. Before this branch merges, delete `freecad/Shelving/spikes/`, the
+4. Before this branch merges, delete `freecad/Shelving/spikes/`, the
    toolbar lines in `init_gui.py`, the spike line in
    `.claude/docs/code-map.md`, and `research/spikes/`.
 

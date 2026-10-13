@@ -30,6 +30,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from shiboken6 import Shiboken
 
 from freecad.Shelving.compat import override
+from freecad.Shelving.core.edit import EditError, split_region
 from freecad.Shelving.core.geometry import AxisIndex, Space, Vec3
 from freecad.Shelving.core.layout import (
     Axis,
@@ -43,10 +44,12 @@ from freecad.Shelving.core.layout import (
     Void,
 )
 from freecad.Shelving.core.scan import elevation_axes
+from freecad.Shelving.core.solver import LayoutSolveError, solve
 from freecad.Shelving.editor.panel import _DimensionField
 from freecad.Shelving.editor.scene import _apply_insets
-from freecad.Shelving.editor.session import EditFailure, Session
+from freecad.Shelving.editor.session import EditFailure, Session, SplitDirection
 from freecad.Shelving.refusals import report_error
+from freecad.Shelving.spikes.edit_history import EditHistory
 from freecad.Shelving.spikes.spike_log import log
 
 # FreeCAD imports a module once per process, so a test session on code
@@ -67,6 +70,8 @@ _CLICK_SLOP_PX = 4
 _LABEL_HIT_PX = 24
 # The dragger's length as a fraction of the unit's larger elevation side.
 _DRAGGER_FRACTION = 0.04
+# The add buttons' icon side, in logical pixels.
+_ICON_PX = 24
 
 _BAY_RGB = (0.85, 0.85, 0.85)
 _VOID_RGB = (0.6, 0.6, 0.6)
@@ -138,9 +143,14 @@ class Host(Protocol):
     """What the editor needs from the task panel that owns it."""
 
     session: Session
+    history: EditHistory | None
 
     def select_node(self, node_id: str | None) -> None: ...
     def show_result(self, failure: EditFailure | None) -> None: ...
+    def run_edit(self, name: str, edit: Callable[[], EditFailure | None]) -> None:
+        """Run ``edit`` as one history step named ``name`` and show its
+        result."""
+        ...
 
 
 def _basis(axis: Axis) -> FreeCAD.Vector:
@@ -262,6 +272,84 @@ class _Label:
     region_id: str
     mid_h_mm: float
     mid_v_mm: float
+
+
+class _AddBar(QtWidgets.QFrame):
+    """The add-shelf and add-divider buttons over the selected bay. Hovering
+    one reports its split to ``on_hover``, and leaving it reports ``None``."""
+
+    def __init__(
+        self,
+        parent: QtWidgets.QWidget | None,
+        on_add: Callable[[SplitDirection], None],
+        on_hover: Callable[[SplitDirection | None], None],
+    ) -> None:
+        super().__init__(parent)
+        self._on_hover = on_hover
+        self.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
+        self.setAutoFillBackground(True)
+        layout = QtWidgets.QHBoxLayout(self)
+        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setSpacing(2)
+        self.buttons: dict[SplitDirection, QtWidgets.QToolButton] = {}
+        directions: tuple[tuple[SplitDirection, str], ...] = (
+            ("vertical", "Add a shelf across this opening"),
+            ("horizontal", "Add a divider across this opening"),
+        )
+        for direction, tip in directions:
+            button = QtWidgets.QToolButton(self)
+            button.setIcon(_board_icon(direction, self.devicePixelRatioF()))
+            button.setIconSize(QtCore.QSize(_ICON_PX, _ICON_PX))
+            button.setToolTip(tip)
+            button.setAccessibleName(tip)
+            button.clicked.connect(_bind(on_add, direction))
+            button.installEventFilter(self)
+            layout.addWidget(button)
+            self.buttons[direction] = button
+        self.hide()
+
+    @override
+    def eventFilter(self, watched: QtCore.QObject, event: QtCore.QEvent) -> bool:
+        if event.type() == QtCore.QEvent.Type.Enter:
+            for direction, button in self.buttons.items():
+                if watched is button:
+                    self._on_hover(direction)
+        elif event.type() == QtCore.QEvent.Type.Leave:
+            self._on_hover(None)
+        return False
+
+
+def _bind(
+    on_add: Callable[[SplitDirection], None], direction: SplitDirection
+) -> Callable[[], None]:
+    """A slot taking no arguments: PySide passes ``clicked``'s checked flag
+    to any callable that accepts one, such as a ``partial``."""
+    return lambda: on_add(direction)
+
+
+def _board_icon(direction: SplitDirection, ratio: float) -> QtGui.QIcon:
+    """An opening with the board ``direction``'s split adds across it: a
+    shelf for "vertical", a divider for "horizontal"."""
+    pixmap = QtGui.QPixmap(round(_ICON_PX * ratio), round(_ICON_PX * ratio))
+    pixmap.setDevicePixelRatio(ratio)
+    pixmap.fill(QtCore.Qt.GlobalColor.transparent)
+    painter = QtGui.QPainter(pixmap)
+    painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+    pen = QtGui.QPen(
+        QtWidgets.QApplication.palette().color(QtGui.QPalette.ColorRole.ButtonText)
+    )
+    pen.setWidthF(1.5)
+    painter.setPen(pen)
+    side = _ICON_PX - 6
+    painter.drawRect(QtCore.QRectF(3, 3, side, side))
+    bar = (
+        QtCore.QRectF(3, _ICON_PX / 2 - 1.5, side, 3)
+        if direction == "vertical"
+        else QtCore.QRectF(_ICON_PX / 2 - 1.5, 3, 3, side)
+    )
+    painter.fillRect(bar, QtGui.QColor.fromRgbF(*_SELECTED_RGB))
+    painter.end()
+    return QtGui.QIcon(pixmap)
 
 
 class _FieldKeys(QtCore.QObject):
@@ -408,6 +496,13 @@ class ViewportEditor:
         self._field_applied = False
         self._field_region: str | None = None
         self._field_anchor: tuple[float, float] | None = None
+        self._add_bar = _AddBar(
+            self._viewer.parentWidget(), self._add_board, self._preview_add
+        )
+        self._add_anchor: tuple[float, float] | None = None
+        # The split the button under the pointer would make, drawn as the
+        # board it adds.
+        self._preview: SplitDirection | None = None
         self._camera_sensor: _Coin = None
         self._gate = _BoardGate(self)
         self._observer = _SelectionObserver(self)
@@ -541,6 +636,8 @@ class ViewportEditor:
             return
         self._closed = True
         self._close_field("editor closed")
+        self._add_bar.hide()
+        self._add_bar.deleteLater()
         self.set_hide_others(False)
         for kind, callback in self._dragger_callbacks:
             self.view.removeDraggerCallback(self._dragger, kind, callback)
@@ -665,6 +762,8 @@ class ViewportEditor:
     def _camera_moved(self, _data: object, _sensor: object) -> None:
         if self._field_host is not None:
             self._place_field()
+        if self._add_anchor is not None:
+            self._move_to_anchor(self._add_bar, self._add_anchor)
         if self._dragging or self._closed:
             return
         camera = self.view.getCameraNode()
@@ -718,6 +817,7 @@ class ViewportEditor:
         self._drawing.addChild(self._drawing_content())
         if not self._dragging:
             self._rebuild_dragger()
+            self._place_add_bar()
         if self._field_host is not None:
             self._place_field()
         elapsed_ms = (time.perf_counter() - start_s) * 1000
@@ -790,7 +890,90 @@ class ViewportEditor:
                 self._add_dimensions(
                     dimensions, node, z_mm + self._z_sign * _LIFT_MM, outer_rows
                 )
+        preview = self._split_preview()
+        if preview is not None:
+            z_mm = self._z_sign * _LIFT_MM * 1.5
+            outlines.addChild(_face(frame.rect(preview), z_mm, _SELECTED_RGB, 0.3))
+            outlines.addChild(_outline(frame.rect(preview), z_mm, _SELECTED_RGB, 2.0))
         return content
+
+    def _split_preview(self) -> Space | None:
+        """Where the board the hovered add button would add goes, solved as
+        the split would solve it; ``None`` with no button hovered or when
+        the split would be refused."""
+        direction = self._preview
+        session = self._host.session
+        selected = session.selected_id
+        if direction is None or selected is None:
+            return None
+        frame = self._frame
+        axis = frame.horizontal if direction == "horizontal" else frame.vertical
+        try:
+            candidate = split_region(session.unit, selected, axis)
+            spaces = solve(candidate)
+        except (EditError, LayoutSolveError):
+            return None
+        before = self._board_ids()
+        for node, _depth, division_axis in _walk(candidate.root):
+            if (
+                isinstance(node, Board)
+                and node.id not in before
+                and division_axis is not None
+            ):
+                return _apply_insets(division_axis, spaces[node.id], node.insets)
+        return None
+
+    def _board_ids(self) -> set[str]:
+        return {
+            node.id
+            for node, _depth, _axis in _walk(self._host.session.unit.root)
+            if isinstance(node, Board)
+        }
+
+    # The add buttons
+
+    def _place_add_bar(self) -> None:
+        """Show the add buttons over the selected bay's center, or hide them
+        when the selection is not a bay."""
+        session = self._host.session
+        selected = session.selected_id
+        space = session.spaces.get(selected) if selected is not None else None
+        if space is None or not session.can_split():
+            self._hide_add_bar()
+            return
+        h0, v0, h1, v1 = self._frame.rect(space)
+        self._add_anchor = ((h0 + h1) / 2, (v0 + v1) / 2)
+        self._add_bar.show()
+        self._add_bar.raise_()
+        self._move_to_anchor(self._add_bar, self._add_anchor)
+
+    def _hide_add_bar(self) -> None:
+        self._add_bar.hide()
+        self._add_anchor = None
+        self._preview = None
+
+    def _preview_add(self, direction: SplitDirection | None) -> None:
+        if direction != self._preview:
+            self._preview = direction
+            self.rebuild()
+
+    def _add_board(self, direction: SplitDirection) -> None:
+        """Split the selected bay as the panel's buttons do, then select the
+        new board, so its arrow is ready to move it."""
+        name = "Add shelf" if direction == "vertical" else "Add divider"
+        log(f"in-view button: {name}")
+        self._preview = None
+        session = self._host.session
+        before = self._board_ids()
+        self._host.run_edit(name, lambda: session.split(direction))
+        added = self._board_ids() - before
+        if len(added) == 1:
+            self._host.select_node(added.pop())
+
+    def history_moved(self) -> None:
+        """Drop what an Undo or Redo just made stale, before the redraw."""
+        self._close_field("undo or redo")
+        self._preview = None
 
     def _add_dimensions(
         self,
@@ -992,6 +1175,9 @@ class ViewportEditor:
                 report_error(failure.message)
                 return
             self._dragging = True
+            self._hide_add_bar()
+            if self._host.history is not None:
+                self._host.history.begin("Move board")
             self._drag_timings_ms = []
             self._drag_failed = False
         except Exception:  # noqa: BLE001 - a Coin callback must not raise
@@ -1035,6 +1221,8 @@ class ViewportEditor:
             return
         self._host.session.end_drag()
         self._dragging = False
+        if self._host.history is not None:
+            self._host.history.end()
         timings = self._drag_timings_ms
         if timings:
             solve = [t[0] for t in timings]
@@ -1203,7 +1391,7 @@ class ViewportEditor:
     def _delete_selected(self) -> None:
         session = self._host.session
         if session.can_merge():
-            self._host.show_result(session.merge())
+            self._host.run_edit("Delete board", session.merge)
 
     # The floating size field
 
@@ -1246,6 +1434,13 @@ class ViewportEditor:
         anchor = self._field_anchor
         if host is None or anchor is None or not Shiboken.isValid(host):
             return
+        self._move_to_anchor(host, anchor)
+
+    def _move_to_anchor(
+        self, host: QtWidgets.QWidget, anchor: tuple[float, float]
+    ) -> None:
+        """Center ``host``, a child of the viewer's parent, on the frame point
+        ``anchor``."""
         raw = self.view.getPointOnViewport(self._frame.to_global(*anchor))
         ratio = self._viewer.devicePixelRatioF()
         height_px = self.view.getSize()[1]
@@ -1255,10 +1450,6 @@ class ViewportEditor:
         parent = host.parentWidget()
         in_parent = self._viewer.mapTo(parent, local) if parent is not None else local
         host.move(in_parent.x() - host.width() // 2, in_parent.y() - host.height() // 2)
-        log(
-            f"field placed: viewport point {raw}, ratio {ratio}, widget point "
-            f"({local.x()}, {local.y()}), host {host.geometry().getRect()}"
-        )
 
     def _field_size(self, size_mm: float) -> None:
         # Return applies, then the close's focus-out finishes the same edit
@@ -1271,7 +1462,7 @@ class ViewportEditor:
         log(f"field applies {size_mm} mm to {self._field_region}")
         if self._field_region is not None:
             session.select(self._field_region)
-        self._host.show_result(session.set_size(size_mm))
+        self._host.run_edit("Change size", lambda: session.set_size(size_mm))
         self._close_field_later("applied")
 
     def _field_expression_done(self) -> None:
@@ -1367,12 +1558,13 @@ def _face(
     rect: tuple[float, float, float, float],
     z_mm: float,
     rgb: tuple[float, float, float],
+    transparency: float = 0.6,
 ) -> _Coin:
     h0, v0, h1, v1 = rect
     group = coin.SoSeparator()
     material = coin.SoMaterial()
     _rgb(material, rgb)
-    material.transparency.setValue(0.6)
+    material.transparency.setValue(transparency)
     coordinates = coin.SoCoordinate3()
     coordinates.point.setValues(
         0, 4, [[h0, v0, z_mm], [h1, v0, z_mm], [h1, v1, z_mm], [h0, v1, z_mm]]

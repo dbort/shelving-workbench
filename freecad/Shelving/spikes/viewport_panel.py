@@ -7,14 +7,17 @@ spike switches sits on top.
 
 from __future__ import annotations
 
+import contextlib
 import time
+from collections.abc import Callable
 
 import FreeCAD
 from PySide6 import QtWidgets
 
 from freecad.Shelving.compat import override
 from freecad.Shelving.editor.panel import EditUnitPanel
-from freecad.Shelving.editor.session import EditFailure
+from freecad.Shelving.editor.session import EditFailure, SplitDirection, UnitDimension
+from freecad.Shelving.spikes.edit_history import EditHistory
 from freecad.Shelving.spikes.spike_log import LOG_PATH, log
 from freecad.Shelving.spikes.viewport_editor import ViewportEditor
 
@@ -23,16 +26,21 @@ class SpikePanel(EditUnitPanel):
     def __init__(self, container: FreeCAD.DocumentObject) -> None:
         # Read by _refresh, which the base constructor already calls.
         self.editor: ViewportEditor | None = None
+        self.history: EditHistory | None = None
         log(f"===== spike opened on {container.Name} ({container.Label})")
         super().__init__(container)
         try:
+            self.history = EditHistory(self.session, self._history_moved)
             self.view.setVisible(False)
             self._add_spike_controls()
             self.editor = ViewportEditor(self)
         except BaseException:
             if self.editor is not None:
                 self.editor.close()
-            self.session.cancel()
+            if self.history is not None:
+                self.history.finish(keep=False)
+            else:
+                self.session.cancel()
             raise
 
     def _add_spike_controls(self) -> None:
@@ -96,7 +104,52 @@ class SpikePanel(EditUnitPanel):
             log(f"NOTE: {text}")
             self.note_edit.clear()
 
+    # Every edit is one history step; the panel's own controls call these.
+
+    @override
+    def _split(self, direction: SplitDirection) -> None:
+        name = "Add shelf" if direction == "vertical" else "Add divider"
+        self.run_edit(name, lambda: self.session.split(direction))
+
+    @override
+    def _merge(self) -> None:
+        self.run_edit("Delete board", self.session.merge)
+
+    @override
+    def _resize(self, dimension: UnitDimension, size_mm: float) -> None:
+        with self._step(f"Change unit {dimension}"):
+            super()._resize(dimension, size_mm)
+
+    @override
+    def _set_size(self, size_mm: float) -> None:
+        self.run_edit("Change size", lambda: self.session.set_size(size_mm))
+
+    @override
+    def _set_basis(self, index: int) -> None:
+        with self._step("Change what the size measures"):
+            super()._set_basis(index)
+
+    @override
+    def _delete_untagged(self) -> None:
+        with self._step("Delete parts"):
+            super()._delete_untagged()
+
+    def _step(self, name: str) -> contextlib.AbstractContextManager[None]:
+        if self.history is None:
+            return contextlib.nullcontext()
+        return self.history.step(name)
+
+    def _history_moved(self, failure: EditFailure | None) -> None:
+        if self.editor is not None:
+            self.editor.history_moved()
+        self.show_result(failure)
+
     # The editor's Host protocol
+
+    def run_edit(self, name: str, edit: Callable[[], EditFailure | None]) -> None:
+        with self._step(name):
+            failure = edit()
+        self.show_result(failure)
 
     def select_node(self, node_id: str | None) -> None:
         self.session.select(node_id)
@@ -125,11 +178,17 @@ class SpikePanel(EditUnitPanel):
         log("accept (OK)")
         if self.editor is not None:
             self.editor.close()
-        return super().accept()
+        if self.history is None:
+            return super().accept()
+        self.history.finish(keep=True)
+        return True
 
     @override
     def reject(self) -> bool:
         log("reject (Cancel or Escape)")
         if self.editor is not None:
             self.editor.close()
-        return super().reject()
+        if self.history is None:
+            return super().reject()
+        self.history.finish(keep=False)
+        return True

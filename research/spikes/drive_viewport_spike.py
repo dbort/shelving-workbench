@@ -67,6 +67,7 @@ def check(name: str, ok: bool, detail: str = "") -> None:
 def main() -> None:
     from freecad.Shelving.core.edit import EditError, region_before, run_axis
     from freecad.Shelving.core.layout import Bay, Board
+    from freecad.Shelving.properties import has_board_properties
     from freecad.Shelving.spikes import command
     from freecad.Shelving.spikes.spike_log import LOG_PATH
     from freecad.Shelving.spikes.viewport_editor import _walk, elevation_frame
@@ -78,7 +79,12 @@ def main() -> None:
     doc = FreeCAD.newDocument("Spike")
     bystander = doc.addObject("Part::Box", "Bystander")
     bystander.Placement.Base = FreeCAD.Vector(3000, 0, 0)
+    # A step before the session, as the GUI's Create Unit leaves, for an
+    # Undo past the session's start to reach.
+    doc.UndoMode = 1
+    doc.openTransaction("Create Shelving Unit")
     container = create_unit(doc)
+    doc.commitTransaction()
     if os.environ.get("SPIKE_ROTATE_DEG"):
         container.Placement = FreeCAD.Placement(
             FreeCAD.Vector(500, 200, 100),
@@ -95,6 +101,12 @@ def main() -> None:
     Gui.Selection.clearSelection()
     Gui.Selection.addSelection(container)
     camera_before = view.getCamera()
+
+    def document_boards() -> int:
+        return sum(1 for o in doc.Objects if has_board_properties(o))
+
+    boards_at_start = document_boards()
+    undo_at_start = doc.UndoCount
     Gui.runCommand("Shelving_SpikeViewport")
     pump(500)
     check("dialog open", bool(Gui.Control.activeDialog()))
@@ -162,9 +174,9 @@ def main() -> None:
 
     # A divider and a shelf, so there are inner boards and several regions.
     session.select(nodes_of(Bay)[0].id)
-    panel.show_result(session.split("horizontal"))
+    panel.run_edit("Add divider", lambda: session.split("horizontal"))
     session.select(nodes_of(Bay)[0].id)
-    panel.show_result(session.split("vertical"))
+    panel.run_edit("Add shelf", lambda: session.split("vertical"))
     pump(300)
 
     bay = nodes_of(Bay)[0]
@@ -354,13 +366,76 @@ def main() -> None:
     )
     panel.mode_combo.setCurrentIndex(0)
 
+    # Undo and Redo as Cmd-Z and the Edit menu run them.
+    boards_before = len(nodes_of(Board))
+    undo_count = doc.UndoCount
+    Gui.runCommand("Std_Undo")
+    pump(300)
+    check(
+        "Undo takes back the last delete",
+        len(nodes_of(Board)) == boards_before + 1
+        and document_boards() == len(nodes_of(Board))
+        and doc.UndoCount == undo_count - 1
+        and bool(Gui.Control.activeDialog()),
+        f"{boards_before} -> {len(nodes_of(Board))}, undo {doc.UndoNames}",
+    )
+    Gui.runCommand("Std_Redo")
+    pump(300)
+    check(
+        "Redo deletes it again",
+        len(nodes_of(Board)) == boards_before and document_boards() == boards_before,
+        f"{len(nodes_of(Board))} boards, undo {doc.UndoNames}",
+    )
+    history = panel.history
+    assert history is not None
+    for _ in range(doc.UndoCount + 2):
+        Gui.runCommand("Std_Undo")
+    pump(400)
+    check(
+        "Undo past the start stops at the start",
+        doc.UndoCount == history._start_count
+        and doc.getObject(container.Name) is container
+        and len(nodes_of(Board)) == boards_at_start
+        and document_boards() == boards_at_start
+        and bool(Gui.Control.activeDialog()),
+        f"undo {doc.UndoNames}, redo {doc.RedoNames}, {len(nodes_of(Board))} boards",
+    )
+
+    # The in-view buttons over a selected bay.
+    bay = nodes_of(Bay)[0]
+    click(qt_point(point_in(bay.id, frac=(0.2, 0.2))))
+    pump(300)
+    bar = editor._add_bar
+    check("add buttons over the selected bay", bar.isVisible(), str(bar.geometry()))
+    shelf_button = bar.buttons["vertical"]
+    QtTest.QTest.mouseMove(shelf_button)
+    pump(300)
+    if editor._preview is None:
+        print("no Enter event under Xvfb; previewing directly", flush=True)
+        editor._preview_add("vertical")
+    check("hovering previews the shelf", editor._split_preview() is not None)
+    if os.environ.get("SPIKE_SHOT"):
+        stem, ext = os.path.splitext(os.environ["SPIKE_SHOT"])
+        view.graphicsView().parentWidget().grab().save(f"{stem}-add{ext}")
+    boards_before = len(nodes_of(Board))
+    QtTest.QTest.mouseClick(shelf_button, LEFT)
+    pump(300)
+    selected = session.selected_id
+    check(
+        "shelf button adds a shelf and selects it",
+        len(nodes_of(Board)) == boards_before + 1
+        and editor._dragger_board == selected
+        and doc.UndoNames[0] == "Add shelf"
+        and doc.RedoCount == 0,
+        f"selected {selected}, undo {doc.UndoNames}",
+    )
+
     if os.environ.get("SPIKE_SHOT"):
         # A column with regions above and below it: its width belongs
         # inside the unit, clear of its neighbors.
         def split(bay_id: str, direction: str) -> None:
             session.select(bay_id)
-            failure = session.split(direction)
-            print("split", direction, failure and failure.message, flush=True)
+            panel.run_edit("Split", lambda: session.split(direction))
 
         def bays_by(key):
             return sorted(nodes_of(Bay), key=lambda b: key(session.spaces[b.id].origin))
@@ -403,6 +478,47 @@ def main() -> None:
         without_clipping(view.getCamera()) == without_clipping(camera_before),
     )
     check("overlay removed", view.getSceneGraph().findChild(editor._root) == -1)
+    check(
+        "Cancel restores the document and clears Redo",
+        doc.UndoCount == undo_at_start
+        and doc.RedoCount == 0
+        and document_boards() == boards_at_start,
+        f"undo {doc.UndoNames}, redo {doc.RedoNames}, {document_boards()} boards",
+    )
+
+    # A second session, kept with OK: one history step for all of it.
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(container)
+    Gui.runCommand("Shelving_SpikeViewport")
+    pump(500)
+    first_panel = panel
+    panel = [
+        o
+        for o in gc.get_objects()
+        if isinstance(o, SpikePanel) and o is not first_panel
+    ][-1]
+    session = panel.session
+    for direction in ("vertical", "horizontal"):
+        session.select(nodes_of(Bay)[0].id)
+        panel.run_edit("Split", lambda d=direction: session.split(d))
+    kept_boards = len(nodes_of(Board))
+    panel.accept()
+    Gui.Control.closeDialog()
+    pump(300)
+    check(
+        "OK keeps one history step",
+        doc.UndoNames == ["Edit Shelving Unit", "Create Shelving Unit"]
+        and document_boards() == kept_boards
+        and doc.RedoCount == 0,
+        f"undo {doc.UndoNames}, {document_boards()} of {kept_boards} boards",
+    )
+    Gui.runCommand("Std_Undo")
+    pump(300)
+    check(
+        "one Undo after OK takes back the session",
+        document_boards() == boards_at_start,
+        f"{document_boards()} boards",
+    )
 
 
 try:

@@ -1,5 +1,5 @@
 ---
-next_id: bug-015
+next_id: bug-016
 ---
 
 # Bug log
@@ -95,3 +95,15 @@ log happens only when the user asks.
   design question: the group directly holding every selection is the
   obvious answer, but a box nested in a subgroup or a PartDesign Body
   makes that group the subgroup rather than the unit.
+- `bug-015` - **Undo during Edit Unit undoes the whole edit and what came
+  before it**: with the panel open, Cmd-Z or the Edit menu's Undo reverts
+  every edit made in the panel at once, and a second Undo reverts the step
+  before the session, such as Create Unit, while the panel stays open over
+  a stale session; OK and Cancel then act on a document the session no
+  longer matches. `Std_Undo` is enabled during any task dialog, and with
+  `Session.open`'s one transaction still open, FreeCAD commits it and
+  undoes it whole. Found in the viewport-editing spike on the user's Mac;
+  the spike's `EditHistory` fixes it with one transaction per edit and a
+  read-back after each Undo. Fix: `sh-XXX task`. It changes what one
+  Undo means inside the editor, and it belongs with the viewport editor's
+  task.
