@@ -332,9 +332,19 @@ view (`freecad/Shelving/spikes/`). It logs to
   first. The spike now draws a bay's line two thirds across with its text
   a third along, so the two never meet, and lets the label drawn last win
   a tie. Thirds alone still let a region that holds others put its
-  dimension on a child's line, so those dimensions sit just outside their
-  region instead, like chain dimensions on a drawing. Dragging labels as
-  in the Sketcher is wanted later, not now.
+  dimension on a child's line. Such a dimension goes outside the unit,
+  like a chain dimension on a drawing, when only boards lie between its
+  region and that side of the unit; a row already taken there pushes it
+  one row further out. Otherwise it stays inside its own region, a sixth
+  across: just outside the region it lay over a neighbor's boards and
+  dimensions. Dragging labels as in the Sketcher is wanted later, not now.
+- **The overlay draws in a fixed order.** Coin defers translucent shapes
+  and sorts them by distance from the camera, and `SoDatumLabel` always
+  counts itself translucent, so a fill could land over a dimension and dim
+  it depending on the view. An `SoTransparencyType` of `BLEND` draws the
+  overlay in scene order instead: fills, then outlines, then dimensions,
+  with the fills writing no depth (`SoDepthBuffer`) because the label
+  draws its lines in the face's own plane, behind the fills.
 - **Dimension colors follow the Sketcher:** `ConstrainedDimColor` (red)
   for a fixed size, which drives, `NonDrivingConstrDimColor` (blue) for a
   region sharing the leftover space, which only reports, and
@@ -372,12 +382,11 @@ view (`freecad/Shelving/spikes/`). It logs to
 - **The overlay follows the unit's size.** A new depth from the panel
   moves the back face; the overlay recomputes both faces on every redraw
   instead of once at open.
-- **A selected opening's dimension is unconfirmed on the Mac.** Under Xvfb
-  it shows in the selection color under both picking modes, but the
-  fifth laptop session still reported it missing. FreeCAD imports a module
-  once per process, so that session may have run the code from before the
-  fix; the log's open line now says whether any of the workbench's files
-  changed since FreeCAD loaded them.
+- **FreeCAD imports a module once per process,** so a test session after
+  a pull runs the old code until FreeCAD restarts. The fifth laptop
+  session did, and reported a fixed bug as still present. The log's open
+  lines now say whether any of the workbench's files changed since FreeCAD
+  loaded them.
 - **Escape in the 3D view is harmless.** With no field open it reaches the
   spike's key callback and the task dialog stays open.
 - **Dimension text must be sized as the Sketcher sizes it.** `SoDatumLabel`

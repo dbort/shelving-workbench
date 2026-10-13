@@ -30,7 +30,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from shiboken6 import Shiboken
 
 from freecad.Shelving.compat import override
-from freecad.Shelving.core.geometry import Space, Vec3
+from freecad.Shelving.core.geometry import AxisIndex, Space, Vec3
 from freecad.Shelving.core.layout import (
     Axis,
     Basis,
@@ -736,7 +736,26 @@ class ViewportEditor:
         light = coin.SoLightModel()
         light.model = coin.SoLightModel.BASE_COLOR
         content.addChild(light)
+        # Coin otherwise defers translucent shapes, the fills and every
+        # SoDatumLabel alike, and sorts them by distance, so a fill could
+        # land over a dimension and dim it depending on the camera. BLEND
+        # draws them in the order below: fills, then outlines, then
+        # dimensions.
+        transparency = coin.SoTransparencyType()
+        transparency.getField("value").setValue(coin.SoTransparencyType.BLEND)
+        content.addChild(transparency)
+        fills = coin.SoSeparator()
+        # A fill must not hide the dimension lines behind it from the depth
+        # test; SoDatumLabel draws its lines in the face's own plane.
+        no_depth_write = coin.SoDepthBuffer()
+        no_depth_write.getField("write").setValue(False)
+        fills.addChild(no_depth_write)
+        outlines = coin.SoSeparator()
+        dimensions = coin.SoSeparator()
+        for layer in (fills, outlines, dimensions):
+            content.addChild(layer)
         self._labels = []
+        outer_rows: _OuterRows = {}
         for node, depth, division_axis in _walk(session.unit.root):
             space = session.spaces.get(node.id)
             if space is None:
@@ -745,21 +764,21 @@ class ViewportEditor:
             if isinstance(node, Board):
                 if node.id == selected and division_axis is not None:
                     inset = _apply_insets(division_axis, space, node.insets)
-                    content.addChild(
+                    outlines.addChild(
                         _outline(frame.rect(inset), z_mm, _SELECTED_RGB, 3.0)
                     )
                 continue
             is_selected = node.id == selected
             if isinstance(node, Bay | Void):
                 rgb = _VOID_RGB if isinstance(node, Void) else _BAY_RGB
-                content.addChild(
+                fills.addChild(
                     # The selection shows as the outline below: a fill in the
                     # selection color would hide the selected dimensions,
                     # which are drawn in that color too.
                     _face(frame.rect(space), z_mm, rgb)
                 )
             if isinstance(node, Bay | Void) or is_selected:
-                content.addChild(
+                outlines.addChild(
                     _outline(
                         frame.rect(space),
                         z_mm,
@@ -768,12 +787,21 @@ class ViewportEditor:
                     )
                 )
             if isinstance(node, Division):
-                self._add_dimensions(content, node, z_mm + self._z_sign * _LIFT_MM)
+                self._add_dimensions(
+                    dimensions, node, z_mm + self._z_sign * _LIFT_MM, outer_rows
+                )
         return content
 
-    def _add_dimensions(self, content: _Coin, division: Division, z_mm: float) -> None:
+    def _add_dimensions(
+        self,
+        content: _Coin,
+        division: Division,
+        z_mm: float,
+        outer_rows: _OuterRows,
+    ) -> None:
         """One datum label per region in ``division``'s run, measured the way
-        its rule measures it, as the panel's elevation does."""
+        its rule measures it, as the panel's elevation does. ``outer_rows``
+        holds the dimensions already outside the unit, and gains this run's."""
         session = self._host.session
         frame = self._frame
         if division.axis not in (frame.horizontal, frame.vertical):
@@ -801,11 +829,22 @@ class ViewportEditor:
                     )
             # Thirds keep a bay's width and height apart: its line runs two
             # thirds across, its text a third along. A region holding others
-            # gets its dimension just outside its low edge instead, where no
-            # child's line can land on it.
+            # gets its dimension outside the unit, where no child's line can
+            # land on it, when it reaches the unit's edge; inside the unit
+            # that spot belongs to a neighbor, so it stays within its own
+            # region, clear of its children's lines at two thirds.
+            region_low_mm = space.origin_mm(across)
+            region_high_mm = region_low_mm + space.extent_mm(across)
             if isinstance(item, Division):
                 along_fraction = 0.5
-                cross_mm = space.origin_mm(across) - self._outside_mm
+                if self._only_boards_beyond(space, along, across, low=True):
+                    row = _outer_row(outer_rows, (across, True), low_mm, high_mm)
+                    cross_mm = region_low_mm - self._outside_mm * row
+                elif self._only_boards_beyond(space, along, across, low=False):
+                    row = _outer_row(outer_rows, (across, False), low_mm, high_mm)
+                    cross_mm = region_high_mm + self._outside_mm * row
+                else:
+                    cross_mm = region_low_mm + space.extent_mm(across) / 6
             else:
                 along_fraction = 1 / 3
                 cross_mm = space.origin_mm(across) + 2 / 3 * space.extent_mm(across)
@@ -847,6 +886,36 @@ class ViewportEditor:
                     p1[1] + along_fraction * (p2[1] - p1[1]),
                 )
             )
+
+    def _only_boards_beyond(
+        self, space: Space, along: AxisIndex, across: AxisIndex, low: bool
+    ) -> bool:
+        """Whether nothing but boards lies between ``space`` and the unit's
+        outside, past its low or high edge on the ``across`` axis."""
+        session = self._host.session
+        start_mm = space.origin_mm(along)
+        end_mm = start_mm + space.extent_mm(along)
+        edge_mm = space.origin_mm(across) + (0 if low else space.extent_mm(across))
+        for node, _depth, _axis in _walk(session.unit.root):
+            other = session.spaces.get(node.id)
+            if isinstance(node, Board) or other is None:
+                continue
+            other_start_mm = other.origin_mm(along)
+            if (
+                other_start_mm >= end_mm - 1e-6
+                or other_start_mm + other.extent_mm(along) <= start_mm + 1e-6
+            ):
+                continue
+            other_low_mm = other.origin_mm(across)
+            other_high_mm = other_low_mm + other.extent_mm(across)
+            beyond = (
+                other_high_mm <= edge_mm + 1e-6
+                if low
+                else other_low_mm >= edge_mm - 1e-6
+            )
+            if beyond:
+                return False
+        return True
 
     def _hide_dragger(self) -> None:
         self._dragger_switch.whichChild.setValue(coin.SO_SWITCH_NONE)
@@ -1231,6 +1300,29 @@ class ViewportEditor:
 # time it is dragged (coin3d/coin#556, fixed in 4.0.4); FreeCAD 1.1's macOS
 # bundle ships Coin 4.0.3. One small dragger per editing session.
 _KEPT_ALIVE: list[_Coin] = []
+
+
+# The spans already taken outside the unit, per edge (the axis across it,
+# and whether it is the low edge) and per row counted outward from 1.
+_OuterRows: TypeAlias = dict[
+    tuple[AxisIndex, bool], dict[int, list[tuple[float, float]]]
+]
+
+
+def _outer_row(
+    rows: _OuterRows, edge: tuple[AxisIndex, bool], low_mm: float, high_mm: float
+) -> int:
+    """The first row outside ``edge`` where ``low_mm`` to ``high_mm`` overlaps
+    no dimension already there; records the span in that row."""
+    taken = rows.setdefault(edge, {})
+    row = 1
+    while any(
+        low_mm < end_mm - 1e-6 and start_mm < high_mm - 1e-6
+        for start_mm, end_mm in taken.get(row, [])
+    ):
+        row += 1
+    taken.setdefault(row, []).append((low_mm, high_mm))
+    return row
 
 
 def _coin_destroys_draggers_safely() -> bool:

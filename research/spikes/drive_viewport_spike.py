@@ -354,6 +354,42 @@ def main() -> None:
     )
     panel.mode_combo.setCurrentIndex(0)
 
+    if os.environ.get("SPIKE_SHOT"):
+        # A column with regions above and below it: its width belongs
+        # inside the unit, clear of its neighbors.
+        def split(bay_id: str, direction: str) -> None:
+            session.select(bay_id)
+            failure = session.split(direction)
+            print("split", direction, failure and failure.message, flush=True)
+
+        def bays_by(key):
+            return sorted(nodes_of(Bay), key=lambda b: key(session.spaces[b.id].origin))
+
+        left = [
+            b
+            for b in bays_by(lambda o: o.z_mm)
+            if session.spaces[b.id].origin.x_mm < 100
+        ]
+        split(left[-1].id, "vertical")
+        left = [
+            b
+            for b in bays_by(lambda o: o.z_mm)
+            if session.spaces[b.id].origin.x_mm < 100
+        ]
+        middle_z_mm = session.spaces[left[1].id].origin.z_mm
+        split(left[1].id, "horizontal")
+        row = [
+            b
+            for b in bays_by(lambda o: o.x_mm)
+            if abs(session.spaces[b.id].origin.z_mm - middle_z_mm) < 1e-6
+        ]
+        split(row[-1].id, "vertical")
+        session.select(None)
+        panel._refresh()
+        pump(200)
+        stem, ext = os.path.splitext(os.environ["SPIKE_SHOT"])
+        view.saveImage(f"{stem}-nested{ext}", 480, 360, "White")
+
     panel.reject()
     Gui.Control.closeDialog()
     pump(300)
