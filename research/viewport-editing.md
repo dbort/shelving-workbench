@@ -467,9 +467,21 @@ spike unless it carries a risk the spike can retire.
   since the panel opened (finding above).
 - **Add boards from the view:** with an opening selected, buttons over it
   add a shelf or a divider, and the board appears where it would go while
-  the pointer is over its button. The spike tries Qt buttons floating at
-  the opening's center; adding selects the new board, so its arrow is
-  ready to move it.
+  the pointer is over its button. Qt buttons floating at the opening's
+  center, as the spike has them, suit the user; adding selects the new
+  board, so its arrow is ready to move it. These buttons and the delete
+  key replace the panel's Add Divider, Add Shelf and Delete buttons, which
+  the spike hides.
+- **A drag moves only the dragged board.** `core.edit.move_board` fixes
+  the opening before the board and leaves every opening that shares
+  leftover space to absorb the change, so with two shelves in a column,
+  dragging the upper one 50 mm moved the lower one 34 mm and landed the
+  dragged one 34 mm short of the pointer. The user expects the openings on
+  either side to change and nothing else to move. The spike's
+  `move_board_locally` also fixes the opening after the board, unless it
+  is the last opening in the run still sharing space, in which case it
+  takes up the move unaided. The main editor's drag has the same
+  behavior, and the real task changes the core edit and its tests.
 - **The mouse wheel must not change a field it merely passes over.** Today
   scrolling the panel with the pointer over a size field changes the size,
   and the unit fields apply every wheel step at once. FreeCAD behaves this

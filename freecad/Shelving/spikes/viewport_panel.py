@@ -32,6 +32,13 @@ class SpikePanel(EditUnitPanel):
         try:
             self.history = EditHistory(self.session, self._history_moved)
             self.view.setVisible(False)
+            # The view's own buttons and the delete key replace these.
+            for button in (
+                self.add_divider_button,
+                self.add_shelf_button,
+                self.delete_button,
+            ):
+                button.setVisible(False)
             self._add_spike_controls()
             self.editor = ViewportEditor(self)
         except BaseException:

@@ -50,6 +50,7 @@ from freecad.Shelving.editor.scene import _apply_insets
 from freecad.Shelving.editor.session import EditFailure, Session, SplitDirection
 from freecad.Shelving.refusals import report_error
 from freecad.Shelving.spikes.edit_history import EditHistory
+from freecad.Shelving.spikes.local_move import drag_to_locally
 from freecad.Shelving.spikes.spike_log import log
 
 # FreeCAD imports a module once per process, so a test session on code
@@ -1196,7 +1197,7 @@ class ViewportEditor:
             components[self._run_index] += offset
             start_s = time.perf_counter()
             session = self._host.session
-            failure = session.drag_to(Vec3(*components))
+            failure = drag_to_locally(session, Vec3(*components))
             # drag_to selects the region before the board, which the panel's
             # size field shows; here the labels show sizes, and the board
             # stays selected so its arrow stays until the user picks

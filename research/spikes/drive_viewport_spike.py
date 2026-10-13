@@ -65,7 +65,7 @@ def check(name: str, ok: bool, detail: str = "") -> None:
 
 
 def main() -> None:
-    from freecad.Shelving.core.edit import EditError, region_before, run_axis
+    from freecad.Shelving.core.edit import EditError, _locate, region_before, run_axis
     from freecad.Shelving.core.layout import Bay, Board
     from freecad.Shelving.properties import has_board_properties
     from freecad.Shelving.spikes import command
@@ -218,6 +218,40 @@ def main() -> None:
         + abs(after.z_mm - before.z_mm)
     )
     check("dragger drag moves board", moved_mm > 1, f"moved {moved_mm:.1f} mm")
+
+    # Two shelves in one run, as in the user's note: dragging the second
+    # moves no other board.
+    def added_by(edit_name: str, bay_id: str, direction: str) -> str:
+        ids = {b.id for b in nodes_of(Board)}
+        session.select(bay_id)
+        panel.run_edit(edit_name, lambda: session.split(direction))
+        (new_id,) = {b.id for b in nodes_of(Board)} - ids
+        return new_id
+
+    first = added_by("Add shelf", nodes_of(Bay)[0].id, "vertical")
+    run_parent, first_index = _locate(session.unit.root, first)
+    second = added_by("Add shelf", run_parent.items[first_index + 1].id, "vertical")
+    others = {
+        b.id: session.spaces[b.id].origin for b in nodes_of(Board) if b.id != second
+    }
+    second_before = session.spaces[second].origin
+    session.select(second)
+    panel._refresh()
+    editor.frame_camera()
+    pump(GESTURE_GAP_MS)
+    start = arrow_point()
+    drag(start, start + QtCore.QPointF(0, -30))
+    pump(300)
+    shifted = [
+        board_id
+        for board_id, origin in others.items()
+        if board_id in session.spaces and session.spaces[board_id].origin != origin
+    ]
+    check(
+        "dragging a shelf moves no other board",
+        not shifted and session.spaces[second].origin != second_before,
+        f"moved {shifted}; {second_before} -> {session.spaces[second].origin}",
+    )
 
     pump(GESTURE_GAP_MS)
     label = editor._labels[0]
