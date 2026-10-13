@@ -256,7 +256,9 @@ def main() -> None:
         f"moved {shifted}; {second_before} -> {session.spaces[second].origin}",
     )
 
-    # A lock holds the board beside it, and the board's padlock unlocks it.
+    # A locked opening carries the boards beside it along with a drag; a
+    # board is held only when locks reach the end of its row, and its
+    # padlock then unlocks the nearest one.
     check(
         "a drag leaves its neighbors unlocked",
         holders(session.unit, second) == (),
@@ -273,8 +275,16 @@ def main() -> None:
         parent, _index = _locate(session.unit.root, second)
         return [item for item in parent.items if not isinstance(item, Board)]
 
+    def click_padlocks(region_ids, lock: bool) -> None:
+        for region in run_regions():
+            button = padlock_for(region.id)
+            if region.id in region_ids and is_locked(region) != lock and button:
+                QtTest.QTest.mouseClick(button, LEFT)
+                pump(300)
+
     parent, second_index = _locate(session.unit.root, second)
     below_id = parent.items[second_index - 1].id
+    carried = parent.items[second_index - 2]
     pump(GESTURE_GAP_MS)
     button = padlock_for(below_id)
     visible = [b for b in editor._padlocks if b.isVisible()]
@@ -284,11 +294,35 @@ def main() -> None:
         and len(visible) == sum(1 for label in editor._labels if label.lockable),
         f"{len(visible)} padlocks, {len(editor._labels)} labels",
     )
-    if button is not None:
-        QtTest.QTest.mouseClick(button, LEFT)
-        pump(300)
+    click_padlocks({below_id}, True)
     check(
-        "a padlock locks its opening",
+        "a lock between two shelves leaves both draggable",
+        isinstance(carried, Board)
+        and holders(session.unit, second) == ()
+        and holders(session.unit, carried.id) == ()
+        and editor._dragger_board == second,
+        f"{holders(session.unit, second)}, arrow on {editor._dragger_board}",
+    )
+    run_index = run_axis(session.unit, second).component_index
+    locked_before_mm = session.spaces[below_id].extent_mm(run_index)
+    carried_before_mm = session.spaces[carried.id].origin_mm(run_index)
+    pump(GESTURE_GAP_MS)
+    start = arrow_point()
+    drag(start, start + QtCore.QPointF(0, -30))
+    carried_after_mm = session.spaces[carried.id].origin_mm(run_index)
+    check(
+        "a drag carries the shelf beyond a locked opening",
+        abs(session.spaces[below_id].extent_mm(run_index) - locked_before_mm) < 1e-6
+        and abs(carried_after_mm - carried_before_mm) > 1,
+        f"locked {locked_before_mm:.2f} -> "
+        f"{session.spaces[below_id].extent_mm(run_index):.2f}, carried "
+        f"{carried_before_mm:.2f} -> {carried_after_mm:.2f}",
+    )
+    parent, second_index = _locate(session.unit.root, second)
+    low_side = {item.id for item in parent.items[:second_index]}
+    click_padlocks(low_side, True)
+    check(
+        "locks reaching the row's end hold the board",
         holders(session.unit, second) == (below_id,),
         str(holders(session.unit, second)),
     )
@@ -299,16 +333,15 @@ def main() -> None:
     )
     QtTest.QTest.mouseClick(editor._board_lock, LEFT)
     pump(300)
+    parent, second_index = _locate(session.unit.root, second)
     check(
-        "the board's padlock unlocks what holds it",
-        holders(session.unit, second) == () and editor._dragger_board == second,
+        "the board's padlock unlocks the nearest lock holding it",
+        holders(session.unit, second) == ()
+        and not is_locked(parent.items[second_index - 1])
+        and editor._dragger_board == second,
         str(holders(session.unit, second)),
     )
-    for region in run_regions():
-        button = padlock_for(region.id)
-        if button is not None:
-            QtTest.QTest.mouseClick(button, LEFT)
-            pump(300)
+    click_padlocks({region.id for region in run_regions()}, True)
     locked = [region.id for region in run_regions() if is_locked(region)]
     check(
         "the last unlocked opening in a row cannot be locked",
@@ -316,11 +349,7 @@ def main() -> None:
         and "edit refused: One opening in each row" in LOG_PATH.read_text(),
         f"{len(locked)} of {len(run_regions())} locked",
     )
-    for region_id in locked:
-        button = padlock_for(region_id)
-        if button is not None:
-            QtTest.QTest.mouseClick(button, LEFT)
-            pump(300)
+    click_padlocks(set(locked), False)
     check(
         "padlocks unlock again",
         not any(is_locked(region) for region in run_regions()),

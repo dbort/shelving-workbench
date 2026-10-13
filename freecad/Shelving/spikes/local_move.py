@@ -5,10 +5,10 @@ An opening with a ``Fixed`` rule is locked; one sharing the leftover space
 is unlocked. ``core.edit.move_board`` fixes the opening before the board and
 lets the solve share the change among every unlocked opening in the run,
 so dragging one shelf moves the shelves around it too, and it locks an
-opening the user never asked to lock. Here a lock holds the board next to
-it in place, and a drag reweights the two unlocked openings beside the
-board so the size one unit of weight gets in the run, and with it every
-other opening, stays as it was.
+opening the user never asked to lock. Here a locked opening carries the
+boards on either side of it along with a drag, and the drag reweights the
+first unlocked opening on each side so the size one unit of weight gets
+in the run, and with it every other opening, stays as it was.
 """
 
 from __future__ import annotations
@@ -32,7 +32,6 @@ from freecad.Shelving.core.layout import (
     Fill,
     Fixed,
     Item,
-    Region,
     SizeRule,
     Unit,
     Weighted,
@@ -102,51 +101,77 @@ def unlock(unit: Unit, region_id: str) -> Unit:
     return dataclasses.replace(unit, root=_with_rule(unit.root, region_id, rule))
 
 
-def _neighbors(unit: Unit, board_id: str) -> tuple[Division, Region, Region] | None:
-    """The run holding ``board_id`` and the regions on either side of it, or
-    ``None`` when it is not a board with a region on each side."""
+@dataclasses.dataclass(frozen=True)
+class _Side:
+    """What lies past a board on one side of its run."""
+
+    # The index of the first unlocked opening, which a drag resizes; None
+    # when only boards and locked openings lie between the board and the
+    # end of the run.
+    free_index: int | None
+    # The locked opening nearest the board, when there is one.
+    nearest_locked: str | None
+
+
+def _side(parent: Division, index: int, step: int) -> _Side:
+    nearest_locked: str | None = None
+    i = index + step
+    while 0 <= i < len(parent.items):
+        item = parent.items[i]
+        if not isinstance(item, Board):
+            if not is_locked(item):
+                return _Side(i, nearest_locked)
+            if nearest_locked is None:
+                nearest_locked = item.id
+        i += step
+    return _Side(None, nearest_locked)
+
+
+def _sides(unit: Unit, board_id: str) -> tuple[Division, _Side, _Side] | None:
     found = _locate(unit.root, board_id)
-    if found is None:
+    if found is None or not isinstance(found[0].items[found[1]], Board):
         return None
     parent, index = found
-    if (
-        not isinstance(parent.items[index], Board)
-        or not 0 < index < len(parent.items) - 1
-    ):
-        return None
-    before = parent.items[index - 1]
-    after = parent.items[index + 1]
-    if isinstance(before, Board) or isinstance(after, Board):
-        return None
-    return parent, before, after
+    return parent, _side(parent, index, -1), _side(parent, index, 1)
 
 
 def holders(unit: Unit, board_id: str) -> tuple[str, ...] | None:
-    """The locked openings holding ``board_id`` in place, empty when a drag
-    may move it, or ``None`` when it has no opening on each side to drag
-    between."""
-    found = _neighbors(unit, board_id)
+    """The locked openings to unlock so a drag may move ``board_id``: on
+    each side where only boards and locked openings reach the end of the
+    run, the locked one nearest the board. Empty when a drag may move it;
+    ``None`` when a side holds no opening at all, as beside a carcass board,
+    so no unlock would free it."""
+    found = _sides(unit, board_id)
     if found is None:
         return None
-    _parent, before, after = found
-    return tuple(region.id for region in (before, after) if is_locked(region))
+    _parent, low, high = found
+    if any(s.free_index is None and s.nearest_locked is None for s in (low, high)):
+        return None
+    return tuple(
+        s.nearest_locked
+        for s in (low, high)
+        if s.free_index is None and s.nearest_locked is not None
+    )
 
 
 def move_board_locally(unit: Unit, board_id: str, low_face_mm: float) -> Unit:
-    """``unit`` with ``board_id``'s low face at ``low_face_mm`` along its run
-    and only the two openings beside it resized, both still unlocked.
-    Raises :class:`EditError` naming the board when it has no opening on
-    each side, naming a locked opening holding it, or naming the opening
-    the move would leave no positive size."""
-    found = _neighbors(unit, board_id)
-    if found is None:
-        raise EditError(
-            board_id, "This board has no opening on each side to move between."
-        )
-    parent, before, after = found
-    for region in (before, after):
-        if is_locked(region):
-            raise EditError(region.id, "A locked opening holds this board in place.")
+    """``unit`` with ``board_id``'s low face at ``low_face_mm`` along its run.
+    Every board joined to it through locked openings moves with it, and
+    only the first unlocked opening on each side changes size, staying
+    unlocked. Raises :class:`EditError` naming the board when :func:`holders`
+    gives ``None``, naming a locked opening holding it, or naming the
+    opening the move would leave no positive size."""
+    found = _sides(unit, board_id)
+    held = holders(unit, board_id)
+    if found is None or held is None:
+        raise EditError(board_id, "This board has no opening on each side to move.")
+    if held:
+        raise EditError(held[0], "A locked opening holds this board in place.")
+    parent, low, high = found
+    if low.free_index is None or high.free_index is None:
+        raise EditError(board_id, "This board has no opening on each side to move.")
+    before = parent.items[low.free_index]
+    after = parent.items[high.free_index]
     axis_index = _axis_index(parent.axis)
     spaces = solve(unit)
     shift_mm = low_face_mm - spaces[board_id].origin_mm(axis_index)
@@ -157,7 +182,7 @@ def move_board_locally(unit: Unit, board_id: str, low_face_mm: float) -> Unit:
             raise EditError(
                 region.id, "The board cannot move past the far side of this opening."
             )
-    # Both neighbors are unlocked, so the run has a share.
+    # Both resized openings are unlocked, so the run has a share.
     share_mm = _share_mm(parent, spaces) or 1.0
     root = _with_rule(unit.root, before.id, Weighted(before_mm / share_mm))
     root = _with_rule(root, after.id, Weighted(after_mm / share_mm))

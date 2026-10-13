@@ -485,8 +485,8 @@ spike unless it carries a risk the spike can retire.
   request worth a spike.
 - **Drag a middle opening:** dragging a bay between two shelves moves both
   shelves together, keeping its size; only those shelves, never a
-  neighboring divider. A new core edit. Locks apply as to a board drag
-  (below): the openings beyond both shelves must be unlocked.
+  neighboring divider. A new core edit. With the lock model below,
+  locking that bay and dragging either shelf does the same.
 - **Open spaces edited in the view:** selecting, or double-clicking, an
   opening offers its width and height as on-view fields instead of the
   panel's size field.
@@ -537,15 +537,20 @@ spike unless it carries a risk the spike can retire.
     always has somewhere to go.
   - Typing a size into an opening locks it, and the unlocked openings in
     its row absorb the difference.
-  - A lock holds: a board can be dragged only when the openings on both
-    sides of it are unlocked, and the drag reweights those two so that no
-    other opening changes size. A drag never locks or unlocks anything.
-    Reweighting keeps the row's total weight: with `u` the size one unit
-    of weight gets, each neighbor's weight becomes its new size over `u`.
-  - A selected board held by a lock shows a padlock where its arrow would
-    be, and the locked opening or openings holding it are highlighted.
-    Clicking that padlock unlocks them in one Undo step, and the arrow
-    takes its place.
+  - A locked opening keeps its size through a drag by moving with it: a
+    drag carries every board joined to the dragged one through locked
+    openings, and resizes only the first unlocked opening on each side,
+    reweighting those two so that no other opening changes size. With
+    two shelves around one locked opening, either shelf drags and the
+    other follows. A drag never locks or unlocks anything. Reweighting
+    keeps the row's total weight: with `u` the size one unit of weight
+    gets, each resized opening's weight becomes its new size over `u`.
+  - A board is held only when, on some side, nothing but boards and
+    locked openings lie between it and the end of its row. It then shows
+    a padlock where its arrow would be, and the nearest locked opening on
+    each such side is highlighted. Clicking that padlock unlocks those in
+    one Undo step, and the arrow takes its place. A board with no opening
+    at all on one side, such as a carcass board, shows neither.
   - Today the panel can fix a size but never set it back to sharing, and
     weights never appear in the interface. The padlock is the only way
     to unlock; weights stay hidden.
@@ -612,8 +617,9 @@ needed only for something that looks wrong.
 10. Select an opening and use the two buttons over it. Is the preview
     clear, and do the buttons get in the way?
 11. Click padlocks to lock and unlock openings. Does anything move? Lock
-    the opening beside a shelf, select the shelf, and click the padlock
-    where its arrow was. Drag a shelf between two unlocked openings: does
+    the opening between two shelves and drag either shelf: does the other
+    follow? Lock every opening below a shelf, select it, and click the
+    padlock where its arrow was. Drag a shelf between two unlocked openings: does
     anything else move? Do the padlocks sit clear of the text at every
     zoom, and are they too many? Select a carcass board: no arrow, no
     padlock.
