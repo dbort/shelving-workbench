@@ -69,7 +69,7 @@ def main() -> None:
     from freecad.Shelving.core.layout import Bay, Board
     from freecad.Shelving.spikes import command
     from freecad.Shelving.spikes.spike_log import LOG_PATH
-    from freecad.Shelving.spikes.viewport_editor import _walk
+    from freecad.Shelving.spikes.viewport_editor import _walk, elevation_frame
     from freecad.Shelving.spikes.viewport_panel import SpikePanel
     from freecad.Shelving.unit_ops import create_unit
 
@@ -251,6 +251,9 @@ def main() -> None:
         "clicking an opening clears FreeCAD's selection",
         not Gui.Selection.getSelectionEx(),
     )
+    if os.environ.get("SPIKE_SHOT"):
+        stem, ext = os.path.splitext(os.environ["SPIKE_SHOT"])
+        view.saveImage(f"{stem}-native{ext}", 480, 360, "White")
     panel.mode_combo.setCurrentIndex(0)
 
     # From behind, the overlay moves to the back face and its arrow drags.
@@ -271,6 +274,20 @@ def main() -> None:
     check("overlay on the back face from behind", editor._z_sign == -1)
     if os.environ.get("SPIKE_SHOT_BACK"):
         view.saveImage(os.environ["SPIKE_SHOT_BACK"], 480, 360, "White")
+    # A new depth moves the back face, and the overlay with it.
+    depth_mm = session.unit_dimension_mm("depth")
+    panel._resize("depth", depth_mm - 20)
+    pump(300)
+    back_base = editor._frame.placement.Base
+    expected = elevation_frame(session.unit, session.container, back=True)
+    check(
+        "overlay follows a new depth to the back face",
+        (back_base - expected.placement.Base).Length < 1e-6
+        and session.unit_dimension_mm("depth") == depth_mm - 20,
+        f"{back_base} vs {expected.placement.Base}",
+    )
+    panel._resize("depth", depth_mm)
+    pump(300)
     drags_before = LOG_PATH.read_text().count("drag end:")
     before = session.spaces[board.id].origin
     pump(GESTURE_GAP_MS)
@@ -310,14 +327,32 @@ def main() -> None:
     pump(GESTURE_GAP_MS)
     inner = [b for b in nodes_of(Board) if draggable(b)][0]
     click(qt_point(point_in(inner.id, frac=(0.08, 0.5))))
+    # A Mac's delete key.
+    QtTest.QTest.keyClick(viewport, QtCore.Qt.Key.Key_Backspace)
+    pump(400)
+    boards_after = len(nodes_of(Board))
+    check(
+        "Backspace merges the board",
+        boards_after == boards_before - 1,
+        f"{boards_before} -> {boards_after}",
+    )
+
+    # With FreeCAD's selection on, its Delete command would take the key.
+    panel.mode_combo.setCurrentIndex(1)
+    pump(GESTURE_GAP_MS)
+    boards_before = len(nodes_of(Board))
+    inner = [b for b in nodes_of(Board) if draggable(b)][0]
+    click(qt_point(point_in(inner.id, frac=(0.08, 0.5))))
+    pump(300)
     QtTest.QTest.keyClick(viewport, QtCore.Qt.Key.Key_Delete)
     pump(400)
     boards_after = len(nodes_of(Board))
     check(
-        "Delete merges the board",
-        boards_after == boards_before - 1,
-        f"{boards_before} -> {boards_after}",
+        "Delete merges the board under FreeCAD picking",
+        boards_after == boards_before - 1 and "Delete" not in doc.UndoNames,
+        f"{boards_before} -> {boards_after}, undo {doc.UndoNames}",
     )
+    panel.mode_combo.setCurrentIndex(0)
 
     panel.reject()
     Gui.Control.closeDialog()

@@ -20,6 +20,7 @@ import time
 import traceback
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Literal, Protocol, TypeAlias, cast
 
 import FreeCAD
@@ -47,6 +48,10 @@ from freecad.Shelving.editor.scene import _apply_insets
 from freecad.Shelving.editor.session import EditFailure, Session
 from freecad.Shelving.refusals import report_error
 from freecad.Shelving.spikes.spike_log import log
+
+# FreeCAD imports a module once per process, so a test session on code
+# changed since then runs the old code; the open log line says so.
+_LOADED_S = time.time()
 
 # pivy ships no type information, so every Coin node and field is untyped.
 _Coin: TypeAlias = Any
@@ -284,6 +289,32 @@ class _FieldKeys(QtCore.QObject):
         return False
 
 
+class _DeleteKeyClaim(QtCore.QObject):
+    """Claims Delete and Backspace in the 3D view ahead of FreeCAD's Delete
+    command, which would remove a selected board's object from the document
+    behind the session. A claimed shortcut arrives as an ordinary key press,
+    which reaches the Coin key callback."""
+
+    def __init__(self, viewer: QtWidgets.QWidget) -> None:
+        super().__init__(viewer)
+        self._viewer = viewer
+
+    @override
+    def eventFilter(self, watched: QtCore.QObject, event: QtCore.QEvent) -> bool:
+        if event.type() != QtCore.QEvent.Type.ShortcutOverride:
+            return False
+        if not isinstance(watched, QtWidgets.QWidget) or not (
+            watched is self._viewer or self._viewer.isAncestorOf(watched)
+        ):
+            return False
+        key = cast("QtGui.QKeyEvent", event).key()
+        if key in (QtCore.Qt.Key.Key_Delete, QtCore.Qt.Key.Key_Backspace):
+            log(f"claimed key {key} from FreeCAD's shortcuts")
+            event.accept()
+            return True
+        return False
+
+
 class _BoardGate:
     """A FreeCAD selection gate that lets only the unit's boards be selected."""
 
@@ -318,19 +349,11 @@ class ViewportEditor:
         gui_doc = cast("_GuiDocument", FreeCADGui.ActiveDocument)
         self.view = gui_doc.ActiveView
         self._viewer = self.view.graphicsView()
-        self._front_frame = elevation_frame(session.unit, session.container)
-        self._back_frame = elevation_frame(session.unit, session.container, back=True)
-        self._frame = self._front_frame
         # 1 drawing on the front face toward +z, -1 on the back face toward
         # -z: the overlay sits on whichever face the camera sees, so solids
         # never hide its arrows or show its text through them.
         self._z_sign = 1
-        unit = session.unit
-        # How far outside a region its outer dimension sits.
-        self._outside_mm = 0.06 * max(
-            unit.size_mm.component_mm(self._frame.horizontal.component_index),
-            unit.size_mm.component_mm(self._frame.vertical.component_index),
-        )
+        self._update_frames()
         self._label_size_pt = _label_size_pt(self._viewer)
         self.selection_mode: SelectionMode = "ours"
         self.on_top = False
@@ -403,6 +426,10 @@ class ViewportEditor:
         self._key_callback = self.view.addEventCallbackPivy(
             coin.SoKeyboardEvent.getClassTypeId(), self._on_key
         )
+        self._delete_claim = _DeleteKeyClaim(self._viewer)
+        # The GUI that opened this editor is the application.
+        self._app = cast("QtCore.QCoreApplication", QtCore.QCoreApplication.instance())
+        self._app.installEventFilter(self._delete_claim)
         self.set_selection_mode("ours")
         self._log_environment()
         self.frame_camera()
@@ -429,6 +456,17 @@ class ViewportEditor:
             f"{viewer.devicePixelRatioF()}, screen {screen.name()} "
             f"{screen.geometry().width()}x{screen.geometry().height()} "
             f"dpr {screen.devicePixelRatio()}"
+        )
+        package = Path(__file__).resolve().parent.parent
+        changed = sorted(
+            str(path.relative_to(package))
+            for path in package.rglob("*.py")
+            if path.stat().st_mtime > _LOADED_S
+        )
+        log(
+            f"code: changed since FreeCAD loaded it, restart FreeCAD: {changed}"
+            if changed
+            else "code: current"
         )
         log(f"navigation style: {self.view.getNavigationType()}")
         log(f"dimension text: {self._label_size_pt} pt, sized as the Sketcher's")
@@ -515,6 +553,7 @@ class ViewportEditor:
         self.view.removeEventCallbackPivy(
             coin.SoKeyboardEvent.getClassTypeId(), self._key_callback
         )
+        self._app.removeEventFilter(self._delete_claim)
         if self._camera_sensor is not None:
             self._camera_sensor.detach()
             self._camera_sensor = None
@@ -644,17 +683,32 @@ class ViewportEditor:
             return
         self._close_field("overlay changed face")
         self._z_sign = -1 if back else 1
-        self._frame = self._back_frame if back else self._front_frame
+        self._update_frames()
         log(f"overlay moved to the {'back' if back else 'front'} face")
         self.rebuild()
 
     # Drawing
+
+    def _update_frames(self) -> None:
+        """Recompute the faces from the unit, whose depth the panel can change
+        and so move the back face."""
+        session = self._host.session
+        unit = session.unit
+        self._front_frame = elevation_frame(unit, session.container)
+        self._back_frame = elevation_frame(unit, session.container, back=True)
+        self._frame = self._back_frame if self._z_sign < 0 else self._front_frame
+        # How far outside a region its outer dimension sits.
+        self._outside_mm = 0.06 * max(
+            unit.size_mm.component_mm(self._frame.horizontal.component_index),
+            unit.size_mm.component_mm(self._frame.vertical.component_index),
+        )
 
     def rebuild(self) -> None:
         """Redraw from the session; the dragger too unless a drag is on."""
         if self._closed:
             return
         start_s = time.perf_counter()
+        self._update_frames()
         frame = self._frame
         q = frame.placement.Rotation.Q
         base = frame.placement.Base
@@ -1067,7 +1121,11 @@ class ViewportEditor:
                 f"key {key} {'down' if down else 'up'}, handled before us "
                 f"{bool(event_callback.getAction().isHandled())}"
             )
-            if down and key == coin.SoKeyboardEvent.DELETE:
+            # A Mac's delete key is Backspace.
+            if down and key in (
+                coin.SoKeyboardEvent.DELETE,
+                coin.SoKeyboardEvent.BACKSPACE,
+            ):
                 event_callback.setHandled()
                 QtCore.QTimer.singleShot(0, self._delete_selected)
         except Exception:  # noqa: BLE001 - a Coin callback must not raise

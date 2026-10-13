@@ -628,6 +628,9 @@ class EditUnitPanel:
         dimension_row.addWidget(self.basis_combo)
         layout.addLayout(dimension_row)
         self.readout_label = QtWidgets.QLabel("")
+        # Unwrapped, its longest text would widen the panel and shift every
+        # control as the selection changes.
+        self.readout_label.setWordWrap(True)
         layout.addWidget(self.readout_label)
 
         self.untagged_box = QtWidgets.QGroupBox("Objects this workbench did not create")

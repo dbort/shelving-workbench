@@ -359,6 +359,25 @@ view (`freecad/Shelving/spikes/`). It logs to
   of the opening before the board, so a view zoomed in on a tall or narrow
   opening shows both. Coin's stock `SoTranslate1Dragger` is pale grey and
   hard to see; FreeCAD's own arrow (see the requests) would fix that too.
+- **FreeCAD's Delete command takes the delete key from a selected
+  board.** Under FreeCAD's picking a board sits in FreeCAD's selection, so
+  Delete (Backspace on a Mac) fires `Std_Delete`. That removes the board's
+  object from the document behind the session and records its own undo
+  entry inside the edit. The spike claims both keys with a
+  `ShortcutOverride` event filter whenever focus is in the 3D view; the
+  key then arrives as a plain key press at the Coin key callback, which
+  merges the board. With focus in the tree, `Std_Delete` still runs, so the
+  real editor must also guard the board objects or rescan after a
+  deletion.
+- **The overlay follows the unit's size.** A new depth from the panel
+  moves the back face; the overlay recomputes both faces on every redraw
+  instead of once at open.
+- **A selected opening's dimension is unconfirmed on the Mac.** Under Xvfb
+  it shows in the selection color under both picking modes, but the
+  fifth laptop session still reported it missing. FreeCAD imports a module
+  once per process, so that session may have run the code from before the
+  fix; the log's open line now says whether any of the workbench's files
+  changed since FreeCAD loaded them.
 - **Escape in the 3D view is harmless.** With no field open it reaches the
   spike's key callback and the task dialog stays open.
 - **Dimension text must be sized as the Sketcher sizes it.** `SoDatumLabel`
@@ -408,6 +427,9 @@ spike unless it carries a risk the spike can retire.
   panel's size field.
 - **Unit size in the view:** dragging an outer board resizes the unit, and
   the overall dimensions are clickable fields like the others.
+- **Delete removes the selected board,** under either picking mode.
+  What deleting an outer board does is undecided: refuse it with a
+  message, or remove that side of the carcass.
 - **Later:** select several parallel sibling boards and redistribute them
   at a common spacing.
 - **The mouse wheel must not change a field it merely passes over.** Today
@@ -421,7 +443,9 @@ spike unless it carries a risk the spike can retire.
 
 ### Testing on your laptop
 
-Open a real unit, select it, and run the spike. Use "Log note" to mark
+Restart FreeCAD after pulling new spike code, and check that the log's
+open lines include `code: current`. Open a real unit, select it, and run
+the spike. Use "Log note" to mark
 what you were doing; the log is what comes back here, so screenshots are
 needed only for something that looks wrong.
 
