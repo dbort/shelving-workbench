@@ -352,6 +352,13 @@ view (`freecad/Shelving/spikes/`). It logs to
   highlights only the face under the pointer. In this mode a dimension
   label drawn over a board cannot be clicked, because FreeCAD's selection
   takes the click first.
+- **A selection shows as an outline only.** Filling a selected opening in
+  the selection color hid its dimensions, which use that color too, so
+  only their arrowheads showed.
+- **The arrow sits beside the dimension it changes:** just past the line
+  of the opening before the board, so a view zoomed in on a tall or narrow
+  opening shows both. Coin's stock `SoTranslate1Dragger` is pale grey and
+  hard to see; FreeCAD's own arrow (see the requests) would fix that too.
 - **Escape in the 3D view is harmless.** With no field open it reaches the
   spike's key callback and the task dialog stays open.
 - **Dimension text must be sized as the Sketcher sizes it.** `SoDatumLabel`

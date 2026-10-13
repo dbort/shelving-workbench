@@ -287,7 +287,17 @@ def main() -> None:
     check("front view puts the overlay back", editor._z_sign == 1)
 
     if os.environ.get("SPIKE_SHOT"):
+        # A bay selected and a board's arrow shown, as a user sees them.
+        session.select(nodes_of(Bay)[0].id)
+        panel._refresh()
+        pump(200)
         view.saveImage(os.environ["SPIKE_SHOT"], 480, 360, "White")
+        board = [b for b in nodes_of(Board) if draggable(b)][0]
+        session.select(board.id)
+        panel._refresh()
+        pump(200)
+        stem, ext = os.path.splitext(os.environ["SPIKE_SHOT"])
+        view.saveImage(f"{stem}-arrow{ext}", 480, 360, "White")
     panel.on_top_check.setChecked(True)
     panel.hide_check.setChecked(True)
     pump(200)

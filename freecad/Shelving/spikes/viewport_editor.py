@@ -699,9 +699,10 @@ class ViewportEditor:
             if isinstance(node, Bay | Void):
                 rgb = _VOID_RGB if isinstance(node, Void) else _BAY_RGB
                 content.addChild(
-                    _face(
-                        frame.rect(space), z_mm, _SELECTED_RGB if is_selected else rgb
-                    )
+                    # The selection shows as the outline below: a fill in the
+                    # selection color would hide the selected dimensions,
+                    # which are drawn in that color too.
+                    _face(frame.rect(space), z_mm, rgb)
                 )
             if isinstance(node, Bay | Void) or is_selected:
                 content.addChild(
@@ -808,7 +809,7 @@ class ViewportEditor:
         from freecad.Shelving.core.edit import EditError, region_before, run_axis
 
         try:
-            region_before(session.unit, board_id)
+            before_id = region_before(session.unit, board_id)
             axis = run_axis(session.unit, board_id)
         except EditError:
             return
@@ -823,12 +824,20 @@ class ViewportEditor:
         )
         self._dragger_scale_mm = _DRAGGER_FRACTION * longest_mm
         placement = self._dragger_transform
-        # A sixth of the way along the board: clear of the labels a third
-        # along and the lines two thirds across.
+        # Just past the dimension line of the opening the arrow resizes,
+        # which runs two thirds across that opening, so a zoomed-in view
+        # shows both.
+        bh0, bv0, bh1, bv1 = self._frame.rect(session.spaces[before_id])
+        beside_mm = 0.04 * max(
+            unit.size_mm.component_mm(self._frame.horizontal.component_index),
+            unit.size_mm.component_mm(self._frame.vertical.component_index),
+        )
         if axis == self._frame.vertical:
-            arrow_h, arrow_v = h0 + (h1 - h0) / 6, (v0 + v1) / 2
+            arrow_h = bh0 + 2 / 3 * (bh1 - bh0) + beside_mm
+            arrow_v = (v0 + v1) / 2
         else:
-            arrow_h, arrow_v = (h0 + h1) / 2, v0 + (v1 - v0) / 6
+            arrow_h = (h0 + h1) / 2
+            arrow_v = bv0 + 2 / 3 * (bv1 - bv0) + beside_mm
         placement.translation.setValue(arrow_h, arrow_v, self._z_sign * 4 * _LIFT_MM)
         angle = math.pi / 2 if axis == self._frame.vertical else 0.0
         placement.rotation.setValue(coin.SbVec3f(0, 0, 1), angle)
