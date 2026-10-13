@@ -267,13 +267,13 @@ key events into the 3D view. "Retired" means the driver showed it working;
 | 1 | Board drag through a dragger works in each navigation style, outside edit mode | Retired for CAD, Gesture, Touchpad and OpenSCAD, and on the user's Mac trackpad with Touchpad navigation. OpenInventor works with Ctrl held, which is how that style selects anyway |
 | 2 | Clicks reach our callback; native selection can be switched off from pivy, or gated to the unit | Retired for both picking modes. `getObjectInfo` names the board through the container (`SubName` `Board001.Face3`) |
 | 3 | The floating `QuantitySpinBox` lands on its label on a HiDPI screen and keeps focus; Return and Escape leave the task dialog open | Retired on the user's Retina Mac: the field opened on its label, took typing at once, and applied on Return. `getSize` reports device pixels (2880 by 1122 for a 1440 by 561 widget at ratio 2), as the placement math assumes. The f(x) formula button is untested |
-| 4 | The overlay neither z-fights with board faces nor shows through solids when orbited | Renders correctly from the front, depth-tested and on top. From behind open: the eye judges it faster than a script |
+| 4 | The overlay neither z-fights with board faces nor shows through solids when orbited | Retired by moving the overlay to whichever face the camera sees. From behind, the user found the arrows blocked by boards, and the dimension text showing through the solids even depth-tested (`SoDatumLabel` draws its text without a depth test). On the back face neither happens; the driver drags an arrow from behind |
 | 5 | Drag stays smooth | On the user's Mac: solve and write 8.5 ms a step on average, 40 ms at worst, redraw under 2 ms, over drags of 60 to 150 steps on a default unit. Large units open |
 | 6 | Hiding other objects and restoring them leaves `Visibility` and the undo stack untouched | Retired, also on the user's own document: 13 objects hidden and restored on both OK and Cancel, undo names unchanged |
 | 7 | The overlay follows a moved, rotated container | Retired at 0 and 30 degrees: 0.0000 mm between each board's solid and its overlay. Nested containers untested |
 | 8 | Bay and void hit-testing from a 3D ray | Retired |
 | 9 | Camera save, front framing, restore | Retired: restored exactly, apart from the near and far planes Coin recomputes on every render |
-| 10 | Dimension text is legible | Open. At a fixed 12 pt the user could not read it on a Retina Mac, zoomed or not (labels keep their screen size, as the Sketcher's do). The spike now sizes it as the Sketcher does; the user's eye decides |
+| 10 | Dimension text is legible | Size retired: sized as the Sketcher sizes it (28 pt on the user's Retina Mac), the user found it bigger. Contrast and overlap reworked since: Sketcher colors, bay dimensions at thirds, outer dimensions outside their region. The user's eye decides |
 
 ## The spike
 
@@ -327,6 +327,31 @@ view (`freecad/Shelving/spikes/`). It logs to
   Label placement and hit priority need design.
 - **OpenInventor navigation** consumes the press of the first Ctrl+click,
   so only its release arrives.
+- **Dimension placement.** At the middle of their regions a bay's width
+  and height cross at their text, and a click there opened the one drawn
+  first. The spike now draws a bay's line two thirds across with its text
+  a third along, so the two never meet, and lets the label drawn last win
+  a tie. Thirds alone still let a region that holds others put its
+  dimension on a child's line, so those dimensions sit just outside their
+  region instead, like chain dimensions on a drawing. Dragging labels as
+  in the Sketcher is wanted later, not now.
+- **Dimension colors follow the Sketcher:** `ConstrainedDimColor` (red)
+  for a fixed size, which drives, `NonDrivingConstrDimColor` (blue) for a
+  region sharing the leftover space, which only reports, and
+  `SelectionColor` for the selection, all read from FreeCAD's View
+  preferences.
+- **The overlay follows the camera to the back face.** A camera sensor
+  watches which side of the unit the camera is on and redraws the overlay
+  on the face it sees, with the same axes and negative z. Text stays
+  readable because the label's `norm` stays the front face's normal and
+  the node flips the text itself.
+- **FreeCAD's picking can select whole boards.** A click on a board's
+  face, edge or vertex arrives as that sub-element; the spike replaces it
+  with the whole board, which FreeCAD then highlights entirely, and a
+  click on an opening clears FreeCAD's selection. Hover preselection still
+  highlights only the face under the pointer. In this mode a dimension
+  label drawn over a board cannot be clicked, because FreeCAD's selection
+  takes the click first.
 - **Escape in the 3D view is harmless.** With no field open it reaches the
   spike's key callback and the task dialog stays open.
 - **Dimension text must be sized as the Sketcher sizes it.** `SoDatumLabel`
@@ -353,7 +378,12 @@ view (`freecad/Shelving/spikes/`). It logs to
 From the user's notes during the second laptop session. None needs the
 spike unless it carries a risk the spike can retire.
 
-- **Legible dimensions** at any zoom (risk 10 above).
+- **Legible dimensions** at any zoom (risk 10 above), and later, labels
+  the user can drag aside as in the Sketcher.
+- **FreeCAD's picking, whole boards:** the user prefers FreeCAD's click
+  picking, provided a click anywhere on a board selects the whole board
+  and a click on an opening deselects it. Not yet certain; the spike now
+  does both for trial.
 - **Arrows clear of dimension lines:** offset the drag arrow so it does
   not sit on the dimension it changes.
 - **Typed moves and a step size,** styled as close to FreeCAD's own
@@ -408,10 +438,12 @@ Copy `/tmp/shelving-viewport-spike.log` into the VM afterward.
 
 ## Suggested next steps
 
-Laptop sessions so far settled items 1, 2, 3, 6 and 7 of the list above.
+Laptop sessions have settled the whole list. The f(x) button works; the
+panel still scrolls with the Python console open, which the user accepts
+because the spike's own controls go away.
 
-1. Recheck the dimension text size (risk 10), the f(x) button, and give a
-   verdict on items 4, 5 and 8.
+1. Recheck the dimension layout and colors, FreeCAD picking with whole
+   boards, and orbiting behind the unit.
 2. Optionally, spike FreeCAD's `SoLinearDragger` in place of
    `SoTranslate1Dragger` to retire the typed-move and step-size request.
 3. Plan design A with `/new-task`, carrying the findings and requests

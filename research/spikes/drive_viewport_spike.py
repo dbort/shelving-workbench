@@ -149,6 +149,10 @@ def main() -> None:
         h0, v0, h1, v1 = frame.rect(session.spaces[node_id])
         return frame.to_global(h0 + frac[0] * (h1 - h0), v0 + frac[1] * (v1 - v0), z_mm)
 
+    def arrow_point() -> QtCore.QPointF:
+        x, y, z = editor._dragger_transform.translation.getValue().getValue()
+        return qt_point(editor._frame.to_global(x, y, z))
+
     def draggable(board) -> bool:
         try:
             region_before(session.unit, board.id)
@@ -180,7 +184,7 @@ def main() -> None:
     delta = (
         QtCore.QPointF(-40, 0) if run == frame.horizontal else QtCore.QPointF(0, -40)
     )
-    start = qt_point(point_in(board.id, z_mm=2.0))
+    start = arrow_point()
     drag(start, start + delta)
     after = session.spaces[board.id].origin
     pump(300)
@@ -192,7 +196,7 @@ def main() -> None:
     # Up and down again on the same arrow, with no reselecting.
     for back_and_forth in range(4):
         pump(GESTURE_GAP_MS)
-        start = qt_point(point_in(board.id, z_mm=2.0))
+        start = arrow_point()
         drag(start, start + delta * (-1 if back_and_forth % 2 == 0 else 1))
     drags = LOG_PATH.read_text().count("drag end:")
     check("repeated drags all ran", drags == 5, f"{drags} drags")
@@ -233,11 +237,54 @@ def main() -> None:
     click(qt_point(point_in(target.id, frac=(0.5, 0.3))))
     pump(300)
     check("native picking selects board", session.selected_id == target.id)
+    picked = Gui.Selection.getSelectionEx()
+    check(
+        "native picking selects the whole board",
+        len(picked) == 1 and not picked[0].SubElementNames,
+        str([(p.ObjectName, p.SubElementNames) for p in picked]),
+    )
     pump(GESTURE_GAP_MS)
     bay = nodes_of(Bay)[0]
     click(qt_point(point_in(bay.id, frac=(0.2, 0.8))))
     check("native picking selects bay", session.selected_id == bay.id)
+    check(
+        "clicking an opening clears FreeCAD's selection",
+        not Gui.Selection.getSelectionEx(),
+    )
     panel.mode_combo.setCurrentIndex(0)
+
+    # From behind, the overlay moves to the back face and its arrow drags.
+    board = [b for b in nodes_of(Board) if draggable(b)][0]
+    pump(GESTURE_GAP_MS)
+    click(qt_point(point_in(board.id, frac=(0.08, 0.5))))
+    camera = view.getCameraNode()
+    behind = FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 180).multiply(
+        editor._front_frame.placement.Rotation
+    )
+    camera.orientation.setValue(*behind.Q)
+    center = editor._front_frame.to_global(300, 450)
+    toward = behind.multVec(FreeCAD.Vector(0, 0, 1)) * 2700
+    camera.position.setValue(
+        center.x + toward.x, center.y + toward.y, center.z + toward.z
+    )
+    pump(500)
+    check("overlay on the back face from behind", editor._z_sign == -1)
+    if os.environ.get("SPIKE_SHOT_BACK"):
+        view.saveImage(os.environ["SPIKE_SHOT_BACK"], 480, 360, "White")
+    drags_before = LOG_PATH.read_text().count("drag end:")
+    before = session.spaces[board.id].origin
+    pump(GESTURE_GAP_MS)
+    start = arrow_point()
+    drag(start, start + QtCore.QPointF(0, -40))
+    after = session.spaces[board.id].origin
+    check(
+        "arrow drags from behind",
+        LOG_PATH.read_text().count("drag end:") == drags_before + 1 and after != before,
+        f"{before} -> {after}",
+    )
+    editor.frame_camera()
+    pump(300)
+    check("front view puts the overlay back", editor._z_sign == 1)
 
     if os.environ.get("SPIKE_SHOT"):
         view.saveImage(os.environ["SPIKE_SHOT"], 480, 360, "White")

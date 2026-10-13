@@ -66,8 +66,26 @@ _DRAGGER_FRACTION = 0.04
 _BAY_RGB = (0.85, 0.85, 0.85)
 _VOID_RGB = (0.6, 0.6, 0.6)
 _OUTLINE_RGB = (0.2, 0.2, 0.2)
-_SELECTED_RGB = (0.16, 0.5, 1.0)
-_LABEL_RGB = (0.12, 0.31, 0.47)
+
+
+def _view_color(name: str, default: int) -> tuple[float, float, float]:
+    """A packed 0xRRGGBBAA color from FreeCAD's View preferences."""
+    packed = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/View").GetUnsigned(
+        name, default
+    )
+    return (
+        ((packed >> 24) & 0xFF) / 255,
+        ((packed >> 16) & 0xFF) / 255,
+        ((packed >> 8) & 0xFF) / 255,
+    )
+
+
+# FreeCAD's own selection green, and the Sketcher's dimension colors: red
+# for a size that drives (a fixed rule), blue for one that only reports (a
+# region sharing the leftover space). Defaults from FreeCAD 1.1.
+_SELECTED_RGB = _view_color("SelectionColor", 0x1CAD1CFF)
+_DRIVING_RGB = _view_color("ConstrainedDimColor", 0xFF2600FF)
+_REPORTING_RGB = _view_color("NonDrivingConstrDimColor", 0x0026FFFF)
 
 
 class _View(Protocol):
@@ -169,9 +187,13 @@ class ElevationFrame:
         return (h0, v0, h0 + space.extent_mm(h), v0 + space.extent_mm(v))
 
 
-def elevation_frame(unit: Unit, container: FreeCAD.DocumentObject) -> ElevationFrame:
-    """The frame the overlay draws in. Raises ``ValueError`` when the unit
-    has no depth axis."""
+def elevation_frame(
+    unit: Unit, container: FreeCAD.DocumentObject, back: bool = False
+) -> ElevationFrame:
+    """The frame the overlay draws in, on the front face or, with ``back``,
+    on the back face with the same axes: drawing there uses negative z, so
+    the frame stays a rotation. Raises ``ValueError`` when the unit has no
+    depth axis."""
     if unit.depth_axis is None:
         raise ValueError(f"unit {unit.id!r} has no depth axis")
     horizontal, vertical = elevation_axes(unit.depth_axis)
@@ -182,8 +204,10 @@ def elevation_frame(unit: Unit, container: FreeCAD.DocumentObject) -> ElevationF
     # The camera sits on the toward_camera side, so the near face is the
     # high end of the depth axis when toward_camera points along it.
     toward_component = (toward_camera.x, toward_camera.y, toward_camera.z)[depth_index]
-    front_mm = unit.size_mm.component_mm(depth_index) if toward_component > 0 else 0.0
-    origin = _basis(unit.depth_axis) * front_mm
+    depth_mm = unit.size_mm.component_mm(depth_index)
+    front_mm = depth_mm if toward_component > 0 else 0.0
+    face_mm = depth_mm - front_mm if back else front_mm
+    origin = _basis(unit.depth_axis) * face_mm
     matrix = FreeCAD.Matrix(
         e_h.x, e_v.x, toward_camera.x, origin.x,
         e_h.y, e_v.y, toward_camera.y, origin.y,
@@ -294,7 +318,19 @@ class ViewportEditor:
         gui_doc = cast("_GuiDocument", FreeCADGui.ActiveDocument)
         self.view = gui_doc.ActiveView
         self._viewer = self.view.graphicsView()
-        self._frame = elevation_frame(session.unit, session.container)
+        self._front_frame = elevation_frame(session.unit, session.container)
+        self._back_frame = elevation_frame(session.unit, session.container, back=True)
+        self._frame = self._front_frame
+        # 1 drawing on the front face toward +z, -1 on the back face toward
+        # -z: the overlay sits on whichever face the camera sees, so solids
+        # never hide its arrows or show its text through them.
+        self._z_sign = 1
+        unit = session.unit
+        # How far outside a region its outer dimension sits.
+        self._outside_mm = 0.06 * max(
+            unit.size_mm.component_mm(self._frame.horizontal.component_index),
+            unit.size_mm.component_mm(self._frame.vertical.component_index),
+        )
         self._label_size_pt = _label_size_pt(self._viewer)
         self.selection_mode: SelectionMode = "ours"
         self.on_top = False
@@ -562,6 +598,7 @@ class ViewportEditor:
         """Turn the camera to the unit's front, orthographic, framing the
         unit with a margin."""
         unit = self._host.session.unit
+        self._set_side(back=False)
         width_mm = unit.size_mm.component_mm(self._frame.horizontal.component_index)
         height_mm = unit.size_mm.component_mm(self._frame.vertical.component_index)
         self.view.setCameraType("Orthographic")
@@ -589,6 +626,27 @@ class ViewportEditor:
     def _camera_moved(self, _data: object, _sensor: object) -> None:
         if self._field_host is not None:
             self._place_field()
+        if self._dragging or self._closed:
+            return
+        camera = self.view.getCameraNode()
+        x, y, z, w = camera.orientation.getValue().getValue()
+        toward_camera = FreeCAD.Rotation(x, y, z, w).multVec(FreeCAD.Vector(0, 0, 1))
+        front_normal = self._front_frame.placement.Rotation.multVec(
+            FreeCAD.Vector(0, 0, 1)
+        )
+        back = toward_camera.dot(front_normal) < 0
+        if back != (self._z_sign < 0):
+            # The sensor fires mid-render; the scene changes afterward.
+            QtCore.QTimer.singleShot(0, lambda: self._set_side(back))
+
+    def _set_side(self, back: bool) -> None:
+        if back == (self._z_sign < 0) or self._dragging:
+            return
+        self._close_field("overlay changed face")
+        self._z_sign = -1 if back else 1
+        self._frame = self._back_frame if back else self._front_frame
+        log(f"overlay moved to the {'back' if back else 'front'} face")
+        self.rebuild()
 
     # Drawing
 
@@ -629,7 +687,7 @@ class ViewportEditor:
             space = session.spaces.get(node.id)
             if space is None:
                 continue
-            z_mm = _LIFT_MM * (1 + depth * 0.01)
+            z_mm = self._z_sign * _LIFT_MM * (1 + depth * 0.01)
             if isinstance(node, Board):
                 if node.id == selected and division_axis is not None:
                     inset = _apply_insets(division_axis, space, node.insets)
@@ -655,7 +713,7 @@ class ViewportEditor:
                     )
                 )
             if isinstance(node, Division):
-                self._add_dimensions(content, node, z_mm + _LIFT_MM)
+                self._add_dimensions(content, node, z_mm + self._z_sign * _LIFT_MM)
         return content
 
     def _add_dimensions(self, content: _Coin, division: Division, z_mm: float) -> None:
@@ -686,8 +744,16 @@ class ViewportEditor:
                     high_mm = after_space.origin_mm(along) + after_space.extent_mm(
                         along
                     )
-            fraction = 0.25 if isinstance(item, Division) else 0.5
-            cross_mm = space.origin_mm(across) + fraction * space.extent_mm(across)
+            # Thirds keep a bay's width and height apart: its line runs two
+            # thirds across, its text a third along. A region holding others
+            # gets its dimension just outside its low edge instead, where no
+            # child's line can land on it.
+            if isinstance(item, Division):
+                along_fraction = 0.5
+                cross_mm = space.origin_mm(across) - self._outside_mm
+            else:
+                along_fraction = 1 / 3
+                cross_mm = space.origin_mm(across) + 2 / 3 * space.extent_mm(across)
             if run_is_horizontal:
                 p1 = (low_mm, cross_mm)
                 p2 = (high_mm, cross_mm)
@@ -695,19 +761,36 @@ class ViewportEditor:
                 p1 = (cross_mm, low_mm)
                 p2 = (cross_mm, high_mm)
             selected = item.id == session.selected_id
+            if selected:
+                rgb = _SELECTED_RGB
+            elif isinstance(item.rule, Fixed):
+                rgb = _DRIVING_RGB
+            else:
+                rgb = _REPORTING_RGB
+            length_mm = high_mm - low_mm
             content.addChild(
                 _datum_label(
                     p1,
                     p2,
                     z_mm,
-                    f"{high_mm - low_mm:.2f}".rstrip("0").rstrip("."),
-                    _SELECTED_RGB if selected else _LABEL_RGB,
-                    frame.placement.Rotation.multVec(FreeCAD.Vector(0, 0, 1)),
+                    f"{length_mm:.2f}".rstrip("0").rstrip("."),
+                    rgb,
+                    # The front face's normal on either face: the node
+                    # flips the text itself when seen from behind, as the
+                    # Sketcher relies on.
+                    self._front_frame.placement.Rotation.multVec(
+                        FreeCAD.Vector(0, 0, 1)
+                    ),
                     self._label_size_pt,
+                    (along_fraction - 0.5) * length_mm,
                 )
             )
             self._labels.append(
-                _Label(item.id, (p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2)
+                _Label(
+                    item.id,
+                    p1[0] + along_fraction * (p2[0] - p1[0]),
+                    p1[1] + along_fraction * (p2[1] - p1[1]),
+                )
             )
 
     def _hide_dragger(self) -> None:
@@ -740,7 +823,13 @@ class ViewportEditor:
         )
         self._dragger_scale_mm = _DRAGGER_FRACTION * longest_mm
         placement = self._dragger_transform
-        placement.translation.setValue((h0 + h1) / 2, (v0 + v1) / 2, 4 * _LIFT_MM)
+        # A sixth of the way along the board: clear of the labels a third
+        # along and the lines two thirds across.
+        if axis == self._frame.vertical:
+            arrow_h, arrow_v = h0 + (h1 - h0) / 6, (v0 + v1) / 2
+        else:
+            arrow_h, arrow_v = (h0 + h1) / 2, v0 + (v1 - v0) / 6
+        placement.translation.setValue(arrow_h, arrow_v, self._z_sign * 4 * _LIFT_MM)
         angle = math.pi / 2 if axis == self._frame.vertical else 0.0
         placement.rotation.setValue(coin.SbVec3f(0, 0, 1), angle)
         scale = self._dragger_scale_mm
@@ -843,9 +932,21 @@ class ViewportEditor:
     def native_selected(self, obj_name: str, sub_name: str) -> None:
         board_id = self.board_for_path(obj_name, sub_name)
         log(f"native selection: {obj_name} {sub_name!r} -> board {board_id}")
+        element = sub_name.rsplit(".", 1)[-1]
+        if board_id is not None and element:
+            # A face, edge or vertex: select the whole board instead, which
+            # also highlights all of it. The replacement arrives here again
+            # with no element.
+            QtCore.QTimer.singleShot(0, lambda: self._select_whole(board_id))
+            return
         if board_id is not None and board_id != self._host.session.selected_id:
             # The observer runs inside FreeCAD's selection change.
             QtCore.QTimer.singleShot(0, lambda: self._host.select_node(board_id))
+
+    def _select_whole(self, board_id: str) -> None:
+        doc = self._container.Document
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(doc.Name, board_id)
 
     def _on_mouse(self, event_callback: _Coin) -> None:
         try:
@@ -903,6 +1004,9 @@ class ViewportEditor:
                     return
         node_id = self._region_at(position)
         log(f"click at {position} picks {node_id}")
+        if self.selection_mode == "native":
+            # The board FreeCAD still shows as selected is no longer ours.
+            FreeCADGui.Selection.clearSelection()
         self._host.select_node(node_id)
 
     def _label_at(self, position: tuple[int, int]) -> _Label | None:
@@ -912,7 +1016,7 @@ class ViewportEditor:
                 self._frame.to_global(label.mid_h_mm, label.mid_v_mm)
             )
             distance = math.hypot(screen[0] - position[0], screen[1] - position[1])
-            if distance <= _LABEL_HIT_PX and (best is None or distance < best[0]):
+            if distance <= _LABEL_HIT_PX and (best is None or distance <= best[0]):
                 best = (distance, label)
         return best[1] if best is not None else None
 
@@ -1161,6 +1265,7 @@ def _datum_label(
     rgb: tuple[float, float, float],
     normal: FreeCAD.Vector,
     size_pt: int,
+    text_shift_mm: float,
 ) -> _Coin:
     label = coin.SoType.fromName("SoDatumLabel").createInstance()
     label.getField("pnts").setValues(0, 2, [[p1[0], p1[1], z_mm], [p2[0], p2[1], z_mm]])
@@ -1170,6 +1275,8 @@ def _datum_label(
     label.getField("string").setValue(text)
     label.getField("textColor").setValue(*rgb)
     label.getField("size").setValue(size_pt)
+    # Slides the text along the line from its midpoint.
+    label.getField("param2").setValue(text_shift_mm)
     label.getField("lineWidth").setValue(1.5)
     group = coin.SoSeparator()
     material = coin.SoMaterial()
