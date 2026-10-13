@@ -67,7 +67,7 @@ def check(name: str, ok: bool, detail: str = "") -> None:
 def main() -> None:
     from freecad.Shelving.core.edit import EditError, _locate, region_before, run_axis
     from freecad.Shelving.core.layout import Bay, Board
-    from freecad.Shelving.properties import has_board_properties
+    from freecad.Shelving.properties import has_board_properties, paint
     from freecad.Shelving.spikes import command
     from freecad.Shelving.spikes.spike_log import LOG_PATH
     from freecad.Shelving.spikes.viewport_editor import _walk, elevation_frame
@@ -521,6 +521,10 @@ def main() -> None:
     )
 
     # A second session, kept with OK: one history step for all of it.
+    painted_rgb = (200, 30, 30)
+    for obj in doc.Objects:
+        if has_board_properties(obj):
+            paint(obj, painted_rgb)
     Gui.Selection.clearSelection()
     Gui.Selection.addSelection(container)
     Gui.runCommand("Shelving_SpikeViewport")
@@ -535,6 +539,11 @@ def main() -> None:
     for direction in ("vertical", "horizontal"):
         session.select(nodes_of(Bay)[0].id)
         panel.run_edit("Split", lambda d=direction: session.split(d))
+    # The read back after these drops what the new boards copied from.
+    Gui.runCommand("Std_Undo")
+    pump(300)
+    Gui.runCommand("Std_Redo")
+    pump(300)
     kept_boards = len(nodes_of(Board))
     panel.accept()
     Gui.Control.closeDialog()
@@ -545,6 +554,20 @@ def main() -> None:
         and document_boards() == kept_boards
         and doc.RedoCount == 0,
         f"undo {doc.UndoNames}, {document_boards()} of {kept_boards} boards",
+    )
+    unpainted = [
+        obj.Name
+        for obj in doc.Objects
+        if has_board_properties(obj)
+        and tuple(
+            round(c * 255) for c in obj.ViewObject.ShapeAppearance[0].DiffuseColor[:3]
+        )
+        != painted_rgb
+    ]
+    check(
+        "added boards keep the copied color through Undo, Redo and OK",
+        not unpainted,
+        f"unpainted {unpainted}",
     )
     Gui.runCommand("Std_Undo")
     pump(300)

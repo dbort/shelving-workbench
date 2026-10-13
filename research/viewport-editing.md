@@ -429,6 +429,27 @@ view (`freecad/Shelving/spikes/`). It logs to
   nothing. Verified under Xvfb through `Std_Undo` and `Std_Redo`. One
   cost: OK and Cancel also undo any step the user made elsewhere in
   FreeCAD during the session, such as a property edit on another object.
+- **Reading the unit back after an Undo loses where new boards copy their
+  stock from.** The document does not record `Board.stock_from`, and OK's
+  rewrite recreates every board the session added, so after any Undo or
+  Redo those boards came back in FreeCAD's default grey instead of the
+  surrounding boards' color (the user's Woodworking magicStart unit). The
+  spike reads each added board's material, grain and appearance before
+  OK's undo and writes them onto the recreated boards. The real task
+  should avoid the round trip: keep the session's own unit per history
+  step, or make OK keep the session's objects.
+- **FreeCAD's Gui Redo can read a freed view provider.**
+  `Gui::Document::undo` records each view provider it recreates in
+  `_redoViewProviders`, and only `Gui::Document::redo` walks that list and
+  clears it (FreeCAD 1.1 and main). When an object an Undo brought back is
+  removed again and its step then leaves the history, which OK, Cancel and
+  every new edit after an Undo cause, its view provider is freed while
+  still listed, and the next Gui Redo in the document crashes FreeCAD. The
+  driver hit this as a segfault in `handleChildren3D`. After each Gui Undo
+  the spike runs a Gui Redo and takes it back at the App level, which
+  records nothing, so the list is empty again before anything can free
+  what it holds. Plain FreeCAD can hit the same bug, so it is worth an
+  upstream report.
 
 ### Requests for the real task
 
