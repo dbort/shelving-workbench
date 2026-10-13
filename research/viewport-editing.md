@@ -556,6 +556,24 @@ spike unless it carries a risk the spike can retire.
   dimension's text along the line, from a pool reused across the rebuilds
   a drag runs at every step; text width is estimated at 0.6 em per
   character.
+- **The camera turns to the unit as the Sketcher's does.** Opening the
+  edit animates the camera from wherever it is to face the unit's front,
+  so the user sees how the view relates to the model, then fits the unit
+  in view. The spike jumps there instead, with `setCamera`. The turn is
+  the Sketcher's own call: `ViewProviderSketch::setEditViewer` calls
+  `viewer->setCameraOrientation(rot)`, which rotates about the focal
+  point and animates when the user's `UseNavigationAnimations` preference
+  is on, and Python reaches the same function as
+  `view.setCameraOrientation(rotation)`. The Sketcher also pulls the
+  camera back first when the sketch plane would land in front of it.
+  Whether a fit after the turn can animate is for the task to find out;
+  a jump is acceptable there. On close, the camera goes back where it was
+  only when the Sketcher's "Restore camera position after editing"
+  preference (`Mod/Sketcher/General/RestoreCamera`, default on) is set,
+  and otherwise stays. The Sketcher restores with an instant `setCamera`
+  through TempoVis; the user asked for the return to animate, which needs
+  more than that single call and is the task's to design. No spike: the
+  turn is one call FreeCAD already makes for the Sketcher.
 - **The mouse wheel must not change a field it merely passes over.** Today
   scrolling the panel with the pointer over a size field changes the size,
   and the unit fields apply every wheel step at once. FreeCAD behaves this
