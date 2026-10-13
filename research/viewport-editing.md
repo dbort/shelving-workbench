@@ -429,6 +429,18 @@ view (`freecad/Shelving/spikes/`). It logs to
   nothing. Verified under Xvfb through `Std_Undo` and `Std_Redo`. One
   cost: OK and Cancel also undo any step the user made elsewhere in
   FreeCAD during the session, such as a property edit on another object.
+- **FreeCAD's history holds 20 steps, which one session can outgrow.**
+  The Gui document sets the limit from the `MaxUndoSize` preference
+  (default 20) when it is created, and Python has no way to change it on
+  an open document. Past the limit each new step drops the oldest, so a
+  session with more than about 20 edits loses its starting point: Cancel
+  then leaves the oldest surviving edits applied, OK leaves two history
+  steps, and an Undo past the start is no longer caught. The driver hit
+  this once the padlock checks pushed its session past 20 steps; it now
+  raises the preference before creating its document. The real task needs
+  a design for it, for instance folding the session's steps into one when
+  the history nears the limit, which gives up in-edit Undo of the oldest
+  ones, and counting from `UndoCount` no longer works once steps drop.
 - **Reading the unit back after an Undo loses where new boards copy their
   stock from.** The document does not record `Board.stock_from`, and OK's
   rewrite recreates every board the session added, so after any Undo or
@@ -473,17 +485,29 @@ spike unless it carries a risk the spike can retire.
   request worth a spike.
 - **Drag a middle opening:** dragging a bay between two shelves moves both
   shelves together, keeping its size; only those shelves, never a
-  neighboring divider. A new core edit.
+  neighboring divider. A new core edit. Locks apply as to a board drag
+  (below): the openings beyond both shelves must be unlocked.
 - **Open spaces edited in the view:** selecting, or double-clicking, an
   opening offers its width and height as on-view fields instead of the
   panel's size field.
-- **Unit size in the view:** dragging an outer board resizes the unit, and
-  the overall dimensions are clickable fields like the others.
+- **Unit size in the view:** the overall dimensions are clickable fields
+  like the others. A selected carcass board shows neither an arrow nor a
+  lock; the unit is resized through those fields and never by dragging an
+  outer board. The spike shows an arrow on the top and right carcass
+  boards, since each has an opening before it in its run.
 - **Delete removes the selected board,** under either picking mode.
   What deleting an outer board does is undecided: refuse it with a
   message, or remove that side of the carcass.
-- **Later:** select several parallel sibling boards and redistribute them
-  at a common spacing.
+- **Later, its own design pass:** spacing constraints beyond a lock per
+  opening. A group of shelves kept evenly spaced, so moving one moves
+  them all; two shelves on either side of a divider kept colinear, or with
+  their top or bottom faces level when their thicknesses differ. These tie
+  together openings that the solver now sizes independently, branch by
+  branch, so they belong with the roadmap's named values shared between
+  units, which is the same problem across units. Evenly spaced groups
+  also close the gap the lock model leaves: after drags, the unlocked
+  openings of a row can be uneven, and the user has no way to even them
+  out.
 - **Undo and Redo inside the edit,** stepping through the edits made
   since the panel opened (finding above).
 - **Add boards from the view:** with an opening selected, buttons over it
@@ -499,10 +523,39 @@ spike unless it carries a risk the spike can retire.
   dragging the upper one 50 mm moved the lower one 34 mm and landed the
   dragged one 34 mm short of the pointer. The user expects the openings on
   either side to change and nothing else to move. The spike's
-  `move_board_locally` also fixes the opening after the board, unless it
-  is the last opening in the run still sharing space, in which case it
-  takes up the move unaided. The main editor's drag has the same
-  behavior, and the real task changes the core edit and its tests.
+  `move_board_locally` implements the lock model below. The main editor's
+  drag has the same behavior, and the real task changes the core edit and
+  its tests.
+- **Locked and unlocked openings.** The user thinks of a `Fixed` opening
+  as locked and one that shares leftover space as unlocked; the
+  dimension colors already tell them apart. Decided with the user:
+  - A padlock beside each opening's dimension label, open or closed,
+    toggles it. Locking fixes the opening at its current size and
+    unlocking gives it the `Weighted` share that holds its current size,
+    so neither moves anything. Locking the last unlocked opening in a row
+    is refused with a message in the view, so a change to the unit's size
+    always has somewhere to go.
+  - Typing a size into an opening locks it, and the unlocked openings in
+    its row absorb the difference.
+  - A lock holds: a board can be dragged only when the openings on both
+    sides of it are unlocked, and the drag reweights those two so that no
+    other opening changes size. A drag never locks or unlocks anything.
+    Reweighting keeps the row's total weight: with `u` the size one unit
+    of weight gets, each neighbor's weight becomes its new size over `u`.
+  - A selected board held by a lock shows a padlock where its arrow would
+    be, and the locked opening or openings holding it are highlighted.
+    Clicking that padlock unlocks them in one Undo step, and the arrow
+    takes its place.
+  - Today the panel can fix a size but never set it back to sharing, and
+    weights never appear in the interface. The padlock is the only way
+    to unlock; weights stay hidden.
+  - An unlocked opening alone in its row shows no padlock, since it can
+    never lock.
+
+  The spike draws each padlock as a Qt tool button floating past its
+  dimension's text along the line, from a pool reused across the rebuilds
+  a drag runs at every step; text width is estimated at 0.6 em per
+  character.
 - **The mouse wheel must not change a field it merely passes over.** Today
   scrolling the panel with the pointer over a size field changes the size,
   and the unit fields apply every wheel step at once. FreeCAD behaves this
@@ -540,6 +593,12 @@ needed only for something that looks wrong.
    the first edit. After OK, does one Cmd-Z take back the whole session?
 10. Select an opening and use the two buttons over it. Is the preview
     clear, and do the buttons get in the way?
+11. Click padlocks to lock and unlock openings. Does anything move? Lock
+    the opening beside a shelf, select the shelf, and click the padlock
+    where its arrow was. Drag a shelf between two unlocked openings: does
+    anything else move? Do the padlocks sit clear of the text at every
+    zoom, and are they too many? Select a carcass board: no arrow, no
+    padlock.
 
 Copy `/tmp/shelving-viewport-spike.log` into the VM afterward.
 

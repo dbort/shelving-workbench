@@ -65,10 +65,11 @@ def check(name: str, ok: bool, detail: str = "") -> None:
 
 
 def main() -> None:
-    from freecad.Shelving.core.edit import EditError, _locate, region_before, run_axis
+    from freecad.Shelving.core.edit import _locate, run_axis
     from freecad.Shelving.core.layout import Bay, Board
     from freecad.Shelving.properties import has_board_properties, paint
     from freecad.Shelving.spikes import command
+    from freecad.Shelving.spikes.local_move import holders, is_locked
     from freecad.Shelving.spikes.spike_log import LOG_PATH
     from freecad.Shelving.spikes.viewport_editor import _walk, elevation_frame
     from freecad.Shelving.spikes.viewport_panel import SpikePanel
@@ -76,6 +77,12 @@ def main() -> None:
 
     assert command  # imported for its Gui.addCommand
     LOG_PATH.unlink(missing_ok=True)
+    # FreeCAD keeps 20 steps by default, fewer than this run's session
+    # makes; past the limit the session's start falls off the history and
+    # Cancel cannot reach it (research/viewport-editing.md).
+    FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Document").SetInt(
+        "MaxUndoSize", 100
+    )
     doc = FreeCAD.newDocument("Spike")
     bystander = doc.addObject("Part::Box", "Bystander")
     bystander.Placement.Base = FreeCAD.Vector(3000, 0, 0)
@@ -166,11 +173,7 @@ def main() -> None:
         return qt_point(editor._frame.to_global(x, y, z))
 
     def draggable(board) -> bool:
-        try:
-            region_before(session.unit, board.id)
-        except EditError:
-            return False
-        return board.id not in outer
+        return board.id not in outer and holders(session.unit, board.id) == ()
 
     # A divider and a shelf, so there are inner boards and several regions.
     session.select(nodes_of(Bay)[0].id)
@@ -251,6 +254,87 @@ def main() -> None:
         "dragging a shelf moves no other board",
         not shifted and session.spaces[second].origin != second_before,
         f"moved {shifted}; {second_before} -> {session.spaces[second].origin}",
+    )
+
+    # A lock holds the board beside it, and the board's padlock unlocks it.
+    check(
+        "a drag leaves its neighbors unlocked",
+        holders(session.unit, second) == (),
+        str(holders(session.unit, second)),
+    )
+
+    def padlock_for(region_id: str):
+        for button, label in zip(editor._padlocks, editor._labels, strict=False):
+            if label.region_id == region_id:
+                return button
+        return None
+
+    def run_regions() -> list:
+        parent, _index = _locate(session.unit.root, second)
+        return [item for item in parent.items if not isinstance(item, Board)]
+
+    parent, second_index = _locate(session.unit.root, second)
+    below_id = parent.items[second_index - 1].id
+    pump(GESTURE_GAP_MS)
+    button = padlock_for(below_id)
+    visible = [b for b in editor._padlocks if b.isVisible()]
+    check(
+        "a padlock beside each dimension",
+        button is not None
+        and len(visible) == sum(1 for label in editor._labels if label.lockable),
+        f"{len(visible)} padlocks, {len(editor._labels)} labels",
+    )
+    if button is not None:
+        QtTest.QTest.mouseClick(button, LEFT)
+        pump(300)
+    check(
+        "a padlock locks its opening",
+        holders(session.unit, second) == (below_id,),
+        str(holders(session.unit, second)),
+    )
+    check(
+        "a held board shows a padlock in place of its arrow",
+        editor._board_lock.isVisible() and editor._dragger_board is None,
+        f"selected {session.selected_id}",
+    )
+    QtTest.QTest.mouseClick(editor._board_lock, LEFT)
+    pump(300)
+    check(
+        "the board's padlock unlocks what holds it",
+        holders(session.unit, second) == () and editor._dragger_board == second,
+        str(holders(session.unit, second)),
+    )
+    for region in run_regions():
+        button = padlock_for(region.id)
+        if button is not None:
+            QtTest.QTest.mouseClick(button, LEFT)
+            pump(300)
+    locked = [region.id for region in run_regions() if is_locked(region)]
+    check(
+        "the last unlocked opening in a row cannot be locked",
+        len(locked) == len(run_regions()) - 1
+        and "edit refused: One opening in each row" in LOG_PATH.read_text(),
+        f"{len(locked)} of {len(run_regions())} locked",
+    )
+    for region_id in locked:
+        button = padlock_for(region_id)
+        if button is not None:
+            QtTest.QTest.mouseClick(button, LEFT)
+            pump(300)
+    check(
+        "padlocks unlock again",
+        not any(is_locked(region) for region in run_regions()),
+    )
+    if os.environ.get("SPIKE_SHOT"):
+        stem, ext = os.path.splitext(os.environ["SPIKE_SHOT"])
+        grab = main_window.grab()
+        grab.save(f"{stem}-padlocks{ext}")
+    session.select("top")
+    panel._refresh()
+    pump(300)
+    check(
+        "a carcass board shows neither arrow nor padlock",
+        editor._dragger_board is None and not editor._board_lock.isVisible(),
     )
 
     pump(GESTURE_GAP_MS)

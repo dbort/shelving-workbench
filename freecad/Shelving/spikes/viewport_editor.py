@@ -50,7 +50,7 @@ from freecad.Shelving.editor.scene import _apply_insets
 from freecad.Shelving.editor.session import EditFailure, Session, SplitDirection
 from freecad.Shelving.refusals import report_error
 from freecad.Shelving.spikes.edit_history import EditHistory
-from freecad.Shelving.spikes.local_move import drag_to_locally
+from freecad.Shelving.spikes.local_move import drag_to_locally, holders, set_locks
 from freecad.Shelving.spikes.spike_log import log
 
 # FreeCAD imports a module once per process, so a test session on code
@@ -73,6 +73,9 @@ _LABEL_HIT_PX = 24
 _DRAGGER_FRACTION = 0.04
 # The add buttons' icon side, in logical pixels.
 _ICON_PX = 24
+# A padlock's icon side, in logical pixels, and its gap from the text.
+_PADLOCK_PX = 14
+_PADLOCK_GAP_PX = 4
 
 _BAY_RGB = (0.85, 0.85, 0.85)
 _VOID_RGB = (0.6, 0.6, 0.6)
@@ -273,6 +276,12 @@ class _Label:
     region_id: str
     mid_h_mm: float
     mid_v_mm: float
+    text: str
+    # Whether the dimension line runs along the elevation's horizontal.
+    horizontal: bool
+    locked: bool
+    # False for an unlocked opening alone in its row, which can never lock.
+    lockable: bool
 
 
 class _AddBar(QtWidgets.QFrame):
@@ -351,6 +360,54 @@ def _board_icon(direction: SplitDirection, ratio: float) -> QtGui.QIcon:
     painter.fillRect(bar, QtGui.QColor.fromRgbF(*_SELECTED_RGB))
     painter.end()
     return QtGui.QIcon(pixmap)
+
+
+def _padlock_icon(locked: bool, ratio: float) -> QtGui.QIcon:
+    """A padlock, closed and in the driving dimension color when ``locked``,
+    open and in the reporting color otherwise."""
+    side = _PADLOCK_PX
+    pixmap = QtGui.QPixmap(round(side * ratio), round(side * ratio))
+    pixmap.setDevicePixelRatio(ratio)
+    pixmap.fill(QtCore.Qt.GlobalColor.transparent)
+    painter = QtGui.QPainter(pixmap)
+    painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+    color = QtGui.QColor.fromRgbF(*(_DRIVING_RGB if locked else _REPORTING_RGB))
+    pen = QtGui.QPen(color)
+    pen.setWidthF(1.6)
+    painter.setPen(pen)
+    body = QtCore.QRectF(2, side * 0.45, side - 4, side * 0.5)
+    shackle = QtCore.QRectF(4, 1.5, side - 8, side * 0.6)
+    if not locked:
+        # Swung open: lifted clear of the body on one side.
+        shackle.translate(side * 0.18, -1)
+    painter.drawArc(shackle, 0, 180 * 16)
+    painter.drawLine(
+        QtCore.QPointF(shackle.right(), shackle.center().y()),
+        QtCore.QPointF(shackle.right(), body.top()),
+    )
+    if locked:
+        painter.drawLine(
+            QtCore.QPointF(shackle.left(), shackle.center().y()),
+            QtCore.QPointF(shackle.left(), body.top()),
+        )
+    painter.fillRect(body, color)
+    painter.end()
+    return QtGui.QIcon(pixmap)
+
+
+def _padlock_button(parent: QtWidgets.QWidget | None) -> QtWidgets.QToolButton:
+    button = QtWidgets.QToolButton(parent)
+    button.setAutoRaise(True)
+    button.setIconSize(QtCore.QSize(_PADLOCK_PX, _PADLOCK_PX))
+    button.setFixedSize(_PADLOCK_PX + 4, _PADLOCK_PX + 4)
+    button.setStyleSheet("QToolButton { border: none; padding: 0; }")
+    button.hide()
+    return button
+
+
+def _bind_index(on_click: Callable[[int], None], index: int) -> Callable[[], None]:
+    """:func:`_bind` for a pool slot."""
+    return lambda: on_click(index)
 
 
 class _FieldKeys(QtCore.QObject):
@@ -504,6 +561,15 @@ class ViewportEditor:
         # The split the button under the pointer would make, drawn as the
         # board it adds.
         self._preview: SplitDirection | None = None
+        # One padlock per dimension label, pooled across rebuilds, which a
+        # drag runs at every motion step.
+        self._padlocks: list[QtWidgets.QToolButton] = []
+        self._board_lock = _padlock_button(self._viewer.parentWidget())
+        self._board_lock.setIcon(_padlock_icon(True, self._viewer.devicePixelRatioF()))
+        self._board_lock.clicked.connect(self._unlock_holders)
+        self._board_lock_anchor: tuple[float, float] | None = None
+        # The locked openings holding the selected board in place.
+        self._holder_ids: tuple[str, ...] = ()
         self._camera_sensor: _Coin = None
         self._gate = _BoardGate(self)
         self._observer = _SelectionObserver(self)
@@ -639,6 +705,10 @@ class ViewportEditor:
         self._close_field("editor closed")
         self._add_bar.hide()
         self._add_bar.deleteLater()
+        for button in (*self._padlocks, self._board_lock):
+            button.hide()
+            button.deleteLater()
+        self._padlocks = []
         self.set_hide_others(False)
         for kind, callback in self._dragger_callbacks:
             self.view.removeDraggerCallback(self._dragger, kind, callback)
@@ -765,6 +835,7 @@ class ViewportEditor:
             self._place_field()
         if self._add_anchor is not None:
             self._move_to_anchor(self._add_bar, self._add_anchor)
+        self._place_padlocks()
         if self._dragging or self._closed:
             return
         camera = self.view.getCameraNode()
@@ -819,6 +890,7 @@ class ViewportEditor:
         if not self._dragging:
             self._rebuild_dragger()
             self._place_add_bar()
+        self._place_padlocks()
         if self._field_host is not None:
             self._place_field()
         elapsed_ms = (time.perf_counter() - start_s) * 1000
@@ -856,6 +928,7 @@ class ViewportEditor:
         for layer in (fills, outlines, dimensions):
             content.addChild(layer)
         self._labels = []
+        self._holder_ids = self._selected_holders()
         outer_rows: _OuterRows = {}
         for node, depth, division_axis in _walk(session.unit.root):
             space = session.spaces.get(node.id)
@@ -870,6 +943,8 @@ class ViewportEditor:
                     )
                 continue
             is_selected = node.id == selected
+            if node.id in self._holder_ids:
+                outlines.addChild(_outline(frame.rect(space), z_mm, _DRIVING_RGB, 3.0))
             if isinstance(node, Bay | Void):
                 rgb = _VOID_RGB if isinstance(node, Void) else _BAY_RGB
                 fills.addChild(
@@ -995,6 +1070,7 @@ class ViewportEditor:
         across = (
             frame.vertical if run_is_horizontal else frame.horizontal
         ).component_index
+        openings = sum(1 for item in division.items if not isinstance(item, Board))
         for index, item in enumerate(division.items):
             if isinstance(item, Board):
                 continue
@@ -1046,12 +1122,13 @@ class ViewportEditor:
             else:
                 rgb = _REPORTING_RGB
             length_mm = high_mm - low_mm
+            text = f"{length_mm:.2f}".rstrip("0").rstrip(".")
             content.addChild(
                 _datum_label(
                     p1,
                     p2,
                     z_mm,
-                    f"{length_mm:.2f}".rstrip("0").rstrip("."),
+                    text,
                     rgb,
                     # The front face's normal on either face: the node
                     # flips the text itself when seen from behind, as the
@@ -1068,6 +1145,10 @@ class ViewportEditor:
                     item.id,
                     p1[0] + along_fraction * (p2[0] - p1[0]),
                     p1[1] + along_fraction * (p2[1] - p1[1]),
+                    text,
+                    run_is_horizontal,
+                    isinstance(item.rule, Fixed),
+                    isinstance(item.rule, Fixed) or openings > 1,
                 )
             )
 
@@ -1105,13 +1186,27 @@ class ViewportEditor:
         self._dragger_switch.whichChild.setValue(coin.SO_SWITCH_NONE)
         self._dragger_board = None
 
-    def _rebuild_dragger(self) -> None:
-        """Put the arrow on the selected board, along its run, when it has a
-        region before it to resize; hide it otherwise."""
-        self._hide_dragger()
+    def _selected_holders(self) -> tuple[str, ...]:
         session = self._host.session
         board_id = session.selected_id
         if board_id is None or not session.can_merge():
+            return ()
+        return holders(session.unit, board_id) or ()
+
+    def _rebuild_dragger(self) -> None:
+        """Put the arrow on the selected board, along its run, when it has an
+        unlocked opening on each side; put a padlock there instead when a
+        locked one holds it; show neither otherwise, as on a carcass
+        board."""
+        self._hide_dragger()
+        self._board_lock.hide()
+        self._board_lock_anchor = None
+        session = self._host.session
+        board_id = session.selected_id
+        if board_id is None or not session.can_merge():
+            return
+        held_by = holders(session.unit, board_id)
+        if held_by is None:
             return
         from freecad.Shelving.core.edit import EditError, region_before, run_axis
 
@@ -1145,6 +1240,12 @@ class ViewportEditor:
         else:
             arrow_h = (h0 + h1) / 2
             arrow_v = bv0 + 2 / 3 * (bv1 - bv0) + beside_mm
+        if held_by:
+            self._board_lock_anchor = (arrow_h, arrow_v)
+            self._board_lock.setToolTip("Unlock the openings holding this board")
+            self._board_lock.show()
+            self._board_lock.raise_()
+            return
         placement.translation.setValue(arrow_h, arrow_v, self._z_sign * 4 * _LIFT_MM)
         angle = math.pi / 2 if axis == self._frame.vertical else 0.0
         placement.rotation.setValue(coin.SbVec3f(0, 0, 1), angle)
@@ -1160,6 +1261,71 @@ class ViewportEditor:
             center.z_mm + space.size.z_mm / 2,
         )
         self._run_index = axis.component_index
+
+    # Padlocks
+
+    def _place_padlocks(self) -> None:
+        """One padlock just past each dimension's text along its line, and
+        the board's padlock at its arrow's place."""
+        if self._closed:
+            return
+        parent = self._viewer.parentWidget()
+        ratio = self._viewer.devicePixelRatioF()
+        while len(self._padlocks) < len(self._labels):
+            button = _padlock_button(parent)
+            button.clicked.connect(_bind_index(self._toggle_lock, len(self._padlocks)))
+            self._padlocks.append(button)
+        # SoDatumLabel's text, at about 0.6 em per character.
+        char_px = 0.6 * _label_font_px(self._viewer)
+        for button, label in zip(self._padlocks, self._labels, strict=False):
+            if not label.lockable:
+                button.hide()
+                continue
+            icon_key = "locked" if label.locked else "unlocked"
+            if button.property("icon_key") != icon_key:
+                button.setIcon(_padlock_icon(label.locked, ratio))
+                button.setProperty("icon_key", icon_key)
+            button.setToolTip(
+                "Unlock this opening" if label.locked else "Lock this opening"
+            )
+            reach_px = (
+                len(label.text) * char_px / 2 + _PADLOCK_GAP_PX + button.width() / 2
+            )
+            shift = (reach_px, 0.0) if label.horizontal else (0.0, -reach_px)
+            self._move_to_anchor(button, (label.mid_h_mm, label.mid_v_mm), shift)
+            button.show()
+            button.raise_()
+        for button in self._padlocks[len(self._labels) :]:
+            button.hide()
+        if self._board_lock_anchor is not None:
+            self._move_to_anchor(self._board_lock, self._board_lock_anchor)
+            self._board_lock.raise_()
+
+    def _toggle_lock(self, index: int) -> None:
+        if index >= len(self._labels):
+            return
+        label = self._labels[index]
+        locked = not label.locked
+        name = "Lock opening" if locked else "Unlock opening"
+        log(f"padlock: {name} {label.region_id}")
+        session = self._host.session
+        self._host.run_edit(
+            name, lambda: self._report(set_locks(session, [label.region_id], locked))
+        )
+
+    def _unlock_holders(self) -> None:
+        held_by = self._holder_ids
+        log(f"board padlock: unlock {held_by}")
+        session = self._host.session
+        self._host.run_edit(
+            "Unlock board", lambda: self._report(set_locks(session, held_by, False))
+        )
+
+    @staticmethod
+    def _report(failure: EditFailure | None) -> EditFailure | None:
+        if failure is not None:
+            report_error(failure.message)
+        return failure
 
     # Dragging
 
@@ -1438,10 +1604,13 @@ class ViewportEditor:
         self._move_to_anchor(host, anchor)
 
     def _move_to_anchor(
-        self, host: QtWidgets.QWidget, anchor: tuple[float, float]
+        self,
+        host: QtWidgets.QWidget,
+        anchor: tuple[float, float],
+        shift_px: tuple[float, float] = (0.0, 0.0),
     ) -> None:
         """Center ``host``, a child of the viewer's parent, on the frame point
-        ``anchor``."""
+        ``anchor``, moved by ``shift_px`` logical pixels."""
         raw = self.view.getPointOnViewport(self._frame.to_global(*anchor))
         ratio = self._viewer.devicePixelRatioF()
         height_px = self.view.getSize()[1]
@@ -1450,7 +1619,10 @@ class ViewportEditor:
         )
         parent = host.parentWidget()
         in_parent = self._viewer.mapTo(parent, local) if parent is not None else local
-        host.move(in_parent.x() - host.width() // 2, in_parent.y() - host.height() // 2)
+        host.move(
+            round(in_parent.x() + shift_px[0]) - host.width() // 2,
+            round(in_parent.y() + shift_px[1]) - host.height() // 2,
+        )
 
     def _field_size(self, size_mm: float) -> None:
         # Return applies, then the close's focus-out finishes the same edit
@@ -1527,15 +1699,20 @@ def _coin_destroys_draggers_safely() -> bool:
     return (major, minor, patch) >= (4, 0, 4)
 
 
+def _label_font_px(viewer: QtWidgets.QWidget) -> int:
+    """The Sketcher's dimension font size, in logical pixels."""
+    params = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/View")
+    default_px = QtGui.QFontInfo(QtWidgets.QApplication.font()).pixelSize()
+    return params.GetInt("EditSketcherFontSize", default_px)
+
+
 def _label_size_pt(viewer: QtWidgets.QWidget) -> int:
     """The dimension text size the Sketcher would use on ``viewer``'s
     screen. ``SoDatumLabel`` takes points and renders in device pixels, so
     the Sketcher scales its pixel font size by the device pixel ratio and
     converts at the screen's logical DPI (EditModeCoinManager, FreeCAD 1.1);
     a fixed point size reads half as large on a Retina Mac."""
-    params = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/View")
-    default_px = QtGui.QFontInfo(QtWidgets.QApplication.font()).pixelSize()
-    font_px = params.GetInt("EditSketcherFontSize", default_px)
+    font_px = _label_font_px(viewer)
     dpi = viewer.screen().logicalDotsPerInchX() or 96.0
     return max(1, round(font_px * viewer.devicePixelRatioF() * 72.0 / dpi))
 
