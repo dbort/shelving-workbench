@@ -60,8 +60,6 @@ _LIFT_MM = 0.5
 _CLICK_SLOP_PX = 4
 # How close to a dimension's text a click must land to open its field.
 _LABEL_HIT_PX = 24
-# The datum labels' text size, in points.
-_LABEL_SIZE_PT = 12
 # The dragger's length as a fraction of the unit's larger elevation side.
 _DRAGGER_FRACTION = 0.04
 
@@ -297,6 +295,7 @@ class ViewportEditor:
         self.view = gui_doc.ActiveView
         self._viewer = self.view.graphicsView()
         self._frame = elevation_frame(session.unit, session.container)
+        self._label_size_pt = _label_size_pt(self._viewer)
         self.selection_mode: SelectionMode = "ours"
         self.on_top = False
         self._closed = False
@@ -396,6 +395,7 @@ class ViewportEditor:
             f"dpr {screen.devicePixelRatio()}"
         )
         log(f"navigation style: {self.view.getNavigationType()}")
+        log(f"dimension text: {self._label_size_pt} pt, sized as the Sketcher's")
         log(
             f"Coin {coin.SoDB.getVersion()}, destroys draggers safely: "
             f"{_coin_destroys_draggers_safely()}"
@@ -703,6 +703,7 @@ class ViewportEditor:
                     f"{high_mm - low_mm:.2f}".rstrip("0").rstrip("."),
                     _SELECTED_RGB if selected else _LABEL_RGB,
                     frame.placement.Rotation.multVec(FreeCAD.Vector(0, 0, 1)),
+                    self._label_size_pt,
                 )
             )
             self._labels.append(
@@ -1071,6 +1072,19 @@ def _coin_destroys_draggers_safely() -> bool:
     return (major, minor, patch) >= (4, 0, 4)
 
 
+def _label_size_pt(viewer: QtWidgets.QWidget) -> int:
+    """The dimension text size the Sketcher would use on ``viewer``'s
+    screen. ``SoDatumLabel`` takes points and renders in device pixels, so
+    the Sketcher scales its pixel font size by the device pixel ratio and
+    converts at the screen's logical DPI (EditModeCoinManager, FreeCAD 1.1);
+    a fixed point size reads half as large on a Retina Mac."""
+    params = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/View")
+    default_px = QtGui.QFontInfo(QtWidgets.QApplication.font()).pixelSize()
+    font_px = params.GetInt("EditSketcherFontSize", default_px)
+    dpi = viewer.screen().logicalDotsPerInchX() or 96.0
+    return max(1, round(font_px * viewer.devicePixelRatioF() * 72.0 / dpi))
+
+
 def _box_error_mm(a: FreeCAD.BoundBox, b: FreeCAD.BoundBox) -> float:
     return max(
         abs(a.XMin - b.XMin),
@@ -1146,6 +1160,7 @@ def _datum_label(
     text: str,
     rgb: tuple[float, float, float],
     normal: FreeCAD.Vector,
+    size_pt: int,
 ) -> _Coin:
     label = coin.SoType.fromName("SoDatumLabel").createInstance()
     label.getField("pnts").setValues(0, 2, [[p1[0], p1[1], z_mm], [p2[0], p2[1], z_mm]])
@@ -1154,7 +1169,7 @@ def _datum_label(
     label.getField("norm").setValue(normal.x, normal.y, normal.z)
     label.getField("string").setValue(text)
     label.getField("textColor").setValue(*rgb)
-    label.getField("size").setValue(_LABEL_SIZE_PT)
+    label.getField("size").setValue(size_pt)
     label.getField("lineWidth").setValue(1.5)
     group = coin.SoSeparator()
     material = coin.SoMaterial()

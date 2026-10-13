@@ -266,13 +266,14 @@ key events into the 3D view. "Retired" means the driver showed it working;
 |---|---|---|
 | 1 | Board drag through a dragger works in each navigation style, outside edit mode | Retired for CAD, Gesture, Touchpad and OpenSCAD, and on the user's Mac trackpad with Touchpad navigation. OpenInventor works with Ctrl held, which is how that style selects anyway |
 | 2 | Clicks reach our callback; native selection can be switched off from pivy, or gated to the unit | Retired for both picking modes. `getObjectInfo` names the board through the container (`SubName` `Board001.Face3`) |
-| 3 | The floating `QuantitySpinBox` lands on its label on a HiDPI screen and keeps focus; Return and Escape leave the task dialog open | Return and Escape retired. On the user's Retina Mac `getSize` reported device pixels (2880 by 1122 for a 1440 by 561 widget at ratio 2), as the placement math assumes. Where the field lands, and focus, still need the user's eye |
+| 3 | The floating `QuantitySpinBox` lands on its label on a HiDPI screen and keeps focus; Return and Escape leave the task dialog open | Retired on the user's Retina Mac: the field opened on its label, took typing at once, and applied on Return. `getSize` reports device pixels (2880 by 1122 for a 1440 by 561 widget at ratio 2), as the placement math assumes. The f(x) formula button is untested |
 | 4 | The overlay neither z-fights with board faces nor shows through solids when orbited | Renders correctly from the front, depth-tested and on top. From behind open: the eye judges it faster than a script |
 | 5 | Drag stays smooth | On the user's Mac: solve and write 8.5 ms a step on average, 40 ms at worst, redraw under 2 ms, over drags of 60 to 150 steps on a default unit. Large units open |
-| 6 | Hiding other objects and restoring them leaves `Visibility` and the undo stack untouched | Retired: undo names unchanged, visibility restored |
+| 6 | Hiding other objects and restoring them leaves `Visibility` and the undo stack untouched | Retired, also on the user's own document: 13 objects hidden and restored on both OK and Cancel, undo names unchanged |
 | 7 | The overlay follows a moved, rotated container | Retired at 0 and 30 degrees: 0.0000 mm between each board's solid and its overlay. Nested containers untested |
 | 8 | Bay and void hit-testing from a 3D ray | Retired |
 | 9 | Camera save, front framing, restore | Retired: restored exactly, apart from the near and far planes Coin recomputes on every render |
+| 10 | Dimension text is legible | Open. At a fixed 12 pt the user could not read it on a Retina Mac, zoomed or not (labels keep their screen size, as the Sketcher's do). The spike now sizes it as the Sketcher does; the user's eye decides |
 
 ## The spike
 
@@ -326,6 +327,14 @@ view (`freecad/Shelving/spikes/`). It logs to
   Label placement and hit priority need design.
 - **OpenInventor navigation** consumes the press of the first Ctrl+click,
   so only its release arrives.
+- **Escape in the 3D view is harmless.** With no field open it reaches the
+  spike's key callback and the task dialog stays open.
+- **Dimension text must be sized as the Sketcher sizes it.** `SoDatumLabel`
+  takes points and renders in device pixels. The Sketcher reads the View
+  preference `EditSketcherFontSize` (default: the application font's pixel
+  size), multiplies by the device pixel ratio and converts at the screen's
+  logical DPI (`EditModeCoinManager`, FreeCAD 1.1). A fixed size reads half
+  as large on a Retina Mac.
 - **Destroying a dragger that has been dragged crashes FreeCAD on macOS.**
   The first drag makes Coin's `SoDragger::getViewVolume` create an
   `SoCallbackAction` with callbacks for two node types, which leaves null
@@ -338,6 +347,40 @@ view (`freecad/Shelving/spikes/`). It logs to
   for the whole session, moves and hides it instead of rebuilding it, and
   on Coin before 4.0.4 never lets it be destroyed, leaking one small
   dragger per session. The real editor needs the same rule.
+
+### Requests for the real task
+
+From the user's notes during the second laptop session. None needs the
+spike unless it carries a risk the spike can retire.
+
+- **Legible dimensions** at any zoom (risk 10 above).
+- **Arrows clear of dimension lines:** offset the drag arrow so it does
+  not sit on the dimension it changes.
+- **Typed moves and a step size,** styled as close to FreeCAD's own
+  transform and gizmo arrows as possible: select a movable board, type the
+  distance to move it, and set the drag increment. FreeCAD's
+  `SoLinearDragger` has `translationIncrement` and `label` fields for
+  exactly this and can be created from Python, but its C++ gizmo wiring
+  cannot. Whether that node behaves when driven from Python is the one
+  request worth a spike.
+- **Drag a middle opening:** dragging a bay between two shelves moves both
+  shelves together, keeping its size; only those shelves, never a
+  neighboring divider. A new core edit.
+- **Open spaces edited in the view:** selecting, or double-clicking, an
+  opening offers its width and height as on-view fields instead of the
+  panel's size field.
+- **Unit size in the view:** dragging an outer board resizes the unit, and
+  the overall dimensions are clickable fields like the others.
+- **Later:** select several parallel sibling boards and redistribute them
+  at a common spacing.
+- **The mouse wheel must not change a field it merely passes over.** Today
+  scrolling the panel with the pointer over a size field changes the size,
+  and the unit fields apply every wheel step at once. FreeCAD behaves this
+  way by default: its `WheelEventFilter` (ignore the wheel on combo boxes
+  and unfocused spin boxes) is opt-in through the hidden parameter
+  `BaseApp/Preferences/General/ComboBoxWheelEventFilter`, read at startup.
+  The panel can install the same filter on its own fields. This affects
+  the panel on `main` too.
 
 ### Testing on your laptop
 
@@ -365,9 +408,14 @@ Copy `/tmp/shelving-viewport-spike.log` into the VM afterward.
 
 ## Suggested next steps
 
-1. Run the laptop test above and bring the log back.
-2. Fold the answers into this document, then plan design A with
-   `/new-task`, carrying the findings above into its `## Advice`.
+Laptop sessions so far settled items 1, 2, 3, 6 and 7 of the list above.
+
+1. Recheck the dimension text size (risk 10), the f(x) button, and give a
+   verdict on items 4, 5 and 8.
+2. Optionally, spike FreeCAD's `SoLinearDragger` in place of
+   `SoTranslate1Dragger` to retire the typed-move and step-size request.
+3. Plan design A with `/new-task`, carrying the findings and requests
+   above into its `## Advice`.
 3. Before this branch merges, delete `freecad/Shelving/spikes/`, the
    toolbar lines in `init_gui.py`, the spike line in
    `.claude/docs/code-map.md`, and `research/spikes/`.
