@@ -102,8 +102,20 @@ bug-009. Milestone M14.
       `.claude/docs/bug-log.md`; `README.md`, `docs/scope-and-design.md`,
       `.claude/docs/code-map.md` and `freecad/Shelving/editor/__init__.py`
       describe the editor in the 3D view.
+- [ ] The panel's size fields bind no temporary object: after a session
+      that used an f(x) expression, Close adds no undo step and leaves no
+      object behind, and `Std_Undo` after Close steps back exactly one
+      edit.
 
 ## Advice
+
+RE-PLAN NOTES (from sh-039, 2026-10-13): the editor's edits stay as their
+own undo steps and the panel's only button is Close, so plan against
+Close where this file says OK or Cancel. FreeCAD's f(x) dialog records its
+binding as a step of its own, so a field bound to sh-039's temporary probe
+object leaves a "Remove Shelving Dimension" step at Close; bind the slim
+panel's size fields to properties of a real object, as FreeCAD's own task
+panels do, so there is no temporary object.
 
 DECISIONS (user, 2026-10-12 and 2026-10-13, in the viewport-editing
 research; `06d20ab:research/viewport-editing.md` on branch

@@ -32,9 +32,11 @@ an open panel (bug-015). Milestone M14.
       removes the unit or leaves it unreadable (Create Unit undone), the
       panel closes, and `Std_Redo` then works as it does without a panel.
 - [ ] The panel's only button is Close. Close leaves each edit as its own
-      undo step, removes the probe object without adding a step, and
-      leaves the Redo list as it was; `Std_Undo` after Close steps back
-      exactly one edit. A session that made no edit, or only clicks and
+      undo step, removes the probe object without adding a step unless a
+      step changed it (an f(x) binding does; Close then removes it in a
+      "Remove Shelving Dimension" step), and leaves the Redo list as it
+      was; in a session that used no f(x), `Std_Undo` after Close steps
+      back exactly one edit. A session that made no edit, or only clicks and
       refused edits, leaves the undo and Redo lists as it found them.
 - [ ] A shelf added beside a board whose color and material were set
       keeps that color and material through an Undo and Redo of a later
@@ -65,6 +67,11 @@ DECISIONS (user, 2026-10-13):
 - **Close only, no Cancel**, as Sketcher's edit mode: the user takes edits
   back with Cmd-Z. sh-040 and sh-031 plan around Cancel and need
   re-planning against Close.
+- **The f(x) probe step is accepted here and fixed in sh-040** (user,
+  2026-10-13): a session that used f(x) ends with a "Remove Shelving
+  Dimension" step, so the first Cmd-Z after Close revives the temporary
+  object. sh-040, which replaces this panel, binds its size fields to
+  properties of a real object instead.
 - **No floor, as Sketcher:** Undo and Redo during a session go wherever
   FreeCAD's history takes them, and the panel follows by rescanning; when
   the unit is gone or no longer reads, the panel closes, as Sketcher's
