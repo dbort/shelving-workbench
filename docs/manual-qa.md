@@ -1,10 +1,12 @@
 # Manual QA
 
-Checks a human runs in the FreeCAD GUI, because they need a real display:
-toolbar and task-panel wiring, notification popups, the 3D view following
-an edit, and what an elevation looks like. Anything a test can assert
-belongs in `tests/freecad/` or `tests/freecad_gui/` instead; when a case
-becomes automatable, move it there and delete its case file entry.
+Checks a human runs in the FreeCAD GUI, because no test can judge them:
+how a notification popup reads, what an elevation looks like, how
+navigating and dragging feel on a real trackpad, and anything that depends
+on a HiDPI screen or the macOS build. Anything a test can assert belongs in
+`tests/freecad/`, `tests/freecad_gui/`, or, when it needs the 3D view,
+`tests/freecad_view/`; when a case becomes automatable, move it there and
+delete its case file entry.
 
 Each case is a sequence of steps, each with an expected result, written
 for someone who did not build the feature.

@@ -1,12 +1,14 @@
 """Which pytest runs may collect the FreeCAD test directories.
 
-``tests/freecad/`` starts FreeCAD headless and ``tests/freecad_gui/``
-starts its GUI, each from its ``conftest.py``'s ``pytest_sessionstart``.
-Neither can share a process with the other or with the FreeCAD-free core
-suite: the core tests that check ``FreeCADGui`` stays unloaded fail once
-either has started, and a running GUI changes the headless tests' FreeCAD
-(``ViewObject`` stops being ``None``). So each is collected only by a run
-aimed entirely inside it; ``tests/conftest.py`` applies that rule.
+``tests/freecad/`` starts FreeCAD headless, ``tests/freecad_gui/`` starts
+its GUI offscreen, and ``tests/freecad_view/`` starts it on an X display,
+each from its ``conftest.py``'s ``pytest_sessionstart``. None can share a
+process with another or with the FreeCAD-free core suite: the core tests
+that check ``FreeCADGui`` stays unloaded fail once any has started, a
+running GUI changes the headless tests' FreeCAD (``ViewObject`` stops being
+``None``), and Qt's platform is fixed when the GUI starts. So each is
+collected only by a run aimed entirely inside it; ``tests/conftest.py``
+applies that rule.
 """
 
 from collections.abc import Sequence
@@ -17,6 +19,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 FREECAD_DIRS: tuple[Path, ...] = (
     _REPO_ROOT / "tests" / "freecad",
     _REPO_ROOT / "tests" / "freecad_gui",
+    _REPO_ROOT / "tests" / "freecad_view",
 )
 
 

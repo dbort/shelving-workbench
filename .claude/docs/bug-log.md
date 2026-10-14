@@ -75,7 +75,9 @@ log happens only when the user asks.
   29 s later, so some ancestor held the form hidden. On the user's 1.1.1 the
   Tasks panel docks in overlay mode, and `Gui::OverlayTabWidget
   'OverlayRight'` is a hidden ancestor after `showDialog`; an overlay panel
-  can auto-hide until hovered, so it is the leading suspect.
+  can auto-hide until hovered, so it is the leading suspect. A fresh
+  FreeCAD 1.1.3 profile docks Tasks there too: under Xvfb (sh-037) the
+  dialog's buttons stay hidden inside `OverlayRight` until hovered.
   `AncestorWatch` in `editor/panel.py` logs the hidden ancestors. Fix:
   `ad hoc`, once a slow run's log confirms the ancestor: raise the overlay
   through FreeCAD's API, or document the setting.

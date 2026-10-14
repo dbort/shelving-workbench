@@ -9,8 +9,9 @@ pytest upgrade changed either, a mixed run would start FreeCAD again and
 hang, so every run here has a timeout and uses ``--collect-only``, which
 still runs each conftest's ``pytest_sessionstart``. Each run reports, after
 pytest returns, the state a FreeCAD start leaves behind: ``XDG_CONFIG_HOME``
-pointing at a throwaway settings tree (both directories' startups set it),
-and ``FreeCADGui`` loaded, which in a mixed run only the GUI startup does.
+pointing at a throwaway settings tree (every directory's startup sets it),
+and ``FreeCADGui`` loaded, which in a mixed run only the GUI and 3D-view
+startups do.
 """
 
 import json
@@ -26,6 +27,7 @@ _ROOT = Path(__file__).resolve().parent.parent
 _TIMEOUT_S = 120
 _HEADLESS_NOTE = "skipped tests/freecad/:"
 _GUI_NOTE = "skipped tests/freecad_gui/:"
+_VIEW_NOTE = "skipped tests/freecad_view/:"
 _STATE_PREFIX = "RUN STATE "
 
 # Runs pytest in the child process, then prints what FreeCAD's startup would
@@ -46,7 +48,7 @@ sys.exit(int(code))
 class _Run:
     returncode: int
     output: str
-    # Whether either FreeCAD directory's startup ran: it points
+    # Whether any FreeCAD directory's startup ran: it points
     # XDG_CONFIG_HOME at a fresh tree under the run's own temp directory.
     settings_isolated: bool
     freecadgui_loaded: bool
@@ -86,20 +88,26 @@ def _freecad_node_ids(output: str) -> list[str]:
     return [
         line
         for line in output.splitlines()
-        if line.startswith(("tests/freecad/", "tests/freecad_gui/"))
+        if line.startswith(
+            ("tests/freecad/", "tests/freecad_gui/", "tests/freecad_view/")
+        )
     ]
 
 
 @pytest.mark.parametrize(
     ("targets", "notes"),
     [
-        ((), (_HEADLESS_NOTE, _GUI_NOTE)),
-        (("tests",), (_HEADLESS_NOTE, _GUI_NOTE)),
+        ((), (_HEADLESS_NOTE, _GUI_NOTE, _VIEW_NOTE)),
+        (("tests",), (_HEADLESS_NOTE, _GUI_NOTE, _VIEW_NOTE)),
         (
             ("tests/freecad", "tests/freecad_gui", "tests/test_collection.py"),
             (_HEADLESS_NOTE, _GUI_NOTE),
         ),
         (("tests/freecad_gui/test_panel.py", "tests/test_collection.py"), (_GUI_NOTE,)),
+        (
+            ("tests/freecad_view/test_view_driver.py", "tests/test_collection.py"),
+            (_VIEW_NOTE,),
+        ),
     ],
 )
 def test_a_mixed_run_starts_no_freecad_and_says_so(
@@ -108,7 +116,7 @@ def test_a_mixed_run_starts_no_freecad_and_says_so(
     run = _collect(tmp_path, *targets)
     assert run.returncode == 0, run.output
     assert _freecad_node_ids(run.output) == []
-    for note in (_HEADLESS_NOTE, _GUI_NOTE):
+    for note in (_HEADLESS_NOTE, _GUI_NOTE, _VIEW_NOTE):
         assert (note in run.output) == (note in notes), run.output
     assert not run.settings_isolated, run.output
     assert not run.freecadgui_loaded, run.output
@@ -117,12 +125,17 @@ def test_a_mixed_run_starts_no_freecad_and_says_so(
 
 def test_ignored_directories_are_left_out_without_a_note(tmp_path: Path) -> None:
     run = _collect(
-        tmp_path, "tests", "--ignore=tests/freecad", "--ignore=tests/freecad_gui"
+        tmp_path,
+        "tests",
+        "--ignore=tests/freecad",
+        "--ignore=tests/freecad_gui",
+        "--ignore=tests/freecad_view",
     )
     assert run.returncode == 0, run.output
     assert _freecad_node_ids(run.output) == []
     assert _HEADLESS_NOTE not in run.output
     assert _GUI_NOTE not in run.output
+    assert _VIEW_NOTE not in run.output
     assert not run.settings_isolated
 
 

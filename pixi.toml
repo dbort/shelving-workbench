@@ -22,11 +22,18 @@ shellcheck = "*"
 # Parses tasks/*/*.md frontmatter in tools/task_status.py.
 pyyaml = ">=6.0.3,<7"
 types-pyyaml = ">=6.0.12.20260906,<7"
+# The X server tests/freecad_view/ runs FreeCAD's 3D view on
+# (tools/xvfb_run.py): Xvfb refuses to start without a keymap, and FreeCAD's
+# view needs GLX, which Xvfb serves only with Mesa's software renderer.
+xorg-xvfb-server = ">=21.1.25,<22"
+xkeyboard-config = ">=2.48,<3"
+mesa-llvmpipe = ">=26.2.4,<27"
 
 # `pixi run tests` is the repo's single authoritative check command: it runs
 # tools/run-tests.sh, which chains static analysis, the layout core unit
 # suite, the repository-consistency checks, the workflow-hardening lint, a
-# freecadcmd import check, and the headless and GUI FreeCAD test suites.
+# freecadcmd import check, and the headless, GUI and 3D-view FreeCAD test
+# suites.
 # `task-status` lists the tasks/active/ backlog and the next free task id
 # (`.claude/docs/pipeline.md` § Status); it is not part of the `tests` gate.
 [tasks]
