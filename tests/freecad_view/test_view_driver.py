@@ -6,6 +6,7 @@ from typing import Any, Protocol, cast
 import FreeCAD
 import FreeCADGui
 from pivy import coin
+from PySide6 import QtCore
 
 from tests.freecad_view.view import ViewDriver
 
@@ -80,3 +81,20 @@ def test_std_undo_reaches_the_document_through_the_view(driver: ViewDriver) -> N
     FreeCADGui.runCommand("Std_Undo")
     driver.pump()
     assert doc.getObject("Box") is None
+
+
+def test_a_key_press_reaches_the_scene_graph(driver: ViewDriver) -> None:
+    view: _Coin = cast("_Coin", FreeCADGui.ActiveDocument).ActiveView
+    pressed: list[int] = []
+
+    def record(event_callback: _Coin) -> None:
+        event = event_callback.getEvent()
+        if int(event.getState()) == coin.SoButtonEvent.DOWN:
+            pressed.append(int(event.getKey()))
+
+    handle = view.addEventCallbackPivy(coin.SoKeyboardEvent.getClassTypeId(), record)
+    try:
+        driver.key(QtCore.Qt.Key.Key_Q)
+    finally:
+        view.removeEventCallbackPivy(coin.SoKeyboardEvent.getClassTypeId(), handle)
+    assert coin.SoKeyboardEvent.Q in pressed, pressed

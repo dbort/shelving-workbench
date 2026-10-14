@@ -38,4 +38,5 @@ Each layer imports only the layers listed above it.
 - `freecad/Shelving/resources/`: the workbench icon.
 
 Outside the package: `tools/` holds the check scripts `pixi run tests`
-drives, through `tools/run-tests.sh`.
+drives, through `tools/run-tests.sh`. `tests/freecad_view/` drives
+FreeCAD's 3D view under Xvfb (`.claude/docs/xvfb-gui-testing.md`).

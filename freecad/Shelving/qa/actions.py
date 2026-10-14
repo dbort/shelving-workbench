@@ -8,11 +8,8 @@ start FreeCAD.
 
 from __future__ import annotations
 
-import tempfile
-from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, cast
 
-from freecad.Shelving import qa
 from freecad.Shelving.qa.registry import CheckResult, action, check
 
 if TYPE_CHECKING:
@@ -53,17 +50,13 @@ def _add_box(
     name: str,
     size_mm: tuple[float, float, float],
     corner_mm: tuple[float, float, float],
-    angle_deg: float = 0.0,
 ) -> None:
     import FreeCAD
 
     doc = _active_document()
     box = cast("_BoxFeature", doc.addObject("Part::Box", name))
     box.Length, box.Width, box.Height = size_mm
-    box.Placement = FreeCAD.Placement(
-        FreeCAD.Vector(*corner_mm),
-        FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), angle_deg),
-    )
+    box.Placement = FreeCAD.Placement(FreeCAD.Vector(*corner_mm), FreeCAD.Rotation())
     container = cast("FreeCAD.DocumentObjectGroup", _object(_TEST_UNIT))
     container.addObject(cast("FreeCAD.DocumentObject", box))
     doc.recompute()
@@ -82,24 +75,9 @@ def test_unit() -> None:
     _add_box("Shelf", (564.0, 300.0, 18.0), (18.0, 0.0, 291.0))
 
 
-@action("add_skewed_box", label="Add a box turned 30 degrees")
-def add_skewed_box() -> None:
-    _add_box("Skewed", (100.0, 50.0, 20.0), (0.0, 400.0, 0.0), angle_deg=30.0)
-
-
 @action("add_overlap_box", label="Add a box overlapping LeftSide")
 def add_overlap_box() -> None:
     _add_box("Overlap", (18.0, 300.0, 564.0), (0.0, 0.0, 18.0))
-
-
-@action("save_to_temp", label="Save the document to a temporary folder")
-def save_to_temp() -> str:
-    doc = _active_document()
-    run_dir = qa.temp_dir()
-    run_dir.mkdir(parents=True, exist_ok=True)
-    path = Path(tempfile.mkdtemp(prefix="document-", dir=run_dir)) / f"{doc.Name}.FCStd"
-    doc.saveAs(str(path))
-    return f"Saved to {path}"
 
 
 @action("fresh_unit", label="Create a fresh unit in a new document")
@@ -111,15 +89,6 @@ def fresh_unit() -> None:
     doc = FreeCAD.newDocument("QA_Unit")
     create_unit(doc)
     doc.recompute()
-
-
-@action("nudge_side_1", label="Move Side 1 2 mm toward the center")
-def nudge_side_1() -> None:
-    side = cast("_BoxFeature", _object("left_side"))
-    placement = side.Placement
-    placement.Base.x = 2.0
-    side.Placement = placement
-    _active_document().recompute()
 
 
 @action("shelf_unit_with_varset", label="Create a shelf unit and VarSet.Len = 300 mm")
@@ -163,26 +132,6 @@ def add_untagged_cube() -> None:
     container = cast("FreeCAD.DocumentObjectGroup", _object(_FRESH_UNIT))
     container.addObject(cast("FreeCAD.DocumentObject", cube))
     doc.recompute()
-
-
-@check("side_1_at_x_zero")
-def side_1_at_x_zero(doc: FreeCAD.Document | None) -> CheckResult:
-    side = None if doc is None else doc.getObject("left_side")
-    if side is None:
-        return CheckResult(passed=False, detail="no Side 1 (left_side) found")
-    x_mm = float(cast("_BoxFeature", side).Placement.Base.x)
-    return CheckResult(passed=abs(x_mm) < 1e-6, detail=f"Side 1 x = {x_mm:g} mm")
-
-
-@check("boxes_json_in_exports_folder")
-def boxes_json_in_exports_folder(doc: FreeCAD.Document | None) -> CheckResult:
-    from freecad.Shelving.temp_dirs import export_path
-
-    container = None if doc is None else doc.getObject(_TEST_UNIT)
-    if container is None:
-        return CheckResult(passed=False, detail=f"no {_TEST_UNIT} found")
-    path = export_path(container)
-    return CheckResult(passed=path.is_file(), detail=f"looked for {path}")
 
 
 @check("fresh_unit_size")

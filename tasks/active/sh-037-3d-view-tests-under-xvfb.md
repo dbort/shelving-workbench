@@ -134,11 +134,11 @@ STANDING OBLIGATIONS (`CLAUDE.md`):
 - Users never read the log: no user-facing behavior changes.
 
 ## Plan
-- [ ] **Step 1** (`pixi.toml`, `pixi.lock`): Add `xorg-xvfb-server` for both platforms.
-- [ ] **Step 2** (`tools/`, `tools/run-tests.sh`): A typed Xvfb launcher that picks a free display, waits for the server, runs the view suite under it with `QT_QPA_PLATFORM=xcb`, and always stops it; unit tests for its pure functions; one line in `run-tests.sh`.
-- [ ] **Step 3** (`tests/freecad_view/conftest.py`, `tests/freecad_view/`): Session start of FreeCAD's GUI with isolated settings, a per-test document with an active 3D view, and the typed event helpers, with the three helper-proving tests.
-- [ ] **Step 4** (`tests/freecad_view/`, `freecad/Shelving/qa/cases/20-write.toml`, `freecad/Shelving/qa/actions.py`): The opens-without-workbench subprocess test; delete the manual case and any action only it used.
-- [ ] **Step 5** (`tests/freecad_view/`, `freecad/Shelving/qa/cases/10-scan.toml`, `20-write.toml`, `freecad/Shelving/qa/actions.py`): The refusal test with the notification and the rendered selection color; audit every other step of both files and move each assertable one into the tier.
-- [ ] **Step 6** (`.claude/docs/xvfb-gui-testing.md`, `.claude/docs/code-map.md`, `README.md` § Tests): Bring the Xvfb notes from `06d20ab`, rewritten for this tier; list the tier in the code map and the README's test section.
+- [x] **Step 1** (`pixi.toml`, `pixi.lock`): Add `xorg-xvfb-server` for both platforms.
+- [x] **Step 2** (`tools/`, `tools/run-tests.sh`): A typed Xvfb launcher that picks a free display, waits for the server, runs the view suite under it with `QT_QPA_PLATFORM=xcb`, and always stops it; unit tests for its pure functions; one line in `run-tests.sh`.
+- [x] **Step 3** (`tests/freecad_view/conftest.py`, `tests/freecad_view/`): Session start of FreeCAD's GUI with isolated settings, a per-test document with an active 3D view, and the typed event helpers, with the three helper-proving tests.
+- [x] **Step 4** (`tests/freecad_view/`, `freecad/Shelving/qa/cases/20-write.toml`, `freecad/Shelving/qa/actions.py`): The opens-without-workbench subprocess test; delete the manual case and any action only it used.
+- [x] **Step 5** (`tests/freecad_view/`, `freecad/Shelving/qa/cases/10-scan.toml`, `20-write.toml`, `freecad/Shelving/qa/actions.py`): The refusal test with the notification and the rendered selection color; audit every other step of both files and move each assertable one into the tier.
+- [x] **Step 6** (`.claude/docs/xvfb-gui-testing.md`, `.claude/docs/code-map.md`, `README.md` § Tests): Bring the Xvfb notes from `06d20ab`, rewritten for this tier; list the tier in the code map and the README's test section.
 
 ## Review log

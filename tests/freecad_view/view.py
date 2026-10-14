@@ -5,10 +5,8 @@ so they pass through FreeCAD's navigation style and Coin's event traversal
 exactly as a real click does (``.claude/docs/xvfb-gui-testing.md``).
 """
 
-import tempfile
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Protocol, cast
 
 import FreeCAD
@@ -33,9 +31,6 @@ class View3D(Protocol):
     def getPointOnViewport(self, point: FreeCAD.Vector, /) -> tuple[int, int]: ...
     def getSize(self) -> tuple[int, int]: ...
     def graphicsView(self) -> QtWidgets.QGraphicsView: ...
-    def saveImage(
-        self, path: str, width: int, height: int, background: str, /
-    ) -> None: ...
     def viewFront(self) -> None: ...
     def fitAll(self) -> None: ...
 
@@ -172,9 +167,13 @@ class ViewDriver:
         QtTest.QTest.keyClick(viewport, key, modifiers)
         self.pump()
 
-    def render(self, width_px: int = 480, height_px: int = 360) -> QtGui.QImage:
-        """The view rendered off screen at ``width_px`` by ``height_px``."""
-        with tempfile.TemporaryDirectory() as folder:
-            path = Path(folder) / "view.png"
-            self.view.saveImage(str(path), width_px, height_px, "White")
-            return QtGui.QImage(str(path))
+    def grab(self) -> QtGui.QImage:
+        """The view as drawn on screen, in device pixels."""
+        self.pump()
+        return self.viewport.grab().toImage()
+
+    def color_at(self, image: QtGui.QImage, point: FreeCAD.Vector) -> QtGui.QColor:
+        """The color ``image``, a :meth:`grab`, shows at document point
+        ``point``."""
+        x_px, y_px = self.view.getPointOnViewport(point)
+        return image.pixelColor(x_px, self.view.getSize()[1] - y_px - 1)

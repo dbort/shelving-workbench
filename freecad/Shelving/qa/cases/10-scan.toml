@@ -1,6 +1,6 @@
 [[case]]
-id = "scan.export-and-refusal"
-title = "A hand-built unit: open, export, and a refusal"
+id = "scan.refusal"
+title = "A hand-built unit's refusal, as a person sees it"
 
   [[case.step]]
   id = "start"
@@ -8,39 +8,12 @@ title = "A hand-built unit: open, export, and a refusal"
   expected = "A TestUnit part holding Bottom, Top, LeftSide, RightSide and Shelf appears."
 
   [[case.step]]
-  id = "scan"
-  instruction = ["Select TestUnit.", "Run Edit Unit.", "Click Cancel."]
-  expected = """
-Edit Unit's panel opens with an elevation showing two bays either side of
-Shelf, and no objects left alone. Cancel closes it, and nothing in the
-document changed."""
-
-  [[case.step]]
-  id = "skipped-part"
-  action = "add_skewed_box"
-  instruction = ["Select TestUnit.", "Run Edit Unit.", "Click Cancel."]
-  expected = """
-The same elevation, with Skewed in the list of objects left alone, its
-reason saying it is not axis-aligned. Cancel closes the panel and Skewed
-stays in TestUnit."""
-
-  [[case.step]]
-  id = "export"
-  check = "boxes_json_in_exports_folder"
-  instruction = ["Select TestUnit.", "Run Export Boxes."]
-  expected = """
-The Report view prints how many boxes and skipped parts were exported and
-the path of TestUnit.boxes.json, in a shelving-exports-<your user name>
-folder under FreeCAD's temp directory, though the document is unsaved."""
-
-  [[case.step]]
   id = "refusal"
   action = "add_overlap_box"
   instruction = ["Select TestUnit.", "Run Edit Unit."]
   expected = """
-No panel opens. A Shelving error pops up from the Notification Area and
-shows in red in the status bar. The Report view holds the same error as
-three lines in this order: `REFUSED: Overlap overlaps LeftSide`,
-`Objects: Overlap, LeftSide`, and a `Next:` line saying to move or shrink
-one so they only touch. The 3D view's selection changes to Overlap and
-LeftSide, both visibly highlighted."""
+A Shelving error pops up from the Notification Area, saying that Overlap
+overlaps LeftSide, which objects are responsible, and to move or shrink one
+so they only touch. The Report view holds the same error as three lines in
+this order: `REFUSED: Overlap overlaps LeftSide`, `Objects: Overlap,
+LeftSide`, and a `Next:` line."""

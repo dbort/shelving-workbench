@@ -21,10 +21,10 @@ from freecad.Shelving.qa.report import (
 def test_every_case_file_loads() -> None:
     cases = load_cases()
     assert [case.id for case in cases][:2] == [
-        "scan.export-and-refusal",
-        "write.moved-board-corrected",
+        "scan.refusal",
+        "editor.one-session",
     ]
-    assert len(cases) == 7
+    assert len(cases) == 5
     assert all(case.steps for case in cases)
 
 
@@ -74,17 +74,17 @@ def _progress() -> Progress:
     return Progress(
         started="2026-10-10 09:00:00",
         results={
-            "write.moved-board-corrected": {
-                "start": StepResult("pass", "", None, "created\n"),
-                "edit-and-resize": StepResult(
-                    "fail",
-                    "Side 1 stayed at 2 mm",
-                    CheckResult(passed=False, detail="Side 1 x = 2 mm"),
-                    "[shelving] edit unit\n",
-                ),
-                "nudge-side": StepResult(
+            "editor.unit-size": {
+                "start": StepResult(
                     "pass", "", None, "", presses=("done", "failed: no unit")
                 ),
+                "cancel": StepResult(
+                    "fail",
+                    "The unit stayed taller",
+                    CheckResult(passed=False, detail="600 x 300 x 1000 mm"),
+                    "[shelving] edit unit\n",
+                ),
+                "step-and-wheel": StepResult("pass", "", None, "grew\n"),
             }
         },
     )
@@ -101,19 +101,19 @@ def test_the_report_holds_each_recorded_step_and_the_run() -> None:
     assert report["started"] == "2026-10-10 09:00:00"
     assert report["finished"] == "2026-10-10 09:05:00"
     (case,) = report["cases"]
-    assert case["id"] == "write.moved-board-corrected"
+    assert case["id"] == "editor.unit-size"
     assert [step["id"] for step in case["steps"]] == [
         "start",
-        "nudge-side",
-        "edit-and-resize",
+        "step-and-wheel",
+        "cancel",
     ]
-    assert case["steps"][1]["action"] == "nudge_side_1"
-    assert case["steps"][1]["presses"] == ["done", "failed: no unit"]
+    assert case["steps"][0]["action"] == "fresh_unit"
+    assert case["steps"][0]["presses"] == ["done", "failed: no unit"]
     assert case["steps"][2]["action"] is None
     failed = case["steps"][2]
     assert failed["verdict"] == "fail"
-    assert failed["comment"] == "Side 1 stayed at 2 mm"
-    assert failed["check"] == {"passed": False, "detail": "Side 1 x = 2 mm"}
+    assert failed["comment"] == "The unit stayed taller"
+    assert failed["check"] == {"passed": False, "detail": "600 x 300 x 1000 mm"}
     assert failed["log"] == "[shelving] edit unit\n"
 
 
@@ -136,10 +136,10 @@ def test_a_repeated_step_id_is_refused() -> None:
         parse_cases({"case": [{"id": "c", "title": "C", "step": [step, step]}]}, "x")
 
 
-def test_case_2s_restore_step_carries_the_side_1_check() -> None:
-    (case,) = [c for c in load_cases() if c.id == "write.moved-board-corrected"]
-    (step,) = [s for s in case.steps if s.id == "edit-and-resize"]
-    assert step.check == "side_1_at_x_zero"
+def test_the_unit_size_cancel_step_carries_its_size_check() -> None:
+    (case,) = [c for c in load_cases() if c.id == "editor.unit-size"]
+    (step,) = [s for s in case.steps if s.id == "cancel"]
+    assert step.check == "fresh_unit_size"
 
 
 def test_only_a_step_with_a_button_may_omit_its_instruction() -> None:
