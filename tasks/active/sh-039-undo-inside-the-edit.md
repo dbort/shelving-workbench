@@ -171,3 +171,12 @@ STANDING OBLIGATIONS (`CLAUDE.md`):
 - [x] **Step 5** (`freecad/Shelving/qa/cases/30-editor.toml`, `.claude/docs/code-map.md`, `.claude/docs/bug-log.md`): Remove the replaced QA step, update the code map, delete bug-015.
 
 ## Review log
+
+### Round 1: REJECTED
+- **F1: OK drops the stock of a recreated board that gets its old name back** (`freecad/Shelving/editor/session.py:367`): `Session.write` reapplies stored stock only to boards in `result.id_renames`, which lists a board only when its new name differs; a board recreated under its old name falls back on `stock_from`, whose source may be gone. Apply stored stock to every board the write created, and test the sequence (bottom Wood, add Board, add Board001 above it, add Board002 below it, merge Board, OK).
+- **F2: Nothing tests that color survives** (`tests/freecad/test_edit_history.py:282`): the stock test checks only `ShapeMaterial`, headless, so `ShapeAppearance` through Undo, Redo and OK is untested.
+- N1: The crash test missed a disabled workaround in one of four runs; repeat the sequence in the child.
+- N2: The OK-at-the-limit test skips the ten unrelated steps and does not compare the history below `SESSION_STEP`.
+- N3: The view tier checks the could-not-fold message only for Cancel.
+- N4: Only `set_size` is tested as a refused edit leaving no step.
+- N5: Style nits in `Session.commit`, the `Grain` docstring, `CmdType`'s type, and the `EditUnitPanel` docstring.
