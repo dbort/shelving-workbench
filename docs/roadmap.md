@@ -7,13 +7,11 @@ task ships.
 
 ## M10: v1 polish
 
-**Status:** Tasks sh-022, sh-035, sh-023, sh-024
+**Status:** Tasks sh-022, sh-035, sh-023
 
 - [x] sh-022: one refusal shape, and Edit Unit as the one way in
 - [ ] sh-035: Relabel Unit (blocked on sh-022)
 - [ ] sh-023: the preferences page
-- [ ] sh-024: user documentation and the release (blocked on sh-022,
-  sh-035 and sh-023)
 
 A board takes a readable label and its source board's color when it is
 written, and an update rewrites neither, so a rename or a recolor survives
@@ -32,7 +30,9 @@ disagreeing by up to 0.09 mm, and someone whose model is worse needs a way
 forward that is not editing the source.
 
 The user guide leads with scanning geometry you already have, documents
-what each refusal means, and states the three limits a user will meet.
+what each refusal means, and states the three limits a user will meet. It
+and the release have no task until M14 ships, so the guide describes the
+editor users will keep.
 
 *Verify in FreeCAD:* install from the GitHub repository through the Addon
 Manager on a clean profile, model a real unit, move it into a second
@@ -146,6 +146,22 @@ Each of these is its own task when it comes up.
 - **A support check.** A board floating clear of its neighbors is a valid
   arrangement of straight cuts and is accepted today; whether a design is
   buildable is a separate question that nothing asks yet.
+- **Spacing constraints** beyond a lock per opening: a group of shelves
+  kept evenly spaced, so moving one moves them all, and shelves on either
+  side of a divider kept level, by their centers or by their top or bottom
+  faces when their thicknesses differ. These tie together openings the
+  solver sizes branch by branch, so design them with named values shared
+  between units. Evenly spaced groups also give a way to even out a row's
+  unlocked openings after drags, which nothing offers yet.
+- **Typed moves and a drag step** in the 3D view: type how far to move the
+  selected board, and set the drag increment, in the style of FreeCAD's
+  own transform arrows. FreeCAD's `SoLinearDragger` has the fields for it
+  but no Python wiring, so it needs a spike first.
+- **Sizes typed on the drawing:** the unit's overall dimensions and an
+  opening's width and height as fields in the 3D view, and dimension
+  labels dragged aside as in the Sketcher.
+- **Deleting a carcass board**, refused today: whether it should instead
+  remove that side of the carcass.
 - **Flipping a unit's facing in the editor.** A unit opened for the first
   time may face the wrong way; the editor should offer turning it around to
   the other side.

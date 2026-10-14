@@ -1,7 +1,7 @@
 ---
 id: sh-031
 title: "The editor's stock list and stock swap"
-blocked_by: [sh-030, sh-032]
+blocked_by: [sh-030, sh-032, sh-040]
 ---
 
 # sh-031: The editor's stock list and stock swap
@@ -59,6 +59,14 @@ materials, and puts it in the editor, scoped to one unit and undone by Cancel.
 - [ ] `pyrefly check` clean.
 
 ## Advice
+
+RE-PLAN BEFORE `/work` (user, 2026-10-13): sh-040 moves editing into
+FreeCAD's 3D view and deletes `editor/scene.py` and the panel's elevation,
+which this plan's selection work (Ctrl-click in the elevation, highlighting
+several boards, Step 3) is written against. In the 3D view, boards are
+selected through FreeCAD's own selection. Rewrite those parts with
+`/new-task` once sh-040 ships; the stock list itself still belongs in the
+panel.
 
 DECISIONS (user, 2026-10-09, after the catalog-removal interview):
 - **A stock** is the triple (thickness, `ShapeMaterial` name, dominant
