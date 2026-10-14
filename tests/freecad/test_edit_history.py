@@ -1,5 +1,5 @@
 """An editing session's undo steps, driven at the App level: each edit one
-named step, Undo and Redo read back into the session, the floor, and Close.
+named step, Undo and Redo read back into the session, and Close.
 ``tests/freecad_view/test_undo_in_the_editor.py`` runs Undo and Redo
 through ``Std_Undo`` and ``Std_Redo`` with the 3D view up."""
 

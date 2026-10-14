@@ -148,6 +148,7 @@ title = "Unit size controls"
   [[case.step]]
   id = "start"
   action = "fresh_unit"
+  check = "fresh_unit_size"
   instruction = ["Select the container.", "Run Edit Unit."]
   expected = "The Unit section shows width 600 mm, depth 300 mm and height 900 mm."
 
@@ -169,11 +170,12 @@ A single error in the Notification Area, and the field shows the last
 height that worked."""
 
   [[case.step]]
-  id = "undo-the-session"
-  check = "fresh_unit_size"
+  id = "close-and-undo"
   instruction = [
     "Click Close.",
-    "Open the drop-down list beside the toolbar's Undo button.",
-    "Choose Edit Shelving Unit.",
+    "Click an empty spot in the 3D view.",
+    "Choose Edit, Undo.",
   ]
-  expected = "The unit is back to 600 x 300 x 900 mm."
+  expected = """
+The panel closes with the unit at its last height, and the Undo takes back
+only the last size change, one arrow step."""

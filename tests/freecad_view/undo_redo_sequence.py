@@ -69,7 +69,7 @@ def main(result: Path) -> None:
 
     # A freed read crashes only when the freed memory has been reused, so
     # the sequence runs several times.
-    for _ in range(3):
+    for _ in range(8):
         session.select(bays(session.unit.root)[0])
         panel._refresh()
         shelf = new_board_after(panel.add_shelf_button.click)

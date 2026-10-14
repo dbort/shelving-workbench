@@ -270,7 +270,9 @@ class Session:
         self._history = EditHistory(doc, self, schedule or (lambda _settle: None))
 
     def settle(self) -> None:
-        """Read a pending Undo or Redo back into this session now."""
+        """Read a pending Undo or Redo back into this session now. Every
+        edit calls this first, so none is computed from the unit as it was
+        before an Undo whose read-back has not run yet."""
         if self._history is not None:
             self._history.settle()
 
@@ -456,6 +458,7 @@ class Session:
         corner where it is and the selection as it was. Returns ``None`` on
         success or an :class:`EditFailure` on refusal, which changes
         nothing."""
+        self.settle()
         components = [
             self.unit.size_mm.x_mm,
             self.unit.size_mm.y_mm,
@@ -480,6 +483,7 @@ class Session:
         shelf, whichever model axis the unit's depth runs along. Returns
         ``None`` on success, which clears the selection, or an
         :class:`EditFailure` on refusal, which changes nothing."""
+        self.settle()
         if self.selected_id is None:
             return EditFailure("select a bay to split", None)
         horizontal, vertical = self._elevation_axes()
@@ -495,6 +499,7 @@ class Session:
         """Remove the selected ``Board`` and merge its neighboring regions.
         Returns ``None`` on success, which clears the selection, or an
         :class:`EditFailure` on refusal, which changes nothing."""
+        self.settle()
         if self.selected_id is None:
             return EditFailure("select a board to merge", None)
         try:
@@ -528,6 +533,7 @@ class Session:
         quantity widget already resolved, in the basis the region already
         measures in. The selection is kept. Returns ``None`` on success or
         an :class:`EditFailure` on refusal, which changes nothing."""
+        self.settle()
         if self.selected_id is None:
             return EditFailure("select a region to size", None)
         region_id = self.selected_id
@@ -542,6 +548,7 @@ class Session:
         """Change what the selected region's size measures, moving nothing.
         The selection is kept. Returns ``None`` on success or an
         :class:`EditFailure` on refusal, which changes nothing."""
+        self.settle()
         if self.selected_id is None:
             return EditFailure("select a region to measure", None)
         region_id = self.selected_id
@@ -561,6 +568,7 @@ class Session:
         one write that moves nothing and keeps the selection. Returns an
         :class:`EditFailure` on refusal, such as locking a run's last
         unlocked region, leaving the session and document untouched."""
+        self.settle()
         candidate = self.unit
         try:
             for region_id in region_ids:
@@ -585,6 +593,7 @@ class Session:
         selects the board. Returns an :class:`EditFailure`, starting no
         drag, when a drag may not move the board: a locked region holds it,
         or no unlock would free it."""
+        self.settle()
         try:
             require_movable(self.unit, board_id)
             axis = run_axis(self.unit, board_id)
@@ -631,6 +640,7 @@ class Session:
         """Delete the listed :attr:`left_alone` objects as one undo step, so
         Undo restores them. Refuses, deleting nothing,
         when any name is not currently listed."""
+        self.settle()
         listed = {entry.name for entry in self.left_alone}
         unknown = sorted(set(names) - listed)
         if unknown:

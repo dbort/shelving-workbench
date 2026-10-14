@@ -66,7 +66,6 @@ class EditHistory:
         # getActiveTransaction gives it: an open with no change leaves it
         # pending until a later change, whoever makes it.
         self._pending: tuple[str, int] | None = None
-        self._lingering: tuple[str, int] | None = None
         # The objects the transaction now recording has touched.
         self._recording: set[str] | None = None
         self._own_moves = False
@@ -113,7 +112,6 @@ class EditHistory:
         """Stop following the document, leaving every step where it is."""
         if self._finished:
             return
-        self._close_lingering()
         self.settle()
         self.end(keep=True)
         self._empty_gui_list()
@@ -206,7 +204,6 @@ class EditHistory:
             self._schedule(self.settle)
 
     def _open(self, name: str) -> None:
-        self._close_lingering()
         before = cast("tuple[str, int] | None", FreeCAD.getActiveTransaction())
         self._doc.openTransaction(name)
         active = cast("tuple[str, int] | None", FreeCAD.getActiveTransaction())
@@ -220,21 +217,8 @@ class EditHistory:
         under its name."""
         active = cast("tuple[str, int] | None", FreeCAD.getActiveTransaction())
         if self._pending is not None and active == self._pending:
-            # While a Gui command runs, FreeCAD ignores this close, but would
-            # honor an abort at once, discarding the step just committed.
             FreeCAD.closeActiveTransaction(False)
-            if FreeCAD.getActiveTransaction() == self._pending:
-                self._lingering = self._pending
-                self._schedule(self._close_lingering)
         self._pending = None
-
-    def _close_lingering(self) -> None:
-        """Close a transaction a Gui command kept FreeCAD from closing, once
-        the command has returned."""
-        if self._lingering is not None:
-            if FreeCAD.getActiveTransaction() == self._lingering:
-                FreeCAD.closeActiveTransaction(False)
-            self._lingering = None
 
     @contextmanager
     def _moving(self) -> Generator[None]:
@@ -270,10 +254,14 @@ class EditHistory:
         import FreeCADGui
 
         with self._moving():
-            if self._doc.RedoCount:
+            redo_count = self._doc.RedoCount
+            if redo_count:
                 FreeCADGui.runCommand("Std_Redo")
-                self._doc.undo()
+                # Only a Redo that ran is taken back.
+                if self._doc.RedoCount < redo_count:
+                    self._doc.undo()
             elif self._doc.UndoCount:
                 FreeCADGui.runCommand("Std_Undo")
-                FreeCADGui.runCommand("Std_Redo")
+                if self._doc.RedoCount:
+                    FreeCADGui.runCommand("Std_Redo")
         self._gui_list_filled = False
