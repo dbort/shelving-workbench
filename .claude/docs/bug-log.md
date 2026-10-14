@@ -57,10 +57,8 @@ log happens only when the user asks.
   `record.with_stored_rules` overwrites them with the stored `Fill` rules,
   keyed by boards that still exist. This contradicts the design's promise
   that a hand edit is taken up. Found in sh-020's manual QA; sh-030's QA saw
-  a thinned shelf re-center 3 mm. Fix: `sh-XXX task`. A stored rule must
-  yield when geometry disagrees with it but still win where geometry is
-  ambiguous (why `Basis.WITH_NEXT` is stored); that precedence is a design
-  question.
+  a thinned shelf re-center 3 mm. Fix: sh-038, which takes sizes from geometry and only the
+  lock and basis from the record.
 - `bug-009` - **elevation dimensions overlap each other and their
   labels**: `_add_region_dimensions` in `editor/scene.py` places each
   dimension at a fixed fraction of its region's cross extent with no
