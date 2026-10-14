@@ -16,28 +16,28 @@ which fixes a hand-moved shelf snapping back (bug-007). No new controls:
 sh-041 adds the padlocks. Milestone M14.
 
 ## Must Have
-- [ ] `pixi run tests` green; `pyrefly check` clean over the changed code.
-- [ ] `core.edit` treats a region with a `Fixed` rule as locked and one
+- [x] `pixi run tests` green; `pyrefly check` clean over the changed code.
+- [x] `core.edit` treats a region with a `Fixed` rule as locked and one
       with `Weighted` or `Fill` as unlocked; the rule record's schema is
       unchanged.
-- [ ] A core edit locks or unlocks a region and moves nothing: on any
+- [x] A core edit locks or unlocks a region and moves nothing: on any
       unit, `solve` gives every node the same space before and after.
       Locking gives `Fixed` at the region's solved clear size; unlocking
       gives the `Weighted` share that holds its solved size, or `Fill`
       when it is the run's only unlocked region. Locking or unlocking a
       region already in that state returns the unit unchanged.
-- [ ] Locking the last unlocked region in a run raises `EditError` naming
+- [x] Locking the last unlocked region in a run raises `EditError` naming
       it, with the message "One opening in each row stays unlocked, to
       take up changes to the unit's size." `set_size` and `set_basis`,
       which lock, refuse the same way when they would lock a run's last
       unlocked region. A run that already has no unlocked region (from an
       older record) is not refused anything it was allowed before.
-- [ ] A core query gives, for a board, the locked regions to unlock so a
+- [x] A core query gives, for a board, the locked regions to unlock so a
       drag may move it: on each side where only boards and locked regions
       lie between it and the end of its run, the locked region nearest
       the board. It is empty when a drag may move the board, and `None`
       when a side holds no region at all (a carcass board).
-- [ ] `move_board(unit, board_id, low_face_mm)` puts the board's low face
+- [x] `move_board(unit, board_id, low_face_mm)` puts the board's low face
       at `low_face_mm`, moves every board joined to it through locked
       regions by the same distance, and resizes only the first unlocked
       region on each side, which stay unlocked; every other region keeps
@@ -55,9 +55,9 @@ sh-041 adds the padlocks. Milestone M14.
         the lowest shelf and the middle bay for the upper shelf, and
         `move_board` on either raises naming those;
       - the query gives `None` for the top and bottom boards.
-- [ ] Splitting a locked bay gives two locked halves, and merging gives a
+- [x] Splitting a locked bay gives two locked halves, and merging gives a
       locked region only when both merged regions were locked, as today.
-- [ ] A rescan takes sizes from geometry and lock state and basis from the
+- [x] A rescan takes sizes from geometry and lock state and basis from the
       stored record (bug-007). Asserted in the core suite on scanned units
       with stored records:
       - a stored unlocked region whose scanned size changed keeps the
@@ -68,17 +68,17 @@ sh-041 adds the padlocks. Milestone M14.
       - a stored unlocked region the scan fixed (a void) becomes unlocked
         at the share that holds its scanned size;
       - a region with no stored entry keeps the scanned rule.
-- [ ] Headless (`tests/freecad/`): add a shelf through `Session`, commit,
+- [x] Headless (`tests/freecad/`): add a shelf through `Session`, commit,
       move the shelf 60 mm down by setting its `Placement`, and
       `unit_ops.rescan_unit` leaves it where it was moved (bug-007's
       reproduction).
-- [ ] `Session` gains a lock/unlock of several regions as one write,
+- [x] `Session` gains a lock/unlock of several regions as one write,
       returning `EditFailure` on refusal with the document untouched, and
       exposes the board query; `begin_drag` returns an `EditFailure` and
       starts no drag for a held board or one the query gives `None` for.
       Asserted headless.
-- [ ] `bug-007` is deleted from `.claude/docs/bug-log.md`.
-- [ ] The README glossary's "Size rule" and "The drag rule" entries
+- [x] `bug-007` is deleted from `.claude/docs/bug-log.md`.
+- [x] The README glossary's "Size rule" and "The drag rule" entries
       describe locked and unlocked openings and the drag above, in user
       vocabulary; `tests/test_readme_glossary.py` passes.
 
