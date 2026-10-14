@@ -152,3 +152,10 @@ STANDING OBLIGATIONS (`CLAUDE.md`):
 - **N4: Redundant condition** (`tests/freecad_view/test_scan_and_write.py:131`): `and box.buttons()`.
 - **N5: The trouble filter is never shown to catch anything** (`tests/freecad_view/test_open_without_workbench.py:22`): acceptable as a regression guard today.
 - **N6: SIGTERM to the launcher skips its `finally`** (`tools/xvfb_run.py:151`): Xvfb would outlive it on a developer's machine.
+
+### Round 2: APPROVED
+- **N1: The TestUnit fixture is copied, not shared** (`tests/freecad_view/test_scan_and_write.py:79`, `:214`): `_test_unit` and the Overlap box duplicate the public `qa.actions.test_unit` and `add_overlap_box`, so the automated test and the manual `scan.refusal` step could drift apart.
+- **N2: The SIGTERM test does not check that the command stopped** (`tests/test_xvfb_run.py:100`, `:124`): it asserts only that the X socket is gone.
+- **N3: `main` changes signal state for the whole process** (`tools/xvfb_run.py:162`): an in-process call to `main` leaves SIGTERM mapped to `KeyboardInterrupt`; install the handler only under `__main__`.
+- **N4: The two docs disagree about the Report view** (`.claude/docs/xvfb-gui-testing.md:81`): `freecad-notes.md:173` and the `scan.refusal` step say the error reaches the Report view; name the version or setting the claim depends on.
+- **N5: Document points in mm without `_mm`** (`tests/freecad_view/test_scan_and_write.py:220`): `left` and `right`; a note only.
