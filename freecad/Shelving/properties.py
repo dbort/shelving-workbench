@@ -28,6 +28,7 @@ string values plus "property absent" would conflate "never written" with
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Protocol, cast
 
 import FreeCAD
@@ -311,6 +312,64 @@ def _appearance_view(obj: FreeCAD.DocumentObject) -> _AppearanceView | None:
     return cast("_AppearanceView", view) if view is not None else None
 
 
+@dataclass(frozen=True)
+class Grain:
+    """A Woodworking ``Grain`` property: its type, group and value."""
+
+    type_id: str
+    group: str
+    value: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class Stock:
+    """What :func:`copy_stock` copies, held apart from any object so it
+    outlives the board it was read from."""
+
+    # None when the object has no ShapeMaterial.
+    material: FreeCADMaterial | None
+    grain: Grain | None
+    # The view's whole ShapeAppearance, per-face colors included; None
+    # without a GUI.
+    appearance: tuple[FreeCAD.Material, ...] | None
+
+
+def read_stock(obj: FreeCAD.DocumentObject) -> Stock:
+    """``obj``'s :class:`Stock` as it stands."""
+    material = (
+        cast("_MaterialObject", obj).ShapeMaterial
+        if hasattr(obj, "ShapeMaterial")
+        else None
+    )
+    grain = (
+        Grain(
+            obj.getTypeIdOfProperty(GRAIN_PROP),
+            obj.getGroupOfProperty(GRAIN_PROP),
+            tuple(cast("_GrainObject", obj).Grain),
+        )
+        if hasattr(obj, GRAIN_PROP)
+        else None
+    )
+    view = _appearance_view(obj)
+    appearance = tuple(view.ShapeAppearance) if view is not None else None
+    return Stock(material, grain, appearance)
+
+
+def write_stock(stock: Stock, target: FreeCAD.DocumentObject) -> None:
+    """Give ``target`` each part of ``stock`` that is set and that ``target``
+    can hold; a ``Grain`` property is added in its own type and group.
+    Every part ``stock`` lacks leaves ``target``'s own unchanged."""
+    if stock.material is not None and hasattr(target, "ShapeMaterial"):
+        cast("_MaterialObject", target).ShapeMaterial = stock.material
+    if stock.grain is not None:
+        if not hasattr(target, GRAIN_PROP):
+            target.addProperty(stock.grain.type_id, GRAIN_PROP, stock.grain.group)
+        cast("_GrainObject", target).Grain = list(stock.grain.value)
+    view = _appearance_view(target)
+    if stock.appearance is not None and view is not None:
+        view.ShapeAppearance = list(stock.appearance)
+
+
 def copy_stock(source: FreeCAD.DocumentObject, target: FreeCAD.DocumentObject) -> None:
     """Give ``target`` ``source``'s ``ShapeMaterial``, its ``Grain`` when it
     has one, in the same property type and group, and with a GUI its whole
@@ -318,21 +377,7 @@ def copy_stock(source: FreeCAD.DocumentObject, target: FreeCAD.DocumentObject) -
 
     Each property ``source`` lacks leaves ``target``'s own unchanged.
     """
-    if hasattr(source, "ShapeMaterial") and hasattr(target, "ShapeMaterial"):
-        material = cast("_MaterialObject", source).ShapeMaterial
-        cast("_MaterialObject", target).ShapeMaterial = material
-    if hasattr(source, GRAIN_PROP):
-        if not hasattr(target, GRAIN_PROP):
-            target.addProperty(
-                source.getTypeIdOfProperty(GRAIN_PROP),
-                GRAIN_PROP,
-                source.getGroupOfProperty(GRAIN_PROP),
-            )
-        cast("_GrainObject", target).Grain = list(cast("_GrainObject", source).Grain)
-    source_view = _appearance_view(source)
-    target_view = _appearance_view(target)
-    if source_view is not None and target_view is not None:
-        target_view.ShapeAppearance = list(source_view.ShapeAppearance)
+    write_stock(read_stock(source), target)
 
 
 def paint(obj: FreeCAD.DocumentObject, rgb: tuple[int, int, int]) -> None:

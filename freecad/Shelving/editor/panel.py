@@ -545,19 +545,20 @@ class AncestorWatch(QtCore.QObject):
 class EditUnitPanel:
     """One elevation-editing task panel over ``container``.
 
-    Construction opens the session's one transaction; ``accept`` commits it
-    and ``reject`` aborts it, so every edit made in the panel lands or
-    reverts together.
+    Construction opens the session, each edit made in the panel is its own
+    undo step, ``accept`` folds them into one and ``reject`` undoes them,
+    so the session lands or reverts together.
     """
 
     def __init__(self, container: FreeCAD.DocumentObject) -> None:
         watch = Stopwatch("panel")
         self.session = Session(container)
         watch.lap("session")
-        self.session.open()
-        watch.lap("open transaction")
+        self.session.open(lambda settle: QtCore.QTimer.singleShot(0, settle))
+        self.session.on_change = self._show_result
+        watch.lap("open session")
         # Without this, a failure building the form would leave the
-        # transaction open with no dialog to commit or abort it.
+        # session's steps in the document with no dialog to end them.
         try:
             self._build(watch)
         except BaseException:
@@ -680,6 +681,9 @@ class EditUnitPanel:
         self._refresh()
 
     def _on_scene_drag(self, point: QtCore.QPointF) -> None:
+        if self._dragging and not self.session.dragging:
+            # An Undo ended the drag; the release ends this gesture.
+            return
         if not self._dragging:
             if self._held is not None and not self._drag_failure_reported:
                 self._drag_failure_reported = True
@@ -812,9 +816,13 @@ class EditUnitPanel:
         return buttons.value
 
     def accept(self) -> bool:
-        self.session.commit()
+        message = self.session.commit()
+        if message is not None:
+            report_error(message)
         return True
 
     def reject(self) -> bool:
-        self.session.cancel()
+        message = self.session.cancel()
+        if message is not None:
+            report_error(message)
         return True

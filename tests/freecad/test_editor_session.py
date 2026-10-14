@@ -1253,8 +1253,12 @@ def test_a_rescan_keeps_a_shelf_moved_by_hand_where_it_was_moved() -> None:
         container = create_unit(doc)
         session = Session(container)
         session.open()
-        shelf = _add_board_in_lower_bay(session)
+        shelf_name = _add_board_in_lower_bay(session).Name
         session.commit()
+        # OK writes the session's unit again as one step, recreating the
+        # boards it added.
+        shelf = doc.getObject(shelf_name)
+        assert shelf is not None
         placeable = cast("_Placeable", shelf)
         placement = placeable.Placement
         moved_z_mm = float(placement.Base.z) - 60.0
