@@ -4,9 +4,9 @@ edits, behind one small API the panel drives.
 Every accepted edit writes straight through
 :func:`freecad.Shelving.container.write_container` as its own undo step,
 so the live preview is the real boards: there is no separate preview model
-to drift from the real write path. :mod:`freecad.Shelving.editor.history`
-keeps those steps, reads each Undo and Redo back into the session, and
-folds the session into one step at OK.
+to drift from the real write path. The steps stay after the panel closes;
+:mod:`freecad.Shelving.editor.history` reads each Undo and Redo back into
+the session.
 
 Every ``isinstance`` check and structural match here is against
 ``freecad.Shelving.core.*`` types imported by their fully qualified name.
@@ -239,8 +239,9 @@ class Session:
         self.on_change: Callable[[EditFailure | None], None] | None = None
 
     def open(self, schedule: Schedule | None = None) -> None:
-        """Make the probe object and start this session's undo history with
-        a first step that changes nothing. Call once, before any edit.
+        """Make the probe object and start following the document's undo
+        history; the session's first edit commits a first step that changes
+        nothing, marking where it began. Call once, before any edit.
         ``schedule`` defers the read-back after an Undo or Redo until
         FreeCAD has finished it; with none, :meth:`settle` does the
         read-back.
@@ -266,7 +267,6 @@ class Session:
         self.probe = probe
         self._probe_name = probe.Name
         self._history = EditHistory(doc, self, schedule or (lambda _settle: None))
-        self._history.start()
 
     def settle(self) -> None:
         """Read a pending Undo or Redo back into this session now."""
@@ -630,7 +630,7 @@ class Session:
 
     def delete_untagged(self, names: Collection[str]) -> EditFailure | None:
         """Delete the listed :attr:`left_alone` objects as one undo step, so
-        Undo and :meth:`cancel` restore them. Refuses, deleting nothing,
+        Undo restores them. Refuses, deleting nothing,
         when any name is not currently listed."""
         listed = {entry.name for entry in self.left_alone}
         unknown = sorted(set(names) - listed)

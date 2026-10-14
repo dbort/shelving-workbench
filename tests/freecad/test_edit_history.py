@@ -276,13 +276,45 @@ def test_close_keeps_the_steps_and_removes_the_probe(doc: FreeCAD.Document) -> N
     assert _boards(container) == before_boards
 
 
-def test_a_session_without_edits_leaves_no_step(doc: FreeCAD.Document) -> None:
-    before_names = list(doc.UndoNames)
+def _undone_step_elsewhere(doc: FreeCAD.Document) -> None:
+    """Leave one step from before the session in the Redo list."""
+    other = cast("_BoxFeature", doc.addObject("Part::Box", "Elsewhere"))
+    doc.openTransaction("Move it")
+    other.Length = 20.0
+    doc.commitTransaction()
+    doc.undo()
+
+
+def test_a_session_without_edits_leaves_both_lists_as_it_found_them(
+    doc: FreeCAD.Document,
+) -> None:
+    _undone_step_elsewhere(doc)
+    before_undo, before_redo = list(doc.UndoNames), list(doc.RedoNames)
+    assert before_redo == ["Move it"]
     session = _opened(doc)
     session.close()
-    assert doc.UndoNames == before_names
-    assert doc.RedoNames == []
+    assert doc.UndoNames == before_undo
+    assert doc.RedoNames == before_redo
     assert doc.getObject("ShelvingDimensionProbe") is None
+
+
+def test_undo_before_the_first_edit_reaches_nothing_from_before(
+    doc: FreeCAD.Document,
+) -> None:
+    container = _container(doc)
+    _undone_step_elsewhere(doc)
+    before_undo, before_redo = list(doc.UndoNames), list(doc.RedoNames)
+    before_boards = _boards(container)
+    session = _opened(doc)
+    messages = _Messages(session)
+    try:
+        _undo(session)
+        assert messages.seen == [FLOOR_MESSAGE]
+        assert doc.UndoNames == before_undo
+        assert doc.RedoNames == before_redo
+        assert _boards(container) == before_boards
+    finally:
+        session.close()
 
 
 def test_a_probe_some_step_changed_goes_in_a_step_of_its_own(
@@ -324,6 +356,38 @@ def test_an_added_shelf_keeps_its_stock_through_undo_redo_and_close(
     assert shelf_material() == "Wood"
     session.close()
     assert shelf_material() == "Wood"
+
+
+def test_an_undo_before_a_drag_moves_ends_the_drag(doc: FreeCAD.Document) -> None:
+    """The drag's step has nothing in it yet, so FreeCAD commits nothing and
+    undoes the step below."""
+    session = _opened(doc)
+    try:
+        shelf = _add_shelf(session)
+        grab_mm = session.spaces[shelf].origin
+        assert session.begin_drag(shelf, grab_mm) is None
+        _undo(session)
+        assert not session.dragging
+        assert doc.RedoNames == ["Add Shelf"]
+        assert shelf not in session.spaces
+        failure = session.drag_to(grab_mm)
+        assert failure is not None and failure.message == "no board is being dragged"
+        session.end_drag()
+        assert doc.RedoNames == ["Add Shelf"]
+    finally:
+        session.close()
+
+
+def test_a_selected_board_stays_selected_through_undo(doc: FreeCAD.Document) -> None:
+    session = _opened(doc)
+    try:
+        shelf = _add_shelf(session)
+        session.select(shelf)
+        assert session.resize("height", 950.0) is None
+        _undo(session)
+        assert session.selected_id == shelf
+    finally:
+        session.close()
 
 
 def test_an_undo_during_a_drag_ends_the_drag(doc: FreeCAD.Document) -> None:

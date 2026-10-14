@@ -246,7 +246,7 @@ def _assert_session_matches_document(session: Session) -> None:
 
 
 def test_an_editor_layout_survives_a_rescan() -> None:
-    """bug-006 end to end: build the layout through one ``Session``, commit,
+    """bug-006 end to end: build the layout through one ``Session``, close it,
     and confirm a *fresh* ``Session`` (a real rescan, not the same in-memory
     tree) reads every board back at its just-written placement and size;
     then a further edit elsewhere must not move any board on the left."""
@@ -633,11 +633,11 @@ def test_close_keeps_each_edit_as_a_step_undo_walks_back() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
-def test_commit_then_one_undo_reverses_the_session() -> None:
-    """Commit after the same edits leaves them in place and one undo reverses
-    the lot. The probe object the session made for the dimension field is
-    gone after the commit and does not come back with the undo."""
-    doc = FreeCAD.newDocument("editor_smoke_commit_undo")
+def test_close_then_undo_takes_back_the_edit() -> None:
+    """Close after an edit leaves it in place, and one undo takes it back.
+    The probe object the session made for the dimension field is gone after
+    Close and does not come back with the undo."""
+    doc = FreeCAD.newDocument("editor_smoke_close_undo")
     try:
         container = create_unit(doc)
         doc.recompute()
@@ -1257,12 +1257,8 @@ def test_a_rescan_keeps_a_shelf_moved_by_hand_where_it_was_moved() -> None:
         container = create_unit(doc)
         session = Session(container)
         session.open()
-        shelf_name = _add_board_in_lower_bay(session).Name
+        shelf = _add_board_in_lower_bay(session)
         session.close()
-        # OK writes the session's unit again as one step, recreating the
-        # boards it added.
-        shelf = doc.getObject(shelf_name)
-        assert shelf is not None
         placeable = cast("_Placeable", shelf)
         placement = placeable.Placement
         moved_z_mm = float(placement.Base.z) - 60.0

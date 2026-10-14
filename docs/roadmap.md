@@ -64,13 +64,13 @@ with no place on the drawing.
 An opening is locked at its size or unlocked to share what is left. A drag
 moves only the dragged board, together with any board joined to it through
 locked openings, and a padlock on each dimension locks or unlocks it. Undo
-and Redo step through the edits inside a session, and OK still leaves one
-step in FreeCAD's history.
+and Redo step through the edits inside a session, one edit each, and the
+edits stay as their own steps after the panel closes.
 
 *Verify in FreeCAD:* open a unit with Edit Unit, watch the camera turn to
 it, orbit behind it and back, lock the opening between two shelves and drag
 one of them, add a shelf from the view, undo and redo a few edits with
-Cmd-Z, click OK, and undo the whole session with one Cmd-Z.
+Cmd-Z, click Close, and undo the last edit with one Cmd-Z.
 
 ## M11: Back panels
 

@@ -7,9 +7,8 @@ intercept none of them, so the session follows FreeCAD's stack instead of
 owning it. That stack names its steps and nothing more, and past
 ``MaxUndoSize`` each commit drops its oldest step, so positions read from
 ``UndoCount`` drift. :class:`EditHistory` keeps its own copy of the stack,
-updated from the document's signals, to tell the session's first step
-from the rest: an Undo of it is redone at once, so no Undo during the
-session reaches what came before.
+updated from the document's signals, to tell the session's steps from
+the rest: no Undo during the session reaches what came before it.
 
 Imports no Qt: the caller passes the deferral FreeCAD's signals need.
 """
@@ -77,10 +76,9 @@ class _Entry:
 class EditHistory:
     """The document transactions of one editing session over ``doc``.
 
-    :meth:`start` commits the session's first step. ``schedule`` runs a
-    callable once FreeCAD has finished the signal being handled; the
-    read-back after an Undo or Redo runs through it, or through
-    :meth:`settle`.
+    ``schedule`` runs a callable once FreeCAD has finished the signal being
+    handled; the read-back after an Undo or Redo runs through it, or
+    through :meth:`settle`.
     """
 
     def __init__(
@@ -94,8 +92,17 @@ class EditHistory:
         # The open edit step's name, between begin and end.
         self._step_name: str | None = None
         self._ending = False
-        # Whether the session's first step is being written.
+        # Whether the session's first step is being written, and whether it
+        # has been: it waits for the first edit, since its commit empties
+        # the Redo list.
         self._starting = False
+        self._started = False
+        # Steps from before the session that an Undo took back before the
+        # first edit, which the read-back redoes.
+        self._undone_before = 0
+        # FreeCAD closed the open edit step's undo without a commit: an Undo
+        # during a drag that has not moved yet.
+        self._step_dropped = False
         # FreeCAD's pending transaction this history opened, as
         # getActiveTransaction gives it: an open with no change leaves it
         # pending until a later change, whoever makes it.
@@ -121,22 +128,22 @@ class EditHistory:
     def step_open(self) -> bool:
         return self._step_name is not None
 
-    def start(self) -> None:
-        """Commit the session's first step, named :data:`SESSION_STEP`,
-        which changes nothing: an Undo of it is the floor."""
-        self._starting = True
-        try:
-            self._open(SESSION_STEP)
-            self._owner.mark_start()
-        finally:
-            self._starting = False
-        self._doc.commitTransaction()
-        self._close_pending()
-
     def begin(self, name: str) -> None:
         """Open the step named ``name`` that one edit fills, closed by
-        :meth:`end`."""
+        :meth:`end`. Before the session's first edit, commits its first
+        step, named :data:`SESSION_STEP`, which changes nothing: an Undo of
+        it is the floor."""
         self.settle()
+        if not self._started:
+            self._started = True
+            self._starting = True
+            try:
+                self._open(SESSION_STEP)
+                self._owner.mark_start()
+            finally:
+                self._starting = False
+            self._doc.commitTransaction()
+            self._close_pending()
         self._step_name = name
         self._open(name)
 
@@ -157,44 +164,41 @@ class EditHistory:
             self._close_pending()
 
     def finish(self) -> None:
-        """Stop following the document, leaving every step where it is, but
-        for the session's first step when nothing followed it: a session
-        that changed nothing leaves no trace."""
+        """Stop following the document, leaving every step where it is."""
         if self._finished:
             return
         self._close_lingering()
         self.settle()
         self.end(keep=True)
         self._empty_gui_list()
-        self._sync()
-        if self._undo and self._undo[-1].kind == "start" and not self._redo:
-            with self._moving():
-                self._doc.undo()
-                # FreeCAD clears its Redo list once a transaction records a
-                # change, even one it then aborts.
-                self._open(SESSION_STEP)
-                self._owner.mark_start()
-                self._doc.abortTransaction()
-                self._close_pending()
         FreeCAD.removeDocumentObserver(self)
         self._finished = True
 
     def settle(self) -> None:
         """Read the latest Undo or Redo back into the session, if one has
-        not been yet. An Undo of the session's first step is redone at
-        once, and the owner hears :data:`FLOOR_MESSAGE`."""
+        not been yet. An Undo of the session's first step, or of a step from
+        before the session, is redone at once, and the owner hears
+        :data:`FLOOR_MESSAGE`."""
         if not self._settle_queued or self._finished:
             return
         self._settle_queued = False
+        if self._step_dropped:
+            self._step_dropped = False
+            self._close_pending()
         self._sync()
         self._empty_gui_list()
         message: str | None = None
         start = next((e for e in self._redo if e.kind == "start"), None)
-        if start is not None:
+        if start is not None or self._undone_before:
             with self._moving():
                 while start in self._redo and self._doc.RedoCount:
                     self._doc.redo()
                     self._sync()
+                for _ in range(self._undone_before):
+                    if self._doc.RedoCount:
+                        self._doc.redo()
+                self._undone_before = 0
+                self._sync()
             message = FLOOR_MESSAGE
         self._owner.reload()
         self._owner.changed(message)
@@ -248,22 +252,37 @@ class EditHistory:
         if doc is not self._doc:
             return
         if self._undo:
-            self._redo.append(self._undo.pop())
+            undone = self._undo.pop()
+            self._redo.append(undone)
+            if undone.kind == "before" and not self._own_moves:
+                self._undone_before += 1
         if self._gui_transacting():
             self._gui_list_filled = True
-        if not self._own_moves:
-            self._queue_settle()
+        self._moved()
 
     def slotRedoDocument(self, doc: FreeCAD.Document) -> None:
         if doc is not self._doc:
             return
         if self._redo:
-            self._undo.append(self._redo.pop())
+            redone = self._redo.pop()
+            self._undo.append(redone)
+            if redone.kind == "before" and self._undone_before:
+                self._undone_before -= 1
         if self._gui_transacting():
             # A Gui Redo walks and empties the list a Gui Undo fills.
             self._gui_list_filled = False
-        if not self._own_moves:
-            self._queue_settle()
+        self._moved()
+
+    def _moved(self) -> None:
+        if self._own_moves:
+            return
+        if self._step_name is not None:
+            # A drag's step with nothing in it yet: FreeCAD undoes past it,
+            # and the drag is over.
+            self._step_name = None
+            self._step_dropped = True
+            self._owner.step_interrupted()
+        self._queue_settle()
 
     # Internals
 
