@@ -93,7 +93,9 @@ clear 300 beside it."""
   [[case.step]]
   id = "drag"
   instruction = ["Drag the shelf up a few centimeters with the mouse.", "Release."]
-  expected = "The shelf follows the pointer, and the basis still reads Spacing."
+  expected = """
+The shelf stays put: typing the size locked the lower bay, and with only the
+bottom board below it, nothing can give. Size still reads 318, Spacing."""
 
   [[case.step]]
   id = "expression"

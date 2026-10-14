@@ -162,10 +162,10 @@ STANDING OBLIGATIONS (`CLAUDE.md`):
   `EditFailure` the editor already reports through the Notification Area.
 
 ## Plan
-- [ ] **Step 1** (`freecad/Shelving/core/edit.py`, `freecad/Shelving/core/tests/test_edit.py`): Lock and unlock edits, the last-unlocked refusal in them and in `set_size` and `set_basis`, the held-by query, and `move_board`'s new rule, with the Must Have core tests; update or replace the tests asserting the old drag rule.
-- [ ] **Step 2** (`freecad/Shelving/core/record.py`, `freecad/Shelving/core/tests/test_record.py`, `freecad/Shelving/core/tests/test_scanned_units.py`): The rescan precedence: lock and basis from the record, size from geometry, with the bug-007 core tests.
-- [ ] **Step 3** (`freecad/Shelving/editor/session.py`, `tests/freecad/test_editor_session.py`, `tests/freecad/test_write.py`): Session lock/unlock and query, `begin_drag`'s refusal, and the headless bug-007 reproduction.
-- [ ] **Step 4** (`tests/freecad_gui/test_panel.py`): Bring the panel's drag tests to the new rule, or delete those that only asserted the old one.
-- [ ] **Step 5** (`README.md`, `docs/scope-and-design.md`, `freecad/Shelving/qa/cases/30-editor.toml`, `.claude/docs/bug-log.md`): Glossary and design prose for locked openings and the drag; the QA drag step's expectation; delete bug-007.
+- [x] **Step 1** (`freecad/Shelving/core/edit.py`, `freecad/Shelving/core/tests/test_edit.py`): Lock and unlock edits, the last-unlocked refusal in them and in `set_size` and `set_basis`, the held-by query, and `move_board`'s new rule, with the Must Have core tests; update or replace the tests asserting the old drag rule.
+- [x] **Step 2** (`freecad/Shelving/core/record.py`, `freecad/Shelving/core/tests/test_record.py`, `freecad/Shelving/core/tests/test_scanned_units.py`): The rescan precedence: lock and basis from the record, size from geometry, with the bug-007 core tests.
+- [x] **Step 3** (`freecad/Shelving/editor/session.py`, `tests/freecad/test_editor_session.py`, `tests/freecad/test_write.py`): Session lock/unlock and query, `begin_drag`'s refusal, and the headless bug-007 reproduction.
+- [x] **Step 4** (`tests/freecad_gui/test_panel.py`): Bring the panel's drag tests to the new rule, or delete those that only asserted the old one.
+- [x] **Step 5** (`README.md`, `docs/scope-and-design.md`, `freecad/Shelving/qa/cases/30-editor.toml`, `.claude/docs/bug-log.md`): Glossary and design prose for locked openings and the drag; the QA drag step's expectation; delete bug-007.
 
 ## Review log

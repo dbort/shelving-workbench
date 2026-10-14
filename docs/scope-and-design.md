@@ -63,7 +63,15 @@ a sub-region; two adjacent boards are two boards face to face.
 A board contributes its thickness along the run. A region contributes a
 rule: a fixed size, or a share of what is left. Fixed sizes drive, shares
 absorb, and a run whose fixed sizes overflow, or that has slack and nothing
-to absorb it, is an error naming the region.
+to absorb it, is an error naming the region. The user sees a fixed region
+as locked and a sharing one as unlocked. Locking or unlocking moves
+nothing, and the editor keeps one unlocked region in every run so a change
+to the unit's size has somewhere to go.
+
+A drag moves a board and every board joined to it through locked regions;
+only the first unlocked region on each side changes size. A board with
+only locked regions between it and the end of its run is held until one
+is unlocked.
 
 A fixed size measures the clear opening, or includes the next board, which
 is how a shelf spacing quoted top face to top face is given. The two place
@@ -98,10 +106,13 @@ plausible, wrong tree.
 
 Geometry cannot say two things, so both are stored once set:
 
-- **Rules.** A fixed 300 mm opening and a share that solved to 300 mm look
-  identical, as do a clear size and a spacing. Without stored intent, every
-  bay shares leftover space in proportion to its size, and a void keeps
-  its size unless nothing beside it can change.
+- **Lock and basis.** A fixed 300 mm opening and a share that solved to
+  300 mm look identical, as do a clear size and a spacing. Without stored
+  intent, every bay shares leftover space in proportion to its size, and a
+  void keeps its size unless nothing beside it can change. Sizes always
+  come from the boards, so a board moved by hand stays where it was moved;
+  the record keeps only whether each region is locked and what its size
+  measures.
 - **Facing**: which end of the depth axis is the front, which decides what
   is called left. Two hints exist (a back or front panel, an inset front
   with a flush rear) and both fire rarely. Unknown is the normal state,

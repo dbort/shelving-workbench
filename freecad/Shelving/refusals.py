@@ -34,8 +34,9 @@ _print_user_error = cast(
 )
 
 # A solver reason surfaces from a command only when Edit Unit opens a unit
-# whose stored sizes no longer fit boards moved by hand, so each solver
-# suggestion leads back to a state the editor can open.
+# that does not solve. A rescan takes every size from the boards, so this
+# needs a unit the scan reads but cannot solve; each solver suggestion still
+# leads back to a state the editor can open.
 SUGGESTIONS: Mapping[RefusalReason, str] = {
     "no_boxes": (
         "Put the unit's boards inside the container, or select the container "

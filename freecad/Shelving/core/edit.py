@@ -1,5 +1,10 @@
 """Tree-rewriting edits for the elevation editor: split a bay, merge a board,
-size a region, change what a size measures, drag a board.
+size a region, change what a size measures, lock or unlock a region, drag a
+board.
+
+A region with a ``Fixed`` rule is locked: it keeps its size. One with a
+``Weighted`` or ``Fill`` rule is unlocked and shares what is left of its
+run.
 
 ``split_region`` and ``merge_at`` are each other's exact inverse. No edit
 here mutates the argument ``Unit``: untouched subtrees are shared by
@@ -20,6 +25,7 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import Collection, Mapping, Sequence
+from typing import Literal
 
 from freecad.Shelving.core.geometry import AxisIndex, Space, Vec3
 from freecad.Shelving.core.layout import (
@@ -52,6 +58,31 @@ class EditError(ValueError):
     def __init__(self, node_id: str, message: str) -> None:
         super().__init__(message)
         self.node_id = node_id
+
+
+_LAST_UNLOCKED = (
+    "One opening in each row stays unlocked, to take up changes to the unit's size."
+)
+
+
+def is_locked(item: Item) -> bool:
+    """Whether ``item`` is a region with a ``Fixed`` rule; a board never is."""
+    return not isinstance(item, Board) and isinstance(item.rule, Fixed)
+
+
+def _refuse_last_unlocked(parent: Division, index: int) -> None:
+    """Raise :class:`EditError` naming ``parent.items[index]`` when locking it
+    would leave its run no unlocked region. A region already locked passes:
+    a run an older record left with none keeps what it was allowed."""
+    region = parent.items[index]
+    if isinstance(region, Board) or is_locked(region):
+        return
+    if not any(
+        not isinstance(item, Board) and not is_locked(item)
+        for other, item in enumerate(parent.items)
+        if other != index
+    ):
+        raise EditError(region.id, _LAST_UNLOCKED)
 
 
 def _axis_index(axis: Axis) -> AxisIndex:
@@ -486,10 +517,12 @@ def set_size(unit: Unit, region_id: str, size_mm: float, basis: Basis) -> Unit:
 
     Raises :class:`EditError` naming ``region_id`` when ``size_mm`` is not
     positive, when ``basis`` is ``Basis.WITH_NEXT`` and the next item in the
-    region's run is not a board, or when ``region_id`` names the root, a
-    board, or nothing in ``unit``.
+    region's run is not a board, when ``region_id`` names the root, a
+    board, or nothing in ``unit``, or when it names its run's last unlocked
+    region.
     """
     parent, index = _locate_region(unit, region_id)
+    _refuse_last_unlocked(parent, index)
     if size_mm <= 0:
         raise EditError(
             region_id, f"A size must be more than zero; got {size_mm:.1f} mm."
@@ -563,40 +596,156 @@ def _board_and_region_before(unit: Unit, board_id: str) -> tuple[Division, int]:
 
 
 def region_before(unit: Unit, board_id: str) -> str:
-    """The id of the region a drag of ``board_id`` resizes: the one
-    immediately before it in its run. Raises :class:`EditError` on the same
-    terms as :func:`move_board`'s board checks."""
+    """The id of the region immediately before the board ``board_id`` in its
+    run, the one whose dimension a drag's arrow sits beside. Raises
+    :class:`EditError` naming ``board_id`` when it names no board, or a board
+    with no region immediately before it."""
     parent, index = _board_and_region_before(unit, board_id)
     return parent.items[index].id
+
+
+def lock(unit: Unit, region_id: str) -> Unit:
+    """``unit`` with the region named ``region_id`` fixed at its solved clear
+    size, so ``solve`` places every node where it did. Returns ``unit``
+    itself when the region is already locked. Raises :class:`EditError` on
+    :func:`set_size`'s terms, including for its run's last unlocked region.
+    """
+    parent, index = _locate_region(unit, region_id)
+    if is_locked(parent.items[index]):
+        return unit
+    clear_mm = solve(unit)[region_id].extent_mm(_axis_index(parent.axis))
+    return set_size(unit, region_id, clear_mm, Basis.CLEAR)
+
+
+def unlock(unit: Unit, region_id: str) -> Unit:
+    """``unit`` with the region named ``region_id`` sharing what is left of
+    its run at the weight that holds its solved size, so ``solve`` places
+    every node where it did; ``Fill`` when no other region of the run is
+    unlocked. Returns ``unit`` itself when the region is already unlocked.
+    Raises :class:`EditError` on :func:`set_size`'s terms for the root, a
+    board, or an unknown id."""
+    parent, index = _locate_region(unit, region_id)
+    if not is_locked(parent.items[index]):
+        return unit
+    axis_index = _axis_index(parent.axis)
+    spaces = solve(unit)
+    anchor = _other_driven_anchor(parent.items, {index}, spaces, axis_index)
+    rule: SizeRule = Fill()
+    if anchor is not None:
+        anchor_weight, anchor_size_mm = anchor
+        size_mm = spaces[region_id].extent_mm(axis_index)
+        rule = Weighted(weight=size_mm * anchor_weight / anchor_size_mm)
+    return dataclasses.replace(unit, root=_with_rule(unit.root, region_id, rule))
+
+
+@dataclasses.dataclass(frozen=True)
+class _Side:
+    """What lies past a board toward one end of its run."""
+
+    # The index of the first unlocked region, the one a drag resizes; None
+    # when only boards and locked regions reach the end of the run.
+    free_index: int | None
+    # The locked region nearest the board on this side, if any.
+    nearest_locked: str | None
+
+
+def _side(parent: Division, index: int, step: Literal[-1, 1]) -> _Side:
+    nearest_locked: str | None = None
+    other = index + step
+    while 0 <= other < len(parent.items):
+        item = parent.items[other]
+        if not isinstance(item, Board):
+            if not is_locked(item):
+                return _Side(other, nearest_locked)
+            if nearest_locked is None:
+                nearest_locked = item.id
+        other += step
+    return _Side(None, nearest_locked)
+
+
+def _sides(unit: Unit, board_id: str) -> tuple[Division, _Side, _Side] | None:
+    """The run holding the board ``board_id`` and its low and high sides, or
+    ``None`` when ``board_id`` names no board."""
+    found = _locate(unit.root, board_id)
+    if found is None or not isinstance(found[0].items[found[1]], Board):
+        return None
+    parent, index = found
+    return parent, _side(parent, index, -1), _side(parent, index, 1)
+
+
+def held_by(unit: Unit, board_id: str) -> tuple[str, ...] | None:
+    """The locked regions to unlock so a drag may move the board
+    ``board_id``: on each side where only boards and locked regions lie
+    between it and the end of its run, the locked region nearest the board,
+    low side first. Empty when a drag may move the board; ``None`` when
+    ``board_id`` names no board, or a side holds no region at all, as
+    beside a carcass board, so no unlock would free it."""
+    found = _sides(unit, board_id)
+    if found is None:
+        return None
+    _parent, low, high = found
+    held: list[str] = []
+    for side in (low, high):
+        if side.free_index is not None:
+            continue
+        if side.nearest_locked is None:
+            return None
+        held.append(side.nearest_locked)
+    return tuple(held)
+
+
+def require_movable(unit: Unit, board_id: str) -> None:
+    """Return when a drag may move the board ``board_id``. Raises
+    :class:`EditError` naming ``board_id`` when :func:`held_by` gives
+    ``None``, and naming the nearest holding region when it gives a
+    non-empty tuple."""
+    held = held_by(unit, board_id)
+    if held is None:
+        raise EditError(board_id, "This board has no opening on each side to move.")
+    if held:
+        raise EditError(held[0], "A locked opening holds this board in place.")
 
 
 def move_board(unit: Unit, board_id: str, low_face_mm: float) -> Unit:
     """``unit`` with the board named ``board_id`` dragged so its low face
     along its run's axis sits at ``low_face_mm`` (a unit-frame coordinate).
 
-    Only the region immediately before the board changes: it is fixed at
-    the clear size that puts the board there, restated in the basis that
-    region already had (``Basis.CLEAR`` when it was ``Weighted`` or
-    ``Fill``), so a drag never changes what a size measures. The board lands
-    exactly at ``low_face_mm`` only when nothing before that region is
-    driven; otherwise the solve shares the changed slack among those
-    earlier siblings too. Raises :class:`EditError` naming ``board_id`` when
-    it names no board, or a board with no region immediately before it, and
-    naming that region when the drag would leave it no positive size.
+    Every board joined to it through locked regions moves by the same
+    distance. Only the first unlocked region on each side changes size, and
+    both stay unlocked, reweighted so every other region of the run keeps
+    its solved size. Raises :class:`EditError` naming ``board_id`` when
+    :func:`held_by` gives ``None``, naming the nearest holding region when
+    it gives a non-empty tuple, and naming a resized region the move would
+    leave no positive size.
     """
-    parent, index = _board_and_region_before(unit, board_id)
-    region = parent.items[index]
+    require_movable(unit, board_id)
+    found = _sides(unit, board_id)
+    assert found is not None
+    parent, low, high = found
+    # held_by is empty, so each side has an unlocked region.
+    assert low.free_index is not None and high.free_index is not None
+    axis_index = _axis_index(parent.axis)
     spaces = solve(unit)
-    region_low_mm = spaces[region.id].origin_mm(_axis_index(parent.axis))
-    clear_mm = low_face_mm - region_low_mm
-    if clear_mm <= 0:
-        raise EditError(
-            region.id,
-            "The board cannot move past the far side of the opening it resizes.",
-        )
-    basis = region.rule.basis if isinstance(region.rule, Fixed) else Basis.CLEAR
-    size_mm = _size_in_basis_mm(parent, index, clear_mm, basis)
-    return set_size(unit, region.id, size_mm, basis)
+    shift_mm = low_face_mm - spaces[board_id].origin_mm(axis_index)
+    before = parent.items[low.free_index]
+    after = parent.items[high.free_index]
+    before_mm = spaces[before.id].extent_mm(axis_index) + shift_mm
+    after_mm = spaces[after.id].extent_mm(axis_index) - shift_mm
+    for region, size_mm in ((before, before_mm), (after, after_mm)):
+        if size_mm <= 0:
+            raise EditError(
+                region.id, "The board cannot move past the far side of this opening."
+            )
+    # Both resized regions are unlocked, so the run has an anchor, and the
+    # two new weights keep the run's total weight.
+    anchor = _other_driven_anchor(parent.items, (), spaces, axis_index)
+    assert anchor is not None
+    anchor_weight, anchor_size_mm = anchor
+    root = unit.root
+    for region, size_mm in ((before, before_mm), (after, after_mm)):
+        rule = Weighted(weight=size_mm * anchor_weight / anchor_size_mm)
+        root = _with_rule(root, region.id, rule)
+    return dataclasses.replace(unit, root=root)
 
 
 @dataclasses.dataclass(frozen=True)

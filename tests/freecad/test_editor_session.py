@@ -37,7 +37,12 @@ from freecad.Shelving.editor.session import (
     Session,
     SplitDirection,
 )
-from freecad.Shelving.unit_ops import create_unit, resize_unit, unit_size_mm
+from freecad.Shelving.unit_ops import (
+    create_unit,
+    rescan_unit,
+    resize_unit,
+    unit_size_mm,
+)
 from tests.freecad_materials import library_material
 
 
@@ -849,8 +854,10 @@ def _split_bay(session: Session, bay_id: str, direction: SplitDirection) -> str:
 def test_dimensions_drag_basis_and_untagged() -> None:
     """The dimension operations end to end on one document, all inside one
     session: a set size fixes its region and the sibling redistributes;
-    toggling the basis moves no board; a drag changes the number and keeps
-    the basis; an unsolvable size changes nothing; an untagged box is
+    toggling the basis moves no board; a locked region holds a drag until
+    unlocked, unlocking moves nothing, and locking a column's last unlocked
+    bay is refused; a drag resizes the bays beside the board and leaves them
+    unlocked; an unsolvable size changes nothing; an untagged box is
     listed as left alone, survives every write, and goes only when named;
     and cancel restores the opening document exactly."""
     doc = FreeCAD.newDocument("editor_smoke_dimensions")
@@ -920,23 +927,44 @@ def test_dimensions_drag_basis_and_untagged() -> None:
             doc.recompute()
             assert _board_snapshot(container) == boards_before_toggle
 
-            # A drag changes the number and never the basis.
+            # The locked lower bay holds the shelf until it is unlocked, and
+            # unlocking moves nothing.
             shelf_z_mm = _z_mm(container, left_shelf_id)
             grab_mm = Vec3(100.0, 0.0, shelf_z_mm + 5.0)
+            assert session.held_by(left_shelf_id) == (left_lower_id,)
+            held = session.begin_drag(left_shelf_id, grab_mm)
+            assert isinstance(held, EditFailure), held
+            assert held.node_id == left_lower_id
+            assert session.set_locks([left_lower_id], locked=False) is None
+            doc.recompute()
+            assert _board_snapshot(container) == boards_before_toggle
+            assert not isinstance(_rule_of(session.unit.root, left_lower_id), Fixed)
+            assert session.held_by(left_shelf_id) == ()
+
+            # Locking both bays of the column would leave it nothing to take
+            # up a change of the unit's height: refused, changing nothing.
+            refused = session.set_locks([left_lower_id, left_upper_id], locked=True)
+            assert isinstance(refused, EditFailure), refused
+            assert refused.node_id == left_upper_id
+            doc.recompute()
+            assert _board_snapshot(container) == boards_before_toggle
+            assert not isinstance(_rule_of(session.unit.root, left_lower_id), Fixed)
+
+            # A drag resizes the bays on either side and locks neither.
             assert session.begin_drag(left_shelf_id, grab_mm) is None
             assert session.drag_to(Vec3(100.0, 0.0, shelf_z_mm + 30.0)) is None
             assert session.drag_to(Vec3(100.0, 0.0, shelf_z_mm + 55.0)) is None
             session.end_drag()
             doc.recompute()
             assert session.selected_id == left_lower_id
-            rule = _rule_of(session.unit.root, left_lower_id)
-            assert isinstance(rule, Fixed), rule
-            assert rule.basis is Basis.WITH_NEXT, rule
-            assert abs(rule.size_mm - 350.0) < 1e-6, rule
+            for bay_id in (left_lower_id, left_upper_id):
+                rule = _rule_of(session.unit.root, bay_id)
+                assert not isinstance(rule, Fixed), (bay_id, rule)
             assert abs(_z_mm(container, left_shelf_id) - (shelf_z_mm + 50.0)) < 1e-6
             _assert_session_matches_document(session)
 
-            # A drag with no region before the board, or no drag at all.
+            # A carcass board does not drag, nor does anything with no drag
+            # begun.
             assert isinstance(session.begin_drag("bottom", grab_mm), EditFailure)
             assert isinstance(session.drag_to(grab_mm), EditFailure)
 
@@ -1214,6 +1242,28 @@ def test_a_new_shelf_copies_the_stock_of_the_shelf_in_its_opening(
                 assert properties.read_grain(board) is None, name
         finally:
             session.cancel()
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def test_a_rescan_keeps_a_shelf_moved_by_hand_where_it_was_moved() -> None:
+    """bug-007: the stored record once put a hand-moved shelf back."""
+    doc = FreeCAD.newDocument("editor_rescan_hand_moved")
+    try:
+        container = create_unit(doc)
+        session = Session(container)
+        session.open()
+        shelf = _add_board_in_lower_bay(session)
+        session.commit()
+        placeable = cast("_Placeable", shelf)
+        placement = placeable.Placement
+        moved_z_mm = float(placement.Base.z) - 60.0
+        placement.Base.z = moved_z_mm
+        placeable.Placement = placement
+        doc.recompute()
+        rescan_unit(container)
+        doc.recompute()
+        assert abs(_z_mm(container, shelf.Name) - moved_z_mm) < 1e-6
     finally:
         FreeCAD.closeDocument(doc.Name)
 

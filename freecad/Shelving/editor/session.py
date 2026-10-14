@@ -19,7 +19,7 @@ session never reads theirs.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Collection, Mapping
+from collections.abc import Collection, Mapping, Sequence
 from typing import Literal, Protocol, cast
 
 import FreeCAD
@@ -33,15 +33,19 @@ from freecad.Shelving.container import (
 from freecad.Shelving.core.edit import (
     EditError,
     Measurement,
+    held_by,
+    lock,
     measure,
     merge_at,
     move_board,
     region_before,
+    require_movable,
     run_axis,
     set_basis,
     set_size,
     set_unit_size,
     split_region,
+    unlock,
 )
 from freecad.Shelving.core.geometry import Space, Vec3
 from freecad.Shelving.core.layout import (
@@ -452,14 +456,36 @@ class Session:
             return EditFailure(describe_solve_error(err), err.node_id)
         return self._apply(candidate, select=region_id)
 
+    def set_locks(self, region_ids: Sequence[str], locked: bool) -> EditFailure | None:
+        """Lock each of ``region_ids`` when ``locked``, else unlock each, as
+        one write that moves nothing and keeps the selection. Returns an
+        :class:`EditFailure` on refusal, such as locking a run's last
+        unlocked region, leaving the session and document untouched."""
+        candidate = self.unit
+        try:
+            for region_id in region_ids:
+                candidate = (lock if locked else unlock)(candidate, region_id)
+        except EditError as err:
+            return EditFailure(str(err), err.node_id)
+        except LayoutSolveError as err:
+            return EditFailure(describe_solve_error(err), err.node_id)
+        return self._apply(candidate, select=self.selected_id)
+
+    def held_by(self, board_id: str) -> tuple[str, ...] | None:
+        """:func:`~freecad.Shelving.core.edit.held_by` for this session's
+        unit: the locked regions to unlock so a drag may move ``board_id``,
+        empty when it may move, ``None`` when no unlock would free it."""
+        return held_by(self.unit, board_id)
+
     def begin_drag(self, board_id: str, grab_mm: Vec3) -> EditFailure | None:
         """Start dragging ``board_id``, grabbed at the unit-frame point
         ``grab_mm``; each :meth:`drag_to` keeps that point under the pointer.
         Leaves the selection alone, so a press that never moves still
         selects the board. Returns an :class:`EditFailure`, starting no
-        drag, when the board has no region before it."""
+        drag, when a drag may not move the board: a locked region holds it,
+        or no unlock would free it."""
         try:
-            region_before(self.unit, board_id)
+            require_movable(self.unit, board_id)
             axis = run_axis(self.unit, board_id)
         except EditError as err:
             return EditFailure(str(err), err.node_id)
@@ -474,9 +500,10 @@ class Session:
     def drag_to(self, pointer_mm: Vec3) -> EditFailure | None:
         """Move the dragged board so its grab point follows ``pointer_mm``
         along its run's axis, re-solving and writing the boards, and select
-        the region before it: only that region's number changes, never its
-        basis. Returns an :class:`EditFailure`, leaving the last good state,
-        when this step would not solve or no drag is in progress."""
+        the region before it. Boards joined to it through locked regions
+        move with it, and only the first unlocked region on each side
+        changes size. Returns an :class:`EditFailure`, leaving the last good
+        state, when this step would not solve or no drag is in progress."""
         if self._drag is None:
             return EditFailure("no board is being dragged", None)
         board_id, axis, grab_offset_mm = self._drag

@@ -23,7 +23,6 @@ from shiboken6 import Shiboken
 
 from freecad.Shelving.compat import override
 from freecad.Shelving.core.layout import (
-    Basis,
     Bay,
     Board,
     Division,
@@ -296,19 +295,17 @@ def test_a_jittered_click_does_not_drag(unit_panel: _Fixture) -> None:
     assert unit_panel.panel.delete_button.isEnabled()
 
 
-def test_a_drag_keeps_the_basis(unit_panel: _Fixture) -> None:
+def test_a_locked_opening_holds_the_shelf_above_it(unit_panel: _Fixture) -> None:
+    """A typed size locks the lower opening, which with the bottom board
+    below it leaves the shelf nothing to move into."""
     unit_panel.select(unit_panel.lower)
     unit_panel.type_size("300")
-    unit_panel.panel.basis_combo.setCurrentIndex(1)
-    _process_events()
-    assert unit_panel.rule(unit_panel.lower) == Fixed(318.0, Basis.WITH_NEXT)
+    shelf_z_mm = unit_panel.session.spaces[unit_panel.shelf].origin.z_mm
     _press_move_release(unit_panel, -40)
-    rule = unit_panel.rule(unit_panel.lower)
-    assert isinstance(rule, Fixed)
-    assert rule.basis is Basis.WITH_NEXT
-    assert rule.size_mm > 318.0 + _TOL_MM
-    assert unit_panel.session.selected_id == unit_panel.lower
-    assert unit_panel.panel.basis_combo.currentIndex() == 1
+    assert unit_panel.rule(unit_panel.lower) == Fixed(300.0)
+    assert unit_panel.session.spaces[unit_panel.shelf].origin.z_mm == pytest.approx(
+        shelf_z_mm
+    )
 
 
 def test_untagged_objects_are_kept_unless_deleted() -> None:

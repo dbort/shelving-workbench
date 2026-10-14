@@ -16,6 +16,15 @@ an empty string, so a key read back is never ambiguous about which case it
 is. Two regions in different divisions can never collide, because a board
 bounds at most one region on each side within one run.
 
+GEOMETRY WINS. A rescan takes every region's size from the boards, so a
+board moved by hand stays where it was moved. The record contributes only
+what geometry cannot say: whether a region is locked (``Fixed``) or
+unlocked (``Weighted`` or ``Fill``), and a locked region's basis. A stored
+locked region takes its scanned size restated in its stored basis; a
+stored unlocked region keeps an unlocked scanned rule, or, where the scan
+fixed it, takes the weight that holds its scanned size beside the run's
+other unlocked regions.
+
 CONSEQUENCES of keying this way, because they are not obvious. Renaming or
 deleting a bounding board invalidates its neighbors' keys; the correct
 response, and what :func:`with_stored_rules` does, is to fall back to the
@@ -46,6 +55,7 @@ import json
 from collections.abc import Iterator, Mapping, Sequence
 from typing import Literal, TypedDict
 
+from freecad.Shelving.core.geometry import Space
 from freecad.Shelving.core.layout import (
     Basis,
     Bay,
@@ -60,6 +70,7 @@ from freecad.Shelving.core.layout import (
     Void,
     Weighted,
 )
+from freecad.Shelving.core.solver import solve
 
 RULE_RECORD_VERSION: int = 1
 
@@ -235,33 +246,102 @@ def _set_rule(region: Region, rule: SizeRule) -> Region:
             return dataclasses.replace(region, rule=rule)
 
 
-def _rebuild_with_stored_rules(region: Region, rules: Mapping[str, SizeRule]) -> Region:
-    """A copy of ``region`` with every descendant region's rule replaced by
-    its matching entry in ``rules``, and left as scanned where no entry
-    matches. ``region``'s own rule is untouched; the caller, which holds the
-    parent run ``region`` sits in, is the one that knows ``region``'s key."""
-    if not isinstance(region, Division):
-        return region
-    items = region.items
-    new_items: list[Item] = []
+def _merged_rules(
+    run: Division, rules: Mapping[str, SizeRule], spaces: Mapping[str, Space]
+) -> list[SizeRule | None]:
+    """The rule each item of ``run`` takes, ``None`` for a board: the
+    record's lock state and basis at the size ``spaces`` gives it."""
+    items = run.items
+    axis_index = run.axis.component_index
+    keyed: list[SizeRule | None] = []
     for index, item in enumerate(items):
         if isinstance(item, Board):
+            keyed.append(None)
+            continue
+        key = rule_key(
+            _neighbor_board_id(items, index - 1), _neighbor_board_id(items, index + 1)
+        )
+        keyed.append(rules.get(key))
+    merged: list[SizeRule | None] = []
+    # The unlocked regions whose scanned rule stands share one size per unit
+    # of weight; a region the record unlocks joins them at that rate, or at
+    # the scan's own 1 mm per unit of weight when none stands.
+    anchor_mm: float | None = None
+    for item, stored in zip(items, keyed, strict=True):
+        if isinstance(item, Board):
+            merged.append(None)
+            continue
+        merged.append(item.rule)
+        if isinstance(stored, Fixed):
+            continue
+        if anchor_mm is None and not isinstance(item.rule, Fixed):
+            weight = item.rule.weight if isinstance(item.rule, Weighted) else 1.0
+            anchor_mm = spaces[item.id].extent_mm(axis_index) / weight
+    for index, (item, stored) in enumerate(zip(items, keyed, strict=True)):
+        if isinstance(item, Board) or stored is None:
+            continue
+        clear_mm = spaces[item.id].extent_mm(axis_index)
+        if isinstance(stored, Fixed):
+            merged[index] = Fixed(
+                size_mm=_clear_in_basis_mm(items, index, clear_mm, stored.basis),
+                basis=stored.basis,
+            )
+        elif isinstance(item.rule, Fixed):
+            merged[index] = Weighted(weight=clear_mm / (anchor_mm or 1.0))
+    return merged
+
+
+def _clear_in_basis_mm(
+    items: Sequence[Item], index: int, clear_mm: float, basis: Basis
+) -> float:
+    """``clear_mm`` restated in ``basis`` for ``items[index]``: plus the next
+    board's ``thickness_mm`` for ``Basis.WITH_NEXT``, the amount the solver
+    subtracts. A record can name that basis only for a region with a board
+    after it, since its key names that board."""
+    if basis is Basis.WITH_NEXT and index + 1 < len(items):
+        after = items[index + 1]
+        if isinstance(after, Board):
+            return clear_mm + after.thickness_mm
+    return clear_mm
+
+
+def _rebuild_with_stored_rules(
+    region: Region, rules: Mapping[str, SizeRule], spaces: Mapping[str, Space]
+) -> Region:
+    """A copy of ``region`` with every descendant region's rule merged with
+    its matching entry in ``rules`` (:func:`_merged_rules`), and left as
+    scanned where no entry matches. ``region``'s own rule is untouched; the
+    caller, which holds the parent run ``region`` sits in, is the one that
+    knows ``region``'s key."""
+    if not isinstance(region, Division):
+        return region
+    new_items: list[Item] = []
+    for item, rule in zip(
+        region.items, _merged_rules(region, rules, spaces), strict=True
+    ):
+        if isinstance(item, Board) or rule is None:
             new_items.append(item)
             continue
-        before = _neighbor_board_id(items, index - 1)
-        after = _neighbor_board_id(items, index + 1)
-        key = rule_key(before, after)
-        rebuilt = _rebuild_with_stored_rules(item, rules)
-        new_items.append(_set_rule(rebuilt, rules.get(key, item.rule)))
+        new_items.append(
+            _set_rule(_rebuild_with_stored_rules(item, rules, spaces), rule)
+        )
     return dataclasses.replace(region, items=new_items)
 
 
 def with_stored_rules(unit: Unit, rules: Mapping[str, SizeRule]) -> Unit:
-    """``unit`` with every region whose :func:`rule_key` matches an entry in
-    ``rules`` carrying that rule, and every other region left as scanned.
+    """``unit``, as scanned, with each region whose :func:`rule_key` matches
+    an entry in ``rules`` taking that entry's lock state and basis at its
+    scanned size, so ``solve`` gives every node the space it had in
+    ``unit``. Raises :class:`~freecad.Shelving.core.solver.LayoutSolveError`
+    when ``unit`` does not solve.
 
     A key with no match, most often because a bounding board was renamed or
     deleted since the record was written, is not an error: that region keeps
     whatever rule the scan it was rebuilt from assigned it.
     """
-    return dataclasses.replace(unit, root=_rebuild_with_stored_rules(unit.root, rules))
+    if not rules:
+        return unit
+    spaces = solve(unit)
+    return dataclasses.replace(
+        unit, root=_rebuild_with_stored_rules(unit.root, rules, spaces)
+    )

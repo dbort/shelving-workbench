@@ -65,17 +65,23 @@ The vocabulary the documentation and the code share.
   can have several tops.
 - **Insets**: how far a board is set back from its region on each face
   other than the two along its own run.
-- **Size rule**: how a division sizes one region: **fixed** at an exact
-  size, or a **weighted** share of what is left (**fill** is an equal
-  share).
+- **Size rule**: how a division sizes one region. A **locked** opening is
+  fixed at an exact size; an **unlocked** one takes a weighted share of what
+  is left in its row (**fill** is an equal share). Locking or unlocking
+  moves nothing, and typing a size locks the opening. One opening in each
+  row stays unlocked, so a change to the unit's size always has somewhere
+  to go.
 - **Measurement basis**: what a fixed size measures. **Clear opening** is
   the region alone; **Spacing** runs through the next board, as a shelf
   spacing is quoted top face to top face. Switching basis moves nothing.
   When stock thickness changes, a spacing holds the next board in place and
   a clear opening moves it.
-- **The drag rule**: dragging a board resizes the region before it and
-  changes only that region's number, never its basis. A region that was
-  sharing leftover space becomes a clear opening.
+- **The drag rule**: dragging a board moves it, together with every board
+  joined to it through locked openings, by the same distance. Only the
+  nearest unlocked opening on each side changes size, and both stay
+  unlocked; a drag never locks or unlocks anything. A board with nothing
+  but boards and locked openings between it and the end of its row is
+  held until one of those openings is unlocked.
 - **Local frame**: origin at the unit's front-bottom-left corner, +X right,
   +Y back, +Z up, in millimeters. A container's own placement is excluded,
   so a unit reads the same wherever it sits.
