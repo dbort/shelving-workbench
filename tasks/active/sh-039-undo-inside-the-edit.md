@@ -169,3 +169,8 @@ Reviewed the design the user chose after Round 2.
 - **F2: A click on a board with no edit empties Redo and leaves an "Edit Shelving Unit" step** (`freecad/Shelving/editor/session.py:600`): `begin_drag` on every press commits the start step. Test a no-move drag before any edit with a non-empty Redo list.
 - N1: The fix for an Undo before a drag moves is tested only at the App level.
 - N2: Round 3's N2 rests on the manual QA run.
+
+### Round 5: REJECTED
+- **F1: An Undo reaching below the session's start in one read-back comes back with the first edit redone** (`freecad/Shelving/editor/history.py:211`): after the start step and the earlier steps are redone, the count of pre-session steps undone is still set, so the second loop redoes the session's own undone edits too. Redo by the count only when no start step is in the Redo list, zero it either way, and test several Undos read back at once.
+- N1: Should `write_container`'s solve refuse after `_apply`'s passed, the first refused edit would already have committed the start step.
+- N2: Round 4's N1 and Round 3's N2 stand.
