@@ -13,7 +13,6 @@ from freecad.Shelving import properties
 from freecad.Shelving.container import read_container
 from freecad.Shelving.core.geometry import Space, Vec3
 from freecad.Shelving.core.layout import Basis, Bay, Board, Division, Region
-from freecad.Shelving.editor.history import FLOOR_MESSAGE, SESSION_STEP
 from freecad.Shelving.editor.session import PROBE_PROPERTY, EditFailure, Session
 from freecad.Shelving.unit_ops import create_unit
 from tests.freecad_materials import library_material
@@ -80,18 +79,6 @@ def _board_ids(region: Region) -> set[str]:
     for item in region.items:
         found |= {item.id} if isinstance(item, Board) else _board_ids(item)
     return found
-
-
-class _Messages:
-    """What a session tells its panel after an Undo or Redo."""
-
-    def __init__(self, session: Session) -> None:
-        self.seen: list[str] = []
-        session.on_change = self._record
-
-    def _record(self, failure: EditFailure | None) -> None:
-        if failure is not None:
-            self.seen.append(failure.message)
 
 
 @pytest.fixture
@@ -182,7 +169,6 @@ def test_each_edit_is_one_step_named_for_it(doc: FreeCAD.Document) -> None:
             "Change What a Size Measures",
             "Set Size",
             "Add Shelf",
-            SESSION_STEP,
             *before,
         ]
         assert doc.UndoNames == expected
@@ -206,7 +192,6 @@ def test_a_drag_that_moves_nothing_leaves_no_step(doc: FreeCAD.Document) -> None
 
 def test_undo_and_redo_step_one_edit_at_a_time(doc: FreeCAD.Document) -> None:
     session = _opened(doc)
-    messages = _Messages(session)
     try:
         states = [_record(session)]
         _add_shelf(session)
@@ -224,7 +209,6 @@ def test_undo_and_redo_step_one_edit_at_a_time(doc: FreeCAD.Document) -> None:
                 selected = session.selected_id
                 assert selected is not None
                 assert session.spaces[selected].origin.z_mm == pytest.approx(18.0)
-        assert messages.seen == []
         assert session.selected_id is None
         for expected in states[1:]:
             _redo(session)
@@ -233,23 +217,24 @@ def test_undo_and_redo_step_one_edit_at_a_time(doc: FreeCAD.Document) -> None:
         session.close()
 
 
-def test_undo_past_the_first_edit_stops_at_the_start(doc: FreeCAD.Document) -> None:
+def test_undo_past_the_first_edit_goes_on_into_the_document(
+    doc: FreeCAD.Document,
+) -> None:
+    """As in Sketcher's edit mode: past the session's first edit lies the
+    document's own history, here the step that created the unit, after
+    which there is no unit to read."""
     opening = _boards(_container(doc))
-    before_names = list(doc.UndoNames)
     session = _opened(doc)
-    messages = _Messages(session)
     try:
         _add_shelf(session)
-        first = _record(session)
         _undo(session)
         assert _boards(session.container) == opening
-        assert messages.seen == []
+        assert not session.lost
         _undo(session)
-        assert _boards(session.container) == opening
-        assert messages.seen == [FLOOR_MESSAGE]
-        assert doc.UndoNames == [SESSION_STEP, *before_names]
-        _redo(session)
-        assert _record(session) == first
+        assert doc.getObject("ShelvingUnit") is None
+        assert session.lost
+        doc.redo()
+        assert _boards(_container(doc)) == opening
     finally:
         session.close()
 
@@ -267,7 +252,7 @@ def test_close_keeps_the_steps_and_removes_the_probe(doc: FreeCAD.Document) -> N
     session.close()
     assert doc.getObject("ShelvingDimensionProbe") is None
     assert _boards(container) == one_shelf
-    assert doc.UndoNames == ["Add Shelf", SESSION_STEP, *before_names]
+    assert doc.UndoNames == ["Add Shelf", *before_names]
     assert doc.RedoNames == ["Add Shelf"]
     doc.redo()
     assert _boards(container) == two_shelves
@@ -316,25 +301,6 @@ def test_a_click_or_a_refused_edit_leaves_both_lists_as_it_found_them(
     session.close()
     assert doc.UndoNames == before_undo
     assert doc.RedoNames == before_redo
-
-
-def test_undo_before_the_first_edit_reaches_nothing_from_before(
-    doc: FreeCAD.Document,
-) -> None:
-    container = _container(doc)
-    _undone_step_elsewhere(doc)
-    before_undo, before_redo = list(doc.UndoNames), list(doc.RedoNames)
-    before_boards = _boards(container)
-    session = _opened(doc)
-    messages = _Messages(session)
-    try:
-        _undo(session)
-        assert messages.seen == [FLOOR_MESSAGE]
-        assert doc.UndoNames == before_undo
-        assert doc.RedoNames == before_redo
-        assert _boards(container) == before_boards
-    finally:
-        session.close()
 
 
 def test_a_probe_some_step_changed_goes_in_a_step_of_its_own(

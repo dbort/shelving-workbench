@@ -136,7 +136,7 @@ STANDING OBLIGATIONS (`CLAUDE.md`):
   itself visible, as Sketcher's edit mode ending is.
 
 ## Plan
-- [ ] **Step 1** (`freecad/Shelving/editor/history.py`, `freecad/Shelving/editor/session.py`): A history that follows the document's signals: one step per edit, the read-back by rescanning, the panel closing when the unit is gone, the Gui Redo workaround, and Close; `Session.close` replaces `commit` and `cancel`.
+- [x] **Step 1** (`freecad/Shelving/editor/history.py`, `freecad/Shelving/editor/session.py`): A history that follows the document's signals: one step per edit, the read-back by rescanning, the panel closing when the unit is gone, the Gui Redo workaround, and Close; `Session.close` replaces `commit` and `cancel`.
 - [x] **Step 2** (`freecad/Shelving/editor/panel.py`, `freecad/Shelving/commands/edit_unit.py`, `freecad/Shelving/qa/actions.py`, `freecad/Shelving/properties.py`): The panel's one Close button; callers of `commit` and `cancel` close instead; drop the stock records the rewrite needed.
 - [x] **Step 3** (`tests/freecad/`, `tests/freecad_gui/`, `tests/freecad_view/`): Bring the tests to Close; headless and view-tier tests for the Must Haves; the crash-sequence subprocess test.
 - [x] **Step 4** (`freecad/Shelving/qa/cases/30-editor.toml`, `.claude/docs/code-map.md`, `.claude/docs/bug-log.md`, `.claude/docs/freecad-notes.md`): Close in the QA cases, the code map, bug-015, the notes.

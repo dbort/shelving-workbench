@@ -16,15 +16,12 @@ import pytest
 from freecad.Shelving.container import read_container
 from freecad.Shelving.core.geometry import Space
 from freecad.Shelving.core.layout import Bay, Board, Division, Region
-from freecad.Shelving.editor import panel as panel_module
-from freecad.Shelving.editor.history import FLOOR_MESSAGE, SESSION_STEP
 from freecad.Shelving.editor.panel import EditUnitPanel
 from freecad.Shelving.unit_ops import create_unit
 from tests.freecad_view.editor import (
     click_task_button,
     edit_unit,
     gui_step,
-    notification_count,
 )
 from tests.freecad_view.view import ViewDriver
 
@@ -106,22 +103,6 @@ def unit(driver: ViewDriver) -> Iterator[FreeCAD.DocumentObject]:
         driver.pump()
 
 
-@pytest.fixture
-def reported(monkeypatch: pytest.MonkeyPatch) -> list[str]:
-    """Every message the panel shows in the Notification Area, still shown.
-    Recorded at the panel, since the Notification Area does not count a
-    message repeated unchanged."""
-    shown: list[str] = []
-    real = panel_module.report_error
-
-    def record(message: str) -> None:
-        shown.append(message)
-        real(message)
-
-    monkeypatch.setattr(panel_module, "report_error", record)
-    return shown
-
-
 def _shown_size_mm(panel: EditUnitPanel) -> float:
     widget = panel.size_field.quantity_widget
     assert widget is not None
@@ -165,43 +146,28 @@ def test_undo_and_redo_step_one_edit_and_the_panel_follows(
     click_task_button("Close", driver)
 
 
-def test_undo_past_the_first_edit_says_so_and_redo_redoes_it(
-    unit: FreeCAD.DocumentObject, driver: ViewDriver, reported: list[str]
+def test_undo_past_the_unit_closes_the_panel_and_redo_brings_it_back(
+    unit: FreeCAD.DocumentObject, driver: ViewDriver
 ) -> None:
+    """As Sketcher's edit mode ends when its sketch is undone: past the
+    session's first edit lies the step that created the unit."""
+    doc = unit.Document
     opening = _boards(unit)
     panel = edit_unit(unit, driver)
     _add_shelf(panel, driver)
     first = _boards(unit)
     gui_step("Std_Undo", driver)
     assert _boards(unit) == opening
-    assert reported == []
-    notifications = notification_count()
-    gui_step("Std_Undo", driver)
-    assert _boards(unit) == opening
-    assert reported == [FLOOR_MESSAGE]
-    assert notification_count() == notifications + 1
     assert FreeCADGui.Control.activeDialog()
+    gui_step("Std_Undo", driver)
+    assert doc.getObject("ShelvingUnit") is None
+    assert not FreeCADGui.Control.activeDialog()
+    assert doc.getObject("ShelvingDimensionProbe") is None
     gui_step("Std_Redo", driver)
-    assert _boards(unit) == first
-    click_task_button("Close", driver)
-
-
-def test_undo_before_any_edit_reaches_nothing_from_before(
-    unit: FreeCAD.DocumentObject, driver: ViewDriver, reported: list[str]
-) -> None:
-    """The Gui Undo's redo workaround runs first here, so this differs from
-    the App-level Undo the headless tier checks."""
-    doc = unit.Document
-    before_names = list(doc.UndoNames)
-    before_boards = _boards(unit)
-    edit_unit(unit, driver)
-    gui_step("Std_Undo", driver)
-    assert reported == [FLOOR_MESSAGE]
-    assert doc.UndoNames == before_names
-    assert _boards(unit) == before_boards
-    assert FreeCADGui.Control.activeDialog()
-    click_task_button("Close", driver)
-    assert doc.UndoNames == before_names
+    gui_step("Std_Redo", driver)
+    container = doc.getObject("ShelvingUnit")
+    assert container is not None
+    assert _boards(container) == first
 
 
 def test_close_keeps_each_edit_as_a_step(
@@ -217,7 +183,7 @@ def test_close_keeps_each_edit_as_a_step(
     click_task_button("Close", driver)
     assert not FreeCADGui.Control.activeDialog()
     assert doc.getObject("ShelvingDimensionProbe") is None
-    assert doc.UndoNames == ["Add Shelf", "Add Shelf", SESSION_STEP, *before_names]
+    assert doc.UndoNames == ["Add Shelf", "Add Shelf", *before_names]
     assert _boards(unit) == two_shelves
     gui_step("Std_Undo", driver)
     assert _boards(unit) == one_shelf

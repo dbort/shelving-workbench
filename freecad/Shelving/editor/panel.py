@@ -555,7 +555,7 @@ class EditUnitPanel:
         self.session = Session(container)
         watch.lap("session")
         self.session.open(lambda settle: QtCore.QTimer.singleShot(0, settle))
-        self.session.on_change = self._show_result
+        self.session.on_change = self._follow_document
         watch.lap("open session")
         # Without this, a failure building the form would leave the probe
         # object in the document with no dialog to remove it.
@@ -764,6 +764,17 @@ class EditUnitPanel:
 
     def _delete_untagged(self) -> None:
         self._show_result(self.session.delete_untagged(self._checked_untagged()))
+
+    def _follow_document(self) -> None:
+        """Show the unit an Undo or Redo left, or close, as Sketcher's edit
+        mode ends when its sketch is undone, when it left none."""
+        if not self.session.lost:
+            self._refresh()
+            return
+        import FreeCADGui
+
+        self.session.close()
+        FreeCADGui.Control.closeDialog()
 
     def _show_result(self, failure: EditFailure | None) -> None:
         if failure is not None:

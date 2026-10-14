@@ -86,8 +86,8 @@ its `driver` fixture gives each test a new document with an active 3D view.
 - **Focus the 3D view before `Std_Undo` or `Std_Redo`.** FreeCAD disables
   both while keyboard focus sits in a task panel widget.
 - **The Notification Area does not count a repeated message.** Its
-  status-bar count stays put when the same text comes again; record what
-  the panel reports instead (`test_undo_in_the_editor.py`).
+  status-bar count stays put when the same text comes again; to assert a
+  message seen twice, record the calls that report it instead.
 - **The Report view is not where `print` goes under pytest.** pytest
   captures standard output first; read it with `capsys`.
 - **FreeCAD's GUI takes over standard output** in a child process too, so

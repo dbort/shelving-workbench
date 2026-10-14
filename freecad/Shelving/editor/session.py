@@ -234,17 +234,18 @@ class Session:
         # face along its run's axis, between begin_drag and end_drag.
         self._drag: tuple[str, Axis, float] | None = None
         self._history: EditHistory | None = None
-        # Runs after an Undo or Redo has been read back, with what to tell
-        # the user, if anything.
-        self.on_change: Callable[[EditFailure | None], None] | None = None
+        # Runs after an Undo, a Redo, or a step made elsewhere has been read
+        # back.
+        self.on_change: Callable[[], None] | None = None
+        # Whether an Undo or Redo left no unit to read: the container gone,
+        # or no longer scanning or solving. The panel closes then.
+        self.lost = False
 
     def open(self, schedule: Schedule | None = None) -> None:
         """Make the probe object and start following the document's undo
-        history; the session's first edit commits a first step that changes
-        nothing, marking where it began. Call once, before any edit.
-        ``schedule`` defers the read-back after an Undo or Redo until
-        FreeCAD has finished it; with none, :meth:`settle` does the
-        read-back.
+        history. Call once, before any edit. ``schedule`` defers the
+        read-back after an Undo or Redo until FreeCAD has finished it; with
+        none, :meth:`settle` does the read-back.
 
         A document created by ``FreeCAD.newDocument`` (as every
         ``freecadcmd`` script and this workbench's own smoke does) starts
@@ -300,18 +301,18 @@ class Session:
 
     # What EditHistory needs; see HistoryOwner.
 
-    def mark_start(self) -> None:
-        container = cast("_Placed", self.container)
-        container.Placement = container.Placement
-
     def reload(self) -> None:
         """Rescan the container, keeping a selected node that still exists
-        selected. Keeps the session's state when the container no longer
-        reads."""
+        selected, then tell :attr:`on_change`. Sets :attr:`lost` instead of
+        rescanning when the container no longer reads."""
         try:
             unit, reasons = _read_unit(self.container)
             spaces = solve(unit)
-        except Exception:  # noqa: BLE001 - the session keeps its last state
+        except Exception:  # noqa: BLE001 - an Undo can leave anything behind
+            self.lost = True
+            self._drag = None
+            if self.on_change is not None:
+                self.on_change()
             return
         selected = self.selected_id
         if selected is not None and selected not in spaces:
@@ -327,16 +328,14 @@ class Session:
         self._set_aside_reasons = reasons
         self.left_alone = self._unplaced(reasons)
         self.selected_id = selected
+        if self.on_change is not None:
+            self.on_change()
 
     def probe_name(self) -> str | None:
         return self._probe_name if self.probe is not None else None
 
     def step_interrupted(self) -> None:
         self._drag = None
-
-    def changed(self, message: str | None) -> None:
-        if self.on_change is not None:
-            self.on_change(EditFailure(message, None) if message else None)
 
     def _step(
         self, name: str, edit: Callable[[], EditFailure | None]
@@ -399,8 +398,6 @@ class Session:
         when it fails to solve, leaving the session and document untouched."""
         try:
             spaces: Mapping[str, Space] = solve(candidate)
-            if self._history is not None:
-                self._history.write_ahead()
             # write_container solves again before writing any board, so a
             # LayoutSolveError from either call means nothing was written.
             result = write_container(self.container, candidate)
@@ -644,8 +641,6 @@ class Session:
         doc = self.container.Document
 
         def delete() -> EditFailure | None:
-            if self._history is not None:
-                self._history.write_ahead()
             for name in names:
                 doc.removeObject(name)
             self.left_alone = tuple(e for e in self.left_alone if e.name not in names)
