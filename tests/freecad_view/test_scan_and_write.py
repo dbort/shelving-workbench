@@ -12,6 +12,7 @@ from PySide6 import QtCore, QtGui, QtTest, QtWidgets
 
 from freecad.Shelving.core.layout import Bay, Board, Division, Region
 from freecad.Shelving.editor.panel import EditUnitPanel
+from freecad.Shelving.qa import actions as qa_actions
 from freecad.Shelving.temp_dirs import export_path
 from freecad.Shelving.unit_ops import create_unit
 from tests.freecad_view.view import ViewDriver
@@ -57,18 +58,13 @@ def _document() -> FreeCAD.Document:
     return cast("FreeCAD.Document", FreeCAD.ActiveDocument)
 
 
-def _add_box(
-    container: FreeCAD.DocumentObject,
-    name: str,
-    size_mm: tuple[float, float, float],
-    corner_mm: tuple[float, float, float],
-    angle_deg: float = 0.0,
-) -> None:
+def _add_skewed_box(container: FreeCAD.DocumentObject) -> None:
+    """A box turned 30 degrees about z, which Edit Unit leaves alone."""
     doc = _document()
-    box = cast("_BoxFeature", doc.addObject("Part::Box", name))
-    box.Length, box.Width, box.Height = size_mm
+    box = cast("_BoxFeature", doc.addObject("Part::Box", "Skewed"))
+    box.Length, box.Width, box.Height = 100.0, 50.0, 20.0
     box.Placement = FreeCAD.Placement(
-        FreeCAD.Vector(*corner_mm), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), angle_deg)
+        FreeCAD.Vector(0.0, 400.0, 0.0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 30.0)
     )
     cast("FreeCAD.DocumentObjectGroup", container).addObject(
         cast("FreeCAD.DocumentObject", box)
@@ -76,17 +72,12 @@ def _add_box(
     doc.recompute()
 
 
-def _test_unit() -> FreeCAD.DocumentObject:
-    """The QA wizard's TestUnit: a hand-built closed unit with one shelf."""
-    container = cast(
-        "FreeCAD.DocumentObject", _document().addObject("App::Part", "TestUnit")
-    )
-    _add_box(container, "Bottom", (600.0, 300.0, 18.0), (0.0, 0.0, 0.0))
-    _add_box(container, "Top", (600.0, 300.0, 18.0), (0.0, 0.0, 582.0))
-    _add_box(container, "LeftSide", (18.0, 300.0, 564.0), (0.0, 0.0, 18.0))
-    _add_box(container, "RightSide", (18.0, 300.0, 564.0), (582.0, 0.0, 18.0))
-    _add_box(container, "Shelf", (564.0, 300.0, 18.0), (18.0, 0.0, 291.0))
-    return container
+def _test_unit() -> tuple[FreeCAD.DocumentObject, ViewDriver]:
+    """The QA wizard's TestUnit, in the new document its action opens, and a
+    driver for that document's 3D view."""
+    qa_actions.test_unit()
+    view = ViewDriver.for_active_view()
+    return cast("FreeCAD.DocumentObject", _document().getObject("TestUnit")), view
 
 
 def _snapshot() -> Snapshot:
@@ -161,7 +152,7 @@ def _shift(a: QtGui.QColor, b: QtGui.QColor) -> int:
 def test_edit_unit_reads_a_hand_built_unit_and_cancel_changes_nothing(
     driver: ViewDriver,
 ) -> None:
-    container = _test_unit()
+    container, _ = _test_unit()
     before = _snapshot()
     undo_before = _document().UndoNames
     panel = _edit_unit(container, driver)
@@ -178,8 +169,8 @@ def test_edit_unit_reads_a_hand_built_unit_and_cancel_changes_nothing(
 def test_a_part_turned_off_axis_is_left_alone_with_its_reason(
     driver: ViewDriver,
 ) -> None:
-    container = _test_unit()
-    _add_box(container, "Skewed", (100.0, 50.0, 20.0), (0.0, 400.0, 0.0), 30.0)
+    container, _ = _test_unit()
+    _add_skewed_box(container)
     panel = _edit_unit(container, driver)
     assert list(panel.untagged_checks) == ["Skewed"]
     assert (
@@ -196,8 +187,8 @@ def test_a_part_turned_off_axis_is_left_alone_with_its_reason(
 def test_export_boxes_writes_the_file_and_reports_where(
     driver: ViewDriver, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    container = _test_unit()
-    _add_box(container, "Skewed", (100.0, 50.0, 20.0), (0.0, 400.0, 0.0), 30.0)
+    container, _ = _test_unit()
+    _add_skewed_box(container)
     path = export_path(container)
     path.unlink(missing_ok=True)
     _run("Shelving_ExportBoxes", container, driver)
@@ -210,16 +201,16 @@ def test_export_boxes_writes_the_file_and_reports_where(
 def test_a_refusal_notifies_selects_and_highlights_the_overlap(
     driver: ViewDriver,
 ) -> None:
-    container = _test_unit()
-    _add_box(container, "Overlap", (18.0, 300.0, 564.0), (0.0, 0.0, 18.0))
-    driver.view.viewFront()
-    driver.view.fitAll()
+    container, unit_view = _test_unit()
+    qa_actions.add_overlap_box()
+    unit_view.view.viewFront()
+    unit_view.view.fitAll()
     # Both camera moves animate when navigation animations are on.
     driver.pump(_CAMERA_SETTLE_MS)
     FreeCADGui.Selection.clearSelection()
     left = FreeCAD.Vector(9.0, 0.0, 300.0)
     right = FreeCAD.Vector(591.0, 0.0, 300.0)
-    plain = driver.grab()
+    plain = unit_view.grab()
     notifications = _notification_count()
 
     _run("Shelving_EditUnit", container, driver)
@@ -228,10 +219,12 @@ def test_a_refusal_notifies_selects_and_highlights_the_overlap(
     assert _notification_count() == notifications + 1
     selected = cast("list[FreeCAD.DocumentObject]", FreeCADGui.Selection.getSelection())
     assert {obj.Name for obj in selected} == {"Overlap", "LeftSide"}
-    shown = driver.grab()
-    highlighted = driver.color_at(shown, left)
-    left_shift = _shift(driver.color_at(plain, left), highlighted)
-    right_shift = _shift(driver.color_at(plain, right), driver.color_at(shown, right))
+    shown = unit_view.grab()
+    highlighted = unit_view.color_at(shown, left)
+    left_shift = _shift(unit_view.color_at(plain, left), highlighted)
+    right_shift = _shift(
+        unit_view.color_at(plain, right), unit_view.color_at(shown, right)
+    )
     assert left_shift > _HIGHLIGHT_SHIFT, left_shift
     # FreeCAD 1.1's default selection color is a blue; a board that merely
     # vanished or turned gray would not lean blue.

@@ -78,8 +78,11 @@ its `driver` fixture gives each test a new document with an active 3D view.
   Xvfb as it does offscreen (`freecad-notes.md`), and the test settings
   turn them off. The Notification Area's status-bar button still counts
   each notification. The status bar's own message is gone again by the
-  time a test reads it, and a user error does not reach the Report view in
-  this build, so neither is asserted.
+  time a test reads it, so it is not asserted. Under conda-forge's FreeCAD
+  1.1.3 with popups off, `PrintTranslatedUserError` text does not reach the
+  Report view while `PrintError` text does, so the Report view is not
+  asserted either; the `scan.refusal` manual step checks it in a desktop
+  FreeCAD (`freecad-notes.md` § User-facing errors).
 - **The Report view is not where `print` goes under pytest.** pytest
   captures standard output first; read it with `capsys`.
 - **FreeCAD's GUI takes over standard output** in a child process too, so
