@@ -59,7 +59,10 @@ bug-009. Milestone M14.
       on any face, edge or vertex of a board selects the whole board in
       FreeCAD (no sub-element names) and in the session; a click on an
       opening selects that opening and clears FreeCAD's selection; a
-      click on an object outside the unit selects nothing.
+      click on an object outside the unit selects nothing. On
+      `tests/freecad/fixtures/woodworking_magic_start_default.FCStd`, whose
+      back panel lies behind every opening, a click on each opening selects
+      that opening, and hovering an opening shows no forbidden cursor.
 - [ ] A click on a dimension's text, including one drawn over a board,
       opens a quantity field there showing the region's size; typing a
       size and pressing Return applies it as one edit and closes the
@@ -185,6 +188,24 @@ FINDINGS from the spike, each one a constraint
   filter on `view.graphicsView().viewport()`, which sees events before
   navigation, consuming only clicks within the label radius (the spike
   used 24 device pixels).
+- **Clicks on openings with something behind them never reach a Coin
+  callback.** With FreeCAD's picking on, `SoFCUnifiedSelection` consumes
+  the left release whenever its ray hits any object, even one the gate
+  refuses: on the user's magicStart unit every opening click hit the back
+  panel (`Back`), the press reached the spike but the release never did,
+  and no opening could be selected. The refusal is also what showed the
+  forbidden cursor over openings. Neither `TempoVis.setUnpickable` nor
+  `ViewObject.Selectable = False` on the back panel helped: a link
+  group's children are drawn and picked through the link's own nodes.
+  Verified under Xvfb on that unit: a Qt event filter on
+  `view.graphicsView().viewport()` sees the press and release first, and
+  on a click whose deferred check finds no board selected, picking the
+  region under the pointer with the front-plane ray selects each opening.
+  Handle opening clicks there, with the label clicks below. The cursor
+  still needs a fix: for instance a gate that admits the unit's own
+  set-aside parts while an observer turns such a pick into the opening
+  under the pointer, or another way to keep FreeCAD from refusing over an
+  opening; the probe is in the session's scratchpad only, so re-derive it.
 - **Gating selection:** `FreeCADGui.Selection.addSelectionGate` limited
   to the unit's boards, an observer that replaces a sub-element pick with
   the whole board (deferred: it runs inside FreeCAD's selection change),
