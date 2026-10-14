@@ -1,10 +1,9 @@
 """An editing session's undo steps, driven at the App level: each edit one
-named step, Undo and Redo read back into the session, the floor, the fold
-near FreeCAD's history limit, steps the session did not make, and OK and
-Cancel. ``tests/freecad_view/test_undo_in_the_editor.py`` runs Undo and
-Redo through ``Std_Undo`` and ``Std_Redo`` with the 3D view up."""
+named step, Undo and Redo read back into the session, the floor, and Close.
+``tests/freecad_view/test_undo_in_the_editor.py`` runs Undo and Redo
+through ``Std_Undo`` and ``Std_Redo`` with the 3D view up."""
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from typing import Protocol, cast
 
 import FreeCAD
@@ -14,17 +13,14 @@ from freecad.Shelving import properties
 from freecad.Shelving.container import read_container
 from freecad.Shelving.core.geometry import Space, Vec3
 from freecad.Shelving.core.layout import Basis, Bay, Board, Division, Region
-from freecad.Shelving.editor.history import (
-    FLOOR_MESSAGE,
-    NOT_FOLDED_MESSAGE,
-    SESSION_STEP,
-)
-from freecad.Shelving.editor.session import EditFailure, Session
+from freecad.Shelving.editor.history import FLOOR_MESSAGE, SESSION_STEP
+from freecad.Shelving.editor.session import PROBE_PROPERTY, EditFailure, Session
 from freecad.Shelving.unit_ops import create_unit
 from tests.freecad_materials import library_material
 
 _Boards = tuple[tuple[str, float, float, float, float, float, float], ...]
-_Spaces = dict[str, Space]
+# Every solved space, region ids aside: a rescan mints fresh ones.
+_Spaces = list[tuple[float, ...]]
 
 
 class _BoxFeature(Protocol):
@@ -32,10 +28,6 @@ class _BoxFeature(Protocol):
     Width: float
     Height: float
     Placement: FreeCAD.Placement
-
-
-class _Labeled(Protocol):
-    Label: str
 
 
 def _boards(container: FreeCAD.DocumentObject) -> _Boards:
@@ -48,6 +40,24 @@ def _boards(container: FreeCAD.DocumentObject) -> _Boards:
         base = obj.Placement.Base
         found.append((name, obj.Length, obj.Width, obj.Height, base.x, base.y, base.z))
     return tuple(found)
+
+
+def _spaces(spaces: Mapping[str, Space]) -> _Spaces:
+    # Rounded: a rescan solves from measured boards, a few ulps off.
+    return sorted(
+        tuple(
+            round(value_mm, 6)
+            for value_mm in (
+                space.origin.x_mm,
+                space.origin.y_mm,
+                space.origin.z_mm,
+                space.size.x_mm,
+                space.size.y_mm,
+                space.size.z_mm,
+            )
+        )
+        for space in spaces.values()
+    )
 
 
 def _bay_ids(region: Region) -> list[str]:
@@ -128,12 +138,8 @@ def _redo(session: Session) -> None:
     session.settle()
 
 
-def _same_state(session: Session, spaces: _Spaces, boards: _Boards) -> bool:
-    return dict(session.spaces) == spaces and _boards(session.container) == boards
-
-
 def _record(session: Session) -> tuple[_Spaces, _Boards]:
-    return dict(session.spaces), _boards(session.container)
+    return _spaces(session.spaces), _boards(session.container)
 
 
 def test_each_edit_is_one_step_named_for_it(doc: FreeCAD.Document) -> None:
@@ -167,7 +173,7 @@ def test_each_edit_is_one_step_named_for_it(doc: FreeCAD.Document) -> None:
         session.select(upper)
         assert session.split("horizontal") is None
         assert session.delete_untagged(["HandAdded"]) is None
-        assert doc.UndoNames == [
+        expected = [
             "Delete Objects",
             "Add Divider",
             "Move Board",
@@ -179,8 +185,11 @@ def test_each_edit_is_one_step_named_for_it(doc: FreeCAD.Document) -> None:
             SESSION_STEP,
             *before,
         ]
+        assert doc.UndoNames == expected
     finally:
-        session.cancel()
+        session.close()
+    # Close leaves every step where it is and adds none.
+    assert doc.UndoNames == expected
 
 
 def test_a_drag_that_moves_nothing_leaves_no_step(doc: FreeCAD.Document) -> None:
@@ -192,7 +201,7 @@ def test_a_drag_that_moves_nothing_leaves_no_step(doc: FreeCAD.Document) -> None
         session.end_drag()
         assert doc.UndoNames == names
     finally:
-        session.cancel()
+        session.close()
 
 
 def test_undo_and_redo_step_one_edit_at_a_time(doc: FreeCAD.Document) -> None:
@@ -204,27 +213,29 @@ def test_undo_and_redo_step_one_edit_at_a_time(doc: FreeCAD.Document) -> None:
         states.append(_record(session))
         lower = _bay_ids(session.unit.root)[0]
         session.select(lower)
-        assert session.set_size(250.0) is None
-        states.append(_record(session))
-        assert session.set_size(300.0) is None
-        states.append(_record(session))
-        for number, (spaces, boards) in enumerate(reversed(states[:-1])):
+        for size_mm in (250.0, 300.0):
+            assert session.set_size(size_mm) is None
+            states.append(_record(session))
+        for number, expected in enumerate(reversed(states[:-1])):
             _undo(session)
-            assert _same_state(session, spaces, boards)
-            if number == 0:
-                # A selected node that still exists stays selected.
-                assert session.selected_id == lower
+            assert _record(session) == expected
+            if number < 2:
+                # A rescan gives the bay a fresh id; it stays selected.
+                selected = session.selected_id
+                assert selected is not None
+                assert session.spaces[selected].origin.z_mm == pytest.approx(18.0)
         assert messages.seen == []
         assert session.selected_id is None
-        for spaces, boards in states[1:]:
+        for expected in states[1:]:
             _redo(session)
-            assert _same_state(session, spaces, boards)
+            assert _record(session) == expected
     finally:
-        session.cancel()
+        session.close()
 
 
 def test_undo_past_the_first_edit_stops_at_the_start(doc: FreeCAD.Document) -> None:
     opening = _boards(_container(doc))
+    before_names = list(doc.UndoNames)
     session = _opened(doc)
     messages = _Messages(session)
     try:
@@ -236,57 +247,61 @@ def test_undo_past_the_first_edit_stops_at_the_start(doc: FreeCAD.Document) -> N
         _undo(session)
         assert _boards(session.container) == opening
         assert messages.seen == [FLOOR_MESSAGE]
-        assert session.probe is not None
+        assert doc.UndoNames == [SESSION_STEP, *before_names]
         _redo(session)
-        assert _same_state(session, *first)
+        assert _record(session) == first
     finally:
-        session.cancel()
+        session.close()
 
 
-def test_ok_leaves_one_step_that_undoes_the_session(doc: FreeCAD.Document) -> None:
+def test_close_keeps_the_steps_and_removes_the_probe(doc: FreeCAD.Document) -> None:
     container = _container(doc)
     before_names = list(doc.UndoNames)
     before_boards = _boards(container)
     session = _opened(doc)
     _add_shelf(session)
-    session.select(_bay_ids(session.unit.root)[0])
-    assert session.set_size(250.0) is None
-    final = _boards(container)
-    assert session.commit() is None
-    assert doc.UndoNames == [SESSION_STEP, *before_names]
-    assert doc.RedoNames == []
-    assert _boards(container) == final
+    _add_shelf(session)
+    two_shelves = _boards(container)
+    _undo(session)
+    one_shelf = _boards(container)
+    session.close()
     assert doc.getObject("ShelvingDimensionProbe") is None
+    assert _boards(container) == one_shelf
+    assert doc.UndoNames == ["Add Shelf", SESSION_STEP, *before_names]
+    assert doc.RedoNames == ["Add Shelf"]
+    doc.redo()
+    assert _boards(container) == two_shelves
+    doc.undo()
     doc.undo()
     assert _boards(container) == before_boards
 
 
-def test_ok_with_no_edits_adds_no_step(doc: FreeCAD.Document) -> None:
+def test_a_session_without_edits_leaves_no_step(doc: FreeCAD.Document) -> None:
     before_names = list(doc.UndoNames)
     session = _opened(doc)
-    assert session.commit() is None
+    session.close()
     assert doc.UndoNames == before_names
     assert doc.RedoNames == []
     assert doc.getObject("ShelvingDimensionProbe") is None
 
 
-def test_cancel_puts_everything_back(doc: FreeCAD.Document) -> None:
-    container = _container(doc)
-    before_names = list(doc.UndoNames)
-    before_boards = _boards(container)
-    before_count = len(doc.Objects)
+def test_a_probe_some_step_changed_goes_in_a_step_of_its_own(
+    doc: FreeCAD.Document,
+) -> None:
+    """Removing it outside any step would leave that step naming a
+    destroyed object."""
     session = _opened(doc)
-    _add_shelf(session)
-    _add_shelf(session)
-    _undo(session)
-    assert session.cancel() is None
-    assert _boards(container) == before_boards
-    assert len(doc.Objects) == before_count
-    assert doc.UndoNames == before_names
-    assert doc.RedoNames == []
+    probe = session.probe
+    assert probe is not None
+    doc.openTransaction("Bind an expression")
+    probe.setExpression(PROBE_PROPERTY, "20 mm")
+    doc.commitTransaction()
+    session.close()
+    assert doc.getObject("ShelvingDimensionProbe") is None
+    assert doc.UndoNames[0] == "Remove Shelving Dimension"
 
 
-def test_an_added_shelf_keeps_its_stock_through_undo_redo_and_ok(
+def test_an_added_shelf_keeps_its_stock_through_undo_redo_and_close(
     doc: FreeCAD.Document,
 ) -> None:
     bottom = doc.getObject("bottom")
@@ -307,131 +322,8 @@ def test_an_added_shelf_keeps_its_stock_through_undo_redo_and_ok(
     _undo(session)
     _redo(session)
     assert shelf_material() == "Wood"
-    assert session.commit() is None
+    session.close()
     assert shelf_material() == "Wood"
-
-
-def test_boards_recreated_at_ok_keep_their_stock_under_any_name(
-    doc: FreeCAD.Document,
-) -> None:
-    """OK writes the session's unit again, and a recreated board may get
-    back the name of a board the session deleted, or its own: either way it
-    keeps the stock it was made with, though its source is gone."""
-    bottom = doc.getObject("bottom")
-    assert bottom is not None
-    cast("properties._MaterialObject", bottom).ShapeMaterial = library_material("Wood")
-    doc.recompute()
-    original = _board_ids(Session(_container(doc)).unit.root)
-    session = _opened(doc)
-    first = _add_shelf(session)
-    above = _bay_ids(session.unit.root)[1]
-    for bay_id in (above, _bay_ids(session.unit.root)[0]):
-        session.select(bay_id)
-        assert session.split("vertical") is None
-    session.select(first)
-    assert session.merge() is None
-    added = _board_ids(session.unit.root) - original
-    assert len(added) == 2
-    assert session.commit() is None
-    names = {board[0] for board in _boards(_container(doc))} - original
-    assert len(names) == 2
-    for name in names:
-        obj = doc.getObject(name)
-        assert obj is not None, name
-        assert properties.read_material_name(obj) == "Wood", name
-
-
-def test_ok_near_the_history_limit_leaves_one_step_above_the_history(
-    doc: FreeCAD.Document,
-) -> None:
-    container = _container(doc)
-    doc.addObject("Part::Box", "Elsewhere")
-    for number in range(10):
-        _foreign_change(doc, f"before the session {number}")
-    before_names = list(doc.UndoNames)
-    session = _opened(doc)
-    _add_shelf(session)
-    session.select(_bay_ids(session.unit.root)[0])
-    for number in range(30):
-        assert session.set_size(200.0 + number) is None
-    final = _boards(container)
-    assert session.commit() is None
-    assert doc.UndoNames[0] == SESSION_STEP
-    remaining = list(doc.UndoNames[1:])
-    assert remaining == before_names[: len(remaining)]
-    assert _boards(container) == final
-
-
-def _foreign_change(doc: FreeCAD.Document, label: str) -> None:
-    other = doc.getObject("Elsewhere")
-    assert other is not None
-    doc.openTransaction("Relabel")
-    cast("_Labeled", other).Label = label
-    doc.commitTransaction()
-
-
-@pytest.mark.parametrize("keep", [True, False])
-def test_a_step_the_session_did_not_make_is_never_undone(
-    doc: FreeCAD.Document, keep: bool
-) -> None:
-    container = _container(doc)
-    doc.addObject("Part::Box", "Elsewhere")
-    doc.recompute()
-    before_boards = _boards(container)
-    session = _opened(doc)
-    _add_shelf(session)
-    _foreign_change(doc, "changed during the session")
-    session.settle()
-    _add_shelf(session)
-    final = _boards(container)
-    message = session.commit() if keep else session.cancel()
-    assert message == NOT_FOLDED_MESSAGE
-    assert _boards(container) == (final if keep else before_boards)
-    other = cast("_Labeled", doc.getObject("Elsewhere"))
-    assert other.Label == "changed during the session"
-    assert doc.getObject("ShelvingDimensionProbe") is None
-
-
-def test_near_the_history_limit_only_the_oldest_steps_fold(
-    doc: FreeCAD.Document,
-) -> None:
-    """With FreeCAD's history at its default 20 steps and ten unrelated ones
-    already in it, a session of 30 edits keeps its newest steps one edit at
-    a time, folds the oldest into its floor, and still cancels to where it
-    started."""
-    container = _container(doc)
-    doc.addObject("Part::Box", "Elsewhere")
-    for number in range(10):
-        _foreign_change(doc, f"before the session {number}")
-    before_names = list(doc.UndoNames)
-    before_boards = _boards(container)
-    session = _opened(doc)
-    messages = _Messages(session)
-    _add_shelf(session)
-    lower = _bay_ids(session.unit.root)[0]
-    session.select(lower)
-    states = [_record(session)]
-    for number in range(29):
-        assert session.set_size(200.0 + number) is None
-        states.append(_record(session))
-    assert doc.UndoNames[0] == "Set Size"
-    held = 0
-    while not messages.seen:
-        expected = states[-2 - held]
-        _undo(session)
-        if messages.seen:
-            break
-        assert _same_state(session, *expected), held
-        held += 1
-    assert messages.seen == [FLOOR_MESSAGE]
-    assert held >= 9
-    floor = _record(session)
-    _undo(session)
-    assert _same_state(session, *floor)
-    assert session.cancel() is None
-    assert _boards(container) == before_boards
-    remaining = list(doc.UndoNames)
-    assert remaining == before_names[: len(remaining)]
 
 
 def test_an_undo_during_a_drag_ends_the_drag(doc: FreeCAD.Document) -> None:
@@ -446,10 +338,10 @@ def test_an_undo_during_a_drag_ends_the_drag(doc: FreeCAD.Document) -> None:
         assert session.drag_to(pointer_mm) is None
         _undo(session)
         assert not session.dragging
-        assert _same_state(session, *before)
+        assert _record(session) == before
         assert isinstance(session.drag_to(pointer_mm), EditFailure)
         session.end_drag()
         _redo(session)
         assert session.spaces[shelf].origin.z_mm == pytest.approx(grab_mm.z_mm + 20.0)
     finally:
-        session.cancel()
+        session.close()

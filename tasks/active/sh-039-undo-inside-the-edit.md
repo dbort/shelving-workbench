@@ -36,7 +36,8 @@ an open panel (bug-015). Milestone M14.
       undo step above one "Edit Shelving Unit" step that marks where the
       session began and changes nothing in the document, removes the
       probe object without adding a step, and leaves the Redo list as it
-      was; `Std_Undo` after Close steps back exactly one edit.
+      was; `Std_Undo` after Close steps back exactly one edit. A session
+      that made no edit leaves the undo and Redo lists as it found them.
 - [ ] A shelf added beside a board whose color and material were set
       keeps that color and material through an Undo and Redo of a later
       edit, and after Close.
@@ -134,10 +135,10 @@ STANDING OBLIGATIONS (`CLAUDE.md`):
   panel or the Notification Area.
 
 ## Plan
-- [ ] **Step 1** (`freecad/Shelving/editor/history.py`, `freecad/Shelving/editor/session.py`): Replace the folding history with one that keeps a copy of FreeCAD's stack only to tell the session's steps from others: the start step, one step per edit, the floor, the read-back by rescanning, the Gui Redo workaround, and Close; `Session.close` replaces `commit` and `cancel`.
-- [ ] **Step 2** (`freecad/Shelving/editor/panel.py`, `freecad/Shelving/commands/edit_unit.py`, `freecad/Shelving/qa/actions.py`, `freecad/Shelving/properties.py`): The panel's one Close button; callers of `commit` and `cancel` close instead; drop the stock records the rewrite needed.
-- [ ] **Step 3** (`tests/freecad/`, `tests/freecad_gui/`, `tests/freecad_view/`): Bring the tests to Close; headless and view-tier tests for the Must Haves; the crash-sequence subprocess test.
-- [ ] **Step 4** (`freecad/Shelving/qa/cases/30-editor.toml`, `.claude/docs/code-map.md`, `.claude/docs/bug-log.md`, `.claude/docs/freecad-notes.md`): Close in the QA cases, the code map, bug-015, the notes.
+- [x] **Step 1** (`freecad/Shelving/editor/history.py`, `freecad/Shelving/editor/session.py`): Replace the folding history with one that keeps a copy of FreeCAD's stack only to tell the session's steps from others: the start step, one step per edit, the floor, the read-back by rescanning, the Gui Redo workaround, and Close; `Session.close` replaces `commit` and `cancel`.
+- [x] **Step 2** (`freecad/Shelving/editor/panel.py`, `freecad/Shelving/commands/edit_unit.py`, `freecad/Shelving/qa/actions.py`, `freecad/Shelving/properties.py`): The panel's one Close button; callers of `commit` and `cancel` close instead; drop the stock records the rewrite needed.
+- [x] **Step 3** (`tests/freecad/`, `tests/freecad_gui/`, `tests/freecad_view/`): Bring the tests to Close; headless and view-tier tests for the Must Haves; the crash-sequence subprocess test.
+- [x] **Step 4** (`freecad/Shelving/qa/cases/30-editor.toml`, `.claude/docs/code-map.md`, `.claude/docs/bug-log.md`, `.claude/docs/freecad-notes.md`): Close in the QA cases, the code map, bug-015, the notes.
 
 ## Review log
 

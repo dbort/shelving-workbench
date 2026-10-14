@@ -117,10 +117,9 @@ def shelf_unit_with_varset() -> None:
     session.open()
     session.select(first_bay(session.unit.root))
     failure = session.split("vertical")
+    session.close()
     if failure is not None:
-        session.cancel()
         raise RuntimeError(failure.message)
-    session.commit()
     doc.recompute()
 
 

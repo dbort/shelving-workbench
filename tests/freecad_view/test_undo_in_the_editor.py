@@ -1,11 +1,11 @@
 """Undo and Redo inside Edit Unit as a user runs them: ``Std_Undo`` and
 ``Std_Redo``, which send their message to the active 3D view, with the
-panel open, and OK and Cancel through the panel's own buttons."""
+panel open, and Close through the panel's own button."""
 
 import os
 import subprocess
 import sys
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import Protocol, cast
 
@@ -14,13 +14,10 @@ import FreeCADGui
 import pytest
 
 from freecad.Shelving.container import read_container
+from freecad.Shelving.core.geometry import Space
 from freecad.Shelving.core.layout import Bay, Board, Division, Region
 from freecad.Shelving.editor import panel as panel_module
-from freecad.Shelving.editor.history import (
-    FLOOR_MESSAGE,
-    NOT_FOLDED_MESSAGE,
-    SESSION_STEP,
-)
+from freecad.Shelving.editor.history import FLOOR_MESSAGE, SESSION_STEP
 from freecad.Shelving.editor.panel import EditUnitPanel
 from freecad.Shelving.unit_ops import create_unit
 from tests.freecad_view.editor import (
@@ -57,6 +54,25 @@ def _boards(container: FreeCAD.DocumentObject) -> _Boards:
         base = obj.Placement.Base
         found.append((name, obj.Length, obj.Width, obj.Height, base.x, base.y, base.z))
     return tuple(found)
+
+
+def _spaces(spaces: Mapping[str, Space]) -> list[tuple[float, ...]]:
+    """Every solved space, rounded, region ids aside: a rescan mints fresh
+    ones and solves from measured boards, a few ulps off."""
+    return sorted(
+        tuple(
+            round(value_mm, 6)
+            for value_mm in (
+                space.origin.x_mm,
+                space.origin.y_mm,
+                space.origin.z_mm,
+                space.size.x_mm,
+                space.size.y_mm,
+                space.size.z_mm,
+            )
+        )
+        for space in spaces.values()
+    )
 
 
 def _bay_ids(region: Region) -> list[str]:
@@ -134,19 +150,19 @@ def test_undo_and_redo_step_one_edit_and_the_panel_follows(
     for size_mm in (250.0, 300.0, 350.0):
         assert session.set_size(size_mm) is None
         panel._refresh()
-        states.append((size_mm, dict(session.spaces), _boards(unit)))
+        states.append((size_mm, _spaces(session.spaces), _boards(unit)))
     for size_mm, spaces, boards in reversed(states[:-1]):
         gui_step("Std_Undo", driver)
-        assert dict(session.spaces) == spaces
+        assert _spaces(session.spaces) == spaces
         assert _boards(unit) == boards
-        assert session.selected_id == lower
+        # A rescan gives the bay a fresh id; it stays selected.
         assert _shown_size_mm(panel) == pytest.approx(size_mm)
     for size_mm, spaces, boards in states[1:]:
         gui_step("Std_Redo", driver)
-        assert dict(session.spaces) == spaces
+        assert _spaces(session.spaces) == spaces
         assert _boards(unit) == boards
         assert _shown_size_mm(panel) == pytest.approx(size_mm)
-    click_task_button("Cancel", driver)
+    click_task_button("Close", driver)
 
 
 def test_undo_past_the_first_edit_says_so_and_redo_redoes_it(
@@ -167,108 +183,26 @@ def test_undo_past_the_first_edit_says_so_and_redo_redoes_it(
     assert FreeCADGui.Control.activeDialog()
     gui_step("Std_Redo", driver)
     assert _boards(unit) == first
-    click_task_button("Cancel", driver)
+    click_task_button("Close", driver)
 
 
-def test_ok_leaves_one_step_and_one_undo_takes_it_back(
+def test_close_keeps_each_edit_as_a_step(
     unit: FreeCAD.DocumentObject, driver: ViewDriver
 ) -> None:
     doc = unit.Document
     before_names = list(doc.UndoNames)
-    before_boards = _boards(unit)
     panel = edit_unit(unit, driver)
     _add_shelf(panel, driver)
+    one_shelf = _boards(unit)
     _add_shelf(panel, driver)
-    gui_step("Std_Undo", driver)
-    final = _boards(unit)
-    click_task_button("OK", driver)
+    two_shelves = _boards(unit)
+    click_task_button("Close", driver)
     assert not FreeCADGui.Control.activeDialog()
-    assert doc.UndoNames == [SESSION_STEP, *before_names]
-    assert doc.RedoNames == []
-    assert _boards(unit) == final
+    assert doc.getObject("ShelvingDimensionProbe") is None
+    assert doc.UndoNames == ["Add Shelf", "Add Shelf", SESSION_STEP, *before_names]
+    assert _boards(unit) == two_shelves
     gui_step("Std_Undo", driver)
-    assert _boards(unit) == before_boards
-
-
-def test_cancel_puts_the_document_back(
-    unit: FreeCAD.DocumentObject, driver: ViewDriver
-) -> None:
-    doc = unit.Document
-    before_names = list(doc.UndoNames)
-    before_boards = _boards(unit)
-    before_count = len(doc.Objects)
-    panel = edit_unit(unit, driver)
-    _add_shelf(panel, driver)
-    _add_shelf(panel, driver)
-    gui_step("Std_Undo", driver)
-    click_task_button("Cancel", driver)
-    assert _boards(unit) == before_boards
-    assert len(doc.Objects) == before_count
-    assert doc.UndoNames == before_names
-    assert doc.RedoNames == []
-
-
-def test_near_the_history_limit_undo_steps_one_edit_down_to_the_fold(
-    unit: FreeCAD.DocumentObject, driver: ViewDriver, reported: list[str]
-) -> None:
-    """FreeCAD's history holds 20 steps by default; with ten unrelated ones
-    in it, a session of 30 edits folds its oldest into its floor."""
-    doc = unit.Document
-    elsewhere = cast("_Labeled", doc.addObject("Part::Box", "Elsewhere"))
-    for number in range(10):
-        doc.openTransaction("Relabel")
-        elsewhere.Label = f"before the session {number}"
-        doc.commitTransaction()
-    before_boards = _boards(unit)
-    panel = edit_unit(unit, driver)
-    session = panel.session
-    _add_shelf(panel, driver)
-    session.select(_bay_ids(session.unit.root)[0])
-    sizes_mm = [200.0 + number for number in range(29)]
-    for size_mm in sizes_mm:
-        assert session.set_size(size_mm) is None
-    panel._refresh()
-    held = 0
-    for size_mm in reversed(sizes_mm[:-1]):
-        shown_mm = _shown_size_mm(panel)
-        gui_step("Std_Undo", driver)
-        if reported:
-            assert _shown_size_mm(panel) == pytest.approx(shown_mm)
-            break
-        assert _shown_size_mm(panel) == pytest.approx(size_mm), held
-        held += 1
-    assert reported == [FLOOR_MESSAGE]
-    assert held >= 9
-    floor_boards = _boards(unit)
-    gui_step("Std_Undo", driver)
-    assert _boards(unit) == floor_boards
-    assert reported == [FLOOR_MESSAGE, FLOOR_MESSAGE]
-    click_task_button("Cancel", driver)
-    assert _boards(unit) == before_boards
-
-
-@pytest.mark.parametrize("button", ["OK", "Cancel"])
-def test_a_change_made_elsewhere_is_kept_and_reported(
-    unit: FreeCAD.DocumentObject,
-    driver: ViewDriver,
-    reported: list[str],
-    button: str,
-) -> None:
-    doc = unit.Document
-    elsewhere = cast("_Labeled", doc.addObject("Part::Box", "Elsewhere"))
-    before_boards = _boards(unit)
-    panel = edit_unit(unit, driver)
-    _add_shelf(panel, driver)
-    doc.openTransaction("Relabel")
-    elsewhere.Label = "changed during the session"
-    doc.commitTransaction()
-    driver.pump()
-    _add_shelf(panel, driver)
-    final_boards = _boards(unit)
-    click_task_button(button, driver)
-    assert _boards(unit) == (final_boards if button == "OK" else before_boards)
-    assert elsewhere.Label == "changed during the session"
-    assert reported == [NOT_FOLDED_MESSAGE]
+    assert _boards(unit) == one_shelf
 
 
 def test_the_gui_redo_crash_sequence_runs_cleanly(tmp_path: Path) -> None:

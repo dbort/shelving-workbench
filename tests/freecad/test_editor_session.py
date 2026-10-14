@@ -283,7 +283,7 @@ def test_an_editor_layout_survives_a_rescan() -> None:
         assert session.split("vertical") is None
         doc.recompute()
 
-        session.commit()
+        session.close()
         doc.recompute()
         boards_before = _board_snapshot_by_name(container)
 
@@ -295,7 +295,7 @@ def test_an_editor_layout_survives_a_rescan() -> None:
         fresh.select(right_bay_id)
         assert fresh.split("horizontal") is None
         doc.recompute()
-        fresh.commit()
+        fresh.close()
         doc.recompute()
 
         boards_after = _board_snapshot_by_name(container)
@@ -368,7 +368,7 @@ def test_deleting_a_divider_reaches_the_merge_collapse_splice() -> None:
                 assert after[3:6] == before[3:6], (name, "placement")
                 assert after[size_index] == before[size_index], (name, "column size")
         finally:
-            session.cancel()
+            session.close()
     finally:
         FreeCAD.closeDocument(doc.Name)
 
@@ -419,7 +419,7 @@ def test_split_created_board_keeps_its_name_across_edits() -> None:
             assert properties.read_board_born_as(still_there) == born_as_before
             assert first_board_id in _board_ids(session.unit.root)
         finally:
-            session.cancel()
+            session.close()
     finally:
         FreeCAD.closeDocument(doc.Name)
 
@@ -524,7 +524,7 @@ def test_selection_permissions_and_split() -> None:
             doc.recompute()
             assert _board_names(container) == names_before
         finally:
-            session.cancel()
+            session.close()
     finally:
         FreeCAD.closeDocument(doc.Name)
 
@@ -555,7 +555,7 @@ def test_a_structurally_refused_edit_changes_nothing() -> None:
             doc.recompute()
             assert _board_snapshot(container) == snapshot_before
         finally:
-            session.cancel()
+            session.close()
     finally:
         FreeCAD.closeDocument(doc.Name)
 
@@ -589,14 +589,14 @@ def test_an_unsolvable_edit_changes_nothing() -> None:
             doc.recompute()
             assert _board_snapshot(container) == snapshot_before
         finally:
-            session.cancel()
+            session.close()
     finally:
         FreeCAD.closeDocument(doc.Name)
 
 
-def test_cancel_restores_the_opening_state() -> None:
-    """Cancel after several edits restores the document to its opening state
-    exactly."""
+def test_close_keeps_each_edit_as_a_step_undo_walks_back() -> None:
+    """Close after several edits leaves them in place, and one Undo per edit
+    gives back the document as it opened."""
     doc = FreeCAD.newDocument("editor_smoke_cancel")
     try:
         container = create_unit(doc)
@@ -621,7 +621,12 @@ def test_cancel_restores_the_opening_state() -> None:
         assert session.split("vertical") is None
         doc.recompute()
 
-        session.cancel()
+        snapshot_after = _board_snapshot(container)
+        session.close()
+        doc.recompute()
+        assert _board_snapshot(container) == snapshot_after
+        for _ in range(3):
+            doc.undo()
         doc.recompute()
         assert _board_snapshot(container) == snapshot_before
     finally:
@@ -649,7 +654,7 @@ def test_commit_then_one_undo_reverses_the_session() -> None:
 
         assert session.probe is not None
         probe_name = session.probe.Name
-        session.commit()
+        session.close()
         doc.recompute()
         assert _board_names(container) == names_after_split
         assert doc.getObject(probe_name) is None
@@ -693,7 +698,7 @@ def test_a_refused_edit_after_an_accepted_edit_changes_nothing() -> None:
             doc.recompute()
             assert _board_snapshot(container) == snapshot_after_split
         finally:
-            session.cancel()
+            session.close()
     finally:
         FreeCAD.closeDocument(doc.Name)
 
@@ -729,7 +734,7 @@ def test_an_over_constrained_edit_leaves_the_last_solved_state() -> None:
             assert _board_snapshot(container) == snapshot_after_split
             assert session.unit is unit_after_split
         finally:
-            session.cancel()
+            session.close()
     finally:
         FreeCAD.closeDocument(doc.Name)
 
@@ -774,7 +779,7 @@ def test_split_direction_follows_the_units_depth_axis() -> None:
             )
             assert vertical_axis == Axis.Z, vertical_axis
         finally:
-            session.cancel()
+            session.close()
     finally:
         FreeCAD.closeDocument(doc.Name)
 
@@ -859,7 +864,7 @@ def test_dimensions_drag_basis_and_untagged() -> None:
     bay is refused; a drag resizes the bays beside the board and leaves them
     unlocked; an unsolvable size changes nothing; an untagged box is
     listed as left alone, survives every write, and goes only when named;
-    and cancel restores the opening document exactly."""
+    and Close leaves the edits in place and removes the probe object."""
     doc = FreeCAD.newDocument("editor_smoke_dimensions")
     try:
         container = create_unit(doc)
@@ -871,12 +876,11 @@ def test_dimensions_drag_basis_and_untagged() -> None:
             cast("FreeCAD.DocumentObject", hand_added)
         )
         doc.recompute()
-        snapshot_open = _board_snapshot(container)
         hand_added_before = _board_snapshot_by_name(container)["HandAdded"]
 
         session = Session(container)
         session.open()
-        canceled = False
+        closed = False
         try:
             probe = session.probe
             assert probe is not None
@@ -992,14 +996,15 @@ def test_dimensions_drag_basis_and_untagged() -> None:
             assert doc.getObject("HandAdded") is None
             assert session.left_alone == ()
 
-            session.cancel()
-            canceled = True
+            snapshot_edited = _board_snapshot(container)
+            session.close()
+            closed = True
             doc.recompute()
-            assert _board_snapshot(container) == snapshot_open
+            assert _board_snapshot(container) == snapshot_edited
             assert doc.getObject(probe_name) is None
         finally:
-            if not canceled:
-                session.cancel()
+            if not closed:
+                session.close()
     finally:
         FreeCAD.closeDocument(doc.Name)
 
@@ -1021,7 +1026,7 @@ def test_a_woodworking_magic_start_unit_takes_and_gives_up_a_divider(
 ) -> None:
     """A board created in an ``App::LinkGroup`` container joins its
     ``ElementList``, since a LinkGroup has no ``addObject``; deleting it
-    leaves the list as it was, and cancel restores the file's boards."""
+    leaves the list as it was."""
     path = tmp_path / _MAGIC_START.name
     shutil.copyfile(_MAGIC_START, path)
     doc = FreeCAD.openDocument(str(path))
@@ -1055,7 +1060,7 @@ def test_a_woodworking_magic_start_unit_takes_and_gives_up_a_divider(
             doc.recompute()
             assert [obj.Name for obj in link_group.ElementList] == elements_before
         finally:
-            session.cancel()
+            session.close()
         doc.recompute()
         assert _board_snapshot(container) == snapshot_before
     finally:
@@ -1083,7 +1088,7 @@ def test_a_magic_start_unit_takes_a_typed_size(tmp_path: Path) -> None:
             assert abs(_z_mm(container, "Shelf") - (shelf_z_mm + 47.0)) < 1e-6
             assert abs(_z_mm(container, "Floor") - floor_z_mm) < 1e-6
         finally:
-            session.cancel()
+            session.close()
     finally:
         FreeCAD.closeDocument(doc.Name)
 
@@ -1122,15 +1127,14 @@ def test_a_magic_start_unit_resizes_taller(tmp_path: Path) -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
-def test_a_session_resizes_its_unit_and_cancel_restores_it() -> None:
+def test_a_session_resizes_its_unit() -> None:
     doc = FreeCAD.newDocument("editor_resize")
     try:
         container = create_unit(doc)
         doc.recompute()
-        snapshot_open = _board_snapshot(container)
         session = Session(container)
         session.open()
-        cancelled = False
+        closed = False
         try:
             assert session.unit_dimension_mm("height") == 900.0
             assert session.resize("height", 1000.0) is None
@@ -1147,13 +1151,13 @@ def test_a_session_resizes_its_unit_and_cancel_restores_it() -> None:
             assert _board_snapshot(container) == snapshot_resized
             assert session.unit_dimension_mm("height") == 1000.0
 
-            session.cancel()
-            cancelled = True
+            session.close()
+            closed = True
             doc.recompute()
-            assert _board_snapshot(container) == snapshot_open
+            assert _board_snapshot(container) == snapshot_resized
         finally:
-            if not cancelled:
-                session.cancel()
+            if not closed:
+                session.close()
     finally:
         FreeCAD.closeDocument(doc.Name)
 
@@ -1183,7 +1187,7 @@ def test_a_session_resizes_magic_start_taller_and_keeps_its_plinth(
                 )
                 assert abs(thinnest_mm - 18.0) < 1e-6, name
         finally:
-            session.cancel()
+            session.close()
     finally:
         FreeCAD.closeDocument(doc.Name)
 
@@ -1241,7 +1245,7 @@ def test_a_new_shelf_copies_the_stock_of_the_shelf_in_its_opening(
                 assert properties.read_material_name(board) == "Default", name
                 assert properties.read_grain(board) is None, name
         finally:
-            session.cancel()
+            session.close()
     finally:
         FreeCAD.closeDocument(doc.Name)
 
@@ -1254,7 +1258,7 @@ def test_a_rescan_keeps_a_shelf_moved_by_hand_where_it_was_moved() -> None:
         session = Session(container)
         session.open()
         shelf_name = _add_board_in_lower_bay(session).Name
-        session.commit()
+        session.close()
         # OK writes the session's unit again as one step, recreating the
         # boards it added.
         shelf = doc.getObject(shelf_name)
@@ -1291,7 +1295,7 @@ def test_the_first_shelf_in_a_new_unit_copies_the_bottom_board() -> None:
             assert abs(float(cast("_BoxFeature", new_shelf).Height) - 18.0) < 1e-6
             assert properties.read_material_name(new_shelf) == "Wood"
         finally:
-            session.cancel()
+            session.close()
     finally:
         FreeCAD.closeDocument(doc.Name)
 
@@ -1349,7 +1353,7 @@ def test_a_unit_saved_before_sh030_edits_and_its_old_objects_stay_unchanged(
         session.open()
         new_shelf = _add_board_in_lower_bay(session)
         assert abs(float(cast("_BoxFeature", new_shelf).Height) - 18.0) < 1e-6
-        session.commit()
+        session.close()
         doc.recompute()
 
         assert _objects_outside(container) == before

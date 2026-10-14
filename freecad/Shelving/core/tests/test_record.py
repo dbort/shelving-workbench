@@ -25,6 +25,7 @@ from freecad.Shelving.core.layout import (
 )
 from freecad.Shelving.core.record import (
     RULE_RECORD_VERSION,
+    region_keys,
     rule_key,
     rules_from_json,
     rules_to_json,
@@ -576,3 +577,14 @@ def test_a_unit_that_does_not_solve_comes_back_unchanged() -> None:
     unsolvable = _bay_unit(Fixed(1000.0))
     restored = with_stored_rules(unsolvable, {rule_key("lower", "upper"): Fill()})
     assert restored is unsolvable
+
+
+def test_region_keys_find_each_region_again_after_a_rescan() -> None:
+    original = _closed_box_unit()
+    rescanned = _rescan_unit(original)
+    before, after = region_keys(original), region_keys(rescanned)
+    assert before.keys() == after.keys()
+    assert before[rule_key("shelf1", "shelf2")] == "bay2"
+    spaces_before, spaces_after = solve(original), solve(rescanned)
+    for key, region_id in before.items():
+        assert spaces_before[region_id] == spaces_after[after[key]], key

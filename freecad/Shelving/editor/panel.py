@@ -545,9 +545,9 @@ class AncestorWatch(QtCore.QObject):
 class EditUnitPanel:
     """One elevation-editing task panel over ``container``.
 
-    Construction opens the session, and each edit made in the panel is its
-    own undo step. ``accept`` folds them into one and ``reject`` undoes
-    them, so the session lands or reverts together.
+    Construction opens the session, each edit made in the panel is its own
+    undo step, and Close, through ``accept`` or ``reject``, ends the
+    session with every step left in place.
     """
 
     def __init__(self, container: FreeCAD.DocumentObject) -> None:
@@ -557,12 +557,12 @@ class EditUnitPanel:
         self.session.open(lambda settle: QtCore.QTimer.singleShot(0, settle))
         self.session.on_change = self._show_result
         watch.lap("open session")
-        # Without this, a failure building the form would leave the
-        # session's steps in the document with no dialog to end them.
+        # Without this, a failure building the form would leave the probe
+        # object in the document with no dialog to remove it.
         try:
             self._build(watch)
         except BaseException:
-            self.session.cancel()
+            self.session.close()
             raise
 
     def _build(self, watch: Stopwatch) -> None:
@@ -808,21 +808,17 @@ class EditUnitPanel:
         self.untagged_box.setVisible(bool(self.session.left_alone))
 
     def getStandardButtons(self) -> int:
-        buttons = (
-            QtWidgets.QDialogButtonBox.StandardButton.Ok
-            | QtWidgets.QDialogButtonBox.StandardButton.Cancel
-        )
+        # Edits stay as undo steps, as Sketcher's do, so there is nothing
+        # for a Cancel to put back that Undo cannot.
+        buttons = QtWidgets.QDialogButtonBox.StandardButton.Close
         # FreeCAD's C++ side accepts only a real int here, not the flag.
         return buttons.value
 
     def accept(self) -> bool:
-        message = self.session.commit()
-        if message is not None:
-            report_error(message)
+        self.session.close()
         return True
 
     def reject(self) -> bool:
-        message = self.session.cancel()
-        if message is not None:
-            report_error(message)
+        # FreeCAD calls this for Close, and for Escape.
+        self.session.close()
         return True

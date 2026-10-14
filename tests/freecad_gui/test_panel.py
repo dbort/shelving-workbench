@@ -209,11 +209,7 @@ def test_standard_buttons_are_a_plain_int(unit_panel: _Fixture) -> None:
     """FreeCAD's task dialog rejects the Qt flag itself."""
     buttons = unit_panel.panel.getStandardButtons()
     assert type(buttons) is int
-    expected = (
-        QtWidgets.QDialogButtonBox.StandardButton.Ok
-        | QtWidgets.QDialogButtonBox.StandardButton.Cancel
-    )
-    assert buttons == expected.value
+    assert buttons == QtWidgets.QDialogButtonBox.StandardButton.Close.value
 
 
 def test_the_field_is_freecads_quantity_widget(unit_panel: _Fixture) -> None:
@@ -343,6 +339,8 @@ def test_untagged_objects_are_kept_unless_deleted() -> None:
         assert doc.getObject("HandAdded") is None
         assert not panel.untagged_box.isVisible()
         panel.reject()
+        assert doc.getObject("HandAdded") is None
+        doc.undo()
         assert doc.getObject("HandAdded") is not None
         assert doc.getObject("ShelvingDimensionProbe") is None
     finally:

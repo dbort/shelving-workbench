@@ -131,15 +131,12 @@ def test_a_new_board_copies_its_source_boards_whole_appearance(
         (new_id,) = _board_ids(session.unit.root) - before
         assert _appearance(_view(doc, new_id)) == pytest.approx(expected)
     finally:
-        session.cancel()
+        session.close()
 
 
-def test_a_new_shelf_keeps_its_color_through_undo_redo_and_ok(
+def test_a_new_shelf_keeps_its_color_through_undo_redo_and_close(
     doc: FreeCAD.Document,
 ) -> None:
-    """Undo and Redo of a later edit leave the shelf alone, and OK writes
-    it again in the color it was made with, whatever its source shows by
-    then."""
     doc.UndoMode = 1
     container = create_unit(doc)
     doc.recompute()
@@ -160,17 +157,8 @@ def test_a_new_shelf_keeps_its_color_through_undo_redo_and_ok(
     doc.redo()
     session.settle()
     assert _appearance(_view(doc, shelf)) == pytest.approx(expected)
-    # Outside any transaction, so not a step of its own; OK's rewrite would
-    # copy this color from the shelf's source without the one recorded.
-    bottom.ShapeAppearance = [_material((0.9, 0.1, 0.1))]
-    assert session.commit() is None
-    doc.recompute()
-    (shelf_after_ok,) = {
-        obj.Name
-        for obj in doc.Objects
-        if obj.isDerivedFrom("Part::Box") and obj.Name not in _BOARDS
-    }
-    assert _appearance(_view(doc, shelf_after_ok)) == pytest.approx(expected)
+    session.close()
+    assert _appearance(_view(doc, shelf)) == pytest.approx(expected)
 
 
 def test_a_resize_keeps_a_hand_set_board_color(doc: FreeCAD.Document) -> None:

@@ -39,16 +39,16 @@ that board would not join two openings. Nothing changes and the panel stays
 usable."""
 
   [[case.step]]
-  id = "merge-and-ok"
+  id = "merge-and-close"
   instruction = [
     "Click the new divider.",
     "Click Delete.",
     "Click the bay.",
     "Click Add Divider.",
-    "Click OK.",
+    "Click Close.",
   ]
   expected = """
-The merge redraws one bay; after OK the panel closes with the divider in
+The merge redraws one bay; after Close the panel closes with the divider in
 place."""
 
 [[case]]
@@ -107,11 +107,21 @@ The lower bay follows to 280 mm. While the panel is open a Shelving
 dimension (temporary) object sits in the tree."""
 
   [[case.step]]
-  id = "cancel"
-  instruction = ["Click Cancel."]
+  id = "undo"
+  instruction = [
+    "Click an empty spot in the 3D view, so Undo reaches the document.",
+    "Choose Edit, Undo.",
+  ]
   expected = """
-The unit is back to one shelf between two equal bays, and the temporary
-object is gone."""
+The lower bay goes back to its size before the expression, clear 300 mm,
+in the elevation and the 3D view, and the panel stays open."""
+
+  [[case.step]]
+  id = "close"
+  instruction = ["Click Close."]
+  expected = """
+The panel closes, the Shelving dimension (temporary) object is gone, and
+the lower bay stays at clear 300 mm."""
 
 [[case]]
 id = "editor.untagged-objects"
@@ -159,7 +169,11 @@ A single error in the Notification Area, and the field shows the last
 height that worked."""
 
   [[case.step]]
-  id = "cancel"
+  id = "undo-the-session"
   check = "fresh_unit_size"
-  instruction = ["Click Cancel."]
+  instruction = [
+    "Click Close.",
+    "Open the drop-down list beside the toolbar's Undo button.",
+    "Choose Edit Shelving Unit.",
+  ]
   expected = "The unit is back to 600 x 300 x 900 mm."

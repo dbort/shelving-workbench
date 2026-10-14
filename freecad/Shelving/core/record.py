@@ -101,11 +101,11 @@ def _neighbor_board_id(items: Sequence[Item], index: int) -> str | None:
     return neighbor.id if isinstance(neighbor, Board) else None
 
 
-def _iter_region_rules(region: Region) -> Iterator[tuple[str, SizeRule]]:
-    """``(key, rule)`` for every region in the subtree rooted at ``region``,
-    excluding ``region`` itself: the root region has no division of its own
-    and therefore no key, so callers pass ``unit.root`` to skip it while
-    still reaching everything below it."""
+def _iter_keyed_regions(region: Region) -> Iterator[tuple[str, Region]]:
+    """``(key, region)`` for every region in the subtree rooted at
+    ``region``, excluding ``region`` itself: the root region has no division
+    of its own and therefore no key, so callers pass ``unit.root`` to skip
+    it while still reaching everything below it."""
     if not isinstance(region, Division):
         return
     items = region.items
@@ -114,8 +114,20 @@ def _iter_region_rules(region: Region) -> Iterator[tuple[str, SizeRule]]:
             continue
         before = _neighbor_board_id(items, index - 1)
         after = _neighbor_board_id(items, index + 1)
-        yield rule_key(before, after), item.rule
-        yield from _iter_region_rules(item)
+        yield rule_key(before, after), item
+        yield from _iter_keyed_regions(item)
+
+
+def _iter_region_rules(region: Region) -> Iterator[tuple[str, SizeRule]]:
+    for key, item in _iter_keyed_regions(region):
+        yield key, item.rule
+
+
+def region_keys(unit: Unit) -> Mapping[str, str]:
+    """Each region's id in ``unit``, the root's aside, keyed by its
+    :func:`rule_key`: the key a rescan, which mints fresh region ids,
+    finds the same region by."""
+    return {key: item.id for key, item in _iter_keyed_regions(unit.root)}
 
 
 class _FixedRuleDoc(TypedDict):

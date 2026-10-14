@@ -107,7 +107,7 @@ def _shift(a: QtGui.QColor, b: QtGui.QColor) -> int:
     )
 
 
-def test_edit_unit_reads_a_hand_built_unit_and_cancel_changes_nothing(
+def test_edit_unit_reads_a_hand_built_unit_and_close_changes_nothing(
     driver: ViewDriver,
 ) -> None:
     container, _ = _test_unit()
@@ -118,7 +118,7 @@ def test_edit_unit_reads_a_hand_built_unit_and_cancel_changes_nothing(
     assert sum(isinstance(node, Bay) for node in nodes) == 2
     assert "Shelf" in {node.id for node in nodes if isinstance(node, Board)}
     assert panel.session.left_alone == ()
-    click_task_button("Cancel", driver)
+    click_task_button("Close", driver)
     assert not FreeCADGui.Control.activeDialog()
     assert _snapshot() == before
     assert _document().UndoNames == undo_before
@@ -134,7 +134,7 @@ def test_a_part_turned_off_axis_is_left_alone_with_its_reason(
     assert (
         panel.untagged_checks["Skewed"].accessibleName().endswith(": not axis-aligned")
     )
-    click_task_button("Cancel", driver)
+    click_task_button("Close", driver)
     skewed = _document().getObject("Skewed")
     assert (
         skewed is not None
@@ -204,7 +204,7 @@ def test_a_board_moved_within_the_clearance_is_corrected(driver: ViewDriver) -> 
     QtTest.QTest.keyClicks(height, "1010")
     QtTest.QTest.keyClick(height, QtCore.Qt.Key.Key_Return)
     driver.pump()
-    click_task_button("OK", driver)
+    click_task_button("Close", driver)
 
     assert not FreeCADGui.Control.activeDialog()
     assert abs(side.Placement.Base.x) < 1e-6

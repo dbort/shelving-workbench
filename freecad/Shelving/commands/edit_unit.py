@@ -149,11 +149,11 @@ class EditUnitCommand:
         )
         try:
             Gui.Control.showDialog(panel)
-        except Exception as err:  # noqa: BLE001 - the steps EditUnitPanel's
-            # session already made would otherwise stay with no dialog left to
-            # end them (showDialog raises RuntimeError when another task
-            # dialog is already active).
-            panel.session.cancel()
+        except Exception as err:  # noqa: BLE001 - the probe object
+            # EditUnitPanel's session made would otherwise stay with no dialog
+            # left to remove it (showDialog raises RuntimeError when another
+            # task dialog is already active).
+            panel.session.close()
             refusals.report_refusal(
                 f"Edit Unit could not open its panel: {err}",
                 (),

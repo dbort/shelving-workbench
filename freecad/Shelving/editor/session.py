@@ -20,7 +20,7 @@ session never reads theirs.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from typing import Literal, Protocol, cast
 
 import FreeCAD
@@ -58,7 +58,11 @@ from freecad.Shelving.core.layout import (
     Region,
     Unit,
 )
-from freecad.Shelving.core.record import rules_from_json, with_stored_rules
+from freecad.Shelving.core.record import (
+    region_keys,
+    rules_from_json,
+    with_stored_rules,
+)
 from freecad.Shelving.core.scan import elevation_axes, scan
 from freecad.Shelving.core.solver import LayoutSolveError, describe_solve_error, solve
 from freecad.Shelving.debug_log import Stopwatch
@@ -109,15 +113,6 @@ class EditFailure:
     # caller asked to edit, or the node a re-solve refused at. None only when
     # nothing was selected to act on.
     node_id: str | None
-
-
-def _board_ids(region: Region) -> Iterator[str]:
-    if isinstance(region, Division):
-        for item in region.items:
-            if isinstance(item, Board):
-                yield item.id
-            else:
-                yield from _board_ids(item)
 
 
 def _find_node(region: Region, node_id: str) -> Region | Board | None:
@@ -205,19 +200,6 @@ def _read_unit(container: FreeCAD.DocumentObject) -> tuple[Unit, Mapping[str, st
     return unit, reasons
 
 
-@dataclasses.dataclass(frozen=True)
-class SessionState:
-    """What a :class:`Session` holds between its edits: everything an Undo
-    or Redo puts back."""
-
-    unit: Unit
-    spaces: Mapping[str, Space]
-    left_alone: tuple[LeftAlone, ...]
-    set_aside_reasons: Mapping[str, str]
-    # The left-alone objects the session has deleted so far.
-    deleted: frozenset[str]
-
-
 class Session:
     """One elevation-editing session against a selected container."""
 
@@ -242,88 +224,73 @@ class Session:
         # alone. Before the first write that is every set-aside part
         # carrying no board properties, since write_container deletes a
         # tagged one; after it, exactly what the write reported.
-        doc = container.Document
-        self.left_alone: tuple[LeftAlone, ...] = tuple(
-            self._left_alone(name)
-            for name in sorted(self._set_aside_reasons)
-            if not properties.has_board_properties(doc.getObject(name))
-        )
+        self.left_alone: tuple[LeftAlone, ...] = self._unplaced(self._set_aside_reasons)
         # The object the panel's dimension field binds to, so it can resolve
-        # an expression naming a VarSet; exists only between open() and the
-        # end of the transaction.
+        # an expression naming a VarSet; exists only between open() and
+        # close(), made and removed outside any undo step.
         self.probe: FreeCAD.DocumentObject | None = None
         self._probe_name = ""
         # The board being dragged and the pointer's offset from its low
         # face along its run's axis, between begin_drag and end_drag.
         self._drag: tuple[str, Axis, float] | None = None
-        self._deleted: frozenset[str] = frozenset()
-        # The stock of each board the session created, keyed by its object
-        # name: OK undoes the session and writes its final unit again, and a
-        # recreated board's stock_from source may be gone by then.
-        self._stock: dict[str, properties.Stock] = {}
-        self._history: EditHistory[SessionState] | None = None
+        self._history: EditHistory | None = None
         # Runs after an Undo or Redo has been read back, with what to tell
         # the user, if anything.
         self.on_change: Callable[[EditFailure | None], None] | None = None
 
     def open(self, schedule: Schedule | None = None) -> None:
-        """Start this session's undo history with a first step that creates
-        the probe object. Call once, before any edit. ``schedule`` defers the
-        read-back after an Undo or Redo until FreeCAD has finished it; with
-        none, :meth:`settle` does the read-back.
+        """Make the probe object and start this session's undo history with
+        a first step that changes nothing. Call once, before any edit.
+        ``schedule`` defers the read-back after an Undo or Redo until
+        FreeCAD has finished it; with none, :meth:`settle` does the
+        read-back.
 
         A document created by ``FreeCAD.newDocument`` (as every
         ``freecadcmd`` script and this workbench's own smoke does) starts
-        with ``UndoMode`` off, unlike a document created through the GUI:
-        transactions are silent no-ops against it (verified), so ``cancel``
-        would leave every edit in place. Setting it here makes cancel work
-        regardless of how the document was created.
+        with ``UndoMode`` off, unlike a document created through the GUI,
+        and records no step at all. Setting it here gives every document
+        the same history.
         """
-        self.container.Document.UndoMode = 1
-        self._history = EditHistory(
-            self.container.Document, self, schedule or (lambda _settle: None)
-        )
-        self._history.start(self._create_probe)
-
-    def _create_probe(self) -> None:
+        doc = self.container.Document
+        doc.UndoMode = 1
+        # No step holds the probe: removing it at close would take a step of
+        # its own, which the first Undo after close would spend bringing it
+        # back.
         probe = cast(
             "FreeCAD.DocumentObject",
-            self.container.Document.addObject("App::VarSet", "ShelvingDimensionProbe"),
+            doc.addObject("App::VarSet", "ShelvingDimensionProbe"),
         )
         for name in (PROBE_PROPERTY, *UNIT_PROBE_PROPERTIES.values()):
             probe.addProperty("App::PropertyLength", name, "Shelving")
         cast("_Labeled", probe).Label = "Shelving dimension (temporary)"
         self.probe = probe
         self._probe_name = probe.Name
+        self._history = EditHistory(doc, self, schedule or (lambda _settle: None))
+        self._history.start()
 
     def settle(self) -> None:
         """Read a pending Undo or Redo back into this session now."""
         if self._history is not None:
             self._history.settle()
 
-    def commit(self) -> str | None:
-        """End this session, keeping its unit as one undo step and removing
-        the probe object. Returns a message for the user when a change made
-        elsewhere in the document kept the session from folding into one
-        step."""
-        return self._finish(keep=True)
-
-    def cancel(self) -> str | None:
-        """End this session, putting the document back as the session found
-        it, the probe object's creation included. Returns a message for the
-        user when a change made elsewhere in the document kept the session's
-        steps from being undone, and the starting unit was written over
-        them instead."""
-        return self._finish(keep=False)
-
-    def _finish(self, keep: bool) -> str | None:
+    def close(self) -> None:
+        """End this session, leaving each of its edits as its own undo step
+        and removing the probe object."""
         self._drag = None
         history = self._history
-        if history is None:
-            return None
-        message = history.finish(keep)
+        if history is not None:
+            history.finish()
+        doc = self.container.Document
+        if self.probe is not None and doc.getObject(self._probe_name) is not None:
+            # Removed outside any step only while no step names it; a step
+            # naming a destroyed object would be unsafe to undo.
+            recorded = history is not None and history.probe_recorded
+            if recorded:
+                doc.openTransaction("Remove Shelving Dimension")
+            doc.removeObject(self._probe_name)
+            if recorded:
+                doc.commitTransaction()
         self.probe = None
-        return message
 
     @property
     def dragging(self) -> bool:
@@ -333,98 +300,36 @@ class Session:
 
     # What EditHistory needs; see HistoryOwner.
 
-    def capture(self) -> SessionState:
-        return SessionState(
-            self.unit,
-            self.spaces,
-            self.left_alone,
-            self._set_aside_reasons,
-            self._deleted,
-        )
+    def mark_start(self) -> None:
+        container = cast("_Placed", self.container)
+        container.Placement = container.Placement
 
-    def restore(self, state: SessionState) -> None:
-        self.unit = state.unit
-        self.spaces = state.spaces
-        self.left_alone = state.left_alone
-        self._set_aside_reasons = state.set_aside_reasons
-        self._deleted = state.deleted
-        if self.selected_id is not None and (
-            _find_node(state.unit.root, self.selected_id) is None
-        ):
-            self.selected_id = None
-
-    def write(self, state: SessionState, *, probe: bool) -> Mapping[str, str]:
-        doc = self.container.Document
-        if probe and self.probe is None:
-            self._create_probe()
-        if not probe and self.probe is not None:
-            # An undone creation leaves the object's wrapper without a Name.
-            if doc.getObject(self._probe_name) is not None:
-                doc.removeObject(self._probe_name)
-            self.probe = None
-        for name in state.deleted:
-            if doc.getObject(name) is not None:
-                doc.removeObject(name)
-        existing = {obj.Name for obj in doc.Objects}
-        result = write_container(self.container, state.unit)
-        # A board the write created may get its old name back, and then
-        # appears in no rename.
-        restocked: dict[str, properties.Stock] = {}
-        for board_id in _board_ids(state.unit.root):
-            name = result.id_renames.get(board_id, board_id)
-            stock = self._stock.get(board_id)
-            target = doc.getObject(name)
-            if name in existing or stock is None or target is None:
-                continue
-            properties.write_stock(stock, target)
-            restocked[name] = stock
-        self._stock.update(restocked)
-        return result.id_renames
-
-    def renamed(self, state: SessionState, renames: Mapping[str, str]) -> SessionState:
-        if not renames:
-            return state
-        root = renamed_board_ids(state.unit.root, renames)
-        return dataclasses.replace(
-            state,
-            unit=dataclasses.replace(state.unit, root=root),
-            spaces=_renamed_spaces(state.spaces, renames),
-        )
-
-    def rescan(self) -> SessionState | None:
+    def reload(self) -> None:
+        """Rescan the container, keeping a selected node that still exists
+        selected. Keeps the session's state when the container no longer
+        reads."""
         try:
             unit, reasons = _read_unit(self.container)
             spaces = solve(unit)
         except Exception:  # noqa: BLE001 - the session keeps its last state
-            return None
-        doc = self.container.Document
-        left_alone = tuple(
-            LeftAlone(
-                name=name,
-                label=obj.Label if obj is not None else name,
-                reason=reasons.get(name, _UNPLACED_REASON),
-            )
-            for name in sorted(reasons)
-            if not properties.has_board_properties(obj := doc.getObject(name))
-        )
-        return SessionState(unit, spaces, left_alone, reasons, self._deleted)
-
-    def owns(self, name: str) -> bool:
-        if name == self.container.Name:
-            return True
-        group = cast("FreeCAD.DocumentObjectGroup", self.container).Group
-        if any(obj.Name == name for obj in group):
-            return True
-        return _find_node(self.unit.root, name) is not None or any(
-            entry.name == name for entry in self.left_alone
-        )
+            return
+        selected = self.selected_id
+        if selected is not None and selected not in spaces:
+            # A board keeps its id, its object's name, across a rescan; a
+            # region is found again by the boards bounding it.
+            old_keys = {
+                region_id: key for key, region_id in region_keys(self.unit).items()
+            }
+            key = old_keys.get(selected)
+            selected = None if key is None else region_keys(unit).get(key)
+        self.unit = unit
+        self.spaces = spaces
+        self._set_aside_reasons = reasons
+        self.left_alone = self._unplaced(reasons)
+        self.selected_id = selected
 
     def probe_name(self) -> str | None:
         return self._probe_name if self.probe is not None else None
-
-    def nudge(self) -> None:
-        container = cast("_Placed", self.container)
-        container.Placement = container.Placement
 
     def step_interrupted(self) -> None:
         self._drag = None
@@ -470,6 +375,16 @@ class Session:
         node = _find_node(self.unit.root, self.selected_id)
         return isinstance(node, Board)
 
+    def _unplaced(self, reasons: Mapping[str, str]) -> tuple[LeftAlone, ...]:
+        """Each part ``reasons`` names that carries no board properties,
+        since write_container deletes a tagged one."""
+        doc = self.container.Document
+        return tuple(
+            self._left_alone(name)
+            for name in sorted(reasons)
+            if not properties.has_board_properties(doc.getObject(name))
+        )
+
     def _left_alone(self, name: str) -> LeftAlone:
         obj = self.container.Document.getObject(name)
         return LeftAlone(
@@ -499,11 +414,6 @@ class Session:
                 candidate, root=renamed_board_ids(candidate.root, result.id_renames)
             )
             spaces = _renamed_spaces(spaces, result.id_renames)
-            doc = self.container.Document
-            for name in result.id_renames.values():
-                created = doc.getObject(name)
-                if created is not None:
-                    self._stock[name] = properties.read_stock(created)
         self.unit = candidate
         self.spaces = spaces
         self.selected_id = select
@@ -735,7 +645,6 @@ class Session:
             for name in names:
                 doc.removeObject(name)
             self.left_alone = tuple(e for e in self.left_alone if e.name not in names)
-            self._deleted = self._deleted | frozenset(names)
             return None
 
         return self._step("Delete Objects", delete)
