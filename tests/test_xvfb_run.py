@@ -1,8 +1,11 @@
 """``tools.xvfb_run``: the Xvfb launcher the 3D-view tests run under."""
 
 import os
+import signal
 import stat
+import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -92,3 +95,30 @@ def test_the_server_stops_when_the_command_cannot_start() -> None:
         set(os.listdir("/tmp/.X11-unix")) if Path("/tmp/.X11-unix").exists() else set()
     )
     assert after <= before
+
+
+def test_a_terminated_launcher_stops_its_server_and_command(tmp_path: Path) -> None:
+    seen = tmp_path / "display.txt"
+    launcher = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "tools.xvfb_run",
+            "sh",
+            "-c",
+            f'echo "$DISPLAY" > {seen}; exec sleep 60',
+        ],
+        cwd=Path(__file__).resolve().parent.parent,
+    )
+    try:
+        deadline_s = time.monotonic() + 30
+        while not seen.exists() or not seen.read_text().strip():
+            assert time.monotonic() < deadline_s, "the command never started"
+            time.sleep(0.05)
+        launcher.send_signal(signal.SIGTERM)
+        launcher.wait(timeout=30)
+    finally:
+        if launcher.poll() is None:
+            launcher.kill()
+    display = int(seen.read_text().strip().lstrip(":"))
+    assert not _socket(display).exists()

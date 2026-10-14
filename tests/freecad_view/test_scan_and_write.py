@@ -128,7 +128,7 @@ def _click_task_button(text: str, driver: ViewDriver) -> None:
         button
         for box in main_window.findChildren(QtWidgets.QDialogButtonBox)
         for button in box.buttons()
-        if button.text() == text and box.buttons()
+        if button.text() == text
     ]
     button.click()
     driver.pump(400)
@@ -150,13 +150,6 @@ def _notification_count() -> int:
     assert button is not None
     text = button.text()
     return int(text) if text.isdigit() else 0
-
-
-def _report_text() -> str:
-    main_window = cast("QtWidgets.QMainWindow", FreeCADGui.getMainWindow())
-    report = main_window.findChild(QtWidgets.QTextEdit, "Report view")
-    assert report is not None
-    return report.toPlainText()
 
 
 def _shift(a: QtGui.QColor, b: QtGui.QColor) -> int:
@@ -236,9 +229,13 @@ def test_a_refusal_notifies_selects_and_highlights_the_overlap(
     selected = cast("list[FreeCAD.DocumentObject]", FreeCADGui.Selection.getSelection())
     assert {obj.Name for obj in selected} == {"Overlap", "LeftSide"}
     shown = driver.grab()
-    left_shift = _shift(driver.color_at(plain, left), driver.color_at(shown, left))
+    highlighted = driver.color_at(shown, left)
+    left_shift = _shift(driver.color_at(plain, left), highlighted)
     right_shift = _shift(driver.color_at(plain, right), driver.color_at(shown, right))
     assert left_shift > _HIGHLIGHT_SHIFT, left_shift
+    # FreeCAD 1.1's default selection color is a blue; a board that merely
+    # vanished or turned gray would not lean blue.
+    assert highlighted.blue() > highlighted.red() + 20, highlighted.name()
     assert right_shift < _STILL, right_shift
 
 

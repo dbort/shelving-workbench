@@ -23,11 +23,11 @@ _TROUBLE = ("Error", "Traceback", "No module named", "Exception")
 
 
 def _bounds_mm(doc: FreeCAD.Document) -> dict[str, list[float]]:
-    found: dict[str, list[float]] = {}
+    found_mm: dict[str, list[float]] = {}
     for obj in doc.Objects:
         if obj.TypeId == "Part::Box":
             box = cast("open_without_workbench._Shaped", obj).Shape.BoundBox
-            found[obj.Name] = [
+            found_mm[obj.Name] = [
                 box.XMin,
                 box.YMin,
                 box.ZMin,
@@ -35,7 +35,7 @@ def _bounds_mm(doc: FreeCAD.Document) -> dict[str, list[float]]:
                 box.YMax,
                 box.ZMax,
             ]
-    return found
+    return found_mm
 
 
 def test_a_saved_unit_opens_without_the_workbench(
@@ -46,8 +46,8 @@ def test_a_saved_unit_opens_without_the_workbench(
     doc.recompute()
     path = tmp_path / "unit.FCStd"
     doc.saveAs(str(path))
-    saved = _bounds_mm(doc)
-    assert len(saved) == 4
+    saved_bounds_mm = _bounds_mm(doc)
+    assert len(saved_bounds_mm) == 4
 
     result_path = tmp_path / "result.json"
     child = subprocess.run(
@@ -70,12 +70,15 @@ def test_a_saved_unit_opens_without_the_workbench(
     result = cast("Result", json.loads(result_path.read_text(encoding="utf-8")))
 
     assert "ShelvingWorkbench" not in result["workbenches"], result["workbenches"]
-    opened = {board["name"]: board["bounds_mm"] for board in result["boards"]}
-    assert opened.keys() == saved.keys()
-    for name, bounds in saved.items():
+    opened_bounds_mm = {board["name"]: board["bounds_mm"] for board in result["boards"]}
+    assert opened_bounds_mm.keys() == saved_bounds_mm.keys()
+    for name, bounds_mm in saved_bounds_mm.items():
         assert all(
-            abs(a - b) < 1e-6 for a, b in zip(opened[name], bounds, strict=True)
-        ), (name, opened[name], bounds)
+            abs(opened_mm - saved_mm) < 1e-6
+            for opened_mm, saved_mm in zip(
+                opened_bounds_mm[name], bounds_mm, strict=True
+            )
+        ), (name, opened_bounds_mm[name], bounds_mm)
     trouble = [
         row
         for row in (result["report"] + "\n" + output).splitlines()

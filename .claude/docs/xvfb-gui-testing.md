@@ -77,9 +77,9 @@ its `driver` fixture gives each test a new document with an active 3D view.
 - **Notification popups stay off.** A popup deadlocks FreeCAD 1.1 under
   Xvfb as it does offscreen (`freecad-notes.md`), and the test settings
   turn them off. The Notification Area's status-bar button still counts
-  each notification, and the status bar shows it in red until the next
-  status message replaces it. A user error does not reach the Report view
-  in this build.
+  each notification. The status bar's own message is gone again by the
+  time a test reads it, and a user error does not reach the Report view in
+  this build, so neither is asserted.
 - **The Report view is not where `print` goes under pytest.** pytest
   captures standard output first; read it with `capsys`.
 - **FreeCAD's GUI takes over standard output** in a child process too, so

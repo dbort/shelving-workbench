@@ -12,6 +12,7 @@ display number and nothing polls for a socket.
 
 import os
 import select
+import signal
 import subprocess
 import sys
 import tempfile
@@ -151,7 +152,14 @@ def run(command: Sequence[str]) -> int:
             _stop(server)
 
 
+def _interrupt(signum: int, frame: object) -> None:
+    raise KeyboardInterrupt(f"signal {signum}")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
+    # SIGTERM ends Python without unwinding, which would leave Xvfb and the
+    # command running; as an interrupt it unwinds through run's cleanup.
+    signal.signal(signal.SIGTERM, _interrupt)
     args = list(sys.argv[1:] if argv is None else argv)
     if args[:1] == ["--"]:
         args = args[1:]

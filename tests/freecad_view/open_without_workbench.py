@@ -87,8 +87,8 @@ def main(document: Path, repo: Path) -> Result:
         if obj.TypeId != "Part::Box":
             continue
         box = obj.Shape.BoundBox
-        bounds = [box.XMin, box.YMin, box.ZMin, box.XMax, box.YMax, box.ZMax]
-        boards.append({"name": obj.Name, "bounds_mm": bounds})
+        bounds_mm = [box.XMin, box.YMin, box.ZMin, box.XMax, box.YMax, box.ZMax]
+        boards.append({"name": obj.Name, "bounds_mm": bounds_mm})
     main_window = cast("QtWidgets.QMainWindow", FreeCADGui.getMainWindow())
     report = main_window.findChild(QtWidgets.QTextEdit, "Report view")
     return {
