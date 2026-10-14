@@ -175,3 +175,13 @@ Reviewed the design the user chose after Round 2.
 - **F1: An Undo reaching below the session's start in one read-back comes back with the first edit redone** (`freecad/Shelving/editor/history.py:211`): after the start step and the earlier steps are redone, the count of pre-session steps undone is still set, so the second loop redoes the session's own undone edits too. Redo by the count only when no start step is in the Redo list, zero it either way, and test several Undos read back at once.
 - N1: Should `write_container`'s solve refuse after `_apply`'s passed, the first refused edit would already have committed the start step.
 - N2: Round 4's N1 and Round 3's N2 stand.
+
+### Round 6: REJECTED
+Reviewed the no-floor design.
+- **F1: The unit-size QA step undoes to a step that no longer exists** (`freecad/Shelving/qa/cases/30-editor.toml:173`): there is no "Edit Shelving Unit" entry to choose, and the held arrows make more "Resize Unit" steps than the 20-step history holds, so the `fresh_unit_size` check cannot pass.
+- N1: The test module's docstring still lists the floor.
+- N2: Nothing tests the lingering-transaction path; test it or drop it.
+- N3: The crash-sequence child catches the use-after-free in about two runs of three.
+- N4: The Gui Redo workaround undoes even when its `Std_Redo` did nothing.
+- N5: An edit computes its candidate before a queued read-back settles.
+- N6: The Gui mid-drag Undo, the drop-down multi-step Undo, the f(x) binding, and sh-040 and sh-031 planning around Cancel stand as recorded.
