@@ -169,3 +169,13 @@ STANDING OBLIGATIONS (`CLAUDE.md`):
 - [x] **Step 5** (`README.md`, `docs/scope-and-design.md`, `freecad/Shelving/qa/cases/30-editor.toml`, `.claude/docs/bug-log.md`): Glossary and design prose for locked openings and the drag; the QA drag step's expectation; delete bug-007.
 
 ## Review log
+
+### Round 1: REJECTED
+- **F1: The QA `drag` step expects a state the panel cannot show** (`freecad/Shelving/qa/cases/30-editor.toml:94`): after a refused drag the shelf is selected, so Size is blank and the basis combo disabled; the `expression` step then sizes nothing. The panel test does not assert the selection after the refused drag.
+- **F2: The record hand-copies the WITH_NEXT restatement** (`freecad/Shelving/core/record.py:295`): call one shared helper from `edit` and `record`.
+- **F3: `Session.__init__` lets a raw `LayoutSolveError` escape for a unit with a record** (`freecad/Shelving/editor/session.py:184`): `with_stored_rules` now solves inside `_read_unit`, outside the `try` that wraps `UnsolvableUnit`; docstrings of `unit_size_mm`, `UnsolvableUnit` and `Session.__init__` are stale.
+- **F4: A held board's refusal reaches the user nowhere** (`freecad/Shelving/editor/panel.py:668`): report it, for example once on the first drag motion, and update the stale comment.
+- N1: The overflow, no_slack_absorber and nonpositive_opening suggestions blame stored sizes.
+- N2: `test_move_board_refuses_a_board_with_no_region_before_it` is misnamed.
+- N3: No test for a drag past the opening above.
+- N4: The void merge is tested only on a hand-built unit.
