@@ -27,17 +27,15 @@ an open panel (bug-015). Milestone M14.
       the session's unit (every solved space) equal the state that edit
       produced, the panel shows that state, and a selected node that
       still exists stays selected.
-- [ ] `Std_Undo` past the session's first edit leaves the document as the
-      session opened it and shows "Nothing older to undo in this edit."
-      through the panel or the Notification Area; `Std_Redo` then redoes
-      the first edit. No Undo during the session undoes a step from
-      before it.
+- [ ] `Std_Undo` past the session's first edit undoes the steps before the
+      session as FreeCAD always does, and the panel follows; when an Undo
+      removes the unit or leaves it unreadable (Create Unit undone), the
+      panel closes, and `Std_Redo` then works as it does without a panel.
 - [ ] The panel's only button is Close. Close leaves each edit as its own
-      undo step above one "Edit Shelving Unit" step that marks where the
-      session began and changes nothing in the document, removes the
-      probe object without adding a step, and leaves the Redo list as it
-      was; `Std_Undo` after Close steps back exactly one edit. A session
-      that made no edit leaves the undo and Redo lists as it found them.
+      undo step, removes the probe object without adding a step, and
+      leaves the Redo list as it was; `Std_Undo` after Close steps back
+      exactly one edit. A session that made no edit, or only clicks and
+      refused edits, leaves the undo and Redo lists as it found them.
 - [ ] A shelf added beside a board whose color and material were set
       keeps that color and material through an Undo and Redo of a later
       edit, and after Close.
@@ -67,6 +65,12 @@ DECISIONS (user, 2026-10-13):
 - **Close only, no Cancel**, as Sketcher's edit mode: the user takes edits
   back with Cmd-Z. sh-040 and sh-031 plan around Cancel and need
   re-planning against Close.
+- **No floor, as Sketcher:** Undo and Redo during a session go wherever
+  FreeCAD's history takes them, and the panel follows by rescanning; when
+  the unit is gone or no longer reads, the panel closes, as Sketcher's
+  edit mode ends when its sketch is undone. Follow FreeCAD's own tools
+  rather than inventing behavior they lack (`CLAUDE.md`, standing
+  obligations).
 - **The current panel need not survive long.** Wire Undo into today's
   panel (sh-040 replaces it), enough for the Must Haves; do not polish it.
 
@@ -88,12 +92,9 @@ spike added" has the full account), and from this task's first build:
 - **The probe object cannot live in a step that stays in the history**:
   removing it at Close would take a step of its own, which the first
   Cmd-Z after Close would spend bringing it back. Create and remove it
-  outside any transaction, and mark the session's start with a step that
-  records a change and leaves the document as it was (the container's
-  `Placement` set to itself). An Undo of that step is the floor: redo it
-  at once and show the floor message. Should a step the session did not
-  make record a change to the probe, remove the probe in a step of its own
-  at Close instead, so no step in the history names a destroyed object.
+  outside any transaction. Should any step record a change to the probe,
+  remove it in a step of its own at Close instead, so no step in the
+  history names a destroyed object.
 - **Gui Redo use-after-free (FreeCAD 1.1 and main):**
   `Gui::Document::undo` records each view provider it recreates in
   `_redoViewProviders`, and only `Gui::Document::redo` walks and clears
@@ -131,11 +132,11 @@ STANDING OBLIGATIONS (`CLAUDE.md`):
   used (`Transacting`, `UndoNames`), no bare containers; `pyrefly check`
   clean.
 - Shell stays simple: the crash test starts its subprocess from Python.
-- Users never read the log: the floor message reaches the user in the
-  panel or the Notification Area.
+- Users never read the log: the panel closing when its unit is undone is
+  itself visible, as Sketcher's edit mode ending is.
 
 ## Plan
-- [x] **Step 1** (`freecad/Shelving/editor/history.py`, `freecad/Shelving/editor/session.py`): Replace the folding history with one that keeps a copy of FreeCAD's stack only to tell the session's steps from others: the start step, one step per edit, the floor, the read-back by rescanning, the Gui Redo workaround, and Close; `Session.close` replaces `commit` and `cancel`.
+- [ ] **Step 1** (`freecad/Shelving/editor/history.py`, `freecad/Shelving/editor/session.py`): A history that follows the document's signals: one step per edit, the read-back by rescanning, the panel closing when the unit is gone, the Gui Redo workaround, and Close; `Session.close` replaces `commit` and `cancel`.
 - [x] **Step 2** (`freecad/Shelving/editor/panel.py`, `freecad/Shelving/commands/edit_unit.py`, `freecad/Shelving/qa/actions.py`, `freecad/Shelving/properties.py`): The panel's one Close button; callers of `commit` and `cancel` close instead; drop the stock records the rewrite needed.
 - [x] **Step 3** (`tests/freecad/`, `tests/freecad_gui/`, `tests/freecad_view/`): Bring the tests to Close; headless and view-tier tests for the Must Haves; the crash-sequence subprocess test.
 - [x] **Step 4** (`freecad/Shelving/qa/cases/30-editor.toml`, `.claude/docs/code-map.md`, `.claude/docs/bug-log.md`, `.claude/docs/freecad-notes.md`): Close in the QA cases, the code map, bug-015, the notes.

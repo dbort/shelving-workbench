@@ -64,6 +64,14 @@ wrong.
   functions so tests exercise them directly rather than only
   subprocess-driving the script.
 
+- **Follow FreeCAD's own tools:** before designing how a feature behaves
+  inside FreeCAD (undo, task panels, selection, editing modes, commands),
+  find how FreeCAD's built-in tools and well-regarded workbenches
+  (Sketcher, PartDesign, Draft, Assembly) handle the same situation, and
+  follow them. A behavior none of them has is not built without a reason
+  stated in the task's `## Advice`, and complexity no comparable tool
+  carries is a reason to reconsider the requirement, not to build it.
+
 - **Users never read the log:** Report view and console text is for
   debugging and development. Anything a user needs in order to understand
   what happened to their action (a refusal, a failure, where an export
