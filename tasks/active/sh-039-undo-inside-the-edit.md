@@ -153,3 +153,13 @@ STANDING OBLIGATIONS (`CLAUDE.md`):
 
 ### Round 2: APPROVED
 - No new findings. Round 1's F1 and F2 are fixed with tests that fail without the fixes; N1 to N5 are addressed.
+
+### Round 3: REJECTED
+Reviewed the design the user chose after Round 2.
+- **F1: A session that made no edit wipes the Redo list it found** (`freecad/Shelving/editor/history.py:338`): the start step's commit at open clears Redo, and Close undoing it cannot bring earlier entries back. Test with a non-empty Redo list before open.
+- **F2: The panel tells users Cancel restores deleted objects** (`freecad/Shelving/editor/panel.py:641`).
+- **F3: Docs and tests still describe the dropped design**: `session.py`'s module docstring and `delete_untagged` docstring, a comment and a test name in `tests/freecad/test_editor_session.py`, and M14 in `docs/roadmap.md`.
+- **F4: An Undo during a drag that has not yet changed the document does not end the drag** (`freecad/Shelving/editor/history.py:460`): no commit signal fires, so the drag goes on; end it on the Undo or Redo signal and test it.
+- N1: No test that a selected board stays selected across an Undo.
+- N2: The `editor.dimensions` undo step assumes the f(x) binding records no step of its own.
+- N3: sh-040 and sh-031 still plan around Cancel.
