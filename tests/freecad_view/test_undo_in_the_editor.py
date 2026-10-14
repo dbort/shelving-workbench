@@ -186,6 +186,24 @@ def test_undo_past_the_first_edit_says_so_and_redo_redoes_it(
     click_task_button("Close", driver)
 
 
+def test_undo_before_any_edit_reaches_nothing_from_before(
+    unit: FreeCAD.DocumentObject, driver: ViewDriver, reported: list[str]
+) -> None:
+    """The Gui Undo's redo workaround runs first here, so this differs from
+    the App-level Undo the headless tier checks."""
+    doc = unit.Document
+    before_names = list(doc.UndoNames)
+    before_boards = _boards(unit)
+    edit_unit(unit, driver)
+    gui_step("Std_Undo", driver)
+    assert reported == [FLOOR_MESSAGE]
+    assert doc.UndoNames == before_names
+    assert _boards(unit) == before_boards
+    assert FreeCADGui.Control.activeDialog()
+    click_task_button("Close", driver)
+    assert doc.UndoNames == before_names
+
+
 def test_close_keeps_each_edit_as_a_step(
     unit: FreeCAD.DocumentObject, driver: ViewDriver
 ) -> None:

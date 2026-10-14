@@ -298,6 +298,26 @@ def test_a_session_without_edits_leaves_both_lists_as_it_found_them(
     assert doc.getObject("ShelvingDimensionProbe") is None
 
 
+def test_a_click_or_a_refused_edit_leaves_both_lists_as_it_found_them(
+    doc: FreeCAD.Document,
+) -> None:
+    """A press on a board begins a drag that never moves, and a refused edit
+    writes nothing: neither is an edit."""
+    first = _opened(doc)
+    shelf = _add_shelf(first)
+    first.close()
+    _undone_step_elsewhere(doc)
+    before_undo, before_redo = list(doc.UndoNames), list(doc.RedoNames)
+    session = _opened(doc)
+    assert session.begin_drag(shelf, session.spaces[shelf].origin) is None
+    session.end_drag()
+    session.select(_bay_ids(session.unit.root)[0])
+    assert isinstance(session.set_size(5000.0), EditFailure)
+    session.close()
+    assert doc.UndoNames == before_undo
+    assert doc.RedoNames == before_redo
+
+
 def test_undo_before_the_first_edit_reaches_nothing_from_before(
     doc: FreeCAD.Document,
 ) -> None:

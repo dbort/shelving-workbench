@@ -89,19 +89,22 @@ class EditHistory:
         self._schedule = schedule
         self._undo = [_Entry("before") for _ in range(doc.UndoCount)]
         self._redo = [_Entry("before") for _ in range(doc.RedoCount)]
-        # The open edit step's name, between begin and end.
+        # The edit step's name, between begin and end, and whether its
+        # transaction is open: it opens only once the edit writes, so a
+        # click, or a refused edit, leaves the history untouched.
         self._step_name: str | None = None
+        self._step_opened = False
         self._ending = False
         # Whether the session's first step is being written, and whether it
-        # has been: it waits for the first edit, since its commit empties
+        # has been: it waits for the first write, since its commit empties
         # the Redo list.
         self._starting = False
         self._started = False
         # Steps from before the session that an Undo took back before the
         # first edit, which the read-back redoes.
         self._undone_before = 0
-        # FreeCAD closed the open edit step's undo without a commit: an Undo
-        # during a drag that has not moved yet.
+        # An Undo or Redo ended a step whose transaction was open but held
+        # nothing, leaving FreeCAD's pending transaction to close.
         self._step_dropped = False
         # FreeCAD's pending transaction this history opened, as
         # getActiveTransaction gives it: an open with no change leaves it
@@ -129,11 +132,19 @@ class EditHistory:
         return self._step_name is not None
 
     def begin(self, name: str) -> None:
-        """Open the step named ``name`` that one edit fills, closed by
-        :meth:`end`. Before the session's first edit, commits its first
-        step, named :data:`SESSION_STEP`, which changes nothing: an Undo of
-        it is the floor."""
+        """Start the step named ``name`` that one edit fills, closed by
+        :meth:`end`; its transaction opens at :meth:`write_ahead`."""
         self.settle()
+        self._step_name = name
+        self._step_opened = False
+
+    def write_ahead(self) -> None:
+        """Open the current step's transaction, if it is not yet open, just
+        before the edit writes. Before the session's first write, commits
+        its first step, named :data:`SESSION_STEP`, which changes nothing:
+        an Undo of it is the floor. Does nothing outside a step."""
+        if self._step_name is None or self._step_opened:
+            return
         if not self._started:
             self._started = True
             self._starting = True
@@ -144,13 +155,18 @@ class EditHistory:
                 self._starting = False
             self._doc.commitTransaction()
             self._close_pending()
-        self._step_name = name
-        self._open(name)
+        self._step_opened = True
+        self._open(self._step_name)
 
     def end(self, keep: bool) -> None:
-        """Commit the open step when ``keep``, else abort it, so a refused
-        edit leaves no step. Does nothing when FreeCAD already closed it."""
+        """Commit the step when ``keep``, else abort it, so a refused edit
+        leaves no step. Does nothing when FreeCAD already closed it."""
         if self._step_name is None:
+            return
+        opened = self._step_opened
+        self._step_name = None
+        self._step_opened = False
+        if not opened:
             return
         self._ending = True
         try:
@@ -160,7 +176,6 @@ class EditHistory:
                 self._doc.abortTransaction()
         finally:
             self._ending = False
-            self._step_name = None
             self._close_pending()
 
     def finish(self) -> None:
@@ -239,6 +254,7 @@ class EditHistory:
         if kind == "edit" and self._step_name is not None and not self._ending:
             # An Undo during a drag commits the drag's open step first.
             self._step_name = None
+            self._step_opened = False
             self._owner.step_interrupted()
         if self._owner.probe_name() in touched:
             self.probe_recorded = True
@@ -266,7 +282,9 @@ class EditHistory:
         if self._redo:
             redone = self._redo.pop()
             self._undo.append(redone)
-            if redone.kind == "before" and self._undone_before:
+            # The Gui Redo workaround's own moves come in pairs that leave
+            # the count as it was.
+            if redone.kind == "before" and self._undone_before and not self._own_moves:
                 self._undone_before -= 1
         if self._gui_transacting():
             # A Gui Redo walks and empties the list a Gui Undo fills.
@@ -277,10 +295,11 @@ class EditHistory:
         if self._own_moves:
             return
         if self._step_name is not None:
-            # A drag's step with nothing in it yet: FreeCAD undoes past it,
-            # and the drag is over.
+            # A drag that has written nothing yet: FreeCAD undoes past its
+            # step, and the drag is over.
+            self._step_dropped = self._step_opened
             self._step_name = None
-            self._step_dropped = True
+            self._step_opened = False
             self._owner.step_interrupted()
         self._queue_settle()
 

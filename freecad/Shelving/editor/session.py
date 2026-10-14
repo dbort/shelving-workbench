@@ -399,6 +399,8 @@ class Session:
         when it fails to solve, leaving the session and document untouched."""
         try:
             spaces: Mapping[str, Space] = solve(candidate)
+            if self._history is not None:
+                self._history.write_ahead()
             # write_container solves again before writing any board, so a
             # LayoutSolveError from either call means nothing was written.
             result = write_container(self.container, candidate)
@@ -642,6 +644,8 @@ class Session:
         doc = self.container.Document
 
         def delete() -> EditFailure | None:
+            if self._history is not None:
+                self._history.write_ahead()
             for name in names:
                 doc.removeObject(name)
             self.left_alone = tuple(e for e in self.left_alone if e.name not in names)
