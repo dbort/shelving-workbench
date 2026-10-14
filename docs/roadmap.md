@@ -40,6 +40,32 @@ document with an ordinary placement, confirm an over-constrained input
 produces a clear error and no stale geometry, and walk the user guide's
 steps exactly as written.
 
+## M14: Editing in the 3D view
+
+**Status:** Tasks sh-037
+
+- [ ] sh-037: 3D-view tests under Xvfb
+
+The editor moves out of the task panel into FreeCAD's own 3D view, so zoom,
+pan and orbit are FreeCAD's navigation. The camera turns to face the unit
+as the Sketcher's does, and the unit's real boards are what the user picks
+and drags. Openings are drawn over the boards with dimensions in the
+Sketcher's style; clicking a dimension types a size on the spot, buttons
+over a selected opening add a shelf or a divider, and an arrow drags the
+selected board. A slim task panel keeps the unit's size and the controls
+with no place on the drawing.
+
+An opening is locked at its size or unlocked to share what is left. A drag
+moves only the dragged board, together with any board joined to it through
+locked openings, and a padlock on each dimension locks or unlocks it. Undo
+and Redo step through the edits inside a session, and OK still leaves one
+step in FreeCAD's history.
+
+*Verify in FreeCAD:* open a unit with Edit Unit, watch the camera turn to
+it, orbit behind it and back, lock the opening between two shelves and drag
+one of them, add a shelf from the view, undo and redo a few edits with
+Cmd-Z, click OK, and undo the whole session with one Cmd-Z.
+
 ## M11: Back panels
 
 **Status:** Planned
