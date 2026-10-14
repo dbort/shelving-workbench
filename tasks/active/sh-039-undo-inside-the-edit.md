@@ -163,3 +163,9 @@ Reviewed the design the user chose after Round 2.
 - N1: No test that a selected board stays selected across an Undo.
 - N2: The `editor.dimensions` undo step assumes the f(x) binding records no step of its own.
 - N3: sh-040 and sh-031 still plan around Cancel.
+
+### Round 4: REJECTED
+- **F1: A Gui `Std_Undo` before the session's first edit undoes a step from before the session, with no floor message** (`freecad/Shelving/editor/history.py:270`): the Gui Redo workaround's own moves change the count of pre-session steps undone, so `settle` finds nothing to redo. Test it through `Std_Undo` in the view tier.
+- **F2: A click on a board with no edit empties Redo and leaves an "Edit Shelving Unit" step** (`freecad/Shelving/editor/session.py:600`): `begin_drag` on every press commits the start step. Test a no-move drag before any edit with a non-empty Redo list.
+- N1: The fix for an Undo before a drag moves is tested only at the App level.
+- N2: Round 3's N2 rests on the manual QA run.
