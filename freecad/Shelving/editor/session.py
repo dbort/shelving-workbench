@@ -138,7 +138,7 @@ def _renamed_spaces(
 
 class UnsolvableUnit(Exception):
     """:class:`Session` construction's refusal when the container scans but
-    its stored sizes do not solve against its boards as they stand."""
+    its boards do not solve as they stand."""
 
     def __init__(self, error: LayoutSolveError, unit: Unit) -> None:
         super().__init__(str(error))
@@ -195,8 +195,7 @@ class Session:
 
     def __init__(self, container: FreeCAD.DocumentObject) -> None:
         """Read and solve ``container``. Raises ``ScanError`` when it does
-        not scan and :class:`UnsolvableUnit` when its stored sizes do not
-        solve."""
+        not scan and :class:`UnsolvableUnit` when it does not solve."""
         watch = Stopwatch("session")
         self.container = container
         # unit and spaces are the current, already-solved state, replaced

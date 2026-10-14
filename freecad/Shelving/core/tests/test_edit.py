@@ -1157,7 +1157,7 @@ def test_a_spacing_holds_boards_and_a_clear_size_moves_them_across_thicknesses()
 
 
 @pytest.mark.parametrize("board_id", ["bottom", "no-such-id", "lower"])
-def test_move_board_refuses_a_board_with_no_region_before_it(board_id: str) -> None:
+def test_move_board_refuses_a_carcass_board_and_a_non_board(board_id: str) -> None:
     with pytest.raises(EditError) as err:
         move_board(_column_unit(Fill()), board_id, 350.0)
     assert err.value.node_id == board_id
@@ -1167,6 +1167,12 @@ def test_move_board_refuses_a_drag_past_the_region_below() -> None:
     with pytest.raises(EditError) as err:
         move_board(_column_unit(Fill()), "shelf", 10.0)
     assert err.value.node_id == "lower"
+
+
+def test_move_board_refuses_a_drag_past_the_region_above() -> None:
+    with pytest.raises(EditError) as err:
+        move_board(_three_bays(), "shelf1", 500.0)
+    assert err.value.node_id == "bay2"
 
 
 def test_measure_reports_both_numbers_and_the_basis_a_size_would_use() -> None:

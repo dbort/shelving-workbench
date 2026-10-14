@@ -532,7 +532,7 @@ def set_size(unit: Unit, region_id: str, size_mm: float, basis: Basis) -> Unit:
     return dataclasses.replace(unit, root=_with_rule(unit.root, region_id, rule))
 
 
-def _size_in_basis_mm(
+def size_in_basis_mm(
     parent: Division,
     index: int,
     clear_mm: float,
@@ -543,6 +543,8 @@ def _size_in_basis_mm(
     A spacing adds the next board's ``thickness_mm`` rather than its solved
     extent, because that is what the solver subtracts when it resolves
     ``Basis.WITH_NEXT``; the two differ for a board carrying its own rule.
+    Raises :class:`EditError` naming the region for ``Basis.WITH_NEXT``
+    when no board follows it.
     """
     board = _next_board(parent, index, basis)
     if board is None:
@@ -565,7 +567,7 @@ def set_basis(unit: Unit, region_id: str, basis: Basis) -> Unit:
     parent, index = _locate_region(unit, region_id)
     spaces = solve(unit)
     clear_mm = spaces[region_id].extent_mm(_axis_index(parent.axis))
-    size_mm = _size_in_basis_mm(parent, index, clear_mm, basis)
+    size_mm = size_in_basis_mm(parent, index, clear_mm, basis)
     return set_size(unit, region_id, size_mm, basis)
 
 
@@ -781,7 +783,7 @@ def measure(unit: Unit, region_id: str, spaces: Mapping[str, Space]) -> Measurem
     clear_mm = spaces[region_id].extent_mm(_axis_index(parent.axis))
     spacing_mm: float | None = None
     if index + 1 < len(parent.items) and isinstance(parent.items[index + 1], Board):
-        spacing_mm = _size_in_basis_mm(parent, index, clear_mm, Basis.WITH_NEXT)
+        spacing_mm = size_in_basis_mm(parent, index, clear_mm, Basis.WITH_NEXT)
     fixed = isinstance(region.rule, Fixed)
     basis = region.rule.basis if isinstance(region.rule, Fixed) else Basis.CLEAR
     return Measurement(

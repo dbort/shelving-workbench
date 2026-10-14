@@ -94,12 +94,15 @@ clear 300 beside it."""
   id = "drag"
   instruction = ["Drag the shelf up a few centimeters with the mouse.", "Release."]
   expected = """
-The shelf stays put: typing the size locked the lower bay, and with only the
-bottom board below it, nothing can give. Size still reads 318, Spacing."""
+The shelf stays put and is selected: typing the size locked the lower bay,
+and with only the bottom board below it, nothing can give. A Shelving error
+pops up from the Notification Area saying a locked opening holds this board
+in place."""
 
   [[case.step]]
   id = "expression"
   instruction = [
+    "Click the lower bay.",
     "Click Size.",
     "Type =.",
     "Enter VarSet.Len - 20 mm in the f(x) dialog.",

@@ -295,13 +295,18 @@ def test_a_jittered_click_does_not_drag(unit_panel: _Fixture) -> None:
     assert unit_panel.panel.delete_button.isEnabled()
 
 
-def test_a_locked_opening_holds_the_shelf_above_it(unit_panel: _Fixture) -> None:
+def test_a_locked_opening_holds_the_shelf_above_it(
+    unit_panel: _Fixture, reported: list[str]
+) -> None:
     """A typed size locks the lower opening, which with the bottom board
-    below it leaves the shelf nothing to move into."""
+    below it leaves the shelf nothing to move into: the press selects the
+    shelf and the move reports why once."""
     unit_panel.select(unit_panel.lower)
     unit_panel.type_size("300")
     shelf_z_mm = unit_panel.session.spaces[unit_panel.shelf].origin.z_mm
     _press_move_release(unit_panel, -40)
+    assert unit_panel.session.selected_id == unit_panel.shelf
+    assert reported == ["A locked opening holds this board in place."]
     assert unit_panel.rule(unit_panel.lower) == Fixed(300.0)
     assert unit_panel.session.spaces[unit_panel.shelf].origin.z_mm == pytest.approx(
         shelf_z_mm

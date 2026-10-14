@@ -55,6 +55,7 @@ import json
 from collections.abc import Iterator, Mapping, Sequence
 from typing import Literal, TypedDict
 
+from freecad.Shelving.core.edit import EditError, size_in_basis_mm
 from freecad.Shelving.core.geometry import Space
 from freecad.Shelving.core.layout import (
     Basis,
@@ -70,7 +71,7 @@ from freecad.Shelving.core.layout import (
     Void,
     Weighted,
 )
-from freecad.Shelving.core.solver import solve
+from freecad.Shelving.core.solver import LayoutSolveError, solve
 
 RULE_RECORD_VERSION: int = 1
 
@@ -282,27 +283,16 @@ def _merged_rules(
             continue
         clear_mm = spaces[item.id].extent_mm(axis_index)
         if isinstance(stored, Fixed):
-            merged[index] = Fixed(
-                size_mm=_clear_in_basis_mm(items, index, clear_mm, stored.basis),
-                basis=stored.basis,
-            )
+            try:
+                size_mm = size_in_basis_mm(run, index, clear_mm, stored.basis)
+                merged[index] = Fixed(size_mm=size_mm, basis=stored.basis)
+            except EditError:
+                # A spacing whose next board is gone measures nothing; the
+                # region stays locked at its clear size.
+                merged[index] = Fixed(size_mm=clear_mm, basis=Basis.CLEAR)
         elif isinstance(item.rule, Fixed):
             merged[index] = Weighted(weight=clear_mm / (anchor_mm or 1.0))
     return merged
-
-
-def _clear_in_basis_mm(
-    items: Sequence[Item], index: int, clear_mm: float, basis: Basis
-) -> float:
-    """``clear_mm`` restated in ``basis`` for ``items[index]``: plus the next
-    board's ``thickness_mm`` for ``Basis.WITH_NEXT``, the amount the solver
-    subtracts. A record can name that basis only for a region with a board
-    after it, since its key names that board."""
-    if basis is Basis.WITH_NEXT and index + 1 < len(items):
-        after = items[index + 1]
-        if isinstance(after, Board):
-            return clear_mm + after.thickness_mm
-    return clear_mm
 
 
 def _rebuild_with_stored_rules(
@@ -332,8 +322,7 @@ def with_stored_rules(unit: Unit, rules: Mapping[str, SizeRule]) -> Unit:
     """``unit``, as scanned, with each region whose :func:`rule_key` matches
     an entry in ``rules`` taking that entry's lock state and basis at its
     scanned size, so ``solve`` gives every node the space it had in
-    ``unit``. Raises :class:`~freecad.Shelving.core.solver.LayoutSolveError`
-    when ``unit`` does not solve.
+    ``unit``. Returns ``unit`` itself when it does not solve.
 
     A key with no match, most often because a bounding board was renamed or
     deleted since the record was written, is not an error: that region keeps
@@ -341,7 +330,12 @@ def with_stored_rules(unit: Unit, rules: Mapping[str, SizeRule]) -> Unit:
     """
     if not rules:
         return unit
-    spaces = solve(unit)
+    try:
+        spaces = solve(unit)
+    except LayoutSolveError:
+        # The record cannot make solvable what the boards are not; the
+        # caller's own solve reports the scanned unit's error.
+        return unit
     return dataclasses.replace(
         unit, root=_rebuild_with_stored_rules(unit.root, rules, spaces)
     )

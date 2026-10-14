@@ -569,3 +569,10 @@ def test_an_unlocked_region_with_no_unlocked_sibling_takes_its_size_as_weight() 
     scanned = _bay_unit(Fixed(864.0))
     restored = with_stored_rules(scanned, {rule_key("lower", "upper"): Fill()})
     assert _find_bay(restored.root, "bay").rule == Weighted(weight=864.0)
+
+
+def test_a_unit_that_does_not_solve_comes_back_unchanged() -> None:
+    """Its caller's own solve then reports the boards' error."""
+    unsolvable = _bay_unit(Fixed(1000.0))
+    restored = with_stored_rules(unsolvable, {rule_key("lower", "upper"): Fill()})
+    assert restored is unsolvable
