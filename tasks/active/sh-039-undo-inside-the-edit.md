@@ -180,3 +180,6 @@ STANDING OBLIGATIONS (`CLAUDE.md`):
 - N3: The view tier checks the could-not-fold message only for Cancel.
 - N4: Only `set_size` is tested as a refused edit leaving no step.
 - N5: Style nits in `Session.commit`, the `Grain` docstring, `CmdType`'s type, and the `EditUnitPanel` docstring.
+
+### Round 2: APPROVED
+- No new findings. Round 1's F1 and F2 are fixed with tests that fail without the fixes; N1 to N5 are addressed.
