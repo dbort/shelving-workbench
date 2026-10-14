@@ -20,6 +20,7 @@ from freecad.Shelving.core.layout import (
     Region,
     SizeRule,
     Unit,
+    Void,
     Weighted,
 )
 from freecad.Shelving.core.record import (
@@ -30,6 +31,7 @@ from freecad.Shelving.core.record import (
     with_stored_rules,
 )
 from freecad.Shelving.core.scan import Box, scan
+from freecad.Shelving.core.solver import solve
 
 # --- rule_key() -------------------------------------------------------------
 
@@ -171,7 +173,8 @@ def test_with_stored_rules_replaces_a_matching_rule() -> None:
     unit = _bay_unit(Fill())
     key = rule_key("lower", "upper")
     updated = with_stored_rules(unit, {key: Fixed(250.0, basis=Basis.CLEAR)})
-    assert _find_bay(updated.root, "bay").rule == Fixed(250.0, basis=Basis.CLEAR)
+    # The record says the bay is locked; the boards say how big it is.
+    assert _find_bay(updated.root, "bay").rule == Fixed(864.0, basis=Basis.CLEAR)
 
 
 def test_with_stored_rules_leaves_an_unmatched_region_rule_as_scanned() -> None:
@@ -382,7 +385,42 @@ def test_round_trip_recovers_a_with_next_basis_a_scan_always_loses() -> None:
     assert _rule_map(rescanned) != original_rules
 
     restored = with_stored_rules(rescanned, rules_from_json(rules_to_json(original)))
-    assert _rule_map(restored) == original_rules
+    assert _intent(restored) == _intent(original)
+    assert _rule_map(restored)[rule_key(None, "shelf")] == Fixed(
+        400.0, basis=Basis.WITH_NEXT
+    )
+    _assert_same_spaces(restored, original)
+
+
+def _intent(unit: Unit) -> Mapping[str, Basis | None]:
+    """Each region's basis when it is locked, ``None`` when unlocked: what a
+    record carries across a rescan."""
+    return {
+        key: rule.basis if isinstance(rule, Fixed) else None
+        for key, rule in _rule_map(unit).items()
+    }
+
+
+def _assert_same_spaces(a: Unit, b: Unit) -> None:
+    """Every board of ``a`` and ``b`` in the same place; region ids differ
+    across a rescan, board ids do not."""
+    spaces_a, spaces_b = solve(a), solve(b)
+    for board_id in _board_ids(a.root):
+        assert spaces_a[board_id].origin.z_mm == pytest.approx(
+            spaces_b[board_id].origin.z_mm
+        ), board_id
+        assert spaces_a[board_id].origin.x_mm == pytest.approx(
+            spaces_b[board_id].origin.x_mm
+        ), board_id
+
+
+def _board_ids(region: Region) -> list[str]:
+    if not isinstance(region, Division):
+        return []
+    found: list[str] = []
+    for item in region.items:
+        found += [item.id] if isinstance(item, Board) else _board_ids(item)
+    return found
 
 
 def _rename_board_id(unit: Unit, old_id: str, new_id: str) -> Unit:
@@ -431,3 +469,110 @@ def test_renamed_bounding_board_falls_back_to_scanned_rule_without_raising() -> 
     ]
     for key in unaffected_keys:
         assert restored_rules[key] == original_rules[key]
+
+
+# --- geometry wins on a rescan (bug-007) ------------------------------------
+
+
+def _rescan_with_board_moved(unit: Unit, board_id: str, up_mm: float) -> Unit:
+    """:func:`_rescan_unit` after ``board_id`` was moved ``up_mm`` by hand."""
+    boxes: list[Box] = []
+    for spec in expand(unit):
+        corner = spec.placement
+        if spec.node_id == board_id:
+            corner = Vec3(corner.x_mm, corner.y_mm, corner.z_mm + up_mm)
+        boxes.append(Box(name=spec.node_id, corner_mm=corner, size_mm=spec.size))
+    rescanned = scan(boxes).unit
+    return dataclasses.replace(rescanned, root=_stabilize_board_ids(rescanned.root))
+
+
+def _box_with_bay2(rule: SizeRule) -> Unit:
+    """:func:`_closed_box_unit` with "bay2" ruled by ``rule``."""
+    unit = _closed_box_unit()
+    assert isinstance(unit.root, Division)
+    shell = unit.root.items[1]
+    assert isinstance(shell, Division)
+    column = shell.items[1]
+    assert isinstance(column, Division)
+    column.items[2] = Bay(rule=rule, id="bay2")
+    return unit
+
+
+def test_a_rescan_keeps_a_hand_moved_shelf_where_it_was_moved() -> None:
+    original = _closed_box_unit()
+    record = rules_from_json(rules_to_json(original))
+    rescanned = _rescan_with_board_moved(original, "shelf1", -60.0)
+    restored = with_stored_rules(rescanned, record)
+    # Every stored region is unlocked, so each keeps the rule the scan
+    # recovered from the moved boards.
+    assert _rule_map(restored) == _rule_map(rescanned)
+    shelf_z_mm = solve(rescanned)["shelf1"].origin.z_mm
+    assert solve(restored)["shelf1"].origin.z_mm == pytest.approx(shelf_z_mm)
+    assert solve(original)["shelf1"].origin.z_mm == pytest.approx(shelf_z_mm + 60.0)
+
+
+def test_a_locked_bay_takes_its_scanned_size() -> None:
+    original = _box_with_bay2(Fixed(250.0, basis=Basis.CLEAR))
+    record = rules_from_json(rules_to_json(original))
+    rescanned = _rescan_with_board_moved(original, "shelf2", 10.0)
+    restored = with_stored_rules(rescanned, record)
+    rules = _rule_map(restored)
+    bay2 = rules[rule_key("shelf1", "shelf2")]
+    assert isinstance(bay2, Fixed)
+    assert bay2.size_mm == pytest.approx(260.0)
+    assert bay2.basis is Basis.CLEAR
+    for key in (rule_key(None, "shelf1"), rule_key("shelf2", "shelf3")):
+        assert rules[key] == _rule_map(rescanned)[key]
+    _assert_same_spaces(restored, rescanned)
+
+
+def test_a_locked_spacing_keeps_its_basis_at_its_scanned_size() -> None:
+    original = _with_next_unit()
+    record = rules_from_json(rules_to_json(original))
+    rescanned = _rescan_with_board_moved(original, "shelf", 10.0)
+    restored = with_stored_rules(rescanned, record)
+    spaced = _rule_map(restored)[rule_key(None, "shelf")]
+    assert isinstance(spaced, Fixed)
+    assert spaced.basis is Basis.WITH_NEXT
+    assert spaced.size_mm == pytest.approx(410.0)
+    _assert_same_spaces(restored, rescanned)
+
+
+def test_an_unlocked_region_the_scan_fixed_shares_at_its_scanned_size() -> None:
+    """A scan fixes a plinth void beside compartments; a record that says it
+    was unlocked unlocks it at the weight that keeps it where it is."""
+    scanned = Unit(
+        size_mm=Vec3(600.0, 300.0, 954.0),
+        root=Division(
+            axis=Axis.Z,
+            items=[
+                Void(rule=Fixed(100.0), id="plinth"),
+                _b("bottom"),
+                Bay(id="lower"),
+                _b("shelf"),
+                Bay(id="upper"),
+                _b("top"),
+            ],
+        ),
+    )
+    stored = {rule_key(None, "bottom"): Fill()}
+    restored = with_stored_rules(scanned, stored)
+    plinth = _rule_map(restored)[rule_key(None, "bottom")]
+    # Each Fill bay is 400 mm between 18 mm boards, so one unit of weight
+    # is 400 mm.
+    assert plinth == Weighted(weight=0.25)
+    _assert_same_spaces(restored, scanned)
+    assert solve(restored)["plinth"].size.z_mm == pytest.approx(100.0)
+
+
+def test_an_unlocked_region_with_no_unlocked_sibling_takes_its_size_as_weight() -> None:
+    scanned = _bay_unit(Fixed(864.0))
+    restored = with_stored_rules(scanned, {rule_key("lower", "upper"): Fill()})
+    assert _find_bay(restored.root, "bay").rule == Weighted(weight=864.0)
+
+
+def test_a_unit_that_does_not_solve_comes_back_unchanged() -> None:
+    """Its caller's own solve then reports the boards' error."""
+    unsolvable = _bay_unit(Fixed(1000.0))
+    restored = with_stored_rules(unsolvable, {rule_key("lower", "upper"): Fill()})
+    assert restored is unsolvable

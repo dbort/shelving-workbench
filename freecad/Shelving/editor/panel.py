@@ -597,6 +597,8 @@ class EditUnitPanel:
         # goes to the elevation.
         layout.addWidget(self.view, 1)
         self._dragging = False
+        # Why a press could not start a drag, reported on the first move.
+        self._held: EditFailure | None = None
         # A drag re-solves on every pointer move, so one held past a limit
         # would otherwise raise a popup per move.
         self._drag_failure_reported = False
@@ -665,21 +667,23 @@ class EditUnitPanel:
         scene = self.view.scene()
         node_id = hit_test(scene, point) if scene is not None else None
         self.session.select(node_id)
-        # A board with no region before it cannot be dragged, but a press on
-        # it still selects it for Delete, so that refusal is not reported.
-        self._dragging = (
-            node_id is not None
-            and self.session.can_merge()
-            and self.session.begin_drag(
-                node_id, elevation_point_mm(self.session.unit, point)
-            )
-            is None
-        )
+        refused: EditFailure | None = None
+        self._dragging = False
+        if node_id is not None and self.session.can_merge():
+            grab_mm = elevation_point_mm(self.session.unit, point)
+            refused = self.session.begin_drag(node_id, grab_mm)
+            self._dragging = refused is None
+        # A press on a board a drag may not move still selects it for
+        # Delete, so its refusal waits for the pointer to move.
+        self._held = refused
         self._drag_failure_reported = False
         self._refresh()
 
     def _on_scene_drag(self, point: QtCore.QPointF) -> None:
         if not self._dragging:
+            if self._held is not None and not self._drag_failure_reported:
+                self._drag_failure_reported = True
+                report_error(self._held.message)
             return
         failure = self.session.drag_to(elevation_point_mm(self.session.unit, point))
         if failure is not None and not self._drag_failure_reported:

@@ -21,7 +21,16 @@ from freecad.Shelving.commands.edit_unit import EditUnitCommand
 from freecad.Shelving.commands.export_boxes import ExportBoxesCommand
 from freecad.Shelving.container import write_container
 from freecad.Shelving.core.geometry import Vec3
-from freecad.Shelving.core.layout import Axis, Bay, Board, Division, Fixed, Unit
+from freecad.Shelving.core.layout import (
+    Axis,
+    Bay,
+    Board,
+    Division,
+    Fixed,
+    Region,
+    SizeRule,
+    Unit,
+)
 from freecad.Shelving.editor import panel as panel_module
 from freecad.Shelving.init_gui import TOOLBAR_COMMANDS
 from freecad.Shelving.unit_ops import create_unit
@@ -169,13 +178,24 @@ def _fixed_shelf_unit() -> Unit:
     )
 
 
-def test_edit_unit_refuses_stored_sizes_that_no_longer_fit(
-    doc: FreeCAD.Document, recorded: list[_Refusal]
+def _bay_rules(region: Region) -> list[SizeRule]:
+    if isinstance(region, Bay):
+        return [region.rule]
+    if not isinstance(region, Division):
+        return []
+    found: list[SizeRule] = []
+    for item in region.items:
+        if not isinstance(item, Board):
+            found += _bay_rules(item)
+    return found
+
+
+def test_edit_unit_opens_locked_openings_at_the_size_hand_moves_left_them(
+    doc: FreeCAD.Document,
 ) -> None:
-    """Moving the top down and shortening the sides by hand leaves the two
-    fixed openings 100 mm too tall to fit: Edit Unit refuses with the
-    solver's diagnosis and suggestion, names and selects the shelf between
-    the competing openings, and changes no board."""
+    """Moving the top down and shortening the sides by hand leaves 100 mm
+    less than the two locked openings stored: the boards win, so both stay
+    locked and the upper one opens at the 446 mm left to it."""
     container = cast("FreeCAD.DocumentObject", doc.addObject("App::Part", "Unit"))
     write_container(container, _fixed_shelf_unit())
     doc.recompute()
@@ -186,21 +206,17 @@ def test_edit_unit_refuses_stored_sizes_that_no_longer_fit(
     for side in ("left_side", "right_side"):
         cast("_BoxFeature", doc.getObject(side)).Height = 764.0
     doc.recompute()
-    FreeCADGui.Selection.clearSelection()
-    FreeCADGui.Selection.addSelection(container)
     before = _board_snapshot(doc)
 
-    EditUnitCommand().Activated()
+    panel = panel_module.EditUnitPanel(container)
+    try:
+        rules = _bay_rules(panel.session.unit.root)
+    finally:
+        panel.reject()
 
-    assert recorded == [
-        _Refusal(
-            "The fixed sizes add up to 100.0 mm more than the space available.",
-            ("shelf",),
-            refusals.SUGGESTIONS["overflow"],
-        )
-    ]
-    assert _selected_names() == {"shelf"}
-    assert FreeCADGui.Control.activeDialog() is False
+    assert all(isinstance(rule, Fixed) for rule in rules), rules
+    sizes_mm = sorted(rule.size_mm for rule in rules if isinstance(rule, Fixed))
+    assert sizes_mm == pytest.approx([300.0, 446.0])
     assert _board_snapshot(doc) == before
 
 

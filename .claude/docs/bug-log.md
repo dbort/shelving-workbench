@@ -49,15 +49,6 @@ log happens only when the user asks.
   sh-020's manual QA. Fix: `sh-XXX task`. It needs an edit that splits a
   `Division` across its cross axis and a way to select a region with no
   area of its own, both design questions.
-- `bug-007` - **a board moved or thinned by hand snaps back on the next
-  edit when a stored `Fill` rule bounds it**: add a shelf and click OK,
-  move it down 60 mm by hand, then run `unit_ops.rescan_unit`; it returns
-  to the middle. The scan reads the unequal bays correctly, but
-  `record.with_stored_rules` overwrites them with the stored `Fill` rules,
-  keyed by boards that still exist. This contradicts the design's promise
-  that a hand edit is taken up. Found in sh-020's manual QA; sh-030's QA saw
-  a thinned shelf re-center 3 mm. Fix: sh-038, which takes sizes from geometry and only the
-  lock and basis from the record.
 - `bug-009` - **elevation dimensions overlap each other and their
   labels**: `_add_region_dimensions` in `editor/scene.py` places each
   dimension at a fixed fraction of its region's cross extent with no
