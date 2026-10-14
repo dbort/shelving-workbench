@@ -502,7 +502,8 @@ class Session:
         the region before it. Boards joined to it through locked regions
         move with it, and only the first unlocked region on each side
         changes size. Returns an :class:`EditFailure`, leaving the last good
-        state, when this step would not solve or no drag is in progress."""
+        state, when this step is refused or would not solve, or no drag is in
+        progress."""
         if self._drag is None:
             return EditFailure("no board is being dragged", None)
         board_id, axis, grab_offset_mm = self._drag

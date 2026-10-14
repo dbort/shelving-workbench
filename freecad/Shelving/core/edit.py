@@ -756,7 +756,7 @@ class Measurement:
 
     # What the region's size measures: its Fixed rule's basis, or
     # Basis.CLEAR for a Weighted or Fill region, which is what a typed size
-    # or a drag would fix it in.
+    # would fix it in.
     basis: Basis
     # Whether the region's rule is Fixed; False means it shares slack.
     fixed: bool

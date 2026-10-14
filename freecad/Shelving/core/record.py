@@ -251,7 +251,8 @@ def _merged_rules(
     run: Division, rules: Mapping[str, SizeRule], spaces: Mapping[str, Space]
 ) -> list[SizeRule | None]:
     """The rule each item of ``run`` takes, ``None`` for a board: the
-    record's lock state and basis at the size ``spaces`` gives it."""
+    record's lock state and basis at the size ``spaces`` gives it, or the
+    scanned rule where the record has no entry."""
     items = run.items
     axis_index = run.axis.component_index
     keyed: list[SizeRule | None] = []
