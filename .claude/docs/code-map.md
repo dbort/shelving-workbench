@@ -15,10 +15,13 @@ Each layer imports only the layers listed above it.
   `freecad/Shelving/unit_ops.py`: reading and writing a FreeCAD document
   against the core. Tested headless in `tests/freecad/`.
 - `freecad/Shelving/editor/`: `scene.py` draws and hit-tests with no
-  document; `session.py` owns the document and its one transaction;
-  `panel.py` is the Qt shell over a session. Tested in
-  `tests/test_editor_scene.py`, `tests/freecad/test_editor_session.py`
-  and `tests/freecad_gui/`.
+  document; `session.py` owns the document and its undo steps, one per
+  edit, through `history.py`, which reads each Undo and Redo back into the
+  session and folds the session into one step at OK; `panel.py` is the Qt
+  shell over a session. Tested in `tests/test_editor_scene.py`,
+  `tests/freecad/test_editor_session.py`, `tests/freecad/test_edit_history.py`,
+  `tests/freecad_gui/` and, for `Std_Undo` and `Std_Redo`,
+  `tests/freecad_view/test_undo_in_the_editor.py`.
 - `freecad/Shelving/refusals.py`: the one way a command reports a
   refusal, with the suggested next step for each reason, and the
   Notification Area error that it and the editor's refused edits use. Tested in

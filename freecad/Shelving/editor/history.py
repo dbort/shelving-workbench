@@ -16,9 +16,9 @@ Imports no Qt: the caller passes the deferral FreeCAD's signals need.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Generator, Mapping
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Generic, Literal, Protocol, TypeVar, cast
 
 import FreeCAD
@@ -121,7 +121,6 @@ class _Entry(Generic[S]):
     # A foreign step that touched the unit's objects, read back by a
     # rescan the first time it is on top.
     rescan: bool = False
-    touched: set[str] = field(default_factory=set)
 
 
 class EditHistory(Generic[S]):
@@ -297,10 +296,10 @@ class EditHistory(Generic[S]):
                 self._step_name = None
                 self._owner.step_interrupted()
         elif touched and touched <= {self._owner.probe_name()}:
-            entry = _Entry("probe", touched=touched)
+            entry = _Entry("probe")
         else:
             rescan = any(self._owner.owns(name) for name in touched)
-            entry = _Entry("foreign", rescan=rescan, touched=touched)
+            entry = _Entry("foreign", rescan=rescan)
         before = len(self._undo)
         self._undo.append(entry)
         self._redo.clear()
@@ -424,7 +423,7 @@ class EditHistory(Generic[S]):
         self._sync()
 
     @contextmanager
-    def _moving(self) -> Iterator[None]:
+    def _moving(self) -> Generator[None]:
         self._own_moves = True
         try:
             yield

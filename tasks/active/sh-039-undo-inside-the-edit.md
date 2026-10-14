@@ -164,10 +164,10 @@ STANDING OBLIGATIONS (`CLAUDE.md`):
   message reach the user in the panel or the Notification Area.
 
 ## Plan
-- [ ] **Step 1** (`freecad/Shelving/editor/`): A history object owning the session's transactions: one per edit, its own step list with the unit after each, the read-back on Undo and Redo, the floor, the fold near the limit, foreign-step detection, and OK and Cancel; `Session` routes every edit through it.
-- [ ] **Step 2** (`freecad/Shelving/editor/`): The Gui Redo workaround and the Redo-clearing transaction.
-- [ ] **Step 3** (`freecad/Shelving/editor/panel.py`, `freecad/Shelving/commands/edit_unit.py`): The panel refreshes after an Undo or Redo and shows the floor and could-not-fold messages; OK and Cancel go through the history.
-- [ ] **Step 4** (`tests/freecad/`, `tests/freecad_view/`): Headless tests for the step list, fold and floor; view-tier tests for every Must Have that runs `Std_Undo` or `Std_Redo`, and the crash-sequence subprocess test.
-- [ ] **Step 5** (`freecad/Shelving/qa/cases/30-editor.toml`, `.claude/docs/code-map.md`, `.claude/docs/bug-log.md`): Remove the replaced QA step, update the code map, delete bug-015.
+- [x] **Step 1** (`freecad/Shelving/editor/`): A history object owning the session's transactions: one per edit, its own step list with the unit after each, the read-back on Undo and Redo, the floor, the fold near the limit, foreign-step detection, and OK and Cancel; `Session` routes every edit through it.
+- [x] **Step 2** (`freecad/Shelving/editor/`): The Gui Redo workaround and the Redo-clearing transaction.
+- [x] **Step 3** (`freecad/Shelving/editor/panel.py`, `freecad/Shelving/commands/edit_unit.py`): The panel refreshes after an Undo or Redo and shows the floor and could-not-fold messages; OK and Cancel go through the history.
+- [x] **Step 4** (`tests/freecad/`, `tests/freecad_view/`): Headless tests for the step list, fold and floor; view-tier tests for every Must Have that runs `Std_Undo` or `Std_Redo`, and the crash-sequence subprocess test.
+- [x] **Step 5** (`freecad/Shelving/qa/cases/30-editor.toml`, `.claude/docs/code-map.md`, `.claude/docs/bug-log.md`): Remove the replaced QA step, update the code map, delete bug-015.
 
 ## Review log

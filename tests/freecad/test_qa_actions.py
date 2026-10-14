@@ -46,11 +46,10 @@ def test_the_wizard_is_on_by_default() -> None:
     assert qa.enabled is True
 
 
-def test_the_fresh_unit_checks_pass_on_a_fresh_unit() -> None:
+def test_the_fresh_unit_check_passes_on_a_fresh_unit() -> None:
     actions.fresh_unit()
-    for name in ("four_boards", "fresh_unit_size"):
-        result = CHECKS[name](FreeCAD.ActiveDocument)
-        assert result.passed, (name, result.detail)
+    result = CHECKS["fresh_unit_size"](FreeCAD.ActiveDocument)
+    assert result.passed, result.detail
 
 
 def test_the_run_folder_is_per_user_under_freecads_temp_directory(

@@ -83,6 +83,11 @@ its `driver` fixture gives each test a new document with an active 3D view.
   Report view while `PrintError` text does, so the Report view is not
   asserted either; the `scan.refusal` manual step checks it in a desktop
   FreeCAD (`freecad-notes.md` § User-facing errors).
+- **Focus the 3D view before `Std_Undo` or `Std_Redo`.** FreeCAD disables
+  both while keyboard focus sits in a task panel widget.
+- **The Notification Area does not count a repeated message.** Its
+  status-bar count stays put when the same text comes again; record what
+  the panel reports instead (`test_undo_in_the_editor.py`).
 - **The Report view is not where `print` goes under pytest.** pytest
   captures standard output first; read it with `capsys`.
 - **FreeCAD's GUI takes over standard output** in a child process too, so

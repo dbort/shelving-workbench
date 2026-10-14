@@ -51,12 +51,6 @@ usable."""
 The merge redraws one bay; after OK the panel closes with the divider in
 place."""
 
-  [[case.step]]
-  id = "undo"
-  check = "four_boards"
-  instruction = ["Run Edit, Undo once."]
-  expected = "The whole session reverses in one step: the unit has its four boards again."
-
 [[case]]
 id = "editor.dimensions"
 title = "Dimensions"

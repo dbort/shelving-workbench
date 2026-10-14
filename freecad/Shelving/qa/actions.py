@@ -150,11 +150,3 @@ def fresh_unit_size(doc: FreeCAD.Document | None) -> CheckResult:
     )
     detail = " x ".join(f"{value_mm:g}" for value_mm in sizes_mm) + " mm"
     return CheckResult(passed=passed, detail=detail)
-
-
-@check("four_boards")
-def four_boards(doc: FreeCAD.Document | None) -> CheckResult:
-    count = (
-        0 if doc is None else sum(1 for obj in doc.Objects if obj.TypeId == "Part::Box")
-    )
-    return CheckResult(passed=count == 4, detail=f"{count} boxes in the document")
