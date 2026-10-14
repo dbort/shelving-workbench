@@ -154,13 +154,16 @@ class EditHistory:
             return
         touched = self._recording or set()
         self._recording = None
-        if self._owner.probe_name() in touched:
+        probe_only = touched <= {self._owner.probe_name()}
+        if not touched.isdisjoint({self._owner.probe_name()}):
             self.probe_recorded = True
         if self._step_name is not None and not self._ending:
             # An Undo during a drag commits the drag's open step first.
             self._end_interrupted()
-        elif self._step_name is None and not self._own_moves:
-            # A step the session did not make.
+        elif self._step_name is None and not self._own_moves and not probe_only:
+            # A step the session did not make. One that touched only the
+            # probe, as the f(x) dialog's binding does, leaves the unit as
+            # it was.
             self._queue_settle()
 
     def slotUndoDocument(self, doc: FreeCAD.Document) -> None:

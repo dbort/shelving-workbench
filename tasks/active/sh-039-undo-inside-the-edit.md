@@ -94,7 +94,10 @@ spike added" has the full account), and from this task's first build:
   Cmd-Z after Close would spend bringing it back. Create and remove it
   outside any transaction. Should any step record a change to the probe,
   remove it in a step of its own at Close instead, so no step in the
-  history names a destroyed object.
+  history names a destroyed object. FreeCAD's f(x) dialog does record its
+  binding as a step touching only the probe, so a session that used f(x)
+  ends with a "Remove Shelving Dimension" step; such a step changes no
+  board, so it needs no read-back.
 - **Gui Redo use-after-free (FreeCAD 1.1 and main):**
   `Gui::Document::undo` records each view provider it recreates in
   `_redoViewProviders`, and only `Gui::Document::redo` walks and clears

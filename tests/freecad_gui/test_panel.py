@@ -281,6 +281,13 @@ def test_an_fx_binding_applies_then_leaves_the_field_editable(
     unit_panel.select(unit_panel.lower)
     unit_panel.type_size("250")
     assert unit_panel.rule(unit_panel.lower) == Fixed(250.0)
+    # FreeCAD records the binding as a step of its own, so the probe goes
+    # in a step too: removed outside one, that step would name a destroyed
+    # object.
+    doc = unit_panel.session.container.Document
+    unit_panel.panel.reject()
+    assert doc.getObject("ShelvingDimensionProbe") is None
+    assert doc.UndoNames[0] == "Remove Shelving Dimension"
 
 
 def test_a_jittered_click_does_not_drag(unit_panel: _Fixture) -> None:
