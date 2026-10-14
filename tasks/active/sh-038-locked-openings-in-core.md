@@ -179,3 +179,9 @@ STANDING OBLIGATIONS (`CLAUDE.md`):
 - N2: `test_move_board_refuses_a_board_with_no_region_before_it` is misnamed.
 - N3: No test for a drag past the opening above.
 - N4: The void merge is tested only on a hand-built unit.
+
+### Round 2: APPROVED
+- N1: The record merge's WITH_NEXT fallback (`record.py:286`) has no test; only a hand-edited or corrupt record reaches it.
+- N2: No test that a plain click on a held board stays quiet; the `startDragDistance` gate keeps it quiet by reading.
+- N3: Dragging a carcass board now pops up "This board has no opening on each side to move."; neither the QA case nor the Advice mentions it.
+- N4: Round 1's N1 (suggestion texts blame stored sizes) and N4 (void merge tested on a hand-built unit) stand.
