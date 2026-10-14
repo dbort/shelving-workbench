@@ -15,22 +15,22 @@ against, and it takes over the existing manual QA steps it can assert.
 Milestone M14.
 
 ## Must Have
-- [ ] `pixi run tests` green, and it runs the new `tests/freecad_view/`
+- [x] `pixi run tests` green, and it runs the new `tests/freecad_view/`
       suite under Xvfb in its own process, separate from the headless and
       offscreen GUI suites.
-- [ ] Xvfb comes from conda-forge's `xorg-xvfb-server` in `pixi.toml` for
+- [x] Xvfb comes from conda-forge's `xorg-xvfb-server` in `pixi.toml` for
       both `linux-64` and `linux-aarch64`, with `pixi.lock` updated; no
       system package is required, and `.github/workflows/ci.yml` still runs
       only `pixi run tests`.
-- [ ] Starting and stopping Xvfb is typed Python (a free display number,
+- [x] Starting and stopping Xvfb is typed Python (a free display number,
       `DISPLAY` set for the tier, the server stopped on every exit path,
       including a failed or interrupted run), not shell logic;
       `tools/run-tests.sh` gains at most a thin line invoking it.
-- [ ] The tier starts FreeCAD's GUI once per process against throwaway
+- [x] The tier starts FreeCAD's GUI once per process against throwaway
       settings (`tests.freecad_env`), and gives each test a new document
       with an active `Gui::View3DInventor` whose `getSize()` is positive;
       documents a test opened are closed after it.
-- [ ] Typed helpers in `tests/freecad_view/` send real Qt events to
+- [x] Typed helpers in `tests/freecad_view/` send real Qt events to
       `view.graphicsView().viewport()`: a click at a document point, a drag
       between two points, a key press, and an event pump. Tests prove them:
       - a click on a `Part::Box`'s face puts that box in
@@ -40,27 +40,27 @@ Milestone M14.
       - `FreeCADGui.runCommand("Std_Undo")` undoes a committed transaction
         (it sends its message to the active view, so it does nothing
         offscreen).
-- [ ] `write.opens-without-workbench` is no longer a manual QA case: a
+- [x] `write.opens-without-workbench` is no longer a manual QA case: a
       view-tier test saves a unit made by `unit_ops.create_unit`, opens it
       in a FreeCAD GUI process (under the same Xvfb) whose module path
       does not include this workbench, and asserts that every board is
       present with its saved bounding box and that the Report view and the
       process's output carry no error or warning naming a missing module.
-- [ ] `scan.export-and-refusal`'s `refusal` step loses every expectation
+- [x] `scan.export-and-refusal`'s `refusal` step loses every expectation
       the tier asserts. At least: a view-tier test runs Edit Unit through
       its toolbar command on the overlap fixture and asserts the
       Notification Area shows the Shelving error and Overlap and LeftSide
       are drawn in FreeCAD's selection color in a rendered image of the
       view. What remains of the step, if anything, is what only a person
       can judge.
-- [ ] Every other step of `freecad/Shelving/qa/cases/10-scan.toml` and
+- [x] Every other step of `freecad/Shelving/qa/cases/10-scan.toml` and
       `20-write.toml` was checked against the tier, and each one it can
       assert moved into `tests/freecad_view/`; the commit that removes a
       step names the test that replaced it. `30-editor.toml` is unchanged.
-- [ ] `.claude/docs/xvfb-gui-testing.md` exists on `main`, describing this
+- [x] `.claude/docs/xvfb-gui-testing.md` exists on `main`, describing this
       tier, its helpers and its limits, and `.claude/docs/code-map.md`
       lists `tests/freecad_view/`.
-- [ ] `pyrefly check` clean over the new code; `tests/test_qa_cases.py`
+- [x] `pyrefly check` clean over the new code; `tests/test_qa_cases.py`
       and `tests/test_code_map.py` pass.
 
 ## Advice
