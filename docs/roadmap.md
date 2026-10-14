@@ -42,13 +42,15 @@ steps exactly as written.
 
 ## M14: Editing in the 3D view
 
-**Status:** Tasks sh-037, sh-038, sh-039, sh-040
+**Status:** Tasks sh-037, sh-038, sh-039, sh-040, sh-041
 
 - [ ] sh-037: 3D-view tests under Xvfb
 - [ ] sh-038: locked openings, and a drag that moves only what it drags
 - [ ] sh-039: Undo and Redo inside an edit (blocked on sh-037)
 - [ ] sh-040: Edit Unit works in the 3D view (blocked on sh-037, sh-038
   and sh-039)
+- [ ] sh-041: padlocks lock and unlock openings in the view (blocked on
+  sh-040)
 
 The editor moves out of the task panel into FreeCAD's own 3D view, so zoom,
 pan and orbit are FreeCAD's navigation. The camera turns to face the unit
