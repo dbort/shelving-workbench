@@ -25,6 +25,8 @@ Each layer imports only the layers listed above it.
   `tests/freecad/test_refusals.py` and `tests/freecad_gui/test_refusals.py`.
 - `freecad/Shelving/commands/`: one thin module per toolbar command.
 - `freecad/Shelving/init_gui.py`: workbench registration.
+- `freecad/Shelving/compat.py`: standard-library names newer than the
+  Python FreeCAD 1.1 ships, usable from any layer.
 - `freecad/Shelving/debug_log.py`: Report-view diagnostics, usable from
   any layer.
 - `freecad/Shelving/temp_dirs.py`: per-user folders under FreeCAD's temp

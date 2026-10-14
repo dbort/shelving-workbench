@@ -13,7 +13,7 @@ these tests assert.
 import sys
 from collections.abc import Iterator
 from types import TracebackType
-from typing import Protocol, cast, override
+from typing import Protocol, cast
 
 import FreeCAD
 import FreeCADGui
@@ -21,6 +21,7 @@ import pytest
 from PySide6 import QtCore, QtGui, QtTest, QtWidgets
 from shiboken6 import Shiboken
 
+from freecad.Shelving.compat import override
 from freecad.Shelving.core.layout import (
     Basis,
     Bay,

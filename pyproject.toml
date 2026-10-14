@@ -33,6 +33,10 @@ known-third-party = ["FreeCAD", "FreeCADGui", "Part"]
 
 [tool.pyrefly]
 preset = "strict"
+# The oldest Python a supported FreeCAD ships: FreeCAD 1.1's macOS bundle
+# runs 3.11 while this environment runs 3.12, so checking at 3.11 is what
+# catches a standard-library name the workbench cannot import there.
+python-version = "3.11"
 project-includes = [
     "freecad/",
     "tools/",
