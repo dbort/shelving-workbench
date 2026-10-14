@@ -8,7 +8,7 @@ calls ``unit_ops`` functions.
 
 import os
 import time
-from typing import TYPE_CHECKING, TypedDict, cast
+from typing import TYPE_CHECKING, Literal, TypedDict, cast
 
 import FreeCAD
 
@@ -24,7 +24,7 @@ class _CommandResources(TypedDict):
     MenuText: str
     ToolTip: str
     Pixmap: str
-    CmdType: str
+    CmdType: Literal["NoTransaction"]
 
 
 def _selected_container() -> FreeCAD.DocumentObject | None:

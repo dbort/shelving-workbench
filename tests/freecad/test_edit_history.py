@@ -153,6 +153,7 @@ def test_each_edit_is_one_step_named_for_it(doc: FreeCAD.Document) -> None:
         assert session.set_size(250.0) is None
         names = list(doc.UndoNames)
         assert isinstance(session.set_size(5000.0), EditFailure)
+        assert isinstance(session.set_locks([lower, upper], locked=True), EditFailure)
         assert doc.UndoNames == names
         assert session.set_basis(Basis.WITH_NEXT) is None
         assert session.set_locks([lower], locked=False) is None
@@ -310,6 +311,57 @@ def test_an_added_shelf_keeps_its_stock_through_undo_redo_and_ok(
     assert shelf_material() == "Wood"
 
 
+def test_boards_recreated_at_ok_keep_their_stock_under_any_name(
+    doc: FreeCAD.Document,
+) -> None:
+    """OK writes the session's unit again, and a recreated board may get
+    back the name of a board the session deleted, or its own: either way it
+    keeps the stock it was made with, though its source is gone."""
+    bottom = doc.getObject("bottom")
+    assert bottom is not None
+    cast("properties._MaterialObject", bottom).ShapeMaterial = library_material("Wood")
+    doc.recompute()
+    original = _board_ids(Session(_container(doc)).unit.root)
+    session = _opened(doc)
+    first = _add_shelf(session)
+    above = _bay_ids(session.unit.root)[1]
+    for bay_id in (above, _bay_ids(session.unit.root)[0]):
+        session.select(bay_id)
+        assert session.split("vertical") is None
+    session.select(first)
+    assert session.merge() is None
+    added = _board_ids(session.unit.root) - original
+    assert len(added) == 2
+    assert session.commit() is None
+    names = {board[0] for board in _boards(_container(doc))} - original
+    assert len(names) == 2
+    for name in names:
+        obj = doc.getObject(name)
+        assert obj is not None, name
+        assert properties.read_material_name(obj) == "Wood", name
+
+
+def test_ok_near_the_history_limit_leaves_one_step_above_the_history(
+    doc: FreeCAD.Document,
+) -> None:
+    container = _container(doc)
+    doc.addObject("Part::Box", "Elsewhere")
+    for number in range(10):
+        _foreign_change(doc, f"before the session {number}")
+    before_names = list(doc.UndoNames)
+    session = _opened(doc)
+    _add_shelf(session)
+    session.select(_bay_ids(session.unit.root)[0])
+    for number in range(30):
+        assert session.set_size(200.0 + number) is None
+    final = _boards(container)
+    assert session.commit() is None
+    assert doc.UndoNames[0] == SESSION_STEP
+    remaining = list(doc.UndoNames[1:])
+    assert remaining == before_names[: len(remaining)]
+    assert _boards(container) == final
+
+
 def _foreign_change(doc: FreeCAD.Document, label: str) -> None:
     other = doc.getObject("Elsewhere")
     assert other is not None
@@ -380,20 +432,6 @@ def test_near_the_history_limit_only_the_oldest_steps_fold(
     assert _boards(container) == before_boards
     remaining = list(doc.UndoNames)
     assert remaining == before_names[: len(remaining)]
-
-
-def test_ok_near_the_history_limit_leaves_one_step(doc: FreeCAD.Document) -> None:
-    container = _container(doc)
-    session = _opened(doc)
-    _add_shelf(session)
-    session.select(_bay_ids(session.unit.root)[0])
-    for number in range(30):
-        assert session.set_size(200.0 + number) is None
-    final = _boards(container)
-    assert session.commit() is None
-    assert doc.UndoNames[0] == SESSION_STEP
-    assert SESSION_STEP not in doc.UndoNames[1:]
-    assert _boards(container) == final
 
 
 def test_an_undo_during_a_drag_ends_the_drag(doc: FreeCAD.Document) -> None:

@@ -20,7 +20,7 @@ session never reads theirs.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Callable, Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from typing import Literal, Protocol, cast
 
 import FreeCAD
@@ -109,6 +109,15 @@ class EditFailure:
     # caller asked to edit, or the node a re-solve refused at. None only when
     # nothing was selected to act on.
     node_id: str | None
+
+
+def _board_ids(region: Region) -> Iterator[str]:
+    if isinstance(region, Division):
+        for item in region.items:
+            if isinstance(item, Board):
+                yield item.id
+            else:
+                yield from _board_ids(item)
 
 
 def _find_node(region: Region, node_id: str) -> Region | Board | None:
@@ -297,8 +306,7 @@ class Session:
         the probe object. Returns a message for the user when a change made
         elsewhere in the document kept the session from folding into one
         step."""
-        message = self._finish(keep=True)
-        return message
+        return self._finish(keep=True)
 
     def cancel(self) -> str | None:
         """End this session, putting the document back as the session found
@@ -357,13 +365,20 @@ class Session:
         for name in state.deleted:
             if doc.getObject(name) is not None:
                 doc.removeObject(name)
+        existing = {obj.Name for obj in doc.Objects}
         result = write_container(self.container, state.unit)
-        for old_id, new_id in result.id_renames.items():
-            stock = self._stock.get(old_id)
-            target = doc.getObject(new_id)
-            if stock is not None and target is not None:
-                properties.write_stock(stock, target)
-                self._stock[new_id] = stock
+        # A board the write created may get its old name back, and then
+        # appears in no rename.
+        restocked: dict[str, properties.Stock] = {}
+        for board_id in _board_ids(state.unit.root):
+            name = result.id_renames.get(board_id, board_id)
+            stock = self._stock.get(board_id)
+            target = doc.getObject(name)
+            if name in existing or stock is None or target is None:
+                continue
+            properties.write_stock(stock, target)
+            restocked[name] = stock
+        self._stock.update(restocked)
         return result.id_renames
 
     def renamed(self, state: SessionState, renames: Mapping[str, str]) -> SessionState:

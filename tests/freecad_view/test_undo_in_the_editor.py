@@ -247,8 +247,12 @@ def test_near_the_history_limit_undo_steps_one_edit_down_to_the_fold(
     assert _boards(unit) == before_boards
 
 
+@pytest.mark.parametrize("button", ["OK", "Cancel"])
 def test_a_change_made_elsewhere_is_kept_and_reported(
-    unit: FreeCAD.DocumentObject, driver: ViewDriver, reported: list[str]
+    unit: FreeCAD.DocumentObject,
+    driver: ViewDriver,
+    reported: list[str],
+    button: str,
 ) -> None:
     doc = unit.Document
     elsewhere = cast("_Labeled", doc.addObject("Part::Box", "Elsewhere"))
@@ -260,8 +264,9 @@ def test_a_change_made_elsewhere_is_kept_and_reported(
     doc.commitTransaction()
     driver.pump()
     _add_shelf(panel, driver)
-    click_task_button("Cancel", driver)
-    assert _boards(unit) == before_boards
+    final_boards = _boards(unit)
+    click_task_button(button, driver)
+    assert _boards(unit) == (final_boards if button == "OK" else before_boards)
     assert elsewhere.Label == "changed during the session"
     assert reported == [NOT_FOLDED_MESSAGE]
 

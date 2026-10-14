@@ -545,9 +545,9 @@ class AncestorWatch(QtCore.QObject):
 class EditUnitPanel:
     """One elevation-editing task panel over ``container``.
 
-    Construction opens the session, each edit made in the panel is its own
-    undo step, ``accept`` folds them into one and ``reject`` undoes them,
-    so the session lands or reverts together.
+    Construction opens the session, and each edit made in the panel is its
+    own undo step. ``accept`` folds them into one and ``reject`` undoes
+    them, so the session lands or reverts together.
     """
 
     def __init__(self, container: FreeCAD.DocumentObject) -> None:

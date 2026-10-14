@@ -13,6 +13,7 @@ Python's standard output for its Report view.
 import gc
 import os
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 
@@ -54,28 +55,36 @@ def main(result: Path) -> None:
     driver.pump(300)
     (panel,) = [obj for obj in gc.get_objects() if isinstance(obj, EditUnitPanel)]
     session = panel.session
-    session.select(bays(session.unit.root)[0])
-    panel._refresh()
-    panel.add_shelf_button.click()
-    driver.pump(200)
-    shelf = next(
-        board_id
-        for board_id in session.spaces
-        if doc.getObject(board_id) is not None
-        and board_id not in ("bottom", "top", "left_side", "right_side")
-    )
-    session.select(shelf)
-    panel._refresh()
-    panel.delete_button.click()
-    driver.pump(200)
-    gui_step("Std_Undo", driver)
-    gui_step("Std_Undo", driver)
-    session.select(bays(session.unit.root)[0])
-    panel._refresh()
-    panel.add_divider_button.click()
-    driver.pump(200)
-    gui_step("Std_Undo", driver)
-    gui_step("Std_Redo", driver)
+
+    def new_board_after(click: Callable[[], None]) -> str:
+        before = set(session.spaces)
+        click()
+        driver.pump(200)
+        (made,) = {
+            board_id
+            for board_id in set(session.spaces) - before
+            if doc.getObject(board_id) is not None
+        }
+        return made
+
+    # A freed read crashes only when the freed memory has been reused, so
+    # the sequence runs several times.
+    for _ in range(3):
+        session.select(bays(session.unit.root)[0])
+        panel._refresh()
+        shelf = new_board_after(panel.add_shelf_button.click)
+        session.select(shelf)
+        panel._refresh()
+        panel.delete_button.click()
+        driver.pump(200)
+        gui_step("Std_Undo", driver)
+        gui_step("Std_Undo", driver)
+        session.select(bays(session.unit.root)[0])
+        panel._refresh()
+        panel.add_divider_button.click()
+        driver.pump(200)
+        gui_step("Std_Undo", driver)
+        gui_step("Std_Redo", driver)
     panel.reject()
     FreeCADGui.Control.closeDialog()
     driver.pump(200)

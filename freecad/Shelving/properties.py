@@ -314,10 +314,13 @@ def _appearance_view(obj: FreeCAD.DocumentObject) -> _AppearanceView | None:
 
 @dataclass(frozen=True)
 class Grain:
-    """A Woodworking ``Grain`` property: its type, group and value."""
+    """A Woodworking ``Grain`` property, held apart from any object."""
 
+    # The property's FreeCAD type, such as App::PropertyStringList.
     type_id: str
+    # The property group it shows under in the property editor.
     group: str
+    # One grain direction per face.
     value: tuple[str, ...]
 
 
