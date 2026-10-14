@@ -9,8 +9,9 @@ pytest upgrade changed either, a mixed run would start FreeCAD again and
 hang, so every run here has a timeout and uses ``--collect-only``, which
 still runs each conftest's ``pytest_sessionstart``. Each run reports, after
 pytest returns, the state a FreeCAD start leaves behind: ``XDG_CONFIG_HOME``
-pointing at a throwaway settings tree (both directories' startups set it),
-and ``FreeCADGui`` loaded, which in a mixed run only the GUI startup does.
+pointing at a throwaway settings tree (every directory's startup sets it),
+and ``FreeCADGui`` loaded, which in a mixed run only the GUI and 3D-view
+startups do.
 """
 
 import json
@@ -47,7 +48,7 @@ sys.exit(int(code))
 class _Run:
     returncode: int
     output: str
-    # Whether either FreeCAD directory's startup ran: it points
+    # Whether any FreeCAD directory's startup ran: it points
     # XDG_CONFIG_HOME at a fresh tree under the run's own temp directory.
     settings_isolated: bool
     freecadgui_loaded: bool

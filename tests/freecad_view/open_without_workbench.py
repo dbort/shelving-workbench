@@ -2,8 +2,8 @@
 and writes what it found to a JSON file.
 
 Run as a script, ``python open_without_workbench.py DOCUMENT REPO_ROOT
-RESULT_FILE``,
-by ``test_open_without_workbench.py``, never imported by the tests: FreeCAD
+RESULT_FILE``, by ``test_open_without_workbench.py``, which imports it only
+for its types and path; ``main`` never runs in the test process: FreeCAD
 loads every ``freecad.*`` package it can import as a workbench, and the
 editable install puts the repository on ``sys.path``, so the repository has
 to leave ``sys.path`` before ``freecad`` is first imported. The caller
