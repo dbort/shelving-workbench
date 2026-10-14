@@ -142,3 +142,13 @@ STANDING OBLIGATIONS (`CLAUDE.md`):
 - [x] **Step 6** (`.claude/docs/xvfb-gui-testing.md`, `.claude/docs/code-map.md`, `README.md` § Tests): Bring the Xvfb notes from `06d20ab`, rewritten for this tier; list the tier in the code map and the README's test section.
 
 ## Review log
+
+### Round 1: REJECTED
+- **F1: `tools/run-tests.sh` lost its executable bit** (`tools/run-tests.sh:1`): commit 1d0dbee changed its mode from 100755 to 100644; `pixi.toml` runs it by path, and running it directly or from a fresh checkout fails. Restore 100755.
+- **F2: mm quantities without the `_mm` suffix** (`tests/freecad_view/open_without_workbench.py:90`, `tests/freecad_view/test_open_without_workbench.py:49`, `:73`, `:75`): `bounds`, `saved` and `opened` hold millimeter bounding boxes; rename them per § Project conventions.
+- **N1: The highlight check accepts any large change** (`tests/freecad_view/test_scan_and_write.py:241`): a fair stand-in for the selection color, but a vanished or recolored board would pass too; a hue check (blue above red) would tighten it.
+- **N2: The status bar claim is unasserted** (`.claude/docs/xvfb-gui-testing.md:80`): the doc says the status bar shows the error in red, but `currentMessage()` read empty 400 ms after the command; assert it or drop it. The notification count proves a notification arrived, not which, which the manual step covers.
+- **N3: Unused helper** (`tests/freecad_view/test_scan_and_write.py:155`): `_report_text`.
+- **N4: Redundant condition** (`tests/freecad_view/test_scan_and_write.py:131`): `and box.buttons()`.
+- **N5: The trouble filter is never shown to catch anything** (`tests/freecad_view/test_open_without_workbench.py:22`): acceptable as a regression guard today.
+- **N6: SIGTERM to the launcher skips its `finally`** (`tools/xvfb_run.py:151`): Xvfb would outlive it on a developer's machine.
