@@ -35,11 +35,12 @@ ruff check .
 ruff format --check .
 pyrefly check
 shellcheck tools/*.sh
-pytest freecad/Shelving/core tests --ignore=tests/freecad --ignore=tests/freecad_gui
+pytest freecad/Shelving/core tests --ignore=tests/freecad --ignore=tests/freecad_gui \
+	--ignore=tests/freecad_view
 bash tools/lint-workflows.sh
 
 # freecadcmd runs against throwaway XDG directories so it never touches a
-# developer's real FreeCAD settings; the two pytest directories below set up
+# developer's real FreeCAD settings; the three pytest directories below set up
 # their own the same way (tests/freecad_env.py). The v1-1 directory
 # name follows FreeCAD's minor version.
 freecad_dirs="$(mktemp -d)"
@@ -58,3 +59,5 @@ printf '== %s\n' tests/freecad
 pytest tests/freecad
 printf '== %s\n' tests/freecad_gui
 QT_QPA_PLATFORM=offscreen pytest tests/freecad_gui
+printf '== %s\n' tests/freecad_view
+python -m tools.xvfb_run pytest tests/freecad_view

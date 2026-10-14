@@ -10,7 +10,7 @@ from tests.collection import (
     skipped_freecad_dir,
 )
 
-_HEADLESS, _GUI = FREECAD_DIRS
+_HEADLESS, _GUI, _VIEW = FREECAD_DIRS
 _ROOT = _HEADLESS.parent.parent
 
 
@@ -37,9 +37,18 @@ def test_a_run_aimed_inside_the_directory_collects_it(targets: list[str]) -> Non
         ["tests/freecad", "tests/test_collection.py"],
     ],
 )
-def test_a_mixed_run_skips_both_directories(targets: list[str]) -> None:
+def test_a_mixed_run_skips_every_directory(targets: list[str]) -> None:
     assert skipped_freecad_dir(_HEADLESS, targets, _ROOT) == _HEADLESS
     assert skipped_freecad_dir(_GUI, targets, _ROOT) == _GUI
+    assert skipped_freecad_dir(_VIEW, targets, _ROOT) == _VIEW
+
+
+def test_the_view_directory_is_collected_only_on_its_own() -> None:
+    assert skipped_freecad_dir(_VIEW, ["tests/freecad_view"], _ROOT) is None
+    assert (
+        skipped_freecad_dir(_VIEW, ["tests/freecad_view", "tests/freecad_gui"], _ROOT)
+        == _VIEW
+    )
 
 
 def test_targets_resolve_against_the_invocation_directory() -> None:
