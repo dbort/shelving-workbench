@@ -632,15 +632,55 @@ Laptop sessions have settled the whole list. The f(x) button works; the
 panel still scrolls with the Python console open, which the user accepts
 because the spike's own controls go away.
 
-1. Recheck the dimension layout and colors, FreeCAD picking with whole
-   boards, and orbiting behind the unit.
-2. Optionally, spike FreeCAD's `SoLinearDragger` in place of
-   `SoTranslate1Dragger` to retire the typed-move and step-size request.
-3. Plan design A with `/new-task`, carrying the findings and requests
-   above into its `## Advice`.
-4. Before this branch merges, delete `freecad/Shelving/spikes/`, the
-   toolbar lines in `init_gui.py`, the spike line in
-   `.claude/docs/code-map.md`, and `research/spikes/`.
+### Task breakdown
+
+Agreed with the user: four tasks, each planned with `/new-task` carrying
+the findings and requests above into its `## Advice`. The current editor
+panel need not keep working through them: delete or pare it down as soon
+as that makes sense, and a stretch with no working editor is acceptable.
+
+1. **The lock model in core.** Lock and unlock, the last-unlocked
+   refusal, drags that carry boards across locked openings and reweight
+   the first unlocked opening on each side, and the held test; it
+   replaces `core.edit.move_board`'s semantics and tests. No user
+   interface. It also takes bug-007: a rescan keeps each opening's lock
+   state and basis from the record and takes sizes from geometry, so an
+   unlocked opening's weight comes from its scanned size and a locked one
+   is fixed at its scanned size. Reference: `spikes/local_move.py`.
+2. **Undo inside the edit (bug-015).** One transaction per edit, the
+   read-back after Undo and Redo, OK folding the session into one step,
+   Cancel clearing Redo, the stock carried through the fold, the Gui
+   Redo crash workaround, and a design for FreeCAD's 20-step history.
+   Reference: `spikes/edit_history.py`. Independent of task 1.
+3. **The viewport editor replaces the elevation view.** Overlay,
+   whole-board picking, dimensions, the floating size field, drag
+   arrows, the in-view add buttons, Delete, the Sketcher-style camera,
+   and a slim panel; `editor/scene.py` goes, and with it bug-004 and
+   bug-009. Blocked on tasks 1 and 2.
+4. **Padlocks in the view.** Padlocks on dimensions, the held board's
+   padlock and holder highlight, and no arrow on carcass boards. Blocked
+   on task 3.
+
+Also decided:
+
+- sh-024 (user guide and release) is abandoned for now, to be revived
+  later.
+- sh-031 (stock list and swap) is re-planned after task 3, blocked on it:
+  its selection step is written against `editor/scene.py`, and the
+  viewport selects through FreeCAD's selection instead.
+- Later, as roadmap entries rather than tasks: typed moves and a step
+  size (`SoLinearDragger`), unit and opening sizes edited in the view,
+  labels dragged aside, what deleting an outer board does, and the
+  spacing-constraints design pass.
+- bug-005 (no full-height divider after deleting one) could join task 3
+  as add buttons on a selected `Division`, but it needs a new core edit.
+
+### Before this branch is deleted
+
+Delete `freecad/Shelving/spikes/`, the toolbar lines in `init_gui.py`,
+the spike line in `.claude/docs/code-map.md`, and `research/spikes/`. The
+FreeCAD issue draft for the Redo crash is at
+`3622341:research/spikes/freecad-issue-redo-crash.md`.
 
 ## Sources
 
