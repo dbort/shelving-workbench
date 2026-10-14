@@ -188,3 +188,9 @@ Reviewed the no-floor design.
 - N4: The Gui Redo workaround undoes even when its `Std_Redo` did nothing.
 - N5: An edit computes its candidate before a queued read-back settles.
 - N6: The Gui mid-drag Undo, the drop-down multi-step Undo, the f(x) binding, and sh-040 and sh-031 planning around Cancel stand as recorded.
+
+### Round 7: APPROVED
+- N1: A session that used f(x) ends with a "Remove Shelving Dimension" step, so the first Cmd-Z after Close brings back the temporary object instead of taking back an edit; the Must Have's wording on Close does not hold on that path. Put to the user.
+- N2: During a session, the f(x) binding's own step undoes with no visible change; FreeCAD's own f(x) bindings record the same step.
+- N3: `_empty_gui_list` clears its flag even when its `Std_Redo` did not run.
+- N4: Round 6's N6 stands as recorded.
