@@ -324,3 +324,10 @@ STANDING OBLIGATIONS (`CLAUDE.md`):
 - Reviewed the QA fixes in abe363d: the overlay's bounding box reaches the dimensions, so a square-on camera no longer clips their lines and text (confirmed by the user on FreeCAD 1.1.4 for macOS); the camera restore survives its document closing; an unexpected Edit Unit refusal logs its traceback. Both new view tests fail without their fixes.
 - **N1: The unreproduced "QGraphicsView already deleted" refusal is recorded only in conversation** (`freecad/Shelving/commands/edit_unit.py:147`): give it a bug-log entry so the next QA run captures the Report view.
 - **N2: Ambiguous referent in the new docstring** (`freecad/Shelving/editor/overlay.py:214`): name `SoDatumLabel`.
+
+### Round 5: REJECTED
+- **F1: `pixi run tests` is red: the new test fails, and its failure cascades** (`tests/freecad_view/test_editor_drawing.py:535`, `freecad/Shelving/editor/view_editor.py:469`): the test's `ViewDriver` keeps the closed view's `graphicsView()` wrapper; when FreeCAD puts the next view at the same address, `view.graphicsView()` returns that wrapper and `viewer.destroyed.connect(...)` raises "Signal source has been deleted", failing this and later tests. Make the test deterministic, and make `_open` cope with a stale wrapper held elsewhere or record in Advice why that is out of scope.
+- **N1: The `alive` callable passed to the camera restore never turns false** (`freecad/Shelving/editor/view_editor.py:598`, `:1153-1167`).
+- **N2: FreeCAD has its own auto-close for a Python task dialog's document** (`freecad/Shelving/editor/panel.py:350-357`): Assembly's `setAutoCloseOnDeletedDocument(True)` and `setDocumentName`; use it for the document case or say in Advice why one signal covers both.
+- **N3: `_view_closed` closes whatever dialog is active, even after the panel has already ended** (`freecad/Shelving/editor/panel.py:350`).
+- **N4: `_DeleteKeys` still keeps the viewer wrapper** (`freecad/Shelving/editor/view_editor.py:254`).
