@@ -316,3 +316,6 @@ STANDING OBLIGATIONS (`CLAUDE.md`):
 - **F1: The size fields' properties get saved into the user's file** (`freecad/Shelving/editor/session.py:81`, `:250-252`): `Transient` keeps only the value out of the file; a save during the edit writes all four `ShelvingField*` declarations into `Document.xml`, putting workbench state in the user's document. Add them with the `Prop_NoPersist` attribute (32) instead, test a save during the session, and correct the comment.
 - **N1: `Session.close` raises once the container object is destroyed** (`freecad/Shelving/editor/session.py:268-270`): `hasattr` does not catch FreeCAD's `ReferenceError`, so `EditUnitPanel._end` (`freecad/Shelving/editor/panel.py:374`) raises before `closeDialog()` on the lost-unit path, and from the form's `destroyed` slot after the document closed.
 - **N2: The container test's parameter could be a `Literal`** (`tests/freecad_view/test_editor_input.py:731`).
+
+### Round 3: APPROVED
+- All three round 2 findings are fixed: the size fields' properties carry `Prop_NoPersist` and a save during the session writes none of them; `Session.close` survives a destroyed container; the view test's `kind` is a `Literal`. Nothing new blocks.
