@@ -311,3 +311,8 @@ STANDING OBLIGATIONS (`CLAUDE.md`):
 - **N2: Unit suffixes missing on a few new quantities** (`freecad/Shelving/editor/view_editor.py:159`, `:675`, `:697`; `tests/freecad_view/test_editor_input.py:122`).
 - **N3: A late camera restore can jump the next session's camera** (`freecad/Shelving/editor/view_editor.py:1089`): a pending restore poll can override a new session's turn and fit on the same view.
 - **N4: The default of the RestoreCamera preference is not exercised** (`tests/freecad_view/test_editor_drawing.py:215`).
+
+### Round 2: REJECTED
+- **F1: The size fields' properties get saved into the user's file** (`freecad/Shelving/editor/session.py:81`, `:250-252`): `Transient` keeps only the value out of the file; a save during the edit writes all four `ShelvingField*` declarations into `Document.xml`, putting workbench state in the user's document. Add them with the `Prop_NoPersist` attribute (32) instead, test a save during the session, and correct the comment.
+- **N1: `Session.close` raises once the container object is destroyed** (`freecad/Shelving/editor/session.py:268-270`): `hasattr` does not catch FreeCAD's `ReferenceError`, so `EditUnitPanel._end` (`freecad/Shelving/editor/panel.py:374`) raises before `closeDialog()` on the lost-unit path, and from the form's `destroyed` slot after the document closed.
+- **N2: The container test's parameter could be a `Literal`** (`tests/freecad_view/test_editor_input.py:731`).
