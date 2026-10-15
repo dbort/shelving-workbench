@@ -16,6 +16,7 @@ from PySide6 import QtWidgets
 
 from freecad.Shelving import refusals
 from freecad.Shelving.commands import create_unit as create_unit_module
+from freecad.Shelving.commands import edit_unit as edit_unit_module
 from freecad.Shelving.commands.create_unit import CreateUnitCommand
 from freecad.Shelving.commands.edit_unit import EditUnitCommand
 from freecad.Shelving.commands.export_boxes import ExportBoxesCommand
@@ -249,6 +250,24 @@ def test_edit_unit_refuses_an_unexpected_failure(
     assert recorded == [
         _Refusal("panel exploded", (), refusals.SUGGESTIONS["unexpected"])
     ]
+
+
+def test_edit_unit_refuses_a_document_with_no_3d_view(
+    doc: FreeCAD.Document, recorded: list[_Refusal], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _fresh_unit_selected(doc)
+    objects = len(doc.Objects)
+
+    def no_view(_doc: FreeCAD.Document) -> None:
+        return None
+
+    monkeypatch.setattr(edit_unit_module, "_view_of", no_view)
+    EditUnitCommand().Activated()
+
+    assert len(recorded) == 1, recorded
+    assert recorded[0].suggestion == refusals.SUGGESTIONS["no_3d_view"]
+    assert not FreeCADGui.Control.activeDialog()
+    _assert_no_session_left(doc, objects)
 
 
 class _OtherTaskPanel:

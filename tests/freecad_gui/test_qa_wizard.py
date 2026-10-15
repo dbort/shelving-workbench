@@ -35,7 +35,7 @@ def test_a_recorded_step_reaches_the_report(
     wizard: dock.QAWizard, tmp_path: Path
 ) -> None:
     assert wizard.parent() is FreeCADGui.getMainWindow()
-    wizard.open_case("editor.unit-size")
+    wizard.open_case("editor.camera")
     label = "Create a fresh unit in a new document"
     assert wizard.action_button.text() == label
     wizard.action_button.click()
@@ -64,24 +64,23 @@ def test_a_recorded_step_reaches_the_report(
     report_view.append("qa-wizard-log-marker")
     wizard.comment_edit.setPlainText("Four boards, as expected.")
     wizard.verdict_buttons["pass"].click()
-    assert wizard.position_label.text() == "Step 2 of 4"
+    assert wizard.position_label.text() == "Step 2 of 2"
     assert wizard.back_button.text() == "Back to cases"
-    for _ in range(3):
-        wizard.verdict_buttons["skip"].click()
+    wizard.verdict_buttons["skip"].click()
     assert wizard.back_button.text() == "Finish case"
     assert wizard.back_button.font().bold()
     assert wizard.back_button.isDefault()
     wizard.back_button.click()
     rows = [wizard.case_list.item(i).text() for i in range(wizard.case_list.count())]
     assert wizard.report_label.text() == ""
-    assert "\u2705  Unit size controls" in rows
+    assert "\u2705  The camera's turn and return" in rows
 
     report = json.loads(wizard.save_report())
     assert wizard.report_label.text().startswith("Saved to ")
     assert json.loads(wizard._report_path.read_text(encoding="utf-8")) == report
     assert wizard._report_path.parent == wizard._progress_path.parent == tmp_path
     (case,) = report["cases"]
-    assert case["id"] == "editor.unit-size"
+    assert case["id"] == "editor.camera"
     step = case["steps"][0]
     assert step["id"] == "start"
     assert step["action"] == "fresh_unit"

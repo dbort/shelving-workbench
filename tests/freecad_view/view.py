@@ -32,6 +32,7 @@ class View3D(Protocol):
     def getSize(self) -> tuple[int, int]: ...
     def graphicsView(self) -> QtWidgets.QGraphicsView: ...
     def viewFront(self) -> None: ...
+    def viewIsometric(self) -> None: ...
     def fitAll(self) -> None: ...
 
 
@@ -157,6 +158,17 @@ class ViewDriver:
             QtCore.QEvent.Type.MouseButtonRelease, last, _LEFT, _NO_BUTTON, modifiers
         )
         self.pump()
+
+    def hover(self, at: Point) -> None:
+        """The pointer moved to ``at`` with no button held."""
+        self._send(
+            QtCore.QEvent.Type.MouseMove,
+            self.qt_point(at),
+            _NO_BUTTON,
+            _NO_BUTTON,
+            _NO_MODIFIER,
+        )
+        self.pump(_SETTLE_MS)
 
     def key(
         self, key: QtCore.Qt.Key, modifiers: QtCore.Qt.KeyboardModifier = _NO_MODIFIER

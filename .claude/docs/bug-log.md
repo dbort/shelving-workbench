@@ -37,23 +37,12 @@ log happens only when the user asks.
   Whether to defer classification until a box's match status is known or
   to redirect every failure to `skipped` is a design question in shared
   scanning logic.
-- `bug-004` - **the editor's elevation is drawn far larger than the task
-  pane**: the view shows the scene at one pixel per millimeter, so a unit
-  needs many screens of scrolling, and nothing fits it to the view or
-  zooms. Found in sh-020's manual QA. Fix: sh-040, which moves editing
-  into FreeCAD's 3D view.
 - `bug-005` - **after deleting a divider beside a stack of shelves, a
   full-height divider cannot be added back**: the whole-width region is a
   `Division`, and `Session.can_split` and `core.edit.split_region` act only
-  on a selected `Bay`, which is all the scene lets you select. Found in
-  sh-020's manual QA. Fix: `sh-XXX task`. It needs an edit that splits a
-  `Division` across its cross axis and a way to select a region with no
-  area of its own, both design questions.
-- `bug-009` - **elevation dimensions overlap each other and their
-  labels**: `_add_region_dimensions` in `editor/scene.py` places each
-  dimension at a fixed fraction of its region's cross extent with no
-  awareness of the others. Found in sh-021's manual QA. Fix: sh-040, whose
-  dimensions are placed in the 3D view instead.
+  on a selected `Bay`. Found in sh-020's manual QA. Fix: `sh-XXX task`.
+  It needs an edit that splits a `Division` across its cross axis and a
+  way to select a region with no area of its own, both design questions.
 - `bug-010` - **a dimension set from an expression keeps only the resolved
   number**: binding `VarSet.Len` sizes the region once, and a later change
   to the `VarSet` moves nothing. The rule record in `core/record.py` holds

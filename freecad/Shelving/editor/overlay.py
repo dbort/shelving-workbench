@@ -222,13 +222,13 @@ def arrow_geometry(rgb: RGB) -> Coin:
     turn.angle = -math.pi / 2
     group.addChild(turn)
     shaft = coin.SoCylinder()
-    shaft.radius = 0.08
-    shaft.height = 1.4
+    shaft.radius = 0.12
+    shaft.height = 1.2
     group.addChild(shaft)
     for sign in (1.0, -1.0):
         head = coin.SoSeparator()
         place = coin.SoTranslation()
-        place.translation.setValue(0.0, sign * 0.85, 0.0)
+        place.translation.setValue(0.0, sign * 0.8, 0.0)
         head.addChild(place)
         if sign < 0:
             flip = coin.SoRotationXYZ()
@@ -236,8 +236,8 @@ def arrow_geometry(rgb: RGB) -> Coin:
             flip.angle = math.pi
             head.addChild(flip)
         cone = coin.SoCone()
-        cone.bottomRadius = 0.25
-        cone.height = 0.3
+        cone.bottomRadius = 0.3
+        cone.height = 0.4
         head.addChild(cone)
         group.addChild(head)
     return group

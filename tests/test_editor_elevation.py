@@ -278,7 +278,7 @@ def test_a_movable_board_gets_an_arrow_beside_the_dimension_before_it() -> None:
     assert not arrow.vertical
     row = frame.rect(_SPACES["row"])
     assert arrow.at_mm[1] > row.v0_mm + 2 / 3 * (row.v1_mm - row.v0_mm)
-    assert arrow.length_mm == pytest.approx(0.04 * 900.0)
+    assert arrow.length_mm == pytest.approx(0.08 * 900.0)
     moved = dragged_to_mm(arrow, 10.0)
     assert moved.x_mm == pytest.approx(arrow.grab_mm.x_mm + 10.0)
 

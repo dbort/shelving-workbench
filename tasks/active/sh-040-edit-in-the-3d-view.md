@@ -296,11 +296,11 @@ STANDING OBLIGATIONS (`CLAUDE.md`):
   file does not come along.
 
 ## Plan
-- [ ] **Step 1** (`freecad/Shelving/editor/`): The elevation frame and the overlay drawing (faces, outlines, dimensions, back face, colors, sizes), with tests that need no GUI for the frame math and placement.
-- [ ] **Step 2** (`freecad/Shelving/editor/`, `freecad/Shelving/commands/edit_unit.py`): The view editor's lifecycle: camera turn, fit and restore, overlay and callbacks added and removed on every exit, selection gate and whole-board picking, opening picks, hide-others.
-- [ ] **Step 3** (`freecad/Shelving/editor/`, `freecad/Shelving/editor/session.py`): The floating size field over labels, the drag arrow with sh-038's rule and the board kept selected, the add buttons with their preview, and Delete.
-- [ ] **Step 4** (`freecad/Shelving/editor/panel.py`, `freecad/Shelving/editor/scene.py`, `tests/test_editor_scene.py`, `tests/freecad_gui/`): The slim panel with the wheel filter; delete the scene and the elevation, and bring the offscreen GUI tests to the slim panel.
-- [ ] **Step 5** (`tests/freecad_view/`): View-tier tests for every Must Have, parametrized over navigation styles where they click or drag.
-- [ ] **Step 6** (`freecad/Shelving/qa/cases/30-editor.toml`, `freecad/Shelving/qa/actions.py`, `README.md`, `docs/scope-and-design.md`, `.claude/docs/code-map.md`, `freecad/Shelving/editor/__init__.py`, `.claude/docs/bug-log.md`): The manual cases for what only a person can judge; the docs; delete bug-004 and bug-009.
+- [x] **Step 1** (`freecad/Shelving/editor/`): The elevation frame and the overlay drawing (faces, outlines, dimensions, back face, colors, sizes), with tests that need no GUI for the frame math and placement.
+- [x] **Step 2** (`freecad/Shelving/editor/`, `freecad/Shelving/commands/edit_unit.py`): The view editor's lifecycle: camera turn, fit and restore, overlay and callbacks added and removed on every exit, selection gate and whole-board picking, opening picks, hide-others.
+- [x] **Step 3** (`freecad/Shelving/editor/`, `freecad/Shelving/editor/session.py`): The floating size field over labels, the drag arrow with sh-038's rule and the board kept selected, the add buttons with their preview, and Delete.
+- [x] **Step 4** (`freecad/Shelving/editor/panel.py`, `freecad/Shelving/editor/scene.py`, `tests/test_editor_scene.py`, `tests/freecad_gui/`): The slim panel with the wheel filter; delete the scene and the elevation, and bring the offscreen GUI tests to the slim panel.
+- [x] **Step 5** (`tests/freecad_view/`): View-tier tests for every Must Have, parametrized over navigation styles where they click or drag.
+- [x] **Step 6** (`freecad/Shelving/qa/cases/30-editor.toml`, `freecad/Shelving/qa/actions.py`, `README.md`, `docs/scope-and-design.md`, `.claude/docs/code-map.md`, `freecad/Shelving/editor/__init__.py`, `.claude/docs/bug-log.md`): The manual cases for what only a person can judge; the docs; delete bug-004 and bug-009.
 
 ## Review log

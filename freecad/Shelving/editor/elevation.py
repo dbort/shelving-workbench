@@ -52,7 +52,7 @@ LIFT_MM = 0.5
 # How far a click may land from a dimension's text and still open its field.
 LABEL_HIT_PX = 24.0
 # The drag arrow's length, as a fraction of the unit's longer elevation side.
-_ARROW_FRACTION = 0.04
+_ARROW_FRACTION = 0.08
 # How far past the dimension line of the opening it resizes the arrow sits,
 # as a fraction of the unit's longer elevation side.
 _ARROW_BESIDE_FRACTION = 0.04

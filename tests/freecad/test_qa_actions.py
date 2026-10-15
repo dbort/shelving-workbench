@@ -56,10 +56,7 @@ def test_the_fresh_unit_check_passes_on_a_fresh_unit() -> None:
     ("setup", "names"),
     [
         ((actions.fresh_unit,), ["Create Shelving Unit"]),
-        (
-            (actions.fresh_unit, actions.add_untagged_cube),
-            ["Add Cube", "Create Shelving Unit"],
-        ),
+        ((actions.large_unit,), ["Divide Unit", "Create Shelving Unit"]),
         (
             (actions.test_unit, actions.add_overlap_box),
             ["Add Overlap", "Create TestUnit"],

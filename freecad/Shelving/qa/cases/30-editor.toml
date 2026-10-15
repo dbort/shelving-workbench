@@ -1,184 +1,143 @@
 [[case]]
-id = "editor.one-session"
-title = "One editing session"
-
-  [[case.step]]
-  id = "start"
-  action = "fresh_unit"
-  instruction = ["Select the container.", "Run Edit Unit."]
-  expected = """
-A panel titled Edit Unit docks in the Tasks tab and shows an elevation
-matching the 3D view's shape and proportions. Add Divider, Add Shelf and
-Delete are disabled."""
-
-  [[case.step]]
-  id = "select-bay"
-  instruction = ["Click the open bay."]
-  expected = """
-Its outline draws distinctly until something else is clicked. The two Add
-buttons enable; Delete stays disabled."""
-
-  [[case.step]]
-  id = "add-divider"
-  instruction = ["Click Add Divider."]
-  expected = """
-A vertical divider splits the bay in the elevation, and the 3D view shows
-it as a real box while the panel is still open. Dimensions overlapping in a
-crowded elevation are a known defect (bug-009), not a failure."""
-
-  [[case.step]]
-  id = "refused-delete"
-  instruction = [
-    "Click an outer board (a side, the top or the bottom).",
-    "Click Delete.",
-  ]
-  expected = """
-A Shelving error pops up from the Notification Area and shows in red in
-the status bar, saying in plain words, with no internal ids, that removing
-that board would not join two openings. Nothing changes and the panel stays
-usable."""
-
-  [[case.step]]
-  id = "merge-and-close"
-  instruction = [
-    "Click the new divider.",
-    "Click Delete.",
-    "Click the bay.",
-    "Click Add Divider.",
-    "Click Close.",
-  ]
-  expected = """
-The merge redraws one bay; after Close the panel closes with the divider in
-place."""
-
-[[case]]
-id = "editor.dimensions"
-title = "Dimensions"
-
-  [[case.step]]
-  id = "start"
-  action = "shelf_unit_with_varset"
-  instruction = ["Select the container (ShelvingUnit).", "Run Edit Unit."]
-  expected = "The panel shows one shelf between two equal bays."
-
-  [[case.step]]
-  id = "select-lower"
-  instruction = ["Click the lower bay."]
-  expected = """
-A dimension over each bay: a line with an arrowhead at each end touching
-short witness lines, labeled with its value, the other basis's value beside
-it in gray. Size shows the clear height. Dimensions overlapping in a
-crowded elevation are a known defect (bug-009), not a failure."""
-
-  [[case.step]]
-  id = "type-size"
-  instruction = ["Type 300 in Size and press Return."]
-  expected = """
-The shelf moves in the elevation and the 3D view, and the upper bay's
-dimension absorbs the difference."""
-
-  [[case.step]]
-  id = "spacing-basis"
-  instruction = ["Choose Spacing (through the next board)."]
-  expected = """
-Nothing moves; the dimension now runs through the shelf and reads 318, with
-clear 300 beside it."""
-
-  [[case.step]]
-  id = "drag"
-  instruction = ["Drag the shelf up a few centimeters with the mouse.", "Release."]
-  expected = """
-The shelf stays put and is selected: typing the size locked the lower bay,
-and with only the bottom board below it, nothing can give. A Shelving error
-pops up from the Notification Area saying a locked opening holds this board
-in place."""
-
-  [[case.step]]
-  id = "expression"
-  instruction = [
-    "Click the lower bay.",
-    "Click Size.",
-    "Type =.",
-    "Enter VarSet.Len - 20 mm in the f(x) dialog.",
-    "Accept the dialog.",
-  ]
-  expected = """
-The lower bay follows to 280 mm. While the panel is open a Shelving
-dimension (temporary) object sits in the tree."""
-
-  [[case.step]]
-  id = "undo"
-  instruction = [
-    "Click an empty spot in the 3D view, so Undo reaches the document.",
-    "Choose Edit, Undo.",
-  ]
-  expected = """
-The lower bay goes back to its size before the expression, clear 300 mm,
-in the elevation and the 3D view, and the panel stays open."""
-
-  [[case.step]]
-  id = "close"
-  instruction = ["Click Close."]
-  expected = """
-The panel closes, the Shelving dimension (temporary) object is gone, and
-the lower bay stays at clear 300 mm."""
-
-[[case]]
-id = "editor.untagged-objects"
-title = "Objects this workbench did not create"
-
-  [[case.step]]
-  id = "start"
-  action = "fresh_unit"
-  expected = "A ShelvingUnit with four boards appears."
-
-  [[case.step]]
-  id = "add-cube"
-  action = "add_untagged_cube"
-  instruction = ["Select the container.", "Run Edit Unit."]
-  expected = """
-A box titled Objects this workbench did not create lists the cube,
-unchecked, with a reason that wraps onto several lines rather than making
-the panel scroll sideways."""
-
-[[case]]
-id = "editor.unit-size"
-title = "Unit size controls"
+id = "editor.camera"
+title = "The camera's turn and return"
 
   [[case.step]]
   id = "start"
   action = "fresh_unit"
   check = "fresh_unit_size"
-  instruction = ["Select the container.", "Run Edit Unit."]
-  expected = "The Unit section shows width 600 mm, depth 300 mm and height 900 mm."
-
-  [[case.step]]
-  id = "step-and-wheel"
   instruction = [
-    "Hold the Height field's up arrow for a moment.",
-    "Turn the mouse wheel over Width.",
+    "Orbit the 3D view until you look at the unit from above and to one side.",
+    "Select the container.",
+    "Run Edit Unit.",
   ]
   expected = """
-The unit grows in the 3D view at every step of the held arrow and changes
-with every notch of the wheel."""
+The camera turns smoothly to face the unit's front square on, as it turns to
+a sketch when you edit one, then shows the whole unit with its dimensions
+around it. The open bay is drawn as a light face over the unit's front."""
 
   [[case.step]]
-  id = "limit"
-  instruction = ["Hold the Height down arrow until the unit stops shrinking."]
+  id = "close"
+  instruction = ["Click Close."]
   expected = """
-A single error in the Notification Area, and the field shows the last
-height that worked."""
+The camera turns back to where you left it before Edit Unit, and nothing is
+drawn over the boards any more."""
+
+[[case]]
+id = "editor.navigation"
+title = "Navigating and dragging on a real trackpad"
 
   [[case.step]]
-  id = "close-and-undo"
+  id = "start"
+  action = "shelf_unit_with_varset"
+  instruction = ["Select the container (ShelvingUnit).", "Run Edit Unit."]
+  expected = """
+The panel holds only the unit's size, a menu for what an opening's size
+measures, and Hide other objects. The view shows one shelf between two bays,
+each bay with its dimensions."""
+
+  [[case.step]]
+  id = "navigate"
+  instruction = [
+    "Zoom, pan and orbit with your usual navigation style and your trackpad.",
+  ]
+  expected = """
+The view moves exactly as it does outside Edit Unit. The drawing stays on the
+unit's boards; seen from behind it moves to the back face, and its text
+still reads the right way round."""
+
+  [[case.step]]
+  id = "drag"
+  instruction = [
+    "Orbit back to the front.",
+    "Click the shelf.",
+    "Drag the arrow beside it up a few centimeters with the trackpad.",
+  ]
+  expected = """
+The shelf follows the pointer, only the two bays around it change size, and
+the shelf and its arrow stay selected afterward."""
+
+[[case]]
+id = "editor.hidpi"
+title = "The size field and dimension text on a HiDPI screen"
+
+  [[case.step]]
+  id = "start"
+  action = "shelf_unit_with_varset"
+  instruction = [
+    "Move FreeCAD to a HiDPI screen, such as a Mac's built-in display.",
+    "Select the container (ShelvingUnit).",
+    "Run Edit Unit.",
+  ]
+  expected = """
+The dimension text is as large and as sharp as a sketch's dimensions on the
+same screen."""
+
+  [[case.step]]
+  id = "field"
+  instruction = ["Click the lower bay's dimension text."]
+  expected = """
+A size field opens right on that text, showing the bay's size selected, and
+typing goes straight into it."""
+
+  [[case.step]]
+  id = "type"
+  instruction = ["Type 250 and press Return."]
+  expected = """
+The field closes, the shelf moves, and the dimension reads 250 in the
+color of a locked size."""
+
+[[case]]
+id = "editor.formula"
+title = "The f(x) dialog from a dimension's size field"
+
+  [[case.step]]
+  id = "start"
+  action = "shelf_unit_with_varset"
+  instruction = ["Select the container (ShelvingUnit).", "Run Edit Unit."]
+  expected = "The view shows one shelf between two bays."
+
+  [[case.step]]
+  id = "expression"
+  instruction = [
+    "Click the lower bay's dimension text.",
+    "Type =.",
+    "Enter VarSet.Len - 20 mm in the f(x) dialog.",
+    "Accept the dialog.",
+  ]
+  expected = """
+The f(x) dialog opens beside the size field and keeps the keyboard. After
+it closes, the lower bay is 280 mm and no new object appears in the tree."""
+
+  [[case.step]]
+  id = "close"
   instruction = [
     "Click Close.",
-    "Click an empty spot in the 3D view.",
-    "Choose Edit, Undo.",
+    "Open the drop-down list beside Undo on the Edit toolbar.",
   ]
   expected = """
-The panel closes with the unit at its last height, and the Undo takes back
-only the last size change, one arrow step."""
+Set Size is the list's first entry, with no expression step and no Shelving
+object step above or below it."""
+
+[[case]]
+id = "editor.large-unit"
+title = "Dragging on a large unit"
+
+  [[case.step]]
+  id = "start"
+  action = "large_unit"
+  instruction = ["Select the container (ShelvingUnit).", "Run Edit Unit."]
+  expected = "The view shows four columns of six openings each."
+
+  [[case.step]]
+  id = "drag"
+  instruction = [
+    "Click a shelf in the middle of the unit.",
+    "Drag its arrow up and down for a few seconds.",
+  ]
+  expected = """
+The shelf keeps up with the pointer without stutter, and the dimensions
+follow it."""
 
 [[case]]
 id = "editor.undo"
@@ -188,46 +147,41 @@ title = "Undo and Redo inside Edit Unit"
   id = "start"
   action = "fresh_unit"
   instruction = ["Select the container.", "Run Edit Unit."]
-  expected = "The panel opens on the new unit, one open bay between four boards."
+  expected = "The view shows the new unit, one open bay between four boards."
 
   [[case.step]]
   id = "add-shelves"
   instruction = [
     "Click the open bay.",
-    "Click Add Shelf.",
+    "Click Add shelf over it.",
     "Click the lower bay.",
-    "Click Add Shelf.",
+    "Click Add shelf over it.",
   ]
-  expected = "Two shelves, in the elevation and the 3D view."
+  expected = "Two shelves, and the panel stays open."
 
   [[case.step]]
   id = "keyboard-undo"
   instruction = ["Press Cmd-Z (Ctrl-Z on Windows or Linux) without clicking anything first."]
-  expected = """
-The second shelf goes, in the elevation and the 3D view, and the panel stays
-open."""
+  expected = "The second shelf goes, and the panel stays open."
 
   [[case.step]]
   id = "redo"
-  instruction = ["Click an empty spot in the 3D view.", "Choose Edit, Redo."]
-  expected = "The second shelf comes back, and the panel shows it."
+  instruction = ["Choose Edit, Redo."]
+  expected = "The second shelf comes back."
 
   [[case.step]]
   id = "redo-after-undo"
   instruction = [
-    "Click the upper shelf in the elevation.",
-    "Click Delete.",
-    "Click an empty spot in the 3D view.",
+    "Click the upper shelf.",
+    "Press Delete (the delete key on a Mac).",
     "Choose Edit, Undo.",
     "Choose Edit, Undo.",
-    "Click a bay in the elevation.",
-    "Click Add Divider.",
-    "Click an empty spot in the 3D view.",
+    "Click a bay.",
+    "Click Add divider over it.",
     "Choose Edit, Undo.",
     "Choose Edit, Redo.",
   ]
-  expected = """
-After the last Redo the divider is back, with one shelf in the unit."""
+  expected = "After the last Redo the divider is back, with one shelf in the unit."
 
   [[case.step]]
   id = "undo-list"
@@ -237,14 +191,14 @@ After the last Redo the divider is back, with one shelf in the unit."""
   ]
   expected = """
 Every edit down to that one is undone in one go: the unit is one open bay
-again, the panel shows it, and the panel stays open."""
+again, and the panel stays open."""
 
   [[case.step]]
   id = "undo-the-unit"
   instruction = ["Choose Edit, Undo."]
   expected = """
 Create Unit is undone: the unit disappears from the 3D view and the tree,
-and the panel closes."""
+the panel closes, and nothing is left drawn in the view."""
 
   [[case.step]]
   id = "redo-the-unit"

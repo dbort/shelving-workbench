@@ -5,7 +5,7 @@ panel open, and Close through the panel's own button."""
 import os
 import subprocess
 import sys
-from collections.abc import Iterator, Mapping
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Protocol, cast
 
@@ -16,7 +16,6 @@ import pytest
 from freecad.Shelving.container import read_container
 from freecad.Shelving.core.geometry import Space
 from freecad.Shelving.editor.panel import EditUnitPanel
-from freecad.Shelving.unit_ops import create_unit
 from tests.freecad_view.editor import (
     add_board,
     bay_ids,
@@ -71,24 +70,6 @@ def _spaces(spaces: Mapping[str, Space]) -> list[tuple[float, ...]]:
         )
         for space in spaces.values()
     )
-
-
-@pytest.fixture
-def unit(driver: ViewDriver) -> Iterator[FreeCAD.DocumentObject]:
-    """A fresh unit in the driver's document, made in one step of its own,
-    with the workbench active as a toolbar click needs."""
-    FreeCADGui.activateWorkbench("ShelvingWorkbench")
-    doc = cast("FreeCAD.Document", FreeCAD.ActiveDocument)
-    doc.UndoMode = 1
-    doc.openTransaction("Create Shelving Unit")
-    container = create_unit(doc)
-    doc.commitTransaction()
-    doc.recompute()
-    driver.pump()
-    yield container
-    if FreeCADGui.Control.activeDialog():
-        FreeCADGui.Control.closeDialog()
-        driver.pump()
 
 
 def _shown_size_mm(panel: EditUnitPanel) -> float:

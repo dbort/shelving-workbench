@@ -99,16 +99,25 @@ its `driver` fixture gives each test a new document with an active 3D view.
   without the workbench removes the repository's entries from `sys.path`
   before importing `freecad`.
 - **`pivy` must be imported** before `getSceneGraph()`, or it raises "No
-  SWIG wrapped library loaded".
+  SWIG wrapped library loaded", and only after `showMainWindow()`: a child
+  process that imported it first, through the editor's modules, crashed
+  rendering its first 3D view under `MALLOC_PERTURB_`.
+- **A path `SoSearchAction` finds lives only as long as the action.** Copy
+  and `ref()` each one before the action is collected.
+- **Wait for the editor's camera turn.** Edit Unit animates the camera
+  toward the unit; aim only once `ViewEditor.turning` is false, as
+  `tests/freecad_view/editor.py`'s `edit_unit` does.
 
 ## What it cannot tell you
 
 - **Focus and window activation.** There is no window manager; a focus
   result here is a hint, never proof.
 - **HiDPI.** The device pixel ratio is 1.
-- **View size.** The 3D view stays about 400 by 300 pixels whatever the
-  main window size, so an 18 mm board is a few pixels tall: aim with
-  margin.
+- **View size.** The 3D view is about 400 by 300 pixels in a test run
+  alone, and larger once earlier tests in the same process have changed
+  the window layout, so a test that needs a pixel scale sets the camera
+  itself. In a fitted view an 18 mm board is a few pixels tall, inside
+  FreeCAD's pick radius of its edges: zoom in before aiming at a face.
 - **Platform-specific native crashes.** The Linux builds here are not the
   macOS FreeCAD bundle: a crash from destroying a dragged dragger
   (coin3d/coin#556) hits only on macOS, where clang drops a null check the

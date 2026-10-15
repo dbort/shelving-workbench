@@ -1,8 +1,9 @@
-"""The elevation editor: Qt scene rendering, the edit session, and the panel.
+"""Edit Unit: one editing session over a unit, worked in FreeCAD's 3D view
+with a slim task panel beside it.
 
-``scene.py`` is tested under plain pytest with an offscreen ``QApplication``
-and ``session.py`` under ``freecadcmd``, so both run headlessly.
-``FreeCADGui.Control``, the task-panel shell, does not exist under
-``freecadcmd``, so ``panel.py`` is checked only by hand. Keep every decision
-worth testing out of ``panel.py``.
+``elevation.py`` imports neither FreeCAD nor Qt and is tested under plain
+pytest; ``session.py`` and ``history.py`` run under ``freecadcmd``. The
+in-view editor needs a real 3D view, which only the Xvfb tier has, so
+every decision worth testing without one lives in ``elevation.py`` or the
+session.
 """

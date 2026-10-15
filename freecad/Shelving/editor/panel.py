@@ -210,6 +210,10 @@ class EditUnitPanel:
     def _build(self, watch: Stopwatch) -> None:
         self.form = QtWidgets.QWidget()
         self.form.setWindowTitle("Edit Unit")
+        # FreeCADGui.Control.closeDialog(), which another command or the
+        # document's closing may call, deletes the form without calling
+        # accept or reject.
+        self.form.destroyed.connect(lambda: self._end())
         layout = QtWidgets.QVBoxLayout(self.form)
         self._wheel_filter = WheelFilter(self.form)
 

@@ -1,5 +1,5 @@
 ---
-next_id: friction-025
+next_id: friction-027
 ---
 
 # Friction log
@@ -41,3 +41,16 @@ the papercut and its fix in its message.
   stubbed `agent`/`pipeline`, and ran it under `pixi exec -s nodejs node`.
   Simpler if: `pixi run tests` extracted the block, stubbed the workflow
   API, and dry-ran it in full-tree and diff-scoped modes.
+- `friction-025` - **a way to try a call against FreeCAD's 3D view
+  without writing a test**: sh-040 needed a dozen answers from a live view
+  (what the selection gate sees over a back panel, how long a camera turn
+  animates, whether an aborted transaction leaves an f(x) step). Each probe
+  was a one-off script repeating the settings, GUI start and Xvfb launch
+  that `tests/freecad_view/conftest.py` already does. Simpler if: a
+  `tools/` entry ran a snippet in a 3D view with a fresh document and a
+  `ViewDriver`, under the same settings as the view tier.
+- `friction-026` - **a 3D view of one known size in every view test**: in
+  sh-040 the view was 404 by 300 pixels in one test alone and 1134 by 703
+  later in the same run, so pixel-aimed tests passed alone and failed in
+  the suite. Each such test sets its camera height from the view's size.
+  Simpler if: the `driver` fixture gave each test's view a fixed size.

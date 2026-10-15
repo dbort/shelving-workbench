@@ -31,7 +31,6 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from shiboken6 import Shiboken
 
 from freecad.Shelving.compat import override
-from freecad.Shelving.core.geometry import Vec3
 from freecad.Shelving.editor.elevation import (
     LIFT_MM,
     Arrow,
@@ -110,10 +109,6 @@ class _ViewObject(Protocol):
     Visibility: bool
 
 
-class _Placed(Protocol):
-    Placement: FreeCAD.Placement
-
-
 def container_placement(container: FreeCAD.DocumentObject) -> FreeCAD.Placement:
     """``container``'s placement in the document. ``getGlobalPlacement``
     covers an ``App::Part`` nested in others; a top-level link group falls
@@ -125,10 +120,6 @@ def container_placement(container: FreeCAD.DocumentObject) -> FreeCAD.Placement:
             return placement
     own = getattr(container, "Placement", None)
     return own if isinstance(own, FreeCAD.Placement) else FreeCAD.Placement()
-
-
-def _vector(point_mm: Vec3) -> FreeCAD.Vector:
-    return FreeCAD.Vector(point_mm.x_mm, point_mm.y_mm, point_mm.z_mm)
 
 
 def _path_names(obj_name: str, sub_name: str) -> list[str]:
@@ -208,6 +199,9 @@ class AddBar(QtWidgets.QFrame):
             button.setText(text)
             button.setToolTip(text)
             button.setAccessibleName(text)
+            # As a toolbar button does: keyboard focus stays in the 3D view,
+            # where Delete and FreeCAD's Undo shortcuts reach the edit.
+            button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
             button.clicked.connect(_bind(on_add, direction))
             button.installEventFilter(self)
             layout.addWidget(button)
@@ -375,6 +369,7 @@ class ViewEditor:
         self._on_change = on_change
         self._closed = False
         self._doc = session.container.Document
+        self._doc_name = self._doc.Name
         self._viewer = view.graphicsView()
         self.viewport = self._viewer.viewport()
         self._front = elevation_frame(session.unit)
@@ -383,7 +378,9 @@ class ViewEditor:
         self._boards: frozenset[str] = frozenset()
         self._aside: frozenset[str] = frozenset()
         self._hidden: list[str] = []
-        self._installed: list[Callable[[], None]] = []
+        # What close() undoes, latest first, each with whether it touches the
+        # view, which may be gone by then with its document.
+        self._installed: list[tuple[Callable[[], None], bool]] = []
         self._camera_sensor: Coin = None
         self._turn_target: FreeCAD.Rotation | None = None
         self._turn_started_s = 0.0
@@ -427,33 +424,35 @@ class ViewEditor:
         self._build_dragger()
         scene_graph = self.view.getSceneGraph()
         scene_graph.addChild(self.root)
-        self._installed.append(lambda: scene_graph.removeChild(self.root))
+        self._installed.append((lambda: scene_graph.removeChild(self.root), True))
 
         parent = self._viewer.parentWidget()
         self.add_bar = AddBar(
             parent, self.style.selected_rgb, self._add_board, self._hover_add
         )
-        self._installed.append(self.add_bar.deleteLater)
-        self._installed.append(self.add_bar.hide)
+        self._installed.append((self.add_bar.deleteLater, True))
+        self._installed.append((self.add_bar.hide, True))
 
         clicks = _ViewportClicks(self.viewport, self._sort_press, self._click)
         self.viewport.installEventFilter(clicks)
-        self._installed.append(lambda: self.viewport.removeEventFilter(clicks))
+        self._installed.append((lambda: self.viewport.removeEventFilter(clicks), True))
         app = cast("QtCore.QCoreApplication", QtCore.QCoreApplication.instance())
         keys = _DeleteKeys(
             self._viewer, lambda: QtCore.QTimer.singleShot(0, self._delete_selected)
         )
         app.installEventFilter(keys)
-        self._installed.append(lambda: app.removeEventFilter(keys))
+        self._installed.append((lambda: app.removeEventFilter(keys), False))
 
         FreeCADGui.Selection.clearSelection()
         gate = _BoardGate(self)
         observer = _SelectionObserver(self)
         FreeCADGui.Selection.addSelectionGate(gate)
-        self._installed.append(FreeCADGui.Selection.removeSelectionGate)
+        self._installed.append((FreeCADGui.Selection.removeSelectionGate, False))
         FreeCADGui.Selection.addObserver(observer)
-        self._installed.append(lambda: FreeCADGui.Selection.removeObserver(observer))
-        self._installed.append(FreeCADGui.Selection.clearSelection)
+        self._installed.append(
+            (lambda: FreeCADGui.Selection.removeObserver(observer), False)
+        )
+        self._installed.append((FreeCADGui.Selection.clearSelection, False))
 
         self.rebuild()
         self._turn_camera()
@@ -486,11 +485,14 @@ class ViewEditor:
         ):
             handle = self.view.addDraggerCallback(self.dragger, kind, callback)
             self._installed.append(
-                lambda kind=kind, handle=handle: self.view.removeDraggerCallback(
-                    self.dragger, kind, handle
+                (
+                    lambda kind=kind, handle=handle: self.view.removeDraggerCallback(
+                        self.dragger, kind, handle
+                    ),
+                    True,
                 )
             )
-        self._installed.append(self._release_dragger)
+        self._installed.append((self._release_dragger, False))
 
     def _release_dragger(self) -> None:
         if coin_destroys_draggers_safely():
@@ -517,20 +519,24 @@ class ViewEditor:
         if self._closed:
             return
         self._closed = True
+        view_alive = Shiboken.isValid(self._viewer)
         self._close_field()
-        self.set_hide_others(False)
+        if self._doc_name in FreeCAD.listDocuments():
+            self.set_hide_others(False)
         if self._camera_sensor is not None:
             self._camera_sensor.detach()
             self._camera_sensor = None
         while self._installed:
-            undo = self._installed.pop()
+            undo, touches_view = self._installed.pop()
+            if touches_view and not view_alive:
+                continue
             try:
                 undo()
             except RuntimeError:
-                # The widget or view it would touch is already gone.
+                # A widget it would touch went with the view's window.
                 pass
         restore = FreeCAD.ParamGet(_RESTORE_CAMERA_PARAM).GetBool("RestoreCamera", True)
-        if restore_camera and restore and Shiboken.isValid(self._viewer):
+        if restore_camera and restore and view_alive:
             _restore_camera(
                 self.view, self._viewer, self._saved_orientation, self.saved_camera
             )
@@ -549,16 +555,16 @@ class ViewEditor:
         orientation = FreeCAD.Rotation(*camera.orientation.getValue().getValue())
         current_dir = orientation.multVec(FreeCAD.Vector(0, 0, -1))
         new_dir = target.multVec(FreeCAD.Vector(0, 0, -1))
-        position = FreeCAD.Vector(*camera.position.getValue().getValue())
+        position_mm = FreeCAD.Vector(*camera.position.getValue().getValue())
         focal_mm = float(camera.focalDistance.getValue())
-        focal = position + current_dir * focal_mm
-        new_position = focal - new_dir * focal_mm
-        face = self._placement(self._front).Base
-        distance_mm = (face - new_position).dot(new_dir)
+        focal_point_mm = position_mm + current_dir * focal_mm
+        turned_position_mm = focal_point_mm - new_dir * focal_mm
+        face_mm = self._placement(self._front).Base
+        distance_mm = (face_mm - turned_position_mm).dot(new_dir)
         if distance_mm < 0:
             focal_mm = focal_mm - distance_mm + 5
-            pulled = focal - current_dir * focal_mm
-            camera.position.setValue(pulled.x, pulled.y, pulled.z)
+            pulled_mm = focal_point_mm - current_dir * focal_mm
+            camera.position.setValue(pulled_mm.x, pulled_mm.y, pulled_mm.z)
             camera.focalDistance.setValue(focal_mm)
         self._turn_target = target
         self._turn_started_s = time.monotonic()
@@ -586,7 +592,7 @@ class ViewEditor:
         height_mm = unit.size_mm.component_mm(frame.vertical.component_index)
         margin_mm = _FIT_MARGIN_FRACTION * max(width_mm, height_mm)
         placement = self._placement(frame)
-        center = placement.multVec(FreeCAD.Vector(width_mm / 2, height_mm / 2, 0))
+        center_mm = placement.multVec(FreeCAD.Vector(width_mm / 2, height_mm / 2, 0))
         toward = placement.Rotation.multVec(FreeCAD.Vector(0, 0, 1))
         camera = self.view.getCameraNode()
         size = unit.size_mm
@@ -595,9 +601,9 @@ class ViewEditor:
             float(camera.focalDistance.getValue()),
             2 * math.hypot(size.x_mm, size.y_mm, size.z_mm),
         )
-        position = center + toward * distance_mm
+        position_mm = center_mm + toward * distance_mm
         camera.orientation.setValue(_sbrotation(orientation))
-        camera.position.setValue(position.x, position.y, position.z)
+        camera.position.setValue(position_mm.x, position_mm.y, position_mm.z)
         camera.focalDistance.setValue(distance_mm)
         width_px, height_px = self.view.getSize()
         aspect = width_px / height_px if height_px else 1.0
@@ -837,7 +843,7 @@ class ViewEditor:
         face, edge or vertex becomes the whole board, and a board picked in
         the tree becomes the session's selection. Runs inside FreeCAD's
         selection change, so every change waits."""
-        if doc_name != self._doc.Name or self._closed:
+        if doc_name != self._doc_name or self._closed:
             return
         board = self._board_in(obj_name, sub_name)
         if board is None:
@@ -883,15 +889,16 @@ class ViewEditor:
         self.select(self._region_at(device))
 
     def _region_at(self, device: tuple[int, int]) -> str | None:
-        near, far = self.view.projectPointToLine(device)
+        near_mm, far_mm = self.view.projectPointToLine(device)
         inverse = self._placement(self.frame).inverse()
-        a = inverse.multVec(near)
-        b = inverse.multVec(far)
-        if abs(b.z - a.z) < 1e-9:
+        # The pointer's ray in elevation coordinates, met with z = 0.
+        a_mm = inverse.multVec(near_mm)
+        b_mm = inverse.multVec(far_mm)
+        if abs(b_mm.z - a_mm.z) < 1e-9:
             return None
-        t = -a.z / (b.z - a.z)
-        h_mm = a.x + t * (b.x - a.x)
-        v_mm = a.y + t * (b.y - a.y)
+        t = -a_mm.z / (b_mm.z - a_mm.z)
+        h_mm = a_mm.x + t * (b_mm.x - a_mm.x)
+        v_mm = a_mm.y + t * (b_mm.y - a_mm.y)
         return region_at(self.session.unit, self.session.spaces, self.frame, h_mm, v_mm)
 
     def _project(self, h_mm: float, v_mm: float) -> tuple[float, float]:
@@ -909,16 +916,26 @@ class ViewEditor:
             if arrow.vertical
             else ((h_mm - half_mm, v_mm), (h_mm + half_mm, v_mm))
         )
-        (x0, y0), (x1, y1) = (self._project(*end) for end in ends)
-        x, y = device
-        dx, dy = x1 - x0, y1 - y0
-        length_sq = dx * dx + dy * dy
+        (x0_px, y0_px), (x1_px, y1_px) = (self._project(*end) for end in ends)
+        x_px, y_px = device
+        dx_px, dy_px = x1_px - x0_px, y1_px - y0_px
+        length_sq_px2 = dx_px * dx_px + dy_px * dy_px
+        # How far along the arrow the point nearest the press lies.
         t = (
             0.0
-            if length_sq == 0
-            else max(0.0, min(1.0, ((x - x0) * dx + (y - y0) * dy) / length_sq))
+            if length_sq_px2 == 0
+            else max(
+                0.0,
+                min(
+                    1.0,
+                    ((x_px - x0_px) * dx_px + (y_px - y0_px) * dy_px) / length_sq_px2,
+                ),
+            )
         )
-        return math.hypot(x - (x0 + t * dx), y - (y0 + t * dy)) <= _ARROW_HIT_PX
+        return (
+            math.hypot(x_px - (x0_px + t * dx_px), y_px - (y0_px + t * dy_px))
+            <= _ARROW_HIT_PX
+        )
 
     def _sort_press(self, position: QtCore.QPointF) -> PressKind:
         """A press on the drag arrow is the dragger's; one on a dimension's
