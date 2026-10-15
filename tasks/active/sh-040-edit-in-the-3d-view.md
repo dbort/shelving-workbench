@@ -304,3 +304,10 @@ STANDING OBLIGATIONS (`CLAUDE.md`):
 - [x] **Step 6** (`freecad/Shelving/qa/cases/30-editor.toml`, `freecad/Shelving/qa/actions.py`, `README.md`, `docs/scope-and-design.md`, `.claude/docs/code-map.md`, `freecad/Shelving/editor/__init__.py`, `.claude/docs/bug-log.md`): The manual cases for what only a person can judge; the docs; delete bug-004 and bug-009.
 
 ## Review log
+
+### Round 1: REJECTED
+- **F1: Binding the size fields to the container's `Placement.Base.x/y/z` breaks Edit Unit on supported containers** (`freecad/Shelving/editor/panel.py:39`, `freecad/Shelving/editor/view_editor.py:65`, `freecad/Shelving/editor/fields.py:210`): an `App::DocumentObjectGroup` container has no `Placement`, so binding raises while the panel builds and Edit Unit refuses as unexpected; a user expression on the container's `Placement.Base.x` makes the Width field and every floating field read-only. Bind to a property every accepted container has and that cannot already hold a user expression; test a plain-group container and a placement expression for the panel fields and the floating field.
+- **N1: freecad-notes still describes the probe object** (`.claude/docs/freecad-notes.md:172`).
+- **N2: Unit suffixes missing on a few new quantities** (`freecad/Shelving/editor/view_editor.py:159`, `:675`, `:697`; `tests/freecad_view/test_editor_input.py:122`).
+- **N3: A late camera restore can jump the next session's camera** (`freecad/Shelving/editor/view_editor.py:1089`): a pending restore poll can override a new session's turn and fit on the same view.
+- **N4: The default of the RestoreCamera preference is not exercised** (`tests/freecad_view/test_editor_drawing.py:215`).
