@@ -67,6 +67,31 @@ Not used today; relevant to a future live-unit driver (FreeCAD 1.0.0).
 `abortTransaction` silently reverts nothing. Set `doc.UndoMode = 1` before
 `openTransaction`, as `Session.open` does.
 
+## Transactions and the undo stack
+
+Seen on FreeCAD 1.1.3 (conda-forge); `editor/history.py` relies on each.
+
+- `doc.openTransaction(name)` only names a pending application
+  transaction (`FreeCAD.getActiveTransaction()` gives its name and id);
+  the document's transaction opens at the first change, firing
+  `slotOpenTransaction`. A commit or abort with no change leaves the name
+  pending, and the next change anywhere, by anyone, is recorded under it.
+  `FreeCAD.closeActiveTransaction()` clears it.
+- Inside a Gui command, FreeCAD ignores `closeActiveTransaction(False)`
+  until the command returns, and the pending transaction can outlive it;
+  `closeActiveTransaction(True)` aborts at once, discarding the step just
+  committed. Edit Unit declares `CmdType: NoTransaction` so FreeCAD opens
+  no transaction of its own around it.
+- `slotCommitTransaction`, `slotUndoDocument` and `slotRedoDocument` see
+  `UndoCount` and `RedoCount` already updated. An Undo while a transaction
+  is open commits it first, then undoes it.
+- Past `MaxUndoSize` (default 20) each commit drops the oldest step, so
+  `UndoCount` stops growing; the stack carries names and no ids a script
+  can read.
+- `Std_Undo` and `Std_Redo` were disabled under Xvfb while keyboard
+  focus sat in a task panel's combo box, and ran with focus in the 3D
+  view. On macOS (1.1.4), Cmd-Z ran with focus on a task panel button.
+
 ## A `DocumentObject`'s `ViewObject` is `None`
 
 Without the GUI every object's `ViewObject` is `None`, so color and other

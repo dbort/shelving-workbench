@@ -46,7 +46,7 @@ steps exactly as written.
 
 - [x] sh-037: 3D-view tests under Xvfb
 - [x] sh-038: locked openings, and a drag that moves only what it drags
-- [ ] sh-039: Undo and Redo inside an edit (blocked on sh-037)
+- [x] sh-039: Undo and Redo inside an edit (blocked on sh-037)
 - [ ] sh-040: Edit Unit works in the 3D view (blocked on sh-037, sh-038
   and sh-039)
 - [ ] sh-041: padlocks lock and unlock openings in the view (blocked on
@@ -64,13 +64,13 @@ with no place on the drawing.
 An opening is locked at its size or unlocked to share what is left. A drag
 moves only the dragged board, together with any board joined to it through
 locked openings, and a padlock on each dimension locks or unlocks it. Undo
-and Redo step through the edits inside a session, and OK still leaves one
-step in FreeCAD's history.
+and Redo step through the edits inside a session, one edit each, and the
+edits stay as their own steps after the panel closes.
 
 *Verify in FreeCAD:* open a unit with Edit Unit, watch the camera turn to
 it, orbit behind it and back, lock the opening between two shelves and drag
 one of them, add a shelf from the view, undo and redo a few edits with
-Cmd-Z, click OK, and undo the whole session with one Cmd-Z.
+Cmd-Z, click Close, and undo the last edit with one Cmd-Z.
 
 ## M11: Back panels
 

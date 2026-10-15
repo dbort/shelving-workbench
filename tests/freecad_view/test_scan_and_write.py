@@ -1,20 +1,24 @@
 """The scan and write manual QA cases, run through the toolbar commands and
 the task panel's own buttons with FreeCAD's 3D view up."""
 
-import gc
 from collections.abc import Iterator
 from typing import Protocol, cast
 
 import FreeCAD
 import FreeCADGui
 import pytest
-from PySide6 import QtCore, QtGui, QtTest, QtWidgets
+from PySide6 import QtCore, QtGui, QtTest
 
 from freecad.Shelving.core.layout import Bay, Board, Division, Region
-from freecad.Shelving.editor.panel import EditUnitPanel
 from freecad.Shelving.qa import actions as qa_actions
 from freecad.Shelving.temp_dirs import export_path
 from freecad.Shelving.unit_ops import create_unit
+from tests.freecad_view.editor import (
+    click_task_button,
+    edit_unit,
+    notification_count,
+    run_command,
+)
 from tests.freecad_view.view import ViewDriver
 
 # How far a highlighted board's color moves from its plain one, summed over
@@ -89,42 +93,6 @@ def _snapshot() -> Snapshot:
     ]
 
 
-def _run(command: str, selected: FreeCAD.DocumentObject, driver: ViewDriver) -> None:
-    FreeCADGui.Selection.clearSelection()
-    FreeCADGui.Selection.addSelection(selected)
-    FreeCADGui.runCommand(command)
-    driver.pump(400)
-
-
-def _edit_unit(container: FreeCAD.DocumentObject, driver: ViewDriver) -> EditUnitPanel:
-    """Run Edit Unit on ``container`` and return the panel it opened."""
-    earlier = {id(obj) for obj in gc.get_objects() if isinstance(obj, EditUnitPanel)}
-    _run("Shelving_EditUnit", container, driver)
-    (panel,) = [
-        obj
-        for obj in gc.get_objects()
-        if isinstance(obj, EditUnitPanel) and id(obj) not in earlier
-    ]
-    assert FreeCADGui.Control.activeDialog()
-    return panel
-
-
-def _click_task_button(text: str, driver: ViewDriver) -> None:
-    """Press the open task dialog's ``text`` button. In a fresh profile
-    FreeCAD 1.1 docks Tasks in the right-hand overlay panel, which stays
-    hidden until hovered, so the button is pressed with ``click``, the
-    signal a mouse click on it emits."""
-    main_window = cast("QtWidgets.QMainWindow", FreeCADGui.getMainWindow())
-    (button,) = [
-        button
-        for box in main_window.findChildren(QtWidgets.QDialogButtonBox)
-        for button in box.buttons()
-        if button.text() == text
-    ]
-    button.click()
-    driver.pump(400)
-
-
 def _nodes(region: Region) -> list[Region | Board]:
     found: list[Region | Board] = [region]
     if isinstance(region, Division):
@@ -133,34 +101,24 @@ def _nodes(region: Region) -> list[Region | Board]:
     return found
 
 
-def _notification_count() -> int:
-    main_window = cast("QtWidgets.QMainWindow", FreeCADGui.getMainWindow())
-    button = main_window.statusBar().findChild(
-        QtWidgets.QPushButton, "notificationArea"
-    )
-    assert button is not None
-    text = button.text()
-    return int(text) if text.isdigit() else 0
-
-
 def _shift(a: QtGui.QColor, b: QtGui.QColor) -> int:
     return (
         abs(a.red() - b.red()) + abs(a.green() - b.green()) + abs(a.blue() - b.blue())
     )
 
 
-def test_edit_unit_reads_a_hand_built_unit_and_cancel_changes_nothing(
+def test_edit_unit_reads_a_hand_built_unit_and_close_changes_nothing(
     driver: ViewDriver,
 ) -> None:
     container, _ = _test_unit()
     before = _snapshot()
     undo_before = _document().UndoNames
-    panel = _edit_unit(container, driver)
+    panel = edit_unit(container, driver)
     nodes = _nodes(panel.session.unit.root)
     assert sum(isinstance(node, Bay) for node in nodes) == 2
     assert "Shelf" in {node.id for node in nodes if isinstance(node, Board)}
     assert panel.session.left_alone == ()
-    _click_task_button("Cancel", driver)
+    click_task_button("Close", driver)
     assert not FreeCADGui.Control.activeDialog()
     assert _snapshot() == before
     assert _document().UndoNames == undo_before
@@ -171,12 +129,12 @@ def test_a_part_turned_off_axis_is_left_alone_with_its_reason(
 ) -> None:
     container, _ = _test_unit()
     _add_skewed_box(container)
-    panel = _edit_unit(container, driver)
+    panel = edit_unit(container, driver)
     assert list(panel.untagged_checks) == ["Skewed"]
     assert (
         panel.untagged_checks["Skewed"].accessibleName().endswith(": not axis-aligned")
     )
-    _click_task_button("Cancel", driver)
+    click_task_button("Close", driver)
     skewed = _document().getObject("Skewed")
     assert (
         skewed is not None
@@ -191,7 +149,7 @@ def test_export_boxes_writes_the_file_and_reports_where(
     _add_skewed_box(container)
     path = export_path(container)
     path.unlink(missing_ok=True)
-    _run("Shelving_ExportBoxes", container, driver)
+    run_command("Shelving_ExportBoxes", container, driver)
     assert path.is_file()
     # FreeCAD shows Python's printed output in the Report view; pytest
     # captures it first.
@@ -211,12 +169,12 @@ def test_a_refusal_notifies_selects_and_highlights_the_overlap(
     left = FreeCAD.Vector(9.0, 0.0, 300.0)
     right = FreeCAD.Vector(591.0, 0.0, 300.0)
     plain = unit_view.grab()
-    notifications = _notification_count()
+    notifications = notification_count()
 
-    _run("Shelving_EditUnit", container, driver)
+    run_command("Shelving_EditUnit", container, driver)
 
     assert not FreeCADGui.Control.activeDialog()
-    assert _notification_count() == notifications + 1
+    assert notification_count() == notifications + 1
     selected = cast("list[FreeCAD.DocumentObject]", FreeCADGui.Selection.getSelection())
     assert {obj.Name for obj in selected} == {"Overlap", "LeftSide"}
     shown = unit_view.grab()
@@ -240,13 +198,13 @@ def test_a_board_moved_within_the_clearance_is_corrected(driver: ViewDriver) -> 
     side.Placement = placement
     _document().recompute()
 
-    height = _edit_unit(container, driver).unit_fields["height"].line_edit
+    height = edit_unit(container, driver).unit_fields["height"].line_edit
     height.setFocus()
     height.selectAll()
     QtTest.QTest.keyClicks(height, "1010")
     QtTest.QTest.keyClick(height, QtCore.Qt.Key.Key_Return)
     driver.pump()
-    _click_task_button("OK", driver)
+    click_task_button("Close", driver)
 
     assert not FreeCADGui.Control.activeDialog()
     assert abs(side.Placement.Base.x) < 1e-6

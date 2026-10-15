@@ -24,7 +24,7 @@ def test_every_case_file_loads() -> None:
         "scan.refusal",
         "editor.one-session",
     ]
-    assert len(cases) == 5
+    assert len(cases) == 6
     assert all(case.steps for case in cases)
 
 
@@ -78,7 +78,7 @@ def _progress() -> Progress:
                 "start": StepResult(
                     "pass", "", None, "", presses=("done", "failed: no unit")
                 ),
-                "cancel": StepResult(
+                "close-and-undo": StepResult(
                     "fail",
                     "The unit stayed taller",
                     CheckResult(passed=False, detail="600 x 300 x 1000 mm"),
@@ -105,7 +105,7 @@ def test_the_report_holds_each_recorded_step_and_the_run() -> None:
     assert [step["id"] for step in case["steps"]] == [
         "start",
         "step-and-wheel",
-        "cancel",
+        "close-and-undo",
     ]
     assert case["steps"][0]["action"] == "fresh_unit"
     assert case["steps"][0]["presses"] == ["done", "failed: no unit"]
@@ -136,9 +136,9 @@ def test_a_repeated_step_id_is_refused() -> None:
         parse_cases({"case": [{"id": "c", "title": "C", "step": [step, step]}]}, "x")
 
 
-def test_the_unit_size_cancel_step_carries_its_size_check() -> None:
+def test_the_unit_size_start_step_carries_its_size_check() -> None:
     (case,) = [c for c in load_cases() if c.id == "editor.unit-size"]
-    (step,) = [s for s in case.steps if s.id == "cancel"]
+    (step,) = [s for s in case.steps if s.id == "start"]
     assert step.check == "fresh_unit_size"
 
 

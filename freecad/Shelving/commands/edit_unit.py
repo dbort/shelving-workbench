@@ -8,7 +8,7 @@ calls ``unit_ops`` functions.
 
 import os
 import time
-from typing import TYPE_CHECKING, TypedDict, cast
+from typing import TYPE_CHECKING, Literal, TypedDict, cast
 
 import FreeCAD
 
@@ -24,6 +24,7 @@ class _CommandResources(TypedDict):
     MenuText: str
     ToolTip: str
     Pixmap: str
+    CmdType: Literal["NoTransaction"]
 
 
 def _selected_container() -> FreeCAD.DocumentObject | None:
@@ -46,6 +47,10 @@ class EditUnitCommand:
             "MenuText": "Edit Unit",
             "ToolTip": "Open the elevation editor for the selected unit",
             "Pixmap": _ICON,
+            # FreeCAD otherwise wraps the command in a transaction of its
+            # own, which holds back every commit the session makes until
+            # the command returns: the session's steps are its own.
+            "CmdType": "NoTransaction",
         }
 
     def IsActive(self) -> bool:
@@ -144,11 +149,11 @@ class EditUnitCommand:
         )
         try:
             Gui.Control.showDialog(panel)
-        except Exception as err:  # noqa: BLE001 - the transaction EditUnitPanel
-            # already opened would otherwise stay open with no dialog left to
-            # commit or abort it (showDialog raises RuntimeError when another
-            # task dialog is already active).
-            panel.session.cancel()
+        except Exception as err:  # noqa: BLE001 - the session must close
+            # The probe object EditUnitPanel's session made would otherwise
+            # stay with no dialog left to remove it. showDialog raises
+            # RuntimeError when another task dialog is already active.
+            panel.session.close()
             refusals.report_refusal(
                 f"Edit Unit could not open its panel: {err}",
                 (),

@@ -131,7 +131,34 @@ def test_a_new_board_copies_its_source_boards_whole_appearance(
         (new_id,) = _board_ids(session.unit.root) - before
         assert _appearance(_view(doc, new_id)) == pytest.approx(expected)
     finally:
-        session.cancel()
+        session.close()
+
+
+def test_a_new_shelf_keeps_its_color_through_undo_redo_and_close(
+    doc: FreeCAD.Document,
+) -> None:
+    doc.UndoMode = 1
+    container = create_unit(doc)
+    doc.recompute()
+    bottom = _view(doc, "bottom")
+    bottom.ShapeAppearance = [_material((0.2, 0.6, 0.3))]
+    expected = _appearance(bottom)
+
+    session = Session(container)
+    session.open()
+    before = _board_ids(session.unit.root)
+    session.select(_first_bay_id(session.unit.root))
+    assert session.split("vertical") is None
+    (shelf,) = _board_ids(session.unit.root) - before
+    session.select(_first_bay_id(session.unit.root))
+    assert session.set_size(250.0) is None
+    doc.undo()
+    session.settle()
+    doc.redo()
+    session.settle()
+    assert _appearance(_view(doc, shelf)) == pytest.approx(expected)
+    session.close()
+    assert _appearance(_view(doc, shelf)) == pytest.approx(expected)
 
 
 def test_a_resize_keeps_a_hand_set_board_color(doc: FreeCAD.Document) -> None:

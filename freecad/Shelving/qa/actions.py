@@ -8,6 +8,8 @@ start FreeCAD.
 
 from __future__ import annotations
 
+from collections.abc import Generator
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Protocol, cast
 
 from freecad.Shelving.qa.registry import CheckResult, action, check
@@ -39,6 +41,29 @@ def _active_document() -> FreeCAD.Document:
     return doc
 
 
+def _new_document(name: str) -> FreeCAD.Document:
+    """A new document with undo on, as one made with File, New has; a
+    scripted document starts with it off."""
+    import FreeCAD
+
+    doc = FreeCAD.newDocument(name)
+    doc.UndoMode = 1
+    return doc
+
+
+@contextmanager
+def _undo_step(doc: FreeCAD.Document, name: str) -> Generator[None]:
+    """One undo step named ``name`` around a setup, as a person's own edit
+    would be."""
+    doc.openTransaction(name)
+    try:
+        yield
+    except BaseException:
+        doc.abortTransaction()
+        raise
+    doc.commitTransaction()
+
+
 def _object(name: str) -> FreeCAD.DocumentObject:
     obj = _active_document().getObject(name)
     if obj is None:
@@ -64,31 +89,30 @@ def _add_box(
 
 @action("test_unit", label="Create TestUnit, a five-box unit")
 def test_unit() -> None:
-    import FreeCAD
-
-    doc = FreeCAD.newDocument("QA_Scan")
-    doc.addObject("App::Part", _TEST_UNIT)
-    _add_box("Bottom", (600.0, 300.0, 18.0), (0.0, 0.0, 0.0))
-    _add_box("Top", (600.0, 300.0, 18.0), (0.0, 0.0, 582.0))
-    _add_box("LeftSide", (18.0, 300.0, 564.0), (0.0, 0.0, 18.0))
-    _add_box("RightSide", (18.0, 300.0, 564.0), (582.0, 0.0, 18.0))
-    _add_box("Shelf", (564.0, 300.0, 18.0), (18.0, 0.0, 291.0))
+    doc = _new_document("QA_Scan")
+    with _undo_step(doc, "Create TestUnit"):
+        doc.addObject("App::Part", _TEST_UNIT)
+        _add_box("Bottom", (600.0, 300.0, 18.0), (0.0, 0.0, 0.0))
+        _add_box("Top", (600.0, 300.0, 18.0), (0.0, 0.0, 582.0))
+        _add_box("LeftSide", (18.0, 300.0, 564.0), (0.0, 0.0, 18.0))
+        _add_box("RightSide", (18.0, 300.0, 564.0), (582.0, 0.0, 18.0))
+        _add_box("Shelf", (564.0, 300.0, 18.0), (18.0, 0.0, 291.0))
 
 
 @action("add_overlap_box", label="Add a box overlapping LeftSide")
 def add_overlap_box() -> None:
-    _add_box("Overlap", (18.0, 300.0, 564.0), (0.0, 0.0, 18.0))
+    with _undo_step(_active_document(), "Add Overlap"):
+        _add_box("Overlap", (18.0, 300.0, 564.0), (0.0, 0.0, 18.0))
 
 
 @action("fresh_unit", label="Create a fresh unit in a new document")
 def fresh_unit() -> None:
-    import FreeCAD
-
     from freecad.Shelving.unit_ops import create_unit
 
-    doc = FreeCAD.newDocument("QA_Unit")
-    create_unit(doc)
-    doc.recompute()
+    doc = _new_document("QA_Unit")
+    with _undo_step(doc, "Create Shelving Unit"):
+        create_unit(doc)
+        doc.recompute()
 
 
 @action("shelf_unit_with_varset", label="Create a shelf unit and VarSet.Len = 300 mm")
@@ -98,9 +122,10 @@ def shelf_unit_with_varset() -> None:
 
     fresh_unit()
     doc = _active_document()
-    varset = doc.addObject("App::VarSet", "VarSet")
-    varset.addProperty("App::PropertyLength", "Len")
-    cast("_VarSet", varset).Len = "300 mm"
+    with _undo_step(doc, "Add VarSet"):
+        varset = doc.addObject("App::VarSet", "VarSet")
+        varset.addProperty("App::PropertyLength", "Len")
+        cast("_VarSet", varset).Len = "300 mm"
 
     def first_bay(region: Region) -> str | None:
         if isinstance(region, Bay):
@@ -117,21 +142,21 @@ def shelf_unit_with_varset() -> None:
     session.open()
     session.select(first_bay(session.unit.root))
     failure = session.split("vertical")
+    session.close()
     if failure is not None:
-        session.cancel()
         raise RuntimeError(failure.message)
-    session.commit()
     doc.recompute()
 
 
 @action("add_untagged_cube", label="Add a 400 x 5 x 400 mm cube to the unit")
 def add_untagged_cube() -> None:
     doc = _active_document()
-    cube = cast("_BoxFeature", doc.addObject("Part::Box", "Cube"))
-    cube.Length, cube.Width, cube.Height = 400.0, 5.0, 400.0
-    container = cast("FreeCAD.DocumentObjectGroup", _object(_FRESH_UNIT))
-    container.addObject(cast("FreeCAD.DocumentObject", cube))
-    doc.recompute()
+    with _undo_step(doc, "Add Cube"):
+        cube = cast("_BoxFeature", doc.addObject("Part::Box", "Cube"))
+        cube.Length, cube.Width, cube.Height = 400.0, 5.0, 400.0
+        container = cast("FreeCAD.DocumentObjectGroup", _object(_FRESH_UNIT))
+        container.addObject(cast("FreeCAD.DocumentObject", cube))
+        doc.recompute()
 
 
 @check("fresh_unit_size")
@@ -150,11 +175,3 @@ def fresh_unit_size(doc: FreeCAD.Document | None) -> CheckResult:
     )
     detail = " x ".join(f"{value_mm:g}" for value_mm in sizes_mm) + " mm"
     return CheckResult(passed=passed, detail=detail)
-
-
-@check("four_boards")
-def four_boards(doc: FreeCAD.Document | None) -> CheckResult:
-    count = (
-        0 if doc is None else sum(1 for obj in doc.Objects if obj.TypeId == "Part::Box")
-    )
-    return CheckResult(passed=count == 4, detail=f"{count} boxes in the document")

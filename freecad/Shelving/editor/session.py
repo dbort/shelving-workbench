@@ -1,11 +1,12 @@
-"""The elevation editor's session: the document, the transaction, and the
+"""The elevation editor's session: the document, its undo steps, and the
 edits, behind one small API the panel drives.
 
 Every accepted edit writes straight through
-:func:`freecad.Shelving.container.write_container` inside the one
-transaction :meth:`Session.open` starts, so the live preview is the real
-boards: there is no separate preview model to drift from the real write
-path.
+:func:`freecad.Shelving.container.write_container` as its own undo step,
+so the live preview is the real boards: there is no separate preview model
+to drift from the real write path. The steps stay after the panel closes;
+:mod:`freecad.Shelving.editor.history` reads each Undo and Redo back into
+the session.
 
 Every ``isinstance`` check and structural match here is against
 ``freecad.Shelving.core.*`` types imported by their fully qualified name.
@@ -19,7 +20,7 @@ session never reads theirs.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from typing import Literal, Protocol, cast
 
 import FreeCAD
@@ -57,16 +58,25 @@ from freecad.Shelving.core.layout import (
     Region,
     Unit,
 )
-from freecad.Shelving.core.record import rules_from_json, with_stored_rules
+from freecad.Shelving.core.record import (
+    region_keys,
+    rules_from_json,
+    with_stored_rules,
+)
 from freecad.Shelving.core.scan import elevation_axes, scan
 from freecad.Shelving.core.solver import LayoutSolveError, describe_solve_error, solve
 from freecad.Shelving.debug_log import Stopwatch
+from freecad.Shelving.editor.history import EditHistory, Schedule
 
 SplitDirection = Literal["horizontal", "vertical"]
 
 
 class _Labeled(Protocol):
     Label: str
+
+
+class _Placed(Protocol):
+    Placement: FreeCAD.Placement
 
 
 # The Length property on the session's probe object that the panel's
@@ -214,36 +224,41 @@ class Session:
         # alone. Before the first write that is every set-aside part
         # carrying no board properties, since write_container deletes a
         # tagged one; after it, exactly what the write reported.
-        doc = container.Document
-        self.left_alone: tuple[LeftAlone, ...] = tuple(
-            self._left_alone(name)
-            for name in sorted(self._set_aside_reasons)
-            if not properties.has_board_properties(doc.getObject(name))
-        )
+        self.left_alone: tuple[LeftAlone, ...] = self._unplaced(self._set_aside_reasons)
         # The object the panel's dimension field binds to, so it can resolve
-        # an expression naming a VarSet; exists only between open() and the
-        # end of the transaction.
+        # an expression naming a VarSet; exists only between open() and
+        # close(), made outside any undo step and removed outside one unless
+        # a step changed it.
         self.probe: FreeCAD.DocumentObject | None = None
+        self._probe_name = ""
         # The board being dragged and the pointer's offset from its low
         # face along its run's axis, between begin_drag and end_drag.
         self._drag: tuple[str, Axis, float] | None = None
+        self._history: EditHistory | None = None
+        # Runs after an Undo, a Redo, or a step made elsewhere has been read
+        # back.
+        self.on_change: Callable[[], None] | None = None
+        # Whether an Undo or Redo left no unit to read: the container gone,
+        # or no longer scanning or solving. The panel closes then.
+        self.lost = False
 
-    def open(self) -> None:
-        """Start this session's one transaction. Call once, before any edit.
+    def open(self, schedule: Schedule | None = None) -> None:
+        """Make the probe object and start following the document's undo
+        history. Call once, before any edit. ``schedule`` defers the
+        read-back after an Undo or Redo until FreeCAD has finished it; with
+        none, :meth:`settle` does the read-back.
 
         A document created by ``FreeCAD.newDocument`` (as every
         ``freecadcmd`` script and this workbench's own smoke does) starts
-        with ``UndoMode`` off, unlike a document created through the GUI:
-        ``openTransaction``/``abortTransaction`` are silent no-ops against
-        it (verified), so ``cancel`` would leave every edit in
-        place. Setting it here makes cancel work regardless of how the
-        document was created.
+        with ``UndoMode`` off, unlike a document created through the GUI,
+        and records no step at all. Setting it here gives every document
+        the same history.
         """
         doc = self.container.Document
         doc.UndoMode = 1
-        doc.openTransaction("Edit Shelving Unit")
-        # Created inside the transaction, so the abort in cancel() removes it
-        # and commit() only has to remove it before committing.
+        # No step holds the probe: removing it at close would take a step of
+        # its own, which the first Undo after close would spend bringing it
+        # back.
         probe = cast(
             "FreeCAD.DocumentObject",
             doc.addObject("App::VarSet", "ShelvingDimensionProbe"),
@@ -252,21 +267,94 @@ class Session:
             probe.addProperty("App::PropertyLength", name, "Shelving")
         cast("_Labeled", probe).Label = "Shelving dimension (temporary)"
         self.probe = probe
+        self._probe_name = probe.Name
+        self._history = EditHistory(doc, self, schedule or (lambda _settle: None))
 
-    def commit(self) -> None:
-        """End this session's transaction, keeping every edit made and
-        removing the probe object."""
+    def settle(self) -> None:
+        """Read a pending Undo or Redo back into this session now. Every
+        edit calls this first, so none is computed from the unit as it was
+        before an Undo whose read-back has not run yet."""
+        if self._history is not None:
+            self._history.settle()
+
+    def close(self) -> None:
+        """End this session, leaving each of its edits as its own undo step
+        and removing the probe object."""
+        self._drag = None
+        history = self._history
+        if history is not None:
+            history.finish()
         doc = self.container.Document
-        if self.probe is not None:
-            doc.removeObject(self.probe.Name)
-            self.probe = None
-        doc.commitTransaction()
-
-    def cancel(self) -> None:
-        """End this session's transaction, reverting every edit made,
-        including the probe object's creation."""
+        if self.probe is not None and doc.getObject(self._probe_name) is not None:
+            # Removed outside any step only while no step names it; a step
+            # naming a destroyed object would be unsafe to undo.
+            recorded = history is not None and history.probe_recorded
+            if recorded:
+                doc.openTransaction("Remove Shelving Dimension")
+            doc.removeObject(self._probe_name)
+            if recorded:
+                doc.commitTransaction()
         self.probe = None
-        self.container.Document.abortTransaction()
+
+    @property
+    def dragging(self) -> bool:
+        """Whether a drag begun with :meth:`begin_drag` is still going: an
+        Undo during it ends it."""
+        return self._drag is not None
+
+    # What EditHistory needs; see HistoryOwner.
+
+    def reload(self) -> None:
+        """Rescan the container, keeping a selected node that still exists
+        selected, then tell :attr:`on_change`. Sets :attr:`lost` instead of
+        rescanning when the container no longer reads."""
+        try:
+            unit, reasons = _read_unit(self.container)
+            spaces = solve(unit)
+        except Exception:  # noqa: BLE001 - an Undo can leave anything behind
+            self.lost = True
+            self._drag = None
+            if self.on_change is not None:
+                self.on_change()
+            return
+        selected = self.selected_id
+        if selected is not None and selected not in spaces:
+            # A board keeps its id, its object's name, across a rescan; a
+            # region is found again by the boards bounding it.
+            old_keys = {
+                region_id: key for key, region_id in region_keys(self.unit).items()
+            }
+            key = old_keys.get(selected)
+            selected = None if key is None else region_keys(unit).get(key)
+        self.unit = unit
+        self.spaces = spaces
+        self._set_aside_reasons = reasons
+        self.left_alone = self._unplaced(reasons)
+        self.selected_id = selected
+        if self.on_change is not None:
+            self.on_change()
+
+    def probe_name(self) -> str | None:
+        return self._probe_name if self.probe is not None else None
+
+    def step_interrupted(self) -> None:
+        self._drag = None
+
+    def _step(
+        self, name: str, edit: Callable[[], EditFailure | None]
+    ) -> EditFailure | None:
+        """Run ``edit`` as one undo step named ``name``; a refusal, or an
+        exception, leaves none."""
+        history = self._history
+        if history is None or history.finished:
+            return edit()
+        history.begin(name)
+        failure: EditFailure | None = EditFailure("the edit did not finish", None)
+        try:
+            failure = edit()
+        finally:
+            history.end(keep=failure is None)
+        return failure
 
     def select(self, node_id: str | None) -> None:
         self.selected_id = node_id
@@ -288,6 +376,16 @@ class Session:
             return False
         node = _find_node(self.unit.root, self.selected_id)
         return isinstance(node, Board)
+
+    def _unplaced(self, reasons: Mapping[str, str]) -> tuple[LeftAlone, ...]:
+        """Each part ``reasons`` names that carries no board properties,
+        since write_container deletes a tagged one."""
+        doc = self.container.Document
+        return tuple(
+            self._left_alone(name)
+            for name in sorted(reasons)
+            if not properties.has_board_properties(doc.getObject(name))
+        )
 
     def _left_alone(self, name: str) -> LeftAlone:
         obj = self.container.Document.getObject(name)
@@ -361,6 +459,7 @@ class Session:
         corner where it is and the selection as it was. Returns ``None`` on
         success or an :class:`EditFailure` on refusal, which changes
         nothing."""
+        self.settle()
         components = [
             self.unit.size_mm.x_mm,
             self.unit.size_mm.y_mm,
@@ -371,7 +470,9 @@ class Session:
             candidate = set_unit_size(self.unit, Vec3(*components))
         except EditError as err:
             return EditFailure(str(err), err.node_id)
-        return self._apply(candidate, select=self.selected_id)
+        return self._step(
+            "Resize Unit", lambda: self._apply(candidate, select=self.selected_id)
+        )
 
     def split(self, direction: SplitDirection) -> EditFailure | None:
         """Split the selected ``Bay`` in two with a board that copies its stock
@@ -383,6 +484,7 @@ class Session:
         shelf, whichever model axis the unit's depth runs along. Returns
         ``None`` on success, which clears the selection, or an
         :class:`EditFailure` on refusal, which changes nothing."""
+        self.settle()
         if self.selected_id is None:
             return EditFailure("select a bay to split", None)
         horizontal, vertical = self._elevation_axes()
@@ -391,19 +493,21 @@ class Session:
             candidate = split_region(self.unit, self.selected_id, axis)
         except EditError as err:
             return EditFailure(str(err), err.node_id)
-        return self._apply(candidate)
+        name = "Add Divider" if direction == "horizontal" else "Add Shelf"
+        return self._step(name, lambda: self._apply(candidate))
 
     def merge(self) -> EditFailure | None:
         """Remove the selected ``Board`` and merge its neighboring regions.
         Returns ``None`` on success, which clears the selection, or an
         :class:`EditFailure` on refusal, which changes nothing."""
+        self.settle()
         if self.selected_id is None:
             return EditFailure("select a board to merge", None)
         try:
             candidate = merge_at(self.unit, self.selected_id)
         except EditError as err:
             return EditFailure(str(err), err.node_id)
-        return self._apply(candidate)
+        return self._step("Delete Board", lambda: self._apply(candidate))
 
     def clear_probe_expression(self) -> None:
         """Remove any expression a dimension field's f(x) dialog bound to
@@ -430,6 +534,7 @@ class Session:
         quantity widget already resolved, in the basis the region already
         measures in. The selection is kept. Returns ``None`` on success or
         an :class:`EditFailure` on refusal, which changes nothing."""
+        self.settle()
         if self.selected_id is None:
             return EditFailure("select a region to size", None)
         region_id = self.selected_id
@@ -438,12 +543,13 @@ class Session:
             candidate = set_size(self.unit, region_id, size_mm, basis)
         except EditError as err:
             return EditFailure(str(err), err.node_id)
-        return self._apply(candidate, select=region_id)
+        return self._step("Set Size", lambda: self._apply(candidate, select=region_id))
 
     def set_basis(self, basis: Basis) -> EditFailure | None:
         """Change what the selected region's size measures, moving nothing.
         The selection is kept. Returns ``None`` on success or an
         :class:`EditFailure` on refusal, which changes nothing."""
+        self.settle()
         if self.selected_id is None:
             return EditFailure("select a region to measure", None)
         region_id = self.selected_id
@@ -453,13 +559,17 @@ class Session:
             return EditFailure(str(err), err.node_id)
         except LayoutSolveError as err:
             return EditFailure(describe_solve_error(err), err.node_id)
-        return self._apply(candidate, select=region_id)
+        return self._step(
+            "Change What a Size Measures",
+            lambda: self._apply(candidate, select=region_id),
+        )
 
     def set_locks(self, region_ids: Sequence[str], locked: bool) -> EditFailure | None:
         """Lock each of ``region_ids`` when ``locked``, else unlock each, as
         one write that moves nothing and keeps the selection. Returns an
         :class:`EditFailure` on refusal, such as locking a run's last
         unlocked region, leaving the session and document untouched."""
+        self.settle()
         candidate = self.unit
         try:
             for region_id in region_ids:
@@ -468,7 +578,8 @@ class Session:
             return EditFailure(str(err), err.node_id)
         except LayoutSolveError as err:
             return EditFailure(describe_solve_error(err), err.node_id)
-        return self._apply(candidate, select=self.selected_id)
+        name = "Lock Openings" if locked else "Unlock Openings"
+        return self._step(name, lambda: self._apply(candidate, select=self.selected_id))
 
     def held_by(self, board_id: str) -> tuple[str, ...] | None:
         """:func:`~freecad.Shelving.core.edit.held_by` for this session's
@@ -483,6 +594,7 @@ class Session:
         selects the board. Returns an :class:`EditFailure`, starting no
         drag, when a drag may not move the board: a locked region holds it,
         or no unlock would free it."""
+        self.settle()
         try:
             require_movable(self.unit, board_id)
             axis = run_axis(self.unit, board_id)
@@ -494,6 +606,9 @@ class Session:
             axis,
             grab_mm.component_mm(axis.component_index) - low_mm,
         )
+        # Every move of the drag fills this one step; end_drag closes it.
+        if self._history is not None and not self._history.finished:
+            self._history.begin("Move Board")
         return None
 
     def drag_to(self, pointer_mm: Vec3) -> EditFailure | None:
@@ -502,7 +617,7 @@ class Session:
         the region before it. Boards joined to it through locked regions
         move with it, and only the first unlocked region on each side
         changes size. Returns an :class:`EditFailure`, leaving the last good
-        state, when this step is refused or would not solve, or no drag is in
+        state, when this move is refused or would not solve, or no drag is in
         progress."""
         if self._drag is None:
             return EditFailure("no board is being dragged", None)
@@ -516,12 +631,17 @@ class Session:
         return self._apply(candidate, select=region_id)
 
     def end_drag(self) -> None:
+        """End the drag, closing its undo step; a drag that moved nothing
+        leaves none."""
         self._drag = None
+        if self._history is not None and self._history.step_open:
+            self._history.end(keep=True)
 
     def delete_untagged(self, names: Collection[str]) -> EditFailure | None:
-        """Delete the listed :attr:`left_alone` objects inside this
-        session's transaction, so :meth:`cancel` restores them. Refuses,
-        deleting nothing, when any name is not currently listed."""
+        """Delete the listed :attr:`left_alone` objects as one undo step, so
+        Undo restores them. Refuses, deleting nothing,
+        when any name is not currently listed."""
+        self.settle()
         listed = {entry.name for entry in self.left_alone}
         unknown = sorted(set(names) - listed)
         if unknown:
@@ -530,7 +650,11 @@ class Session:
                 unknown[0],
             )
         doc = self.container.Document
-        for name in names:
-            doc.removeObject(name)
-        self.left_alone = tuple(e for e in self.left_alone if e.name not in names)
-        return None
+
+        def delete() -> EditFailure | None:
+            for name in names:
+                doc.removeObject(name)
+            self.left_alone = tuple(e for e in self.left_alone if e.name not in names)
+            return None
+
+        return self._step("Delete Objects", delete)

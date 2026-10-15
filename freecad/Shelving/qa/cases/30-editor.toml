@@ -39,23 +39,17 @@ that board would not join two openings. Nothing changes and the panel stays
 usable."""
 
   [[case.step]]
-  id = "merge-and-ok"
+  id = "merge-and-close"
   instruction = [
     "Click the new divider.",
     "Click Delete.",
     "Click the bay.",
     "Click Add Divider.",
-    "Click OK.",
+    "Click Close.",
   ]
   expected = """
-The merge redraws one bay; after OK the panel closes with the divider in
+The merge redraws one bay; after Close the panel closes with the divider in
 place."""
-
-  [[case.step]]
-  id = "undo"
-  check = "four_boards"
-  instruction = ["Run Edit, Undo once."]
-  expected = "The whole session reverses in one step: the unit has its four boards again."
 
 [[case]]
 id = "editor.dimensions"
@@ -113,11 +107,21 @@ The lower bay follows to 280 mm. While the panel is open a Shelving
 dimension (temporary) object sits in the tree."""
 
   [[case.step]]
-  id = "cancel"
-  instruction = ["Click Cancel."]
+  id = "undo"
+  instruction = [
+    "Click an empty spot in the 3D view, so Undo reaches the document.",
+    "Choose Edit, Undo.",
+  ]
   expected = """
-The unit is back to one shelf between two equal bays, and the temporary
-object is gone."""
+The lower bay goes back to its size before the expression, clear 300 mm,
+in the elevation and the 3D view, and the panel stays open."""
+
+  [[case.step]]
+  id = "close"
+  instruction = ["Click Close."]
+  expected = """
+The panel closes, the Shelving dimension (temporary) object is gone, and
+the lower bay stays at clear 300 mm."""
 
 [[case]]
 id = "editor.untagged-objects"
@@ -144,6 +148,7 @@ title = "Unit size controls"
   [[case.step]]
   id = "start"
   action = "fresh_unit"
+  check = "fresh_unit_size"
   instruction = ["Select the container.", "Run Edit Unit."]
   expected = "The Unit section shows width 600 mm, depth 300 mm and height 900 mm."
 
@@ -165,7 +170,83 @@ A single error in the Notification Area, and the field shows the last
 height that worked."""
 
   [[case.step]]
-  id = "cancel"
-  check = "fresh_unit_size"
-  instruction = ["Click Cancel."]
-  expected = "The unit is back to 600 x 300 x 900 mm."
+  id = "close-and-undo"
+  instruction = [
+    "Click Close.",
+    "Click an empty spot in the 3D view.",
+    "Choose Edit, Undo.",
+  ]
+  expected = """
+The panel closes with the unit at its last height, and the Undo takes back
+only the last size change, one arrow step."""
+
+[[case]]
+id = "editor.undo"
+title = "Undo and Redo inside Edit Unit"
+
+  [[case.step]]
+  id = "start"
+  action = "fresh_unit"
+  instruction = ["Select the container.", "Run Edit Unit."]
+  expected = "The panel opens on the new unit, one open bay between four boards."
+
+  [[case.step]]
+  id = "add-shelves"
+  instruction = [
+    "Click the open bay.",
+    "Click Add Shelf.",
+    "Click the lower bay.",
+    "Click Add Shelf.",
+  ]
+  expected = "Two shelves, in the elevation and the 3D view."
+
+  [[case.step]]
+  id = "keyboard-undo"
+  instruction = ["Press Cmd-Z (Ctrl-Z on Windows or Linux) without clicking anything first."]
+  expected = """
+The second shelf goes, in the elevation and the 3D view, and the panel stays
+open."""
+
+  [[case.step]]
+  id = "redo"
+  instruction = ["Click an empty spot in the 3D view.", "Choose Edit, Redo."]
+  expected = "The second shelf comes back, and the panel shows it."
+
+  [[case.step]]
+  id = "redo-after-undo"
+  instruction = [
+    "Click the upper shelf in the elevation.",
+    "Click Delete.",
+    "Click an empty spot in the 3D view.",
+    "Choose Edit, Undo.",
+    "Choose Edit, Undo.",
+    "Click a bay in the elevation.",
+    "Click Add Divider.",
+    "Click an empty spot in the 3D view.",
+    "Choose Edit, Undo.",
+    "Choose Edit, Redo.",
+  ]
+  expected = """
+After the last Redo the divider is back, with one shelf in the unit."""
+
+  [[case.step]]
+  id = "undo-list"
+  instruction = [
+    "Open the drop-down list beside Undo on the Edit toolbar.",
+    "Choose the lowest Add Shelf.",
+  ]
+  expected = """
+Every edit down to that one is undone in one go: the unit is one open bay
+again, the panel shows it, and the panel stays open."""
+
+  [[case.step]]
+  id = "undo-the-unit"
+  instruction = ["Choose Edit, Undo."]
+  expected = """
+Create Unit is undone: the unit disappears from the 3D view and the tree,
+and the panel closes."""
+
+  [[case.step]]
+  id = "redo-the-unit"
+  instruction = ["Choose Edit, Redo."]
+  expected = "The unit comes back as Create Unit made it, with no panel open."
