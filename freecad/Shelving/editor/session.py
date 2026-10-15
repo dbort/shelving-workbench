@@ -13,15 +13,15 @@ Every ``isinstance`` check and structural match here is against
 Two importable copies of the core classes is a shipped bug: ``isinstance``
 silently failed to match a ``Board`` against itself and a divider vanished.
 
-Imports no Qt: the scene and the panel read this session's state, this
-session never reads theirs.
+Imports no Qt: the panel and the view editor read this session's state,
+this session never reads theirs.
 """
 
 from __future__ import annotations
 
 import dataclasses
 from collections.abc import Callable, Collection, Mapping, Sequence
-from typing import Literal, Protocol, cast
+from typing import Literal
 
 import FreeCAD
 
@@ -39,7 +39,6 @@ from freecad.Shelving.core.edit import (
     measure,
     merge_at,
     move_board,
-    region_before,
     require_movable,
     run_axis,
     set_basis,
@@ -71,28 +70,7 @@ from freecad.Shelving.editor.history import EditHistory, Schedule
 SplitDirection = Literal["horizontal", "vertical"]
 
 
-class _Labeled(Protocol):
-    Label: str
-
-
-class _Placed(Protocol):
-    Placement: FreeCAD.Placement
-
-
-# The Length property on the session's probe object that the panel's
-# dimension field binds to (.claude/docs/freecad-notes.md, "GUI-only widget
-# access").
-PROBE_PROPERTY = "Dimension"
-
 UnitDimension = Literal["width", "depth", "height"]
-
-# The probe property each of the unit's dimension fields binds to, so an
-# expression typed into one field never shows up in another.
-UNIT_PROBE_PROPERTIES: Mapping[UnitDimension, str] = {
-    "width": "UnitWidth",
-    "depth": "UnitDepth",
-    "height": "UnitHeight",
-}
 
 _PANEL_REASON = (
     "thin through the unit's depth, so it reads as a back or front panel, "
@@ -225,12 +203,6 @@ class Session:
         # carrying no board properties, since write_container deletes a
         # tagged one; after it, exactly what the write reported.
         self.left_alone: tuple[LeftAlone, ...] = self._unplaced(self._set_aside_reasons)
-        # The object the panel's dimension field binds to, so it can resolve
-        # an expression naming a VarSet; exists only between open() and
-        # close(), made outside any undo step and removed outside one unless
-        # a step changed it.
-        self.probe: FreeCAD.DocumentObject | None = None
-        self._probe_name = ""
         # The board being dragged and the pointer's offset from its low
         # face along its run's axis, between begin_drag and end_drag.
         self._drag: tuple[str, Axis, float] | None = None
@@ -243,10 +215,10 @@ class Session:
         self.lost = False
 
     def open(self, schedule: Schedule | None = None) -> None:
-        """Make the probe object and start following the document's undo
-        history. Call once, before any edit. ``schedule`` defers the
-        read-back after an Undo or Redo until FreeCAD has finished it; with
-        none, :meth:`settle` does the read-back.
+        """Start following the document's undo history. Call once, before
+        any edit. ``schedule`` defers the read-back after an Undo or Redo
+        until FreeCAD has finished it; with none, :meth:`settle` does the
+        read-back.
 
         A document created by ``FreeCAD.newDocument`` (as every
         ``freecadcmd`` script and this workbench's own smoke does) starts
@@ -256,18 +228,6 @@ class Session:
         """
         doc = self.container.Document
         doc.UndoMode = 1
-        # No step holds the probe: removing it at close would take a step of
-        # its own, which the first Undo after close would spend bringing it
-        # back.
-        probe = cast(
-            "FreeCAD.DocumentObject",
-            doc.addObject("App::VarSet", "ShelvingDimensionProbe"),
-        )
-        for name in (PROBE_PROPERTY, *UNIT_PROBE_PROPERTIES.values()):
-            probe.addProperty("App::PropertyLength", name, "Shelving")
-        cast("_Labeled", probe).Label = "Shelving dimension (temporary)"
-        self.probe = probe
-        self._probe_name = probe.Name
         self._history = EditHistory(doc, self, schedule or (lambda _settle: None))
 
     def settle(self) -> None:
@@ -278,23 +238,11 @@ class Session:
             self._history.settle()
 
     def close(self) -> None:
-        """End this session, leaving each of its edits as its own undo step
-        and removing the probe object."""
+        """End this session, leaving each of its edits as its own undo step.
+        Safe to call twice."""
         self._drag = None
-        history = self._history
-        if history is not None:
-            history.finish()
-        doc = self.container.Document
-        if self.probe is not None and doc.getObject(self._probe_name) is not None:
-            # Removed outside any step only while no step names it; a step
-            # naming a destroyed object would be unsafe to undo.
-            recorded = history is not None and history.probe_recorded
-            if recorded:
-                doc.openTransaction("Remove Shelving Dimension")
-            doc.removeObject(self._probe_name)
-            if recorded:
-                doc.commitTransaction()
-        self.probe = None
+        if self._history is not None:
+            self._history.finish()
 
     @property
     def dragging(self) -> bool:
@@ -333,9 +281,6 @@ class Session:
         self.selected_id = selected
         if self.on_change is not None:
             self.on_change()
-
-    def probe_name(self) -> str | None:
-        return self._probe_name if self.probe is not None else None
 
     def step_interrupted(self) -> None:
         self._drag = None
@@ -509,15 +454,6 @@ class Session:
             return EditFailure(str(err), err.node_id)
         return self._step("Delete Board", lambda: self._apply(candidate))
 
-    def clear_probe_expression(self) -> None:
-        """Remove any expression a dimension field's f(x) dialog bound to
-        the probe. The edit already holds the resolved number, and while
-        the expression stays its field is read-only; for the region size
-        field, that means read-only for every region."""
-        if self.probe is not None:
-            for name in (PROBE_PROPERTY, *UNIT_PROBE_PROPERTIES.values()):
-                self.probe.setExpression(name, None)
-
     def selected_measurement(self) -> Measurement | None:
         """The selected region's :class:`~freecad.Shelving.core.edit.Measurement`,
         or ``None`` when the selection is nothing, a board, or the whole
@@ -614,21 +550,20 @@ class Session:
     def drag_to(self, pointer_mm: Vec3) -> EditFailure | None:
         """Move the dragged board so its grab point follows ``pointer_mm``
         along its run's axis, re-solving and writing the boards, and select
-        the region before it. Boards joined to it through locked regions
-        move with it, and only the first unlocked region on each side
-        changes size. Returns an :class:`EditFailure`, leaving the last good
-        state, when this move is refused or would not solve, or no drag is in
+        the board. Boards joined to it through locked regions move with it,
+        and only the first unlocked region on each side changes size.
+        Returns an :class:`EditFailure`, leaving the last good state, when
+        this move is refused or would not solve, or no drag is in
         progress."""
         if self._drag is None:
             return EditFailure("no board is being dragged", None)
         board_id, axis, grab_offset_mm = self._drag
         low_face_mm = pointer_mm.component_mm(axis.component_index) - grab_offset_mm
         try:
-            region_id = region_before(self.unit, board_id)
             candidate = move_board(self.unit, board_id, low_face_mm)
         except EditError as err:
             return EditFailure(str(err), err.node_id)
-        return self._apply(candidate, select=region_id)
+        return self._apply(candidate, select=board_id)
 
     def end_drag(self) -> None:
         """End the drag, closing its undo step; a drag that moved nothing

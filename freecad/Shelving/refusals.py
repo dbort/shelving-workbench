@@ -20,6 +20,7 @@ from freecad.Shelving.core.solver import LayoutSolveError, SolveErrorReason
 CommandRefusalReason = Literal[
     "no_unit_selected",
     "not_one_container",
+    "no_3d_view",
     "task_panel_open",
     "unexpected",
 ]
@@ -108,6 +109,10 @@ SUGGESTIONS: Mapping[RefusalReason, str] = {
     "not_one_container": (
         "Select one App::Part, App::LinkGroup or group holding the boards, "
         "grouping loose boards into one first."
+    ),
+    "no_3d_view": (
+        "Open a 3D view of the document with View > Create new view, then run "
+        "Edit Unit again."
     ),
     "task_panel_open": (
         "Close the task panel already open in the Tasks tab with OK or "

@@ -1,68 +1,31 @@
-"""The elevation editor's task panel: a thin Qt shell over one ``Session``.
+"""The editor's task panel: a thin Qt shell over one ``Session`` and the
+in-view editor working on it.
 
 ``EditUnitPanel`` satisfies the duck-typed protocol
 ``FreeCADGui.Control.showDialog`` expects: a ``form`` attribute (the
 ``QWidget`` shown in the task panel), ``getStandardButtons``, ``accept``,
-``reject``. Every control calls a ``Session`` method and redraws from what it
-returns; the decisions left here are input handling: the start-drag
-threshold, reporting only a changed size, never applying text the quantity
-widget rejects (consuming its Return, restoring the shown value when focus
-leaves), reporting only a drag's first failure, and keeping checked items
-across a redraw. ``FreeCADGui.Control`` does not exist under ``freecadcmd``, so
-:mod:`tests.freecad_gui.test_panel` exercises this module under the offscreen
-GUI instead.
-
-The dimension field is FreeCAD's own ``Gui::QuantitySpinBox``, so it
-accepts, resolves, and displays exactly what every other length field in
-FreeCAD does. This module reads only the resolved millimeter value it
-reports and never looks at the typed text: the field takes an expression
-language (units, arithmetic, names of document values), so any pattern
-check over the text would refuse valid input, and a false refusal leaves
-the user no workaround.
+``reject``. The unit's own size and the selected opening's basis are
+edited here; everything else is edited in the 3D view
+(:mod:`freecad.Shelving.editor.view_editor`). ``FreeCADGui.Control`` does
+not exist under ``freecadcmd``, so :mod:`tests.freecad_gui.test_panel`
+exercises this module under the offscreen GUI instead.
 """
 
 from __future__ import annotations
 
-import time
 from collections.abc import Callable, Mapping
 from functools import partial
-from typing import Protocol, cast
 
 import FreeCAD
-import FreeCADGui
-from PySide6 import QtCore, QtGui, QtWidgets
-from shiboken6 import Shiboken
+from PySide6 import QtCore, QtWidgets
 
 from freecad.Shelving.compat import override
 from freecad.Shelving.core.layout import Basis
 from freecad.Shelving.debug_log import Stopwatch
-from freecad.Shelving.editor.scene import build_scene, elevation_point_mm, hit_test
-from freecad.Shelving.editor.session import (
-    PROBE_PROPERTY,
-    UNIT_PROBE_PROPERTIES,
-    EditFailure,
-    Session,
-    SplitDirection,
-    UnitDimension,
-)
+from freecad.Shelving.editor.fields import DimensionField, WheelFilter
+from freecad.Shelving.editor.session import EditFailure, Session, UnitDimension
+from freecad.Shelving.editor.view_editor import View3D, ViewEditor
 from freecad.Shelving.refusals import report_error
-
-# freecad-stubs declares UiLoader.createWidget without parameters and
-# ExpressionBinding with no methods at all, so these Protocols state the
-# signatures .claude/docs/freecad-notes.md verified.
-
-
-class _UiLoader(Protocol):
-    def createWidget(self, class_name: str, /) -> QtWidgets.QWidget | None: ...
-
-
-class _ExpressionBinding(Protocol):
-    def bind(self, obj: FreeCAD.DocumentObject, property_name: str, /) -> None: ...
-
-
-# The elevation keeps at least this height, so the controls around it make
-# FreeCAD's task panel scroll rather than squeezing the view to a sliver.
-_MIN_VIEW_HEIGHT_PX = 320
 
 _UNIT_DIMENSIONS: tuple[tuple[UnitDimension, str], ...] = (
     ("width", "Width"),
@@ -70,349 +33,19 @@ _UNIT_DIMENSIONS: tuple[tuple[UnitDimension, str], ...] = (
     ("height", "Height"),
 )
 
+# The container property each unit field binds to, for FreeCAD's f(x)
+# dialog (DimensionField); one each, so an expression typed into one field
+# never shows up in another.
+UNIT_BINDING_PATHS: Mapping[UnitDimension, str] = {
+    "width": "Placement.Base.x",
+    "depth": "Placement.Base.y",
+    "height": "Placement.Base.z",
+}
+
 _BASIS_CHOICES: tuple[tuple[str, Basis], ...] = (
     ("Clear opening", Basis.CLEAR),
     ("Spacing (through the next board)", Basis.WITH_NEXT),
 )
-
-
-def _format_mm(value_mm: float) -> str:
-    return f"{value_mm:.2f} mm"
-
-
-class _FieldEventFilter(QtCore.QObject):
-    """Consumes every Return and Enter key press on the widgets it is
-    installed on, calling ``on_return`` instead, and calls ``on_focus_out``
-    before the widget itself sees a focus-out. Unconsumed, a Return the
-    quantity widget rejects reaches the task panel, which treats it as OK
-    and closes the editor."""
-
-    def __init__(
-        self,
-        parent: QtCore.QObject,
-        on_return: Callable[[], None],
-        on_focus_out: Callable[[], None],
-    ) -> None:
-        super().__init__(parent)
-        self._on_return = on_return
-        self._on_focus_out = on_focus_out
-
-    @override
-    def eventFilter(self, watched: QtCore.QObject, event: QtCore.QEvent) -> bool:
-        if event.type() == QtCore.QEvent.Type.FocusOut:
-            self._on_focus_out()
-            return False
-        if event.type() != QtCore.QEvent.Type.KeyPress:
-            return False
-        key = cast("QtGui.QKeyEvent", event).key()
-        if key not in (QtCore.Qt.Key.Key_Return, QtCore.Qt.Key.Key_Enter):
-            return False
-        self._on_return()
-        return True
-
-
-class _StepWatch(QtCore.QObject):
-    """Notes, before the spin box sees it, every event that steps its value
-    rather than editing its text: a spin arrow pressed, an arrow or page key,
-    a wheel turn. ``stepping`` stays set until a key that edits text.
-    Installed on the spin box and its line edit, but a mouse press counts
-    only on the spin box itself: a click in the text places the caret or
-    opens a menu whose paste edits text."""
-
-    # Wheel events closer together than this are one turn of the wheel, so
-    # a touchpad gesture past a limit reports its refusal once.
-    _WHEEL_GAP_S = 0.5
-
-    _STEP_KEYS = (
-        QtCore.Qt.Key.Key_Up,
-        QtCore.Qt.Key.Key_Down,
-        QtCore.Qt.Key.Key_PageUp,
-        QtCore.Qt.Key.Key_PageDown,
-    )
-
-    def __init__(self, spin: QtWidgets.QWidget) -> None:
-        super().__init__(spin)
-        self._spin = spin
-        self.stepping = False
-        # Counts presses and wheel turns, not repeats, so a caller can tell
-        # one held arrow or one gesture from the next.
-        self.bursts = 0
-        self._last_wheel_s: float | None = None
-
-    @override
-    def eventFilter(self, watched: QtCore.QObject, event: QtCore.QEvent) -> bool:
-        kind = event.type()
-        if kind == QtCore.QEvent.Type.KeyPress:
-            self._last_wheel_s = None
-            key_event = cast("QtGui.QKeyEvent", event)
-            if key_event.key() in self._STEP_KEYS:
-                if not key_event.isAutoRepeat():
-                    self.bursts += 1
-                self.stepping = True
-            else:
-                self.stepping = False
-        elif kind == QtCore.QEvent.Type.MouseButtonPress:
-            self._last_wheel_s = None
-            if watched is self._spin:
-                self.bursts += 1
-            self.stepping = watched is self._spin
-        elif kind == QtCore.QEvent.Type.Wheel:
-            now_s = time.monotonic()
-            if self._last_wheel_s is None or now_s - self._last_wheel_s > (
-                self._WHEEL_GAP_S
-            ):
-                self.bursts += 1
-            self._last_wheel_s = now_s
-            self.stepping = True
-        return False
-
-
-class _DimensionField:
-    """A size input: FreeCAD's quantity widget bound to the session's
-    probe object, or, when the GUI cannot supply that widget, a plain line
-    edit whose text goes to ``FreeCAD.Units.parseQuantity`` verbatim.
-
-    Text the quantity widget cannot resolve is never applied, and how the
-    field looks while it holds such text is the widget's own business.
-    Whether the text resolves is the widget's verdict, read from its
-    ``acceptableInput``; this class never looks at the text itself.
-
-    ``on_size`` receives the resolved millimeters; ``on_error`` receives
-    ``parseQuantity``'s own message, from the fallback only;
-    ``on_expression_done`` is called once the f(x) dialog closes, after any
-    ``on_size`` it caused. ``property_name`` is the probe property the
-    field binds to. With ``apply_on_step``, each spin step reaches
-    ``on_size`` at once, with no Return; the fallback field has no steps.
-    """
-
-    def __init__(
-        self,
-        probe: FreeCAD.DocumentObject | None,
-        on_size: Callable[[float], None],
-        on_error: Callable[[str], None],
-        on_expression_done: Callable[[], None],
-        property_name: str = PROBE_PROPERTY,
-        apply_on_step: bool = False,
-    ) -> None:
-        self._on_size = on_size
-        self._on_error = on_error
-        self._on_expression_done = on_expression_done
-        loader_type = cast(
-            "Callable[[], _UiLoader] | None", getattr(FreeCADGui, "UiLoader", None)
-        )
-        spin = (
-            loader_type().createWidget("Gui::QuantitySpinBox")
-            if loader_type is not None
-            else None
-        )
-        self.quantity_widget = spin
-        if spin is not None:
-            spin.setProperty("unit", "mm")
-            if probe is not None:
-                binding_type = cast(
-                    "Callable[[QtWidgets.QWidget], _ExpressionBinding]",
-                    FreeCADGui.ExpressionBinding,
-                )
-                # Held for the widget's lifetime: the binding is what lets
-                # the field resolve a VarSet name.
-                self._binding = binding_type(spin)
-                self._binding.bind(probe, property_name)
-            line_edit = spin.findChild(QtWidgets.QLineEdit)
-            assert line_edit is not None
-            self.line_edit = line_edit
-            self.widget: QtWidgets.QWidget = spin
-        else:
-            self.line_edit = QtWidgets.QLineEdit()
-            self.widget = self.line_edit
-        self._event_filter = _FieldEventFilter(
-            self.widget, self._finished, self._discard_unreadable
-        )
-        self.widget.installEventFilter(self._event_filter)
-        if self.line_edit is not self.widget:
-            self.line_edit.installEventFilter(self._event_filter)
-        # What show_mm last displayed. editingFinished also fires when the
-        # field merely loses focus, and reporting an unchanged value would
-        # quietly fix a region that shares leftover space.
-        self._shown_mm: float | None = None
-        self._shown_text = ""
-        # The fallback text parseQuantity last refused. A consumed Return and
-        # the focus-out after it both finish the same edit, and the refusal
-        # is reported once.
-        self._rejected_text: str | None = None
-        self.line_edit.editingFinished.connect(self._finished)
-        # Whether the last on_size came from a spin step, and which press of
-        # the arrows or wheel it belonged to.
-        self.last_change_was_step = False
-        self.step_burst = 0
-        self._step_watch: _StepWatch | None = None
-        if spin is not None and apply_on_step:
-            self._step_watch = _StepWatch(spin)
-            spin.installEventFilter(self._step_watch)
-            self.line_edit.installEventFilter(self._step_watch)
-            QtCore.QObject.connect(
-                spin, QtCore.SIGNAL("valueChanged(double)"), self._value_changed
-            )
-        if spin is not None:
-            # Accepting the f(x) dialog changes the value without any
-            # editingFinished; the dialog closing is the only signal.
-            QtCore.QObject.connect(
-                spin,
-                QtCore.SIGNAL("showFormulaDialog(bool)"),
-                self._formula_dialog_toggled,
-            )
-
-    def _value_changed(self, _value: float) -> None:
-        """Apply a spin step at once. A change from typing waits for Return
-        or focus-out, so a half-typed 800 never applies as 8 or 80."""
-        watch = self._step_watch
-        if watch is None or not watch.stepping or not self._alive():
-            return
-        if self.quantity_widget is None or not self._acceptable():
-            return
-        value_mm = self.quantity_widget.property("rawValue")
-        if isinstance(value_mm, float) and value_mm != self._shown_mm:
-            self.last_change_was_step = True
-            self.step_burst = watch.bursts
-            self._on_size(value_mm)
-
-    def _formula_dialog_toggled(self, shown: bool) -> None:
-        if not shown:
-            self._finished()
-            self._on_expression_done()
-
-    def _acceptable(self) -> bool:
-        """The quantity widget's verdict on its current text; always
-        ``True`` for the fallback field, which learns only by parsing."""
-        if self.quantity_widget is None:
-            return True
-        return bool(self.quantity_widget.property("acceptableInput"))
-
-    def _alive(self) -> bool:
-        """Whether the field's widget still exists. Qt sends focus-out and
-        ``editingFinished`` while it destroys the widget, when the panel
-        closes or the application exits, after the widget is already
-        unusable from Python."""
-        return Shiboken.isValid(self.widget) and Shiboken.isValid(self.line_edit)
-
-    def _discard_unreadable(self) -> None:
-        """Put the last shown value back before the widget handles a
-        focus-out. Left alone, the widget settles on whatever a prefix of the
-        unreadable text resolved to and reports that as a finished edit."""
-        if self._alive() and not self._acceptable():
-            self.show_mm(self._shown_mm)
-
-    def _finished(self) -> None:
-        if not self._alive():
-            return
-        if self.quantity_widget is not None:
-            # While the text is unacceptable, rawValue still holds the last
-            # value some prefix of it resolved to (12 mm for 12 1/2").
-            if not self._acceptable():
-                return
-            value_mm = self.quantity_widget.property("rawValue")
-            if isinstance(value_mm, float) and value_mm != self._shown_mm:
-                self.last_change_was_step = False
-                self._on_size(value_mm)
-            return
-        text = self.line_edit.text()
-        if text in (self._shown_text, self._rejected_text):
-            return
-        try:
-            quantity = FreeCAD.Units.parseQuantity(text)
-        except Exception as err:  # noqa: BLE001 - its message is the report
-            self._rejected_text = text
-            self._on_error(str(err).strip())
-            return
-        self.last_change_was_step = False
-        self._on_size(float(quantity.Value))
-
-    def show_mm(self, value_mm: float | None) -> None:
-        """Display ``value_mm``, or clear the field for ``None``; never
-        reports back through ``on_size``."""
-        self.widget.setEnabled(value_mm is not None)
-        self.widget.blockSignals(True)
-        if self.quantity_widget is not None:
-            if value_mm is not None:
-                self.quantity_widget.setProperty("rawValue", value_mm)
-                # Read back rather than kept: the widget may round what it
-                # stores, and _finished compares against its own value.
-                shown_mm = self.quantity_widget.property("rawValue")
-                self._shown_mm = shown_mm if isinstance(shown_mm, float) else value_mm
-            else:
-                self._shown_mm = None
-        else:
-            self._shown_text = "" if value_mm is None else f"{value_mm:g} mm"
-            self._rejected_text = None
-            self.line_edit.setText(self._shown_text)
-        self.widget.blockSignals(False)
-
-
-class _EditorView(QtWidgets.QGraphicsView):
-    """A ``QGraphicsView`` that reports the scene position of every press to
-    ``on_click``, every move with the left button held to ``on_drag`` once
-    the pointer has traveled the platform's start-drag distance from the
-    press, and every release to ``on_release``."""
-
-    def __init__(
-        self,
-        on_click: Callable[[QtCore.QPointF], None],
-        on_drag: Callable[[QtCore.QPointF], None],
-        on_release: Callable[[], None],
-    ) -> None:
-        super().__init__()
-        self._on_click = on_click
-        self._on_drag = on_drag
-        self._on_release = on_release
-        # The viewport position of the current press, held until the pointer
-        # travels the start-drag distance; without it a click's jitter would
-        # resize the region below the clicked board.
-        self._press_pos: QtCore.QPoint | None = None
-        self._drag_started = False
-        # Called once, with the paint's duration in ms, on the first paint of
-        # the elevation; the Edit Unit run's debug_log timing ends there.
-        self.on_first_paint: Callable[[float], None] | None = None
-
-    @override
-    def paintEvent(self, event: QtGui.QPaintEvent) -> None:
-        callback = self.on_first_paint
-        if callback is None:
-            super().paintEvent(event)
-            return
-        self.on_first_paint = None
-        start_s = time.perf_counter()
-        super().paintEvent(event)
-        callback((time.perf_counter() - start_s) * 1000)
-
-    @override
-    def mousePressEvent(self, event: QtGui.QMouseEvent) -> None:
-        super().mousePressEvent(event)
-        scene = self.scene()
-        if scene is not None:
-            self._press_pos = event.position().toPoint()
-            self._drag_started = False
-            self._on_click(self.mapToScene(self._press_pos))
-
-    @override
-    def mouseMoveEvent(self, event: QtGui.QMouseEvent) -> None:
-        super().mouseMoveEvent(event)
-        if not event.buttons() & QtCore.Qt.MouseButton.LeftButton:
-            return
-        pos = event.position().toPoint()
-        if not self._drag_started:
-            if self._press_pos is None:
-                return
-            traveled_px = (pos - self._press_pos).manhattanLength()
-            if traveled_px < QtWidgets.QApplication.startDragDistance():
-                return
-            self._drag_started = True
-        self._on_drag(self.mapToScene(pos))
-
-    @override
-    def mouseReleaseEvent(self, event: QtGui.QMouseEvent) -> None:
-        super().mouseReleaseEvent(event)
-        self._press_pos = None
-        self._drag_started = False
-        self._on_release()
 
 
 class FirstEvents(QtCore.QObject):
@@ -543,24 +176,33 @@ class AncestorWatch(QtCore.QObject):
 
 
 class EditUnitPanel:
-    """One elevation-editing task panel over ``container``.
+    """One editing task panel over ``container``, editing in ``view``.
 
-    Construction opens the session, each edit made in the panel is its own
-    undo step, and Close, through ``accept`` or ``reject``, ends the
-    session with every step left in place.
+    Construction opens the session and the in-view editor, each edit is its
+    own undo step, and Close, through ``accept`` or ``reject``, ends both
+    with every step left in place. Without a ``view``, as under the
+    offscreen GUI tests, which cannot draw one, the panel's own controls
+    are the whole editor.
     """
 
-    def __init__(self, container: FreeCAD.DocumentObject) -> None:
+    def __init__(
+        self, container: FreeCAD.DocumentObject, view: View3D | None = None
+    ) -> None:
         watch = Stopwatch("panel")
         self.session = Session(container)
         watch.lap("session")
         self.session.open(lambda settle: QtCore.QTimer.singleShot(0, settle))
         self.session.on_change = self._follow_document
         watch.lap("open session")
-        # Without this, a failure building the form would leave the probe
-        # object in the document with no dialog to remove it.
+        self.editor: ViewEditor | None = None
+        # Without this, a failure building the form or the in-view editor
+        # would leave the session following the document with no dialog to
+        # end it.
         try:
             self._build(watch)
+            if view is not None:
+                self.editor = ViewEditor(self.session, view, self._refresh)
+                watch.lap("view editor")
         except BaseException:
             self.session.close()
             raise
@@ -569,19 +211,20 @@ class EditUnitPanel:
         self.form = QtWidgets.QWidget()
         self.form.setWindowTitle("Edit Unit")
         layout = QtWidgets.QVBoxLayout(self.form)
+        self._wheel_filter = WheelFilter(self.form)
 
         self.unit_box = QtWidgets.QGroupBox("Unit")
         unit_layout = QtWidgets.QFormLayout(self.unit_box)
-        self.unit_fields: dict[UnitDimension, _DimensionField] = {}
+        self.unit_fields: dict[UnitDimension, DimensionField] = {}
         for dimension, label in _UNIT_DIMENSIONS:
-            field = _DimensionField(
-                self.session.probe,
+            field = DimensionField(
+                self.session.container,
+                UNIT_BINDING_PATHS[dimension],
                 partial(self._resize, dimension),
                 report_error,
-                self._expression_done,
-                property_name=UNIT_PROBE_PROPERTIES[dimension],
                 apply_on_step=True,
             )
+            self._wheel_filter.watch(field.widget)
             unit_layout.addRow(label, field.widget)
             self.unit_fields[dimension] = field
         layout.addWidget(self.unit_box)
@@ -590,48 +233,16 @@ class EditUnitPanel:
         # is enough.
         self._reported_step_burst: tuple[UnitDimension, int] | None = None
 
-        self.view = _EditorView(
-            self._on_scene_click, self._on_scene_drag, self._on_scene_release
-        )
-        self.view.setMinimumHeight(_MIN_VIEW_HEIGHT_PX)
-        # The only stretch in the layout: any height the panel has to spare
-        # goes to the elevation.
-        layout.addWidget(self.view, 1)
-        self._dragging = False
-        # Why a press could not start a drag, reported on the first move.
-        self._held: EditFailure | None = None
-        # A drag re-solves on every pointer move, so one held past a limit
-        # would otherwise raise a popup per move.
-        self._drag_failure_reported = False
-
-        button_row = QtWidgets.QHBoxLayout()
-        self.add_divider_button = QtWidgets.QPushButton("Add Divider")
-        self.add_shelf_button = QtWidgets.QPushButton("Add Shelf")
-        self.delete_button = QtWidgets.QPushButton("Delete")
-        for button in (
-            self.add_divider_button,
-            self.add_shelf_button,
-            self.delete_button,
-        ):
-            button_row.addWidget(button)
-        layout.addLayout(button_row)
-
-        dimension_row = QtWidgets.QHBoxLayout()
-        dimension_row.addWidget(QtWidgets.QLabel("Size"))
-        self.size_field = _DimensionField(
-            self.session.probe,
-            self._set_size,
-            report_error,
-            self._expression_done,
-        )
-        dimension_row.addWidget(self.size_field.widget)
+        basis_row = QtWidgets.QFormLayout()
         self.basis_combo = QtWidgets.QComboBox()
         for text, _basis in _BASIS_CHOICES:
             self.basis_combo.addItem(text)
-        dimension_row.addWidget(self.basis_combo)
-        layout.addLayout(dimension_row)
-        self.readout_label = QtWidgets.QLabel("")
-        layout.addWidget(self.readout_label)
+        self._wheel_filter.watch(self.basis_combo)
+        basis_row.addRow("Opening size measures", self.basis_combo)
+        layout.addLayout(basis_row)
+
+        self.hide_others_check = QtWidgets.QCheckBox("Hide other objects")
+        layout.addWidget(self.hide_others_check)
 
         self.untagged_box = QtWidgets.QGroupBox("Objects this workbench did not create")
         untagged_layout = QtWidgets.QVBoxLayout(self.untagged_box)
@@ -653,58 +264,15 @@ class EditUnitPanel:
         self.delete_untagged_button = QtWidgets.QPushButton("Delete Selected")
         untagged_layout.addWidget(self.delete_untagged_button)
         layout.addWidget(self.untagged_box)
+        layout.addStretch(1)
 
-        self.add_divider_button.clicked.connect(lambda: self._split("horizontal"))
-        self.add_shelf_button.clicked.connect(lambda: self._split("vertical"))
-        self.delete_button.clicked.connect(self._merge)
         self.basis_combo.currentIndexChanged.connect(self._set_basis)
         self.delete_untagged_button.clicked.connect(self._delete_untagged)
+        self.hide_others_check.toggled.connect(self._hide_others)
         watch.lap("widgets")
 
         self._refresh()
-        watch.lap("first refresh (scene build)")
-
-    def _on_scene_click(self, point: QtCore.QPointF) -> None:
-        scene = self.view.scene()
-        node_id = hit_test(scene, point) if scene is not None else None
-        self.session.select(node_id)
-        refused: EditFailure | None = None
-        self._dragging = False
-        if node_id is not None and self.session.can_merge():
-            grab_mm = elevation_point_mm(self.session.unit, point)
-            refused = self.session.begin_drag(node_id, grab_mm)
-            self._dragging = refused is None
-        # A press on a board a drag may not move still selects it for
-        # Delete, so its refusal waits for the pointer to move.
-        self._held = refused
-        self._drag_failure_reported = False
-        self._refresh()
-
-    def _on_scene_drag(self, point: QtCore.QPointF) -> None:
-        if self._dragging and not self.session.dragging:
-            # An Undo ended the drag; the release ends this gesture.
-            return
-        if not self._dragging:
-            if self._held is not None and not self._drag_failure_reported:
-                self._drag_failure_reported = True
-                report_error(self._held.message)
-            return
-        failure = self.session.drag_to(elevation_point_mm(self.session.unit, point))
-        if failure is not None and not self._drag_failure_reported:
-            self._drag_failure_reported = True
-            report_error(failure.message)
-        self._refresh()
-
-    def _on_scene_release(self) -> None:
-        if self._dragging:
-            self.session.end_drag()
-            self._dragging = False
-
-    def _split(self, direction: SplitDirection) -> None:
-        self._show_result(self.session.split(direction))
-
-    def _merge(self) -> None:
-        self._show_result(self.session.merge())
+        watch.lap("first refresh")
 
     def _resize(self, dimension: UnitDimension, size_mm: float) -> None:
         field = self.unit_fields[dimension]
@@ -718,15 +286,12 @@ class EditUnitPanel:
             self._reported_step_burst = (dimension, field.step_burst)
         self._refresh()
 
-    def _set_size(self, size_mm: float) -> None:
-        self._show_result(self.session.set_size(size_mm))
-
-    def _expression_done(self) -> None:
-        self.session.clear_probe_expression()
-        self._refresh()
-
     def _set_basis(self, index: int) -> None:
         self._show_result(self.session.set_basis(_BASIS_CHOICES[index][1]))
+
+    def _hide_others(self, hide: bool) -> None:
+        if self.editor is not None:
+            self.editor.set_hide_others(hide)
 
     def _checked_untagged(self) -> list[str]:
         """The names of the untagged objects currently checked in the list."""
@@ -769,11 +334,13 @@ class EditUnitPanel:
         """Show the unit an Undo or Redo left, or close the panel when it
         left none, as Sketcher's edit mode ends when its sketch is undone."""
         if not self.session.lost:
+            if self.editor is not None:
+                self.editor.history_moved()
             self._refresh()
             return
         import FreeCADGui
 
-        self.session.close()
+        self._end()
         FreeCADGui.Control.closeDialog()
 
     def _show_result(self, failure: EditFailure | None) -> None:
@@ -782,41 +349,29 @@ class EditUnitPanel:
         self._refresh()
 
     def _refresh(self) -> None:
-        """Rebuild the scene and every control from the session's current
-        state; called after every selection change and every edit attempt,
-        successful or not."""
-        scene = build_scene(
-            self.session.unit, self.session.spaces, self.session.selected_id
-        )
-        self.view.setScene(scene)
-        self.add_divider_button.setEnabled(self.session.can_split())
-        self.add_shelf_button.setEnabled(self.session.can_split())
-        self.delete_button.setEnabled(self.session.can_merge())
-
+        """Show the session's current state in every control and in the
+        view; called after every edit attempt, successful or not."""
         for dimension, field in self.unit_fields.items():
             field.show_mm(self.session.unit_dimension_mm(dimension))
-
         measurement = self.session.selected_measurement()
-        self.size_field.show_mm(None if measurement is None else measurement.size_mm)
         self.basis_combo.blockSignals(True)
         if measurement is None:
             self.basis_combo.setEnabled(False)
-            self.readout_label.setText("")
         else:
             bases = [basis for _text, basis in _BASIS_CHOICES]
             self.basis_combo.setCurrentIndex(bases.index(measurement.basis))
             # With no board after the region there is no spacing to measure.
             self.basis_combo.setEnabled(measurement.spacing_mm is not None)
-            readout = f"clear {_format_mm(measurement.clear_mm)}"
-            if measurement.spacing_mm is not None:
-                readout += f", spacing {_format_mm(measurement.spacing_mm)}"
-            if not measurement.fixed:
-                readout += " (shares the leftover space)"
-            self.readout_label.setText(readout)
         self.basis_combo.blockSignals(False)
-
         self._rebuild_untagged_rows()
         self.untagged_box.setVisible(bool(self.session.left_alone))
+        if self.editor is not None:
+            self.editor.rebuild()
+
+    def _end(self) -> None:
+        if self.editor is not None:
+            self.editor.close()
+        self.session.close()
 
     def getStandardButtons(self) -> int:
         # Edits stay as undo steps, as Sketcher's do, so there is nothing
@@ -826,10 +381,10 @@ class EditUnitPanel:
         return buttons.value
 
     def accept(self) -> bool:
-        self.session.close()
+        self._end()
         return True
 
     def reject(self) -> bool:
         # FreeCAD calls this for Close, and for Escape.
-        self.session.close()
+        self._end()
         return True

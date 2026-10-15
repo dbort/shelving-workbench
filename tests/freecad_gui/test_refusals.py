@@ -228,17 +228,18 @@ def _fresh_unit_selected(doc: FreeCAD.Document) -> FreeCAD.DocumentObject:
     return container
 
 
-def _assert_no_session_left(doc: FreeCAD.Document) -> None:
-    """No editor session is still open on ``doc``: its probe object is gone
-    and no transaction is pending."""
-    assert doc.getObject("ShelvingDimensionProbe") is None
+def _assert_no_session_left(doc: FreeCAD.Document, objects: int) -> None:
+    """No editor session is still open on ``doc``, which holds the
+    ``objects`` it held before: nothing was added and no transaction is
+    pending."""
+    assert len(doc.Objects) == objects
     assert not doc.HasPendingTransaction
 
 
 def test_edit_unit_refuses_an_unexpected_failure(
     doc: FreeCAD.Document, recorded: list[_Refusal], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def fail(_container: FreeCAD.DocumentObject) -> None:
+    def fail(_container: FreeCAD.DocumentObject, _view: object) -> None:
         raise RuntimeError("panel exploded")
 
     _fresh_unit_selected(doc)
@@ -265,6 +266,7 @@ def test_edit_unit_refuses_while_another_task_panel_is_open(
     through the helper and cancels the session it had already opened."""
     _fresh_unit_selected(doc)
     before = _board_snapshot(doc)
+    objects = len(doc.Objects)
     FreeCADGui.Control.showDialog(_OtherTaskPanel())
     try:
         EditUnitCommand().Activated()
@@ -275,7 +277,7 @@ def test_edit_unit_refuses_while_another_task_panel_is_open(
     assert recorded[0].summary.startswith("Edit Unit could not open its panel")
     assert recorded[0].objects == ()
     assert recorded[0].suggestion == refusals.SUGGESTIONS["task_panel_open"]
-    _assert_no_session_left(doc)
+    _assert_no_session_left(doc, objects)
     assert _board_snapshot(doc) == before
 
 
@@ -286,10 +288,11 @@ def test_a_panel_that_fails_to_build_cancels_its_session(
         raise RuntimeError("form exploded")
 
     container = _fresh_unit_selected(doc)
+    objects = len(doc.Objects)
     monkeypatch.setattr(panel_module.EditUnitPanel, "_build", fail)
     with pytest.raises(RuntimeError, match="form exploded"):
         panel_module.EditUnitPanel(container)
-    _assert_no_session_left(doc)
+    _assert_no_session_left(doc, objects)
 
 
 def _refuse_create_unit(doc: FreeCAD.Document, monkeypatch: pytest.MonkeyPatch) -> None:

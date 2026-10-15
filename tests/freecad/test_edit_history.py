@@ -13,7 +13,7 @@ from freecad.Shelving import properties
 from freecad.Shelving.container import read_container
 from freecad.Shelving.core.geometry import Space, Vec3
 from freecad.Shelving.core.layout import Basis, Bay, Board, Division, Region
-from freecad.Shelving.editor.session import PROBE_PROPERTY, EditFailure, Session
+from freecad.Shelving.editor.session import EditFailure, Session
 from freecad.Shelving.unit_ops import create_unit
 from tests.freecad_materials import library_material
 
@@ -239,7 +239,7 @@ def test_undo_past_the_first_edit_goes_on_into_the_document(
         session.close()
 
 
-def test_close_keeps_the_steps_and_removes_the_probe(doc: FreeCAD.Document) -> None:
+def test_close_keeps_the_steps(doc: FreeCAD.Document) -> None:
     container = _container(doc)
     before_names = list(doc.UndoNames)
     before_boards = _boards(container)
@@ -250,7 +250,6 @@ def test_close_keeps_the_steps_and_removes_the_probe(doc: FreeCAD.Document) -> N
     _undo(session)
     one_shelf = _boards(container)
     session.close()
-    assert doc.getObject("ShelvingDimensionProbe") is None
     assert _boards(container) == one_shelf
     assert doc.UndoNames == ["Add Shelf", *before_names]
     assert doc.RedoNames == ["Add Shelf"]
@@ -276,11 +275,12 @@ def test_a_session_without_edits_leaves_both_lists_as_it_found_them(
     _undone_step_elsewhere(doc)
     before_undo, before_redo = list(doc.UndoNames), list(doc.RedoNames)
     assert before_redo == ["Move it"]
+    objects_before = len(doc.Objects)
     session = _opened(doc)
     session.close()
     assert doc.UndoNames == before_undo
     assert doc.RedoNames == before_redo
-    assert doc.getObject("ShelvingDimensionProbe") is None
+    assert len(doc.Objects) == objects_before
 
 
 def test_a_click_or_a_refused_edit_leaves_both_lists_as_it_found_them(
@@ -301,22 +301,6 @@ def test_a_click_or_a_refused_edit_leaves_both_lists_as_it_found_them(
     session.close()
     assert doc.UndoNames == before_undo
     assert doc.RedoNames == before_redo
-
-
-def test_a_probe_some_step_changed_goes_in_a_step_of_its_own(
-    doc: FreeCAD.Document,
-) -> None:
-    """Removing it outside any step would leave that step naming a
-    destroyed object."""
-    session = _opened(doc)
-    probe = session.probe
-    assert probe is not None
-    doc.openTransaction("Bind an expression")
-    probe.setExpression(PROBE_PROPERTY, "20 mm")
-    doc.commitTransaction()
-    session.close()
-    assert doc.getObject("ShelvingDimensionProbe") is None
-    assert doc.UndoNames[0] == "Remove Shelving Dimension"
 
 
 def test_an_added_shelf_keeps_its_stock_through_undo_redo_and_close(

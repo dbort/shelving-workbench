@@ -15,10 +15,11 @@ import pytest
 
 from freecad.Shelving.container import read_container
 from freecad.Shelving.core.geometry import Space
-from freecad.Shelving.core.layout import Bay, Board, Division, Region
 from freecad.Shelving.editor.panel import EditUnitPanel
 from freecad.Shelving.unit_ops import create_unit
 from tests.freecad_view.editor import (
+    add_board,
+    bay_ids,
     click_task_button,
     edit_unit,
     gui_step,
@@ -72,19 +73,6 @@ def _spaces(spaces: Mapping[str, Space]) -> list[tuple[float, ...]]:
     )
 
 
-def _bay_ids(region: Region) -> list[str]:
-    if isinstance(region, Bay):
-        return [region.id]
-    if not isinstance(region, Division):
-        return []
-    return [
-        bay_id
-        for item in region.items
-        if not isinstance(item, Board)
-        for bay_id in _bay_ids(item)
-    ]
-
-
 @pytest.fixture
 def unit(driver: ViewDriver) -> Iterator[FreeCAD.DocumentObject]:
     """A fresh unit in the driver's document, made in one step of its own,
@@ -104,19 +92,22 @@ def unit(driver: ViewDriver) -> Iterator[FreeCAD.DocumentObject]:
 
 
 def _shown_size_mm(panel: EditUnitPanel) -> float:
-    widget = panel.size_field.quantity_widget
-    assert widget is not None
-    value = widget.property("rawValue")
-    assert isinstance(value, float)
-    return value
+    """The size the selected opening's dimension reads."""
+    measurement = panel.session.selected_measurement()
+    assert measurement is not None
+    editor = panel.editor
+    assert editor is not None
+    (label,) = [
+        label
+        for label in editor.overlay.labels
+        if label.region_id == panel.session.selected_id
+    ]
+    assert float(label.text) == pytest.approx(measurement.size_mm)
+    return measurement.size_mm
 
 
 def _add_shelf(panel: EditUnitPanel, driver: ViewDriver) -> None:
-    panel.session.select(_bay_ids(panel.session.unit.root)[0])
-    # The panel enables its buttons for the selection when it refreshes.
-    panel._refresh()
-    panel.add_shelf_button.click()
-    driver.pump()
+    add_board(panel, "vertical", driver)
 
 
 def test_undo_and_redo_step_one_edit_and_the_panel_follows(
@@ -125,7 +116,7 @@ def test_undo_and_redo_step_one_edit_and_the_panel_follows(
     panel = edit_unit(unit, driver)
     session = panel.session
     _add_shelf(panel, driver)
-    lower = _bay_ids(session.unit.root)[0]
+    lower = bay_ids(session.unit.root)[0]
     session.select(lower)
     states = []
     for size_mm in (250.0, 300.0, 350.0):
@@ -162,7 +153,6 @@ def test_undo_past_the_unit_closes_the_panel_and_redo_brings_it_back(
     gui_step("Std_Undo", driver)
     assert doc.getObject("ShelvingUnit") is None
     assert not FreeCADGui.Control.activeDialog()
-    assert doc.getObject("ShelvingDimensionProbe") is None
     gui_step("Std_Redo", driver)
     gui_step("Std_Redo", driver)
     container = doc.getObject("ShelvingUnit")
@@ -175,6 +165,7 @@ def test_close_keeps_each_edit_as_a_step(
 ) -> None:
     doc = unit.Document
     before_names = list(doc.UndoNames)
+    objects = len(doc.Objects)
     panel = edit_unit(unit, driver)
     _add_shelf(panel, driver)
     one_shelf = _boards(unit)
@@ -182,7 +173,7 @@ def test_close_keeps_each_edit_as_a_step(
     two_shelves = _boards(unit)
     click_task_button("Close", driver)
     assert not FreeCADGui.Control.activeDialog()
-    assert doc.getObject("ShelvingDimensionProbe") is None
+    assert len(doc.Objects) == objects + 2
     assert doc.UndoNames == ["Add Shelf", "Add Shelf", *before_names]
     assert _boards(unit) == two_shelves
     gui_step("Std_Undo", driver)

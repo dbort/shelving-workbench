@@ -32,7 +32,6 @@ from freecad.Shelving.core.layout import (
 )
 from freecad.Shelving.core.scan import elevation_axes
 from freecad.Shelving.editor.session import (
-    PROBE_PROPERTY,
     EditFailure,
     Session,
     SplitDirection,
@@ -634,9 +633,8 @@ def test_close_keeps_each_edit_as_a_step_undo_walks_back() -> None:
 
 
 def test_close_then_undo_takes_back_the_edit() -> None:
-    """Close after an edit leaves it in place, and one undo takes it back.
-    The probe object the session made for the dimension field is gone after
-    Close and does not come back with the undo."""
+    """Close after an edit leaves it in place, adds no object, and one undo
+    takes it back."""
     doc = FreeCAD.newDocument("editor_smoke_close_undo")
     try:
         container = create_unit(doc)
@@ -652,17 +650,15 @@ def test_close_then_undo_takes_back_the_edit() -> None:
         names_after_split = _board_names(container)
         assert names_after_split != names_before
 
-        assert session.probe is not None
-        probe_name = session.probe.Name
+        objects_open = len(doc.Objects)
         session.close()
         doc.recompute()
         assert _board_names(container) == names_after_split
-        assert doc.getObject(probe_name) is None
+        assert len(doc.Objects) == objects_open
 
         doc.undo()
         doc.recompute()
         assert _board_names(container) == names_before
-        assert doc.getObject(probe_name) is None
     finally:
         FreeCAD.closeDocument(doc.Name)
 
@@ -864,7 +860,7 @@ def test_dimensions_drag_basis_and_untagged() -> None:
     bay is refused; a drag resizes the bays beside the board and leaves them
     unlocked; an unsolvable size changes nothing; an untagged box is
     listed as left alone, survives every write, and goes only when named;
-    and Close leaves the edits in place and removes the probe object."""
+    and Close leaves the edits in place."""
     doc = FreeCAD.newDocument("editor_smoke_dimensions")
     try:
         container = create_unit(doc)
@@ -882,11 +878,6 @@ def test_dimensions_drag_basis_and_untagged() -> None:
         session.open()
         closed = False
         try:
-            probe = session.probe
-            assert probe is not None
-            probe_name = probe.Name
-            assert hasattr(probe, PROBE_PROPERTY)
-            assert probe not in cast("FreeCAD.DocumentObjectGroup", container).Group
             assert [e.name for e in session.left_alone] == ["HandAdded"]
             assert "panel" in session.left_alone[0].reason
 
@@ -954,13 +945,14 @@ def test_dimensions_drag_basis_and_untagged() -> None:
             assert _board_snapshot(container) == boards_before_toggle
             assert not isinstance(_rule_of(session.unit.root, left_lower_id), Fixed)
 
-            # A drag resizes the bays on either side and locks neither.
+            # A drag resizes the bays on either side, locks neither, and
+            # keeps the board selected.
             assert session.begin_drag(left_shelf_id, grab_mm) is None
             assert session.drag_to(Vec3(100.0, 0.0, shelf_z_mm + 30.0)) is None
             assert session.drag_to(Vec3(100.0, 0.0, shelf_z_mm + 55.0)) is None
             session.end_drag()
             doc.recompute()
-            assert session.selected_id == left_lower_id
+            assert session.selected_id == left_shelf_id
             for bay_id in (left_lower_id, left_upper_id):
                 rule = _rule_of(session.unit.root, bay_id)
                 assert not isinstance(rule, Fixed), (bay_id, rule)
@@ -1001,7 +993,6 @@ def test_dimensions_drag_basis_and_untagged() -> None:
             closed = True
             doc.recompute()
             assert _board_snapshot(container) == snapshot_edited
-            assert doc.getObject(probe_name) is None
         finally:
             if not closed:
                 session.close()
