@@ -344,3 +344,9 @@ the wrapper's methods, which reach the new view.
 
 ### Round 6: REJECTED
 - **F1: The extra-view path the user accepted raises on every panel edit and Undo, and no test covers it any more** (`freecad/Shelving/editor/view_editor.py:731`, `:562`; `freecad/Shelving/editor/panel.py:340`; `tests/freecad_view/test_editor_drawing.py:486`): after an extra 3D view closes mid-edit, `ViewEditor.rebuild` raises `RuntimeError` from the dead view on every resize and Undo, `_follow_document` then skips the panel refresh, and `close()` cannot tell the view is gone because `Shiboken.isValid(self._viewer)` stays True. Have the editor notice its view is gone and skip view work from then on, base `view_alive` on something that goes false, and add a view test of the accepted behavior.
+
+### Round 7: APPROVED
+- Round 6's F1 is fixed: the editor asks FreeCAD's view object whether its view is gone and stands down at the next redraw, and the new view test covers the accepted extra-view behavior.
+- **N1: The editor keeps its selection gate until the next redraw after its view closes** (`freecad/Shelving/editor/view_editor.py:456`, `:510`, `:515`): in the remaining view, objects outside the unit are refused until the first redraw stands the editor down.
+- **N2: "Hide other objects" stays ticked and enabled after the editor stands down** (`freecad/Shelving/editor/panel.py:294`, `freecad/Shelving/editor/view_editor.py:864`).
+- **N3: The new test calls a private panel method and reassigns a fixture parameter** (`tests/freecad_view/test_editor_drawing.py:557`, `:555`).
