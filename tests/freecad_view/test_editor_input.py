@@ -119,15 +119,13 @@ def _zoom_at(
     """Center the camera on the elevation point ``at_mm``, ``height_mm`` of
     the elevation tall. The 3D view's size changes from run to run, so a
     test that needs a scale sets it."""
-    center = editor.to_document(*at_mm)
+    center_mm = editor.to_document(*at_mm)
     camera = editor.view.getCameraNode()
-    x, y, z = camera.position.getValue().getValue()
-    position = FreeCAD.Vector(x, y, z)
-    offset = position - center
+    position_mm = FreeCAD.Vector(*camera.position.getValue().getValue())
     toward = editor.to_document(0, 0, 1) - editor.to_document(0, 0, 0)
-    along = toward * offset.dot(toward)
-    moved = center + along
-    camera.position.setValue(moved.x, moved.y, moved.z)
+    # The camera keeps its distance along the view direction.
+    moved_mm = center_mm + toward * (position_mm - center_mm).dot(toward)
+    camera.position.setValue(moved_mm.x, moved_mm.y, moved_mm.z)
     camera.height.setValue(height_mm)
     driver.pump()
 
@@ -712,3 +710,52 @@ def test_fx_in_the_size_fields_leaves_close_adding_nothing(
     gui_step("Std_Undo", driver)
     assert list(doc.UndoNames) == names[1:]
     assert top.Placement.Base.z == pytest.approx(900.0 - 18.0)
+
+
+def _as_plain_group(container: FreeCAD.DocumentObject) -> FreeCAD.DocumentObject:
+    doc = container.Document
+    boards = list(cast("FreeCAD.DocumentObjectGroup", container).Group)
+    group = cast(
+        "FreeCAD.DocumentObjectGroup",
+        doc.addObject("App::DocumentObjectGroup", "Plain"),
+    )
+    for board in boards:
+        cast("FreeCAD.DocumentObjectGroup", container).removeObject(board)
+        group.addObject(board)
+    doc.removeObject(container.Name)
+    doc.recompute()
+    return cast("FreeCAD.DocumentObject", group)
+
+
+@pytest.mark.parametrize("kind", ["plain group", "placed by an expression"])
+def test_the_dimension_field_works_on_every_container(
+    unit: FreeCAD.DocumentObject, driver: ViewDriver, kind: str
+) -> None:
+    doc = unit.Document
+    varset = cast("FreeCAD.DocumentObject", doc.addObject("App::VarSet", "VarSet"))
+    varset.addProperty("App::PropertyLength", "Len")
+    setattr(varset, "Len", 300.0)  # noqa: B010 - a dynamic property
+    if kind == "plain group":
+        container = _as_plain_group(unit)
+    else:
+        container = unit
+        container.setExpression("Placement.Base.x", "VarSet.Len")
+        doc.recompute()
+    panel = edit_unit(container, driver)
+    editor = editor_of(panel)
+    add_board(panel, "vertical", driver)
+    bay = bay_ids(panel.session.unit.root)[0]
+    driver.click(editor.to_document(*_label_of(editor, bay).text_at_mm))
+    driver.pump()
+    field = editor.field
+    assert field is not None and field.quantity_widget is not None
+    assert not field.line_edit.isReadOnly()
+    field.quantity_widget.setFocus()
+    QtTest.QTest.keyClick(field.quantity_widget, QtCore.Qt.Key.Key_Equal)
+    driver.pump()
+    _accept_formula_dialog("VarSet.Len", driver)
+    assert _rule(panel.session.unit.root, panel.session.selected_id or "") == Fixed(
+        300.0, Basis.CLEAR
+    )
+    assert list(doc.UndoNames)[0] == "Set Size"
+    click_task_button("Close", driver)

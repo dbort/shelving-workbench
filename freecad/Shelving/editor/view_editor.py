@@ -57,12 +57,13 @@ from freecad.Shelving.editor.overlay import (
     drawing_node,
     view_style,
 )
-from freecad.Shelving.editor.session import Session, SplitDirection
+from freecad.Shelving.editor.session import (
+    FIELD_PROPERTIES,
+    Session,
+    SplitDirection,
+)
 from freecad.Shelving.refusals import report_error
 
-# The bound property f(x) in the floating field writes into and the
-# field's own transaction takes back out (DimensionField).
-FIELD_BINDING_PATH = "Placement.Base.x"
 # The add buttons' icon side, in logical pixels.
 _ICON_PX = 24
 # How long the turn toward the unit may animate before the fit goes ahead.
@@ -156,12 +157,12 @@ def _board_icon(
     )
     pen.setWidthF(1.5)
     painter.setPen(pen)
-    side = _ICON_PX - 6
-    painter.drawRect(QtCore.QRectF(3, 3, side, side))
+    side_px = _ICON_PX - 6
+    painter.drawRect(QtCore.QRectF(3, 3, side_px, side_px))
     bar = (
-        QtCore.QRectF(3, _ICON_PX / 2 - 1.5, side, 3)
+        QtCore.QRectF(3, _ICON_PX / 2 - 1.5, side_px, 3)
         if direction == "vertical"
-        else QtCore.QRectF(_ICON_PX / 2 - 1.5, 3, 3, side)
+        else QtCore.QRectF(_ICON_PX / 2 - 1.5, 3, 3, side_px)
     )
     painter.fillRect(bar, QtGui.QColor.fromRgbF(*rgb))
     painter.end()
@@ -347,6 +348,12 @@ class _SelectionObserver:
         self._editor.freecad_selected(doc, obj, sub)
 
 
+# How many editors have opened in this process. A camera restore still
+# animating after Close gives up once another has opened, so it never moves
+# the camera out from under the new editor's turn.
+_editors_opened = 0
+
+
 # Draggers kept from destruction for the life of the process: Coin before
 # 4.0.4 crashes deleting the SoCallbackAction a dragger creates the first
 # time it is dragged (coin3d/coin#556). One small dragger per session.
@@ -399,6 +406,8 @@ class ViewEditor:
         self._add_anchor: tuple[float, float] | None = None
         self.saved_camera = view.getCamera()
         self._saved_orientation = view.getCameraOrientation()
+        global _editors_opened
+        _editors_opened += 1
         try:
             self._open()
         except BaseException:
@@ -672,8 +681,8 @@ class ViewEditor:
             round(height_px - position.y() * ratio - 1),
         )
 
-    def _logical_point(self, point: FreeCAD.Vector) -> QtCore.QPointF:
-        x_px, y_px = self.view.getPointOnViewport(point)
+    def _logical_point(self, point_mm: FreeCAD.Vector) -> QtCore.QPointF:
+        x_px, y_px = self.view.getPointOnViewport(point_mm)
         ratio = self._viewer.devicePixelRatioF()
         height_px = self.view.getSize()[1]
         return QtCore.QPointF(x_px / ratio, (height_px - y_px - 1) / ratio)
@@ -694,8 +703,8 @@ class ViewEditor:
         self._boards = board_ids(unit)
         self._aside = frozenset(entry.name for entry in session.left_alone)
         placement = self._placement(self.frame)
-        base = placement.Base
-        self._frame_transform.translation.setValue(base.x, base.y, base.z)
+        base_mm = placement.Base
+        self._frame_transform.translation.setValue(base_mm.x, base_mm.y, base_mm.z)
         self._frame_transform.rotation.setValue(_sbrotation(placement.Rotation))
         selected = session.selected_id
         self.overlay = plan_overlay(unit, session.spaces, self.frame, selected)
@@ -963,7 +972,10 @@ class ViewEditor:
         if measurement is None:
             return
         field = DimensionField(
-            self.session.container, FIELD_BINDING_PATH, self._field_size, report_error
+            self.session.container,
+            FIELD_PROPERTIES["opening"],
+            self._field_size,
+            report_error,
         )
         field.show_mm(measurement.size_mm)
         # A layout reparents the quantity widget safely; setParent on the
@@ -1096,9 +1108,10 @@ def _restore_camera(
     is, then put it exactly where ``camera`` describes, which jumps."""
     view.setCameraOrientation(orientation)
     started_s = time.monotonic()
+    opened = _editors_opened
 
     def poll() -> None:
-        if not Shiboken.isValid(viewer):
+        if not Shiboken.isValid(viewer) or _editors_opened != opened:
             return
         reached = view.getCameraOrientation().isSame(orientation, 1e-6)
         if not reached and time.monotonic() - started_s < _TURN_TIMEOUT_S:

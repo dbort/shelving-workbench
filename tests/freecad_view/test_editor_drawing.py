@@ -207,12 +207,15 @@ def test_opening_turns_the_camera_to_the_units_front(
 
 
 def _camera_after_close(
-    unit: FreeCAD.DocumentObject, driver: ViewDriver, restore: bool
+    unit: FreeCAD.DocumentObject, driver: ViewDriver, restore: bool | None
 ) -> tuple[FreeCAD.Rotation, FreeCAD.Rotation, FreeCAD.Rotation]:
     """The camera's orientation before Edit Unit, while it is open, and once
-    Close has had time to turn it back."""
+    Close has had time to turn it back, with the Sketcher's preference
+    ``restore``, or unset for ``None``."""
     params = FreeCAD.ParamGet(_SKETCHER_PARAMS)
-    params.SetBool("RestoreCamera", restore)
+    params.RemBool("RestoreCamera")
+    if restore is not None:
+        params.SetBool("RestoreCamera", restore)
     try:
         driver.view.viewIsometric()
         driver.pump(800)
@@ -227,10 +230,11 @@ def _camera_after_close(
         params.RemBool("RestoreCamera")
 
 
+@pytest.mark.parametrize("restore", [True, None], ids=["set", "default"])
 def test_close_restores_the_camera_as_the_sketcher_does(
-    unit: FreeCAD.DocumentObject, driver: ViewDriver
+    unit: FreeCAD.DocumentObject, driver: ViewDriver, restore: bool | None
 ) -> None:
-    before, editing, after = _camera_after_close(unit, driver, restore=True)
+    before, editing, after = _camera_after_close(unit, driver, restore)
     assert not editing.isSame(before, 1e-6)
     assert after.isSame(before, 1e-6)
 
@@ -241,6 +245,21 @@ def test_close_leaves_the_camera_when_the_sketcher_would(
     before, editing, after = _camera_after_close(unit, driver, restore=False)
     assert not editing.isSame(before, 1e-6)
     assert after.isSame(editing, 1e-6)
+
+
+def test_a_restore_still_turning_leaves_the_next_session_alone(
+    unit: FreeCAD.DocumentObject, driver: ViewDriver
+) -> None:
+    driver.view.viewIsometric()
+    driver.pump(800)
+    edit_unit(unit, driver)
+    click_task_button("Close", driver)
+    panel = edit_unit(unit, driver)
+    # Past the time a restore may wait for its turn before it jumps.
+    driver.pump(3500)
+    view = cast("view_editor_module.View3D", driver.view)
+    assert view.getCameraOrientation().isSame(_front_rotation(unit, panel), 1e-6)
+    click_task_button("Close", driver)
 
 
 def _region_front(

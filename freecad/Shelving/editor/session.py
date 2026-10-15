@@ -72,6 +72,23 @@ SplitDirection = Literal["horizontal", "vertical"]
 
 UnitDimension = Literal["width", "depth", "height"]
 
+# A size field: one of the unit's, or the one that opens on an opening's
+# dimension.
+SizeField = Literal["width", "depth", "height", "opening"]
+
+# The container property each size field binds to, so the field resolves
+# names of document values and offers FreeCAD's f(x) dialog. The session
+# adds them at open() and removes them at close(), hidden, never saved and
+# outside any undo step: every container type can carry them, and none can
+# already hold an expression of the user's. One each, so an expression
+# typed into one field never shows up in another.
+FIELD_PROPERTIES: Mapping[SizeField, str] = {
+    "width": "ShelvingFieldWidth",
+    "depth": "ShelvingFieldDepth",
+    "height": "ShelvingFieldHeight",
+    "opening": "ShelvingFieldOpening",
+}
+
 _PANEL_REASON = (
     "thin through the unit's depth, so it reads as a back or front panel, "
     "which the layout does not place"
@@ -215,9 +232,10 @@ class Session:
         self.lost = False
 
     def open(self, schedule: Schedule | None = None) -> None:
-        """Start following the document's undo history. Call once, before
-        any edit. ``schedule`` defers the read-back after an Undo or Redo
-        until FreeCAD has finished it; with none, :meth:`settle` does the
+        """Add the size fields' properties to the container and start
+        following the document's undo history. Call once, before any edit.
+        ``schedule`` defers the read-back after an Undo or Redo until
+        FreeCAD has finished it; with none, :meth:`settle` does the
         read-back.
 
         A document created by ``FreeCAD.newDocument`` (as every
@@ -228,6 +246,10 @@ class Session:
         """
         doc = self.container.Document
         doc.UndoMode = 1
+        for name in FIELD_PROPERTIES.values():
+            if not hasattr(self.container, name):
+                self.container.addProperty("App::PropertyLength", name, "Shelving")
+                self.container.setPropertyStatus(name, ["Hidden", "Transient"])
         self._history = EditHistory(doc, self, schedule or (lambda _settle: None))
 
     def settle(self) -> None:
@@ -238,11 +260,14 @@ class Session:
             self._history.settle()
 
     def close(self) -> None:
-        """End this session, leaving each of its edits as its own undo step.
-        Safe to call twice."""
+        """End this session, leaving each of its edits as its own undo step
+        and removing the size fields' properties. Safe to call twice."""
         self._drag = None
         if self._history is not None:
             self._history.finish()
+        for name in FIELD_PROPERTIES.values():
+            if hasattr(self.container, name):
+                self.container.removeProperty(name)
 
     @property
     def dragging(self) -> bool:

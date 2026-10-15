@@ -737,3 +737,76 @@ def test_ancestor_watch_names_the_container_hiding_the_form() -> None:
         assert lines == []
     finally:
         tabs.close()
+
+
+def _plain_group_unit(doc: FreeCAD.Document) -> FreeCAD.DocumentObject:
+    """A fresh unit's boards moved into an ``App::DocumentObjectGroup``, a
+    container with no ``Placement`` of its own."""
+    part = create_unit(doc)
+    doc.recompute()
+    boards = list(cast("FreeCAD.DocumentObjectGroup", part).Group)
+    group = cast(
+        "FreeCAD.DocumentObjectGroup",
+        doc.addObject("App::DocumentObjectGroup", "Plain"),
+    )
+    for board in boards:
+        cast("FreeCAD.DocumentObjectGroup", part).removeObject(board)
+        group.addObject(board)
+    doc.removeObject(part.Name)
+    doc.recompute()
+    return cast("FreeCAD.DocumentObject", group)
+
+
+def test_a_plain_group_unit_takes_sizes_and_fx() -> None:
+    doc = _new_document("panel_plain_group")
+    try:
+        doc.UndoMode = 1
+        group = _plain_group_unit(doc)
+        assert not hasattr(group, "Placement")
+        panel = EditUnitPanel(group)
+        panel.form.show()
+        _process_events()
+        widget = panel.unit_fields["height"].quantity_widget
+        assert widget is not None
+        _open_formula_dialog(widget)
+        _accept_formula_dialog("VarSet.Len * 3 + 100 mm")
+        assert panel.session.unit_dimension_mm("height") == pytest.approx(1000.0)
+        line_edit = panel.unit_fields["width"].line_edit
+        line_edit.setFocus()
+        line_edit.selectAll()
+        QtTest.QTest.keyClicks(line_edit, "700")
+        QtTest.QTest.keyClick(line_edit, QtCore.Qt.Key.Key_Return)
+        _process_events()
+        assert panel.session.unit_dimension_mm("width") == pytest.approx(700.0)
+        assert list(doc.UndoNames)[:2] == ["Resize Unit", "Resize Unit"]
+        panel.reject()
+        assert [name for name in group.PropertiesList if "ShelvingField" in name] == []
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def test_a_unit_placed_by_an_expression_keeps_its_fields_editable() -> None:
+    doc = _new_document("panel_placed_by_expression")
+    try:
+        container = create_unit(doc)
+        container.setExpression("Placement.Base.x", "VarSet.Len")
+        doc.recompute()
+        panel = EditUnitPanel(container)
+        panel.form.show()
+        _process_events()
+        for field in panel.unit_fields.values():
+            assert not field.line_edit.isReadOnly()
+        line_edit = panel.unit_fields["width"].line_edit
+        line_edit.setFocus()
+        line_edit.selectAll()
+        QtTest.QTest.keyClicks(line_edit, "700")
+        QtTest.QTest.keyClick(line_edit, QtCore.Qt.Key.Key_Return)
+        _process_events()
+        assert panel.session.unit_dimension_mm("width") == pytest.approx(700.0)
+        panel.reject()
+        assert ("Placement.Base.x", "VarSet.Len") in [
+            (path.lstrip("."), expression)
+            for path, expression in container.ExpressionEngine
+        ]
+    finally:
+        FreeCAD.closeDocument(doc.Name)

@@ -13,7 +13,7 @@ from freecad.Shelving import properties
 from freecad.Shelving.container import read_container
 from freecad.Shelving.core.geometry import Space, Vec3
 from freecad.Shelving.core.layout import Basis, Bay, Board, Division, Region
-from freecad.Shelving.editor.session import EditFailure, Session
+from freecad.Shelving.editor.session import FIELD_PROPERTIES, EditFailure, Session
 from freecad.Shelving.unit_ops import create_unit
 from tests.freecad_materials import library_material
 
@@ -379,3 +379,21 @@ def test_an_undo_during_a_drag_ends_the_drag(doc: FreeCAD.Document) -> None:
         assert session.spaces[shelf].origin.z_mm == pytest.approx(grab_mm.z_mm + 20.0)
     finally:
         session.close()
+
+
+def test_the_size_fields_properties_last_only_the_session_and_record_nothing(
+    doc: FreeCAD.Document,
+) -> None:
+    container = _container(doc)
+    names = list(doc.UndoNames)
+    session = _opened(doc)
+    for name in FIELD_PROPERTIES.values():
+        assert hasattr(container, name)
+        status = cast("list[object]", container.getPropertyStatus(name))
+        assert "Hidden" in status and "Transient" in status
+    assert not doc.HasPendingTransaction
+    session.close()
+    for name in FIELD_PROPERTIES.values():
+        assert not hasattr(container, name)
+    assert list(doc.UndoNames) == names
+    assert doc.RedoNames == []

@@ -23,7 +23,12 @@ from freecad.Shelving.compat import override
 from freecad.Shelving.core.layout import Basis
 from freecad.Shelving.debug_log import Stopwatch
 from freecad.Shelving.editor.fields import DimensionField, WheelFilter
-from freecad.Shelving.editor.session import EditFailure, Session, UnitDimension
+from freecad.Shelving.editor.session import (
+    FIELD_PROPERTIES,
+    EditFailure,
+    Session,
+    UnitDimension,
+)
 from freecad.Shelving.editor.view_editor import View3D, ViewEditor
 from freecad.Shelving.refusals import report_error
 
@@ -32,15 +37,6 @@ _UNIT_DIMENSIONS: tuple[tuple[UnitDimension, str], ...] = (
     ("depth", "Depth"),
     ("height", "Height"),
 )
-
-# The container property each unit field binds to, for FreeCAD's f(x)
-# dialog (DimensionField); one each, so an expression typed into one field
-# never shows up in another.
-UNIT_BINDING_PATHS: Mapping[UnitDimension, str] = {
-    "width": "Placement.Base.x",
-    "depth": "Placement.Base.y",
-    "height": "Placement.Base.z",
-}
 
 _BASIS_CHOICES: tuple[tuple[str, Basis], ...] = (
     ("Clear opening", Basis.CLEAR),
@@ -223,7 +219,7 @@ class EditUnitPanel:
         for dimension, label in _UNIT_DIMENSIONS:
             field = DimensionField(
                 self.session.container,
-                UNIT_BINDING_PATHS[dimension],
+                FIELD_PROPERTIES[dimension],
                 partial(self._resize, dimension),
                 report_error,
                 apply_on_step=True,
