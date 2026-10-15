@@ -24,7 +24,7 @@ def test_every_case_file_loads() -> None:
         "scan.refusal",
         "editor.camera",
     ]
-    assert len(cases) == 7
+    assert len(cases) == 8
     assert all(case.steps for case in cases)
 
 

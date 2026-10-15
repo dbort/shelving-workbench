@@ -140,6 +140,31 @@ The shelf keeps up with the pointer without stutter, and the dimensions
 follow it."""
 
 [[case]]
+id = "editor.close-document"
+title = "Closing a document during Edit Unit"
+
+  [[case.step]]
+  id = "start"
+  action = "fresh_unit"
+  instruction = ["Select the container.", "Run Edit Unit."]
+  expected = "The panel opens and the view shows the unit's dimensions."
+
+  [[case.step]]
+  id = "close"
+  instruction = ["Close the document without saving it."]
+  expected = """
+The Edit Unit panel closes with the document, and no Shelving error
+appears."""
+
+  [[case.step]]
+  id = "again"
+  action = "fresh_unit"
+  instruction = ["Select the container.", "Run Edit Unit."]
+  expected = """
+The panel opens on the new unit as before, with no Shelving error about a
+deleted QGraphicsView."""
+
+[[case]]
 id = "editor.undo"
 title = "Undo and Redo inside Edit Unit"
 

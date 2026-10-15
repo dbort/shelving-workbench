@@ -22,6 +22,7 @@ from __future__ import annotations
 import math
 import time
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from typing import Literal, Protocol, cast
 
 import FreeCAD
@@ -360,25 +361,46 @@ _editors_opened = 0
 KEPT_ALIVE: list[Coin] = []
 
 
+@dataclass
+class _ViewWidgets:
+    """The 3D view's Qt widgets, held only while the editor is open: a
+    PySide wrapper that outlives its widget is handed back, dead, for the
+    next widget made at the same address, and the next Edit Unit then fails
+    on it."""
+
+    viewer: QtWidgets.QGraphicsView
+    viewport: QtWidgets.QWidget
+
+
 class ViewEditor:
     """The overlay, camera and input handling of one editing session in
     ``view``. ``on_change`` runs after every edit or selection the editor
-    makes, and is expected to call :meth:`rebuild`. :meth:`close` undoes
-    every change the editor made to the view, the selection and the
-    visibility of objects; a failure while the editor is built closes it
-    before the exception propagates."""
+    makes, and is expected to call :meth:`rebuild`; ``on_view_closed``
+    runs once the view's widget is destroyed, with its document or on its
+    own, and is expected to end the edit. :meth:`close` undoes every change
+    the editor made to the view, the selection and the visibility of
+    objects; a failure while the editor is built closes it before the
+    exception propagates."""
 
     def __init__(
-        self, session: Session, view: View3D, on_change: Callable[[], None]
+        self,
+        session: Session,
+        view: View3D,
+        on_change: Callable[[], None],
+        on_view_closed: Callable[[], None],
     ) -> None:
         self.session = session
         self.view = view
         self._on_change = on_change
+        self._on_view_closed = on_view_closed
         self._closed = False
         self._doc = session.container.Document
         self._doc_name = self._doc.Name
-        self._viewer = view.graphicsView()
-        self.viewport = self._viewer.viewport()
+        viewer = view.graphicsView()
+        self._widgets: _ViewWidgets | None = _ViewWidgets(viewer, viewer.viewport())
+        # Whether the view's widget still exists. Its wrapper cannot say:
+        # PySide does not learn of a widget FreeCAD destroys.
+        self._view_alive = True
         self._front = elevation_frame(session.unit)
         self.frame = self._front
         self.overlay = Overlay()
@@ -387,7 +409,7 @@ class ViewEditor:
         self._hidden: list[str] = []
         # What close() undoes, latest first, each with whether it touches the
         # view, which may be gone by then with its document.
-        self._installed: list[tuple[Callable[[], None], bool]] = []
+        self._installed: list[tuple[Callable[[], object], bool]] = []
         self._camera_sensor: Coin = None
         self._turn_target: FreeCAD.Rotation | None = None
         self._turn_started_s = 0.0
@@ -414,7 +436,25 @@ class ViewEditor:
             self.close(restore_camera=False)
             raise
 
+    @property
+    def _viewer(self) -> QtWidgets.QGraphicsView:
+        widgets = self._widgets
+        assert widgets is not None, "the editor is closed"
+        return widgets.viewer
+
+    @property
+    def viewport(self) -> QtWidgets.QWidget:
+        widgets = self._widgets
+        assert widgets is not None, "the editor is closed"
+        return widgets.viewport
+
     # Setup and teardown
+
+    def _view_destroyed(self) -> None:
+        self._view_alive = False
+        if not self._closed:
+            # Inside the widget's destructor; the edit ends afterward.
+            QtCore.QTimer.singleShot(0, self._on_view_closed)
 
     def _open(self) -> None:
         ratio = self._viewer.devicePixelRatioF()
@@ -424,6 +464,11 @@ class ViewEditor:
         )
         self.style: Style = view_style(
             label_size_pt(font_px, ratio, self._viewer.screen().logicalDotsPerInchX())
+        )
+        viewer = self._viewer
+        viewer.destroyed.connect(self._view_destroyed)
+        self._installed.append(
+            (lambda: viewer.destroyed.disconnect(self._view_destroyed), True)
         )
         self.root: Coin = coin.SoSeparator()
         self._frame_transform: Coin = coin.SoTransform()
@@ -442,14 +487,17 @@ class ViewEditor:
         self._installed.append((self.add_bar.deleteLater, True))
         self._installed.append((self.add_bar.hide, True))
 
-        clicks = _ViewportClicks(self.viewport, self._sort_press, self._click)
-        self.viewport.installEventFilter(clicks)
-        self._installed.append((lambda: self.viewport.removeEventFilter(clicks), True))
+        viewport = self.viewport
+        clicks = _ViewportClicks(viewport, self._sort_press, self._click)
+        viewport.installEventFilter(clicks)
+        self._installed.append((clicks.deleteLater, True))
+        self._installed.append((lambda: viewport.removeEventFilter(clicks), True))
         app = cast("QtCore.QCoreApplication", QtCore.QCoreApplication.instance())
         keys = _DeleteKeys(
             self._viewer, lambda: QtCore.QTimer.singleShot(0, self._delete_selected)
         )
         app.installEventFilter(keys)
+        self._installed.append((keys.deleteLater, True))
         self._installed.append((lambda: app.removeEventFilter(keys), False))
 
         FreeCADGui.Selection.clearSelection()
@@ -528,7 +576,7 @@ class ViewEditor:
         if self._closed:
             return
         self._closed = True
-        view_alive = Shiboken.isValid(self._viewer)
+        view_alive = self._view_alive and Shiboken.isValid(self._viewer)
         self._close_field()
         if self._doc_name in FreeCAD.listDocuments():
             self.set_hide_others(False)
@@ -544,10 +592,14 @@ class ViewEditor:
             except RuntimeError:
                 # A widget it would touch went with the view's window.
                 pass
+        self._widgets = None
         restore = FreeCAD.ParamGet(_RESTORE_CAMERA_PARAM).GetBool("RestoreCamera", True)
         if restore_camera and restore and view_alive:
             _restore_camera(
-                self.view, self._viewer, self._saved_orientation, self.saved_camera
+                self.view,
+                lambda: self._view_alive,
+                self._saved_orientation,
+                self.saved_camera,
             )
 
     # The camera
@@ -883,7 +935,7 @@ class ViewEditor:
     def _click(self, position: QtCore.QPointF) -> None:
         """A click FreeCAD has handled: a board under the pointer selects
         that board, anywhere else the opening there, or nothing."""
-        if self._closed or not Shiboken.isValid(self.viewport):
+        if self._closed or not self._view_alive:
             return
         self._close_field()
         device = self._device_point(position)
@@ -949,7 +1001,7 @@ class ViewEditor:
     def _sort_press(self, position: QtCore.QPointF) -> PressKind:
         """A press on the drag arrow is the dragger's; one on a dimension's
         text opens that dimension's field."""
-        if self._closed or not Shiboken.isValid(self.viewport):
+        if self._closed or not self._view_alive:
             return "leave"
         device = self._device_point(position)
         if self._on_arrow(device):
@@ -1100,18 +1152,19 @@ class ViewEditor:
 
 def _restore_camera(
     view: View3D,
-    viewer: QtWidgets.QWidget,
+    alive: Callable[[], bool],
     orientation: FreeCAD.Rotation,
     camera: str,
 ) -> None:
     """Turn the camera back to ``orientation``, animated as the opening turn
-    is, then put it exactly where ``camera`` describes, which jumps."""
+    is, then put it exactly where ``camera`` describes, which jumps. Gives
+    up once ``alive`` says the view is gone."""
     view.setCameraOrientation(orientation)
     started_s = time.monotonic()
     opened = _editors_opened
 
     def poll() -> None:
-        if not Shiboken.isValid(viewer) or _editors_opened != opened:
+        if not alive() or _editors_opened != opened:
             return
         try:
             reached = view.getCameraOrientation().isSame(orientation, 1e-6)

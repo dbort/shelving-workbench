@@ -5,7 +5,7 @@ dimensions drawn over the boards."""
 import sys
 from collections.abc import Iterator
 from types import TracebackType
-from typing import Protocol, cast
+from typing import Literal, Protocol, cast
 
 import FreeCAD
 import FreeCADGui
@@ -480,6 +480,61 @@ def test_closing_the_document_while_the_camera_turns_back_raises_nothing(
     click_task_button("Close", driver)
     FreeCAD.closeDocument(unit.Document.Name)
     driver.pump(1000)
+    assert errors == []
+
+
+@pytest.mark.parametrize("closing", ["the document", "its 3D view"])
+def test_closing_the_view_under_the_edit_ends_it(
+    unit: FreeCAD.DocumentObject,
+    driver: ViewDriver,
+    monkeypatch: pytest.MonkeyPatch,
+    closing: Literal["the document", "its 3D view"],
+) -> None:
+    """A Python task dialog outlives its document and its view, so the edit
+    ends itself, as the Sketcher's does; a dead editor left open would hold
+    the view's widget wrapper, which PySide hands back, dead, for the next
+    view made at the same address."""
+    errors: list[BaseException] = []
+
+    def record(
+        _kind: type[BaseException], value: BaseException, _trace: TracebackType | None
+    ) -> None:
+        errors.append(value)
+
+    monkeypatch.setattr(sys, "excepthook", record)
+    doc = unit.Document
+    if closing == "its 3D view":
+        # A second view to edit in, so closing it leaves the document one
+        # and FreeCAD asks nothing.
+        FreeCADGui.runCommand("Std_ViewCreate")
+        driver = ViewDriver.for_active_view()
+    panel = edit_unit(unit, driver)
+    editor = editor_of(panel)
+    if closing == "the document":
+        FreeCAD.closeDocument(doc.Name)
+    else:
+        FreeCADGui.runCommand("Std_CloseActiveWindow")
+    driver.pump(500)
+    assert editor.closed
+    assert panel.editor is None
+    assert not FreeCADGui.Control.activeDialog()
+    assert errors == []
+
+    # Edit Unit works again, and no gate of the old edit refuses a pick.
+    fresh = FreeCAD.newDocument("Fresh")
+    fresh.UndoMode = 1
+    from freecad.Shelving.unit_ops import create_unit
+
+    container = create_unit(fresh)
+    fresh.recompute()
+    fresh_driver = ViewDriver.for_active_view()
+    other = _outside_box(fresh, "Other", 2000.0)
+    FreeCADGui.Selection.clearSelection()
+    FreeCADGui.Selection.addSelection(fresh.Name, other.Name)
+    assert FreeCADGui.Selection.getSelection()
+    reopened = edit_unit(container, fresh_driver)
+    assert editor_of(reopened).viewport.isVisible()
+    click_task_button("Close", fresh_driver)
     assert errors == []
 
 

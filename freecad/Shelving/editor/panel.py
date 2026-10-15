@@ -49,7 +49,10 @@ class FirstEvents(QtCore.QObject):
     ``names`` reaches ``target``, then stops filtering; the event itself
     is passed through untouched.
 
-    Parented to ``target``, so it lives exactly as long as the widget.
+    Parented to ``target``, so it lives exactly as long as the widget. It
+    keeps no reference to ``target``: a Python wrapper outliving its
+    widget is what PySide can hand back, dead, for the next widget made
+    at the same address.
     """
 
     def __init__(
@@ -59,7 +62,6 @@ class FirstEvents(QtCore.QObject):
         on_event: Callable[[str], None],
     ) -> None:
         super().__init__(target)
-        self._target = target
         self._pending = dict(names)
         self._on_event = on_event
         target.installEventFilter(self)
@@ -70,7 +72,7 @@ class FirstEvents(QtCore.QObject):
         if name is not None:
             self._on_event(name)
             if not self._pending:
-                self._target.removeEventFilter(self)
+                watched.removeEventFilter(self)
         return False
 
 
@@ -197,7 +199,9 @@ class EditUnitPanel:
         try:
             self._build(watch)
             if view is not None:
-                self.editor = ViewEditor(self.session, view, self._refresh)
+                self.editor = ViewEditor(
+                    self.session, view, self._refresh, self._view_closed
+                )
                 watch.lap("view editor")
         except BaseException:
             self.session.close()
@@ -343,6 +347,15 @@ class EditUnitPanel:
         self._end()
         FreeCADGui.Control.closeDialog()
 
+    def _view_closed(self) -> None:
+        """End the edit when its 3D view closes, with its document or on its
+        own, as the Sketcher's edit mode ends with its document: a Python
+        task dialog outlives both."""
+        import FreeCADGui
+
+        self._end()
+        FreeCADGui.Control.closeDialog()
+
     def _show_result(self, failure: EditFailure | None) -> None:
         if failure is not None:
             report_error(failure.message)
@@ -371,6 +384,9 @@ class EditUnitPanel:
     def _end(self) -> None:
         if self.editor is not None:
             self.editor.close()
+            # Let go of the editor, and with it its last hold on the view's
+            # widgets, without waiting for the garbage collector.
+            self.editor = None
         self.session.close()
 
     def getStandardButtons(self) -> int:

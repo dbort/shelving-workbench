@@ -73,15 +73,3 @@ log happens only when the user asks.
   design question: the group directly holding every selection is the
   obvious answer, but a box nested in a subgroup or a PartDesign Body
   makes that group the subgroup rather than the unit.
-- `bug-016` - **Edit Unit once refused with "Internal C++ object
-  (PySide6.QtWidgets.QGraphicsView) already deleted"**: seen three times
-  running in sh-040's manual QA on FreeCAD 1.1.4 for macOS, in the HiDPI
-  case after earlier cases had opened and closed editors in other
-  documents. The panel built, then building the in-view editor failed as
-  soon as it used the widget `view.graphicsView()` returned
-  (`editor/view_editor.py`), the one place besides `commands/edit_unit.py`
-  that touches a `QGraphicsView`. A stale PySide wrapper for a destroyed
-  view is the leading suspect. It did not reproduce under Xvfb. The
-  refusal now logs its traceback to the Report view: capture that the
-  next time it happens. Fix: `sh-XXX task` once the traceback shows the
-  cause.
