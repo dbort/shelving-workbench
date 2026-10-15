@@ -31,10 +31,11 @@ bug-009. Milestone M14.
       has focus: a `QWheelEvent` sent to an unfocused field leaves its
       value and the document unchanged.
 - [ ] In the view tier (sh-037), Edit Unit adds one overlay node to the
-      active view's scene graph and every exit (OK, Cancel, an exception
-      while the editor is built) removes it, restores FreeCAD's selection
-      settings and the visibility of every object, and leaves FreeCAD's
-      undo names as sh-039 specifies.
+      active view's scene graph and every exit (Close, an Undo that removes
+      the unit, an exception while the editor is built) removes it,
+      restores FreeCAD's selection settings and the visibility of every
+      object, and leaves each edit as its own undo step, as sh-039
+      specifies.
 - [ ] Opening turns the camera with `view.setCameraOrientation` to face
       the unit's front, orthographic, for a container at its default
       placement and for one moved and turned 30 degrees about Z, and
@@ -87,10 +88,10 @@ bug-009. Milestone M14.
       inner board as one edit and `Std_Delete` does not run; on a carcass
       board they report a refusal in the Notification Area and change
       nothing. Deleting a board's object from the tree view during the edit
-      leaves the overlay and panel showing the rescanned unit, and Cancel
+      leaves the overlay and panel showing the rescanned unit, and one Undo
       restores the board.
 - [ ] Ticking "Hide other objects" hides every visible object outside the
-      unit; unticking, OK and Cancel restore exactly the objects it hid,
+      unit; unticking and Close restore exactly the objects it hid,
       and FreeCAD's undo names are unchanged by either.
 - [ ] `freecad/Shelving/qa/cases/30-editor.toml` covers the new editor
       with only what no test asserts: navigation and dragging on a real
@@ -109,13 +110,14 @@ bug-009. Milestone M14.
 
 ## Advice
 
-RE-PLAN NOTES (from sh-039, 2026-10-13): the editor's edits stay as their
-own undo steps and the panel's only button is Close, so plan against
-Close where this file says OK or Cancel. FreeCAD's f(x) dialog records its
-binding as a step of its own, so a field bound to sh-039's temporary probe
-object leaves a "Remove Shelving Dimension" step at Close; bind the slim
-panel's size fields to properties of a real object, as FreeCAD's own task
-panels do, so there is no temporary object.
+FROM sh-039 (2026-10-13): the editor's edits stay as their own undo steps,
+Undo and Redo go wherever FreeCAD's history takes them with the editor
+rescanning after each, and the panel's only button is Close, as in
+Sketcher's edit mode. FreeCAD's f(x) dialog records its binding as a step
+of its own, so a field bound to sh-039's temporary probe object leaves a
+"Remove Shelving Dimension" step at Close; bind the slim panel's size
+fields to properties of a real object, as FreeCAD's own task panels do, so
+there is no temporary object.
 
 DECISIONS (user, 2026-10-12 and 2026-10-13, in the viewport-editing
 research; `06d20ab:research/viewport-editing.md` on branch
@@ -126,7 +128,7 @@ until sh-041 ships):
   container cannot enter FreeCAD's edit mode without putting workbench
   state in the document, so the session is Draft-shaped: the command opens
   the task dialog, saves the camera, adds an overlay subgraph and event
-  callbacks, and accept and reject remove them.
+  callbacks, and Close removes them.
 - **FreeCAD's picking, whole boards.** The spike's switch to its own
   picker goes away.
 - **The camera turns as the Sketcher's does:** `view.setCameraOrientation`
@@ -249,7 +251,7 @@ FINDINGS from the spike, each one a constraint
   `Std_Delete`, which removes the object behind the session. Claim both
   keys with a `ShortcutOverride` filter while focus is in the 3D view;
   they then arrive at the Coin key callback. With focus in the tree,
-  `Std_Delete` still runs; sh-039's foreign-step handling plus a rescan
+  `Std_Delete` still runs; sh-039's rescan after a step made elsewhere
   covers it.
 - **Escape in the 3D view** with no field open is harmless; keep it so.
 - **Hiding other objects** and restoring them leaves `Visibility` and the

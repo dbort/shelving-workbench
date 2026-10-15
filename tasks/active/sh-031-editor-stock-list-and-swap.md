@@ -12,7 +12,8 @@ distinct combination of thickness, FreeCAD material and color, with how many
 boards use it. Clicking a stock selects its boards and Ctrl-click adds or
 removes single boards; "Change stock…" then changes the selection's thickness,
 material or color together. That replaces the catalog's job of swapping
-materials, and puts it in the editor, scoped to one unit and undone by Cancel.
+materials, and puts it in the editor, scoped to one unit, each change one
+undo step.
 
 ## Must Have
 - [ ] `pixi run tests` green.
@@ -30,14 +31,14 @@ materials, and puts it in the editor, scoped to one unit and undone by Cancel.
       material only. Asserted on a copy of
       `tests/freecad/fixtures/woodworking_magic_start_default.FCStd`: one group
       holding the five layout boards, with the back board in none.
-- [ ] A session stock swap applies to the selected boards, inside the session
-      transaction, any combination of: a thickness, a material from FreeCAD's
+- [ ] A session stock swap applies to the selected boards, as one undo
+      step, any combination of: a thickness, a material from FreeCAD's
       library (by UUID, set as `ShapeMaterial`), and a color. Asserted
       headless on the Magic Start copy:
       - after a swap of the shelf to 12 mm and another material, the groups
         are one of four boards and one of the shelf;
       - a swap that cannot fit returns a failure and changes no board;
-      - Cancel restores every board's geometry and `ShapeMaterial`.
+      - one Undo restores every board's geometry and `ShapeMaterial`.
 - [ ] In `tests/freecad_gui/`:
       - a material swap with no explicit color repaints the boards in the
         material's appearance diffuse color;
@@ -96,14 +97,14 @@ DECISIONS (user, 2026-10-09, after the catalog-removal interview):
   after it in place while a clear opening lets it move, as stock changes
   behaved under the old Reflow All. A change that cannot fit is refused and
   changes nothing.
-- **Scope:** this unit only, inside the session's one transaction, so Cancel
-  undoes it. Left-alone objects are never listed or changed.
+- **Scope:** this unit only, as one undo step, so one Undo takes it
+  back. Left-alone objects are never listed or changed.
 - **Grain** is never touched by a swap.
 
 LAYERING, as in sh-020 and sh-021:
 - The thickness edit and the grouping key are decided in the core and tested
   in the fast suite.
-- The session owns the document, the transaction, `ShapeMaterial`, and the
+- The session owns the document, its undo steps, `ShapeMaterial`, and the
   appearance through `ViewObject`.
 - The panel only displays and dispatches.
 
