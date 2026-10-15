@@ -205,8 +205,7 @@ title = "Undo and Redo inside Edit Unit"
   instruction = ["Press Cmd-Z (Ctrl-Z on Windows or Linux) without clicking anything first."]
   expected = """
 The second shelf goes, in the elevation and the 3D view, and the panel stays
-open. Nothing happening means FreeCAD's Undo is disabled while focus sits in
-the panel: a failure worth noting, not a crash."""
+open."""
 
   [[case.step]]
   id = "redo"
@@ -228,14 +227,12 @@ the panel: a failure worth noting, not a crash."""
     "Choose Edit, Redo.",
   ]
   expected = """
-FreeCAD keeps running throughout; this is the sequence whose Redo crashes
-FreeCAD's own Gui. After the last Redo the divider is back, with one shelf
-in the unit."""
+After the last Redo the divider is back, with one shelf in the unit."""
 
   [[case.step]]
   id = "undo-list"
   instruction = [
-    "Open the drop-down list beside the toolbar's Undo button.",
+    "Open the drop-down list beside Undo on the Edit toolbar.",
     "Choose the lowest Add Shelf.",
   ]
   expected = """
