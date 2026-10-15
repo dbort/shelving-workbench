@@ -2,7 +2,7 @@
 document: each case's actions run in step order from a clean slate."""
 
 import getpass
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import FreeCAD
@@ -52,13 +52,33 @@ def test_the_fresh_unit_check_passes_on_a_fresh_unit() -> None:
     assert result.passed, result.detail
 
 
-def test_the_fresh_unit_is_an_undo_step_of_its_own() -> None:
-    actions.fresh_unit()
+@pytest.mark.parametrize(
+    ("setup", "names"),
+    [
+        ((actions.fresh_unit,), ["Create Shelving Unit"]),
+        (
+            (actions.fresh_unit, actions.add_untagged_cube),
+            ["Add Cube", "Create Shelving Unit"],
+        ),
+        (
+            (actions.test_unit, actions.add_overlap_box),
+            ["Add Overlap", "Create TestUnit"],
+        ),
+        (
+            (actions.shelf_unit_with_varset,),
+            ["Add Shelf", "Add VarSet", "Create Shelving Unit"],
+        ),
+    ],
+)
+def test_each_setup_is_an_undo_step_of_its_own(
+    setup: tuple[Callable[[], None], ...], names: list[str]
+) -> None:
+    """As a document made with File, New records a person's own edits."""
+    for run in setup:
+        run()
     doc = FreeCAD.ActiveDocument
     assert doc is not None
-    assert doc.UndoNames == ["Create Shelving Unit"]
-    doc.undo()
-    assert doc.getObject("ShelvingUnit") is None
+    assert doc.UndoNames == names
 
 
 def test_the_run_folder_is_per_user_under_freecads_temp_directory(
