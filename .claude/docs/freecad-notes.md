@@ -179,6 +179,20 @@ the resolved number, which leaves no undo step and no expression
 (`fields.py`). Clearing the expression before the abort is what makes the
 widget editable again: the abort alone leaves it read-only.
 
+## `SoDatumLabel` outside the Sketcher
+
+- Since FreeCAD 1.1.2 it draws its lines at the z its `pnts` carry, and
+  still draws its arrowheads at a fixed z near 0 (`ZARROW_TEXT_OFFSET`);
+  1.1.1 drew the lines at z 0 too. Its text is drawn without a depth test.
+- Its bounding box has no depth: z 0 whatever `pnts` say. FreeCAD's
+  orthographic camera clips just in front of the scene's box, so a label
+  lifted off a face can lose its lines and text, keeping its arrowheads,
+  when the camera looks square on. On a Mac (FreeCAD 1.1.4) it did; under
+  Xvfb (1.1.3) the margin happened to hold. The editor puts invisible
+  points at the labels' height to widen the box (`overlay.py`).
+- It reports itself transparent, so Coin sorts it with other transparent
+  shapes unless an `SoTransparencyType` of `BLEND` is in force.
+
 ## FreeCAD 1.1 offers a settings migration at the first GUI start
 
 Settings live per version under the XDG directories

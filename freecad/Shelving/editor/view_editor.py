@@ -1113,10 +1113,15 @@ def _restore_camera(
     def poll() -> None:
         if not Shiboken.isValid(viewer) or _editors_opened != opened:
             return
-        reached = view.getCameraOrientation().isSame(orientation, 1e-6)
-        if not reached and time.monotonic() - started_s < _TURN_TIMEOUT_S:
-            QtCore.QTimer.singleShot(_POLL_MS, poll)
+        try:
+            reached = view.getCameraOrientation().isSame(orientation, 1e-6)
+            if not reached and time.monotonic() - started_s < _TURN_TIMEOUT_S:
+                QtCore.QTimer.singleShot(_POLL_MS, poll)
+                return
+            view.setCamera(camera)
+        except RuntimeError:
+            # The view closed with its document during the turn; the widget
+            # wrapper does not learn of that.
             return
-        view.setCamera(camera)
 
     QtCore.QTimer.singleShot(_POLL_MS, poll)

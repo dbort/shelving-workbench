@@ -8,6 +8,7 @@ calls ``unit_ops`` functions.
 
 import os
 import time
+import traceback
 from typing import TYPE_CHECKING, Literal, Protocol, TypedDict, cast
 
 import FreeCAD
@@ -141,6 +142,9 @@ class EditUnitCommand:
             run.end("refused")
             return
         except Exception as err:  # noqa: BLE001 - report, don't crash the GUI
+            # The one-line message asks for a report; the traceback is what
+            # a developer needs from it.
+            debug_log.log("edit unit failed:\n" + traceback.format_exc())
             refusals.report_refusal(str(err), (), refusals.SUGGESTIONS["unexpected"])
             run.end("refused")
             return

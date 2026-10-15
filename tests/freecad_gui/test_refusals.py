@@ -238,7 +238,10 @@ def _assert_no_session_left(doc: FreeCAD.Document, objects: int) -> None:
 
 
 def test_edit_unit_refuses_an_unexpected_failure(
-    doc: FreeCAD.Document, recorded: list[_Refusal], monkeypatch: pytest.MonkeyPatch
+    doc: FreeCAD.Document,
+    recorded: list[_Refusal],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     def fail(_container: FreeCAD.DocumentObject, _view: object) -> None:
         raise RuntimeError("panel exploded")
@@ -250,6 +253,10 @@ def test_edit_unit_refuses_an_unexpected_failure(
     assert recorded == [
         _Refusal("panel exploded", (), refusals.SUGGESTIONS["unexpected"])
     ]
+    # Where it failed reaches the Report view, for the developer the
+    # refusal asks to be told.
+    report = capsys.readouterr().out
+    assert "Traceback" in report and "panel exploded" in report
 
 
 def test_edit_unit_refuses_a_document_with_no_3d_view(

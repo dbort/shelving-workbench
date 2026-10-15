@@ -2,7 +2,9 @@
 every way out puts back, the camera's turn, and the openings and
 dimensions drawn over the boards."""
 
+import sys
 from collections.abc import Iterator
+from types import TracebackType
 from typing import Protocol, cast
 
 import FreeCAD
@@ -432,6 +434,53 @@ def test_each_region_in_a_run_has_a_sketcher_dimension(
     assert editor_of(panel).frame.side == "back"
     check()
     click_task_button("Close", driver)
+
+
+def test_the_scene_bounds_reach_every_dimension(
+    placed_unit: FreeCAD.DocumentObject, driver: ViewDriver
+) -> None:
+    """FreeCAD's orthographic camera clips just in front of the scene's
+    bounding box, and ``SoDatumLabel`` gives its own box no depth: unless
+    the overlay's box reaches the dimensions, a camera square on to the unit
+    can clip their lines and text."""
+    panel = edit_unit(placed_unit, driver)
+    add_board(panel, "vertical", driver)
+    editor = editor_of(panel)
+    # An opening shows no drag arrow, which stands higher than the
+    # dimensions and would stretch the box over them.
+    editor.select(bay_ids(panel.session.unit.root)[0])
+    root = editor.root
+    low, high = overlay_nodes.bounds(root)
+    tolerance_mm = 1e-3
+    for label in overlay_nodes.labels(root):
+        for point in label.points:
+            for axis in ("x", "y", "z"):
+                value = getattr(point, axis)
+                assert getattr(low, axis) - tolerance_mm <= value, (label, axis)
+                assert value <= getattr(high, axis) + tolerance_mm, (label, axis)
+    click_task_button("Close", driver)
+
+
+def test_closing_the_document_while_the_camera_turns_back_raises_nothing(
+    unit: FreeCAD.DocumentObject,
+    driver: ViewDriver,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    errors: list[BaseException] = []
+
+    def record(
+        _kind: type[BaseException], value: BaseException, _trace: TracebackType | None
+    ) -> None:
+        errors.append(value)
+
+    monkeypatch.setattr(sys, "excepthook", record)
+    driver.view.viewIsometric()
+    driver.pump(800)
+    edit_unit(unit, driver)
+    click_task_button("Close", driver)
+    FreeCAD.closeDocument(unit.Document.Name)
+    driver.pump(1000)
+    assert errors == []
 
 
 def test_hide_other_objects_hides_and_restores_exactly_those_it_hid(

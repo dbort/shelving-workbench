@@ -95,3 +95,16 @@ def in_scene(scene_graph: _Coin, node: _Coin) -> bool:
         scene_graph.getChild(index) == node
         for index in range(scene_graph.getNumChildren())
     )
+
+
+def bounds(root: _Coin) -> tuple[FreeCAD.Vector, FreeCAD.Vector]:
+    """The low and high corners of ``root``'s bounding box, in the
+    coordinates of its parent: the box FreeCAD's camera fits its clipping
+    planes to."""
+    action = coin.SoGetBoundingBoxAction(coin.SbViewportRegion(400, 300))
+    action.apply(root)
+    box = action.getBoundingBox()
+    return (
+        FreeCAD.Vector(*box.getMin().getValue()),
+        FreeCAD.Vector(*box.getMax().getValue()),
+    )

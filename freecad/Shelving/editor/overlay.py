@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import math
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, TypeAlias
 
@@ -204,7 +205,32 @@ def drawing_node(
         )
     for label in overlay.labels:
         dimensions.addChild(datum_label_node(label, 2 * lift_mm, style, normal))
+    if overlay.labels:
+        dimensions.addChild(_label_bounds_node(overlay.labels, 3 * lift_mm))
     return content
+
+
+def _label_bounds_node(labels: Sequence[DimensionLabel], z_mm: float) -> Coin:
+    """Invisible points just past the dimensions' height, so the scene's
+    bounding box reaches them. ``SoDatumLabel`` gives its own box no depth,
+    and FreeCAD's orthographic camera clips just in front of the scene's
+    box: with the camera square on to the unit, it clipped the dimensions'
+    lines and text and left only their arrowheads, which the node draws on
+    the face itself."""
+    group = coin.SoSeparator()
+    style = coin.SoDrawStyle()
+    style.style = coin.SoDrawStyle.INVISIBLE
+    corners = [
+        [h_mm, v_mm, z_mm]
+        for label in labels
+        for h_mm, v_mm in (label.start_mm, label.end_mm, label.text_at_mm)
+    ]
+    coordinates = coin.SoCoordinate3()
+    coordinates.point.setValues(0, len(corners), corners)
+    points = coin.SoPointSet()
+    for node in (style, coordinates, points):
+        group.addChild(node)
+    return group
 
 
 def arrow_geometry(rgb: RGB) -> Coin:
