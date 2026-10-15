@@ -52,6 +52,15 @@ def test_the_fresh_unit_check_passes_on_a_fresh_unit() -> None:
     assert result.passed, result.detail
 
 
+def test_the_undoable_unit_is_an_undo_step_of_its_own() -> None:
+    actions.undoable_unit()
+    doc = FreeCAD.ActiveDocument
+    assert doc is not None
+    assert doc.UndoNames == ["Create Shelving Unit"]
+    doc.undo()
+    assert doc.getObject("ShelvingUnit") is None
+
+
 def test_the_run_folder_is_per_user_under_freecads_temp_directory(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

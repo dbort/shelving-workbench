@@ -186,12 +186,8 @@ title = "Undo and Redo inside Edit Unit"
 
   [[case.step]]
   id = "start"
-  instruction = [
-    "Choose File, New.",
-    "Run Create Unit.",
-    "Select the container.",
-    "Run Edit Unit.",
-  ]
+  action = "undoable_unit"
+  instruction = ["Select the container.", "Run Edit Unit."]
   expected = "The panel opens on the new unit, one open bay between four boards."
 
   [[case.step]]

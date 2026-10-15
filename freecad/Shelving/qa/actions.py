@@ -91,6 +91,21 @@ def fresh_unit() -> None:
     doc.recompute()
 
 
+@action("undoable_unit", label="Create a unit in a new document, as an undo step")
+def undoable_unit() -> None:
+    import FreeCAD
+
+    from freecad.Shelving.unit_ops import create_unit
+
+    doc = FreeCAD.newDocument("QA_Undo")
+    # A scripted document starts with undo off; the case undoes Create Unit.
+    doc.UndoMode = 1
+    doc.openTransaction("Create Shelving Unit")
+    create_unit(doc)
+    doc.commitTransaction()
+    doc.recompute()
+
+
 @action("shelf_unit_with_varset", label="Create a shelf unit and VarSet.Len = 300 mm")
 def shelf_unit_with_varset() -> None:
     from freecad.Shelving.core.layout import Bay, Division, Region
