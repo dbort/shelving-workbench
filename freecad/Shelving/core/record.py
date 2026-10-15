@@ -124,7 +124,7 @@ def _iter_region_rules(region: Region) -> Iterator[tuple[str, SizeRule]]:
 
 
 def region_keys(unit: Unit) -> Mapping[str, str]:
-    """Each region's id in ``unit``, the root's aside, keyed by its
+    """Each region's id in ``unit`` except the root's, keyed by its
     :func:`rule_key`: the key a rescan, which mints fresh region ids,
     finds the same region by."""
     return {key: item.id for key, item in _iter_keyed_regions(unit.root)}

@@ -227,7 +227,8 @@ class Session:
         self.left_alone: tuple[LeftAlone, ...] = self._unplaced(self._set_aside_reasons)
         # The object the panel's dimension field binds to, so it can resolve
         # an expression naming a VarSet; exists only between open() and
-        # close(), made and removed outside any undo step.
+        # close(), made outside any undo step and removed outside one unless
+        # a step changed it.
         self.probe: FreeCAD.DocumentObject | None = None
         self._probe_name = ""
         # The board being dragged and the pointer's offset from its low
@@ -616,7 +617,7 @@ class Session:
         the region before it. Boards joined to it through locked regions
         move with it, and only the first unlocked region on each side
         changes size. Returns an :class:`EditFailure`, leaving the last good
-        state, when this step is refused or would not solve, or no drag is in
+        state, when this move is refused or would not solve, or no drag is in
         progress."""
         if self._drag is None:
             return EditFailure("no board is being dragged", None)

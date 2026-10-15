@@ -766,8 +766,8 @@ class EditUnitPanel:
         self._show_result(self.session.delete_untagged(self._checked_untagged()))
 
     def _follow_document(self) -> None:
-        """Show the unit an Undo or Redo left, or close, as Sketcher's edit
-        mode ends when its sketch is undone, when it left none."""
+        """Show the unit an Undo or Redo left, or close the panel when it
+        left none, as Sketcher's edit mode ends when its sketch is undone."""
         if not self.session.lost:
             self._refresh()
             return
