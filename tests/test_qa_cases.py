@@ -24,7 +24,7 @@ def test_every_case_file_loads() -> None:
         "scan.refusal",
         "editor.one-session",
     ]
-    assert len(cases) == 5
+    assert len(cases) == 6
     assert all(case.steps for case in cases)
 
 

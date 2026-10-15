@@ -179,3 +179,81 @@ height that worked."""
   expected = """
 The panel closes with the unit at its last height, and the Undo takes back
 only the last size change, one arrow step."""
+
+[[case]]
+id = "editor.undo"
+title = "Undo and Redo inside Edit Unit"
+
+  [[case.step]]
+  id = "start"
+  instruction = [
+    "Choose File, New.",
+    "Run Create Unit.",
+    "Select the container.",
+    "Run Edit Unit.",
+  ]
+  expected = "The panel opens on the new unit, one open bay between four boards."
+
+  [[case.step]]
+  id = "add-shelves"
+  instruction = [
+    "Click the open bay.",
+    "Click Add Shelf.",
+    "Click the lower bay.",
+    "Click Add Shelf.",
+  ]
+  expected = "Two shelves, in the elevation and the 3D view."
+
+  [[case.step]]
+  id = "keyboard-undo"
+  instruction = ["Press Cmd-Z (Ctrl-Z on Windows or Linux) without clicking anything first."]
+  expected = """
+The second shelf goes, in the elevation and the 3D view, and the panel stays
+open. Nothing happening means FreeCAD's Undo is disabled while focus sits in
+the panel: a failure worth noting, not a crash."""
+
+  [[case.step]]
+  id = "redo"
+  instruction = ["Click an empty spot in the 3D view.", "Choose Edit, Redo."]
+  expected = "The second shelf comes back, and the panel shows it."
+
+  [[case.step]]
+  id = "redo-after-undo"
+  instruction = [
+    "Click the upper shelf in the elevation.",
+    "Click Delete.",
+    "Click an empty spot in the 3D view.",
+    "Choose Edit, Undo.",
+    "Choose Edit, Undo.",
+    "Click a bay in the elevation.",
+    "Click Add Divider.",
+    "Click an empty spot in the 3D view.",
+    "Choose Edit, Undo.",
+    "Choose Edit, Redo.",
+  ]
+  expected = """
+FreeCAD keeps running throughout; this is the sequence whose Redo crashes
+FreeCAD's own Gui. After the last Redo the divider is back, with one shelf
+in the unit."""
+
+  [[case.step]]
+  id = "undo-list"
+  instruction = [
+    "Open the drop-down list beside the toolbar's Undo button.",
+    "Choose the lowest Add Shelf.",
+  ]
+  expected = """
+Every edit down to that one is undone in one go: the unit is one open bay
+again, the panel shows it, and the panel stays open."""
+
+  [[case.step]]
+  id = "undo-the-unit"
+  instruction = ["Choose Edit, Undo."]
+  expected = """
+Create Unit is undone: the unit disappears from the 3D view and the tree,
+and the panel closes."""
+
+  [[case.step]]
+  id = "redo-the-unit"
+  instruction = ["Choose Edit, Redo."]
+  expected = "The unit comes back as Create Unit made it, with no panel open."
