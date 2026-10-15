@@ -341,3 +341,6 @@ the wrapper's methods, which reach the new view.
 - **N2: FreeCAD has its own auto-close for a Python task dialog's document** (`freecad/Shelving/editor/panel.py:350-357`): Assembly's `setAutoCloseOnDeletedDocument(True)` and `setDocumentName`; use it for the document case or say in Advice why one signal covers both.
 - **N3: `_view_closed` closes whatever dialog is active, even after the panel has already ended** (`freecad/Shelving/editor/panel.py:350`).
 - **N4: `_DeleteKeys` still keeps the viewer wrapper** (`freecad/Shelving/editor/view_editor.py:254`).
+
+### Round 6: REJECTED
+- **F1: The extra-view path the user accepted raises on every panel edit and Undo, and no test covers it any more** (`freecad/Shelving/editor/view_editor.py:731`, `:562`; `freecad/Shelving/editor/panel.py:340`; `tests/freecad_view/test_editor_drawing.py:486`): after an extra 3D view closes mid-edit, `ViewEditor.rebuild` raises `RuntimeError` from the dead view on every resize and Undo, `_follow_document` then skips the panel refresh, and `close()` cannot tell the view is gone because `Shiboken.isValid(self._viewer)` stays True. Have the editor notice its view is gone and skip view work from then on, base `view_alive` on something that goes false, and add a view test of the accepted behavior.
