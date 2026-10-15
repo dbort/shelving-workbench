@@ -358,3 +358,20 @@ its Close button would.
 - **N1: The editor keeps its selection gate until the next redraw after its view closes** (`freecad/Shelving/editor/view_editor.py:456`, `:510`, `:515`): in the remaining view, objects outside the unit are refused until the first redraw stands the editor down.
 - **N2: "Hide other objects" stays ticked and enabled after the editor stands down** (`freecad/Shelving/editor/panel.py:294`, `freecad/Shelving/editor/view_editor.py:864`).
 - **N3: The new test calls a private panel method and reassigns a fixture parameter** (`tests/freecad_view/test_editor_drawing.py:557`, `:555`).
+
+### Round 8: APPROVED
+
+QA fixes in 99403f2: dimensions keep their lock color when selected,
+`_new_document` rejects a leftover task dialog through public API only,
+and the reworded QA cases match the undo steps the setups make.
+`pixi run tests` green.
+
+- N1 (non-blocking): no test selects a locked region
+  (`tests/test_editor_elevation.py:172`,
+  `tests/freecad_view/test_editor_drawing.py:384`); both select the
+  unlocked upper bay.
+- N2 (non-blocking): `_new_document`'s docstring does not state that it
+  rejects an open task dialog when the GUI is up
+  (`freecad/Shelving/qa/actions.py:46`).
+- N3 (non-blocking): `freecad/Shelving/qa/cases/30-editor.toml:225` runs to
+  82 characters, past the file's wrap width.
