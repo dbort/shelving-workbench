@@ -5,7 +5,7 @@ dimensions drawn over the boards."""
 import sys
 from collections.abc import Iterator
 from types import TracebackType
-from typing import Literal, Protocol, cast
+from typing import Protocol, cast
 
 import FreeCAD
 import FreeCADGui
@@ -483,17 +483,15 @@ def test_closing_the_document_while_the_camera_turns_back_raises_nothing(
     assert errors == []
 
 
-@pytest.mark.parametrize("closing", ["the document", "its 3D view"])
-def test_closing_the_view_under_the_edit_ends_it(
+def test_closing_the_document_ends_the_edit(
     unit: FreeCAD.DocumentObject,
     driver: ViewDriver,
     monkeypatch: pytest.MonkeyPatch,
-    closing: Literal["the document", "its 3D view"],
 ) -> None:
-    """A Python task dialog outlives its document and its view, so the edit
-    ends itself, as the Sketcher's does; a dead editor left open would hold
-    the view's widget wrapper, which PySide hands back, dead, for the next
-    view made at the same address."""
+    """FreeCAD closes the task dialog with its document, as Assembly asks it
+    to, and the editor lets go of the view's widgets: a dead editor left
+    open would hold the view's widget wrapper, which PySide hands back,
+    dead, for the next view made at the same address."""
     errors: list[BaseException] = []
 
     def record(
@@ -502,18 +500,9 @@ def test_closing_the_view_under_the_edit_ends_it(
         errors.append(value)
 
     monkeypatch.setattr(sys, "excepthook", record)
-    doc = unit.Document
-    if closing == "its 3D view":
-        # A second view to edit in, so closing it leaves the document one
-        # and FreeCAD asks nothing.
-        FreeCADGui.runCommand("Std_ViewCreate")
-        driver = ViewDriver.for_active_view()
     panel = edit_unit(unit, driver)
     editor = editor_of(panel)
-    if closing == "the document":
-        FreeCAD.closeDocument(doc.Name)
-    else:
-        FreeCADGui.runCommand("Std_CloseActiveWindow")
+    FreeCAD.closeDocument(unit.Document.Name)
     driver.pump(500)
     assert editor.closed
     assert panel.editor is None

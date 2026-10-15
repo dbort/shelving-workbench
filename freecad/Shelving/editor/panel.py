@@ -199,9 +199,7 @@ class EditUnitPanel:
         try:
             self._build(watch)
             if view is not None:
-                self.editor = ViewEditor(
-                    self.session, view, self._refresh, self._view_closed
-                )
+                self.editor = ViewEditor(self.session, view, self._refresh)
                 watch.lap("view editor")
         except BaseException:
             self.session.close()
@@ -347,14 +345,11 @@ class EditUnitPanel:
         self._end()
         FreeCADGui.Control.closeDialog()
 
-    def _view_closed(self) -> None:
-        """End the edit when its 3D view closes, with its document or on its
-        own, as the Sketcher's edit mode ends with its document: a Python
-        task dialog outlives both."""
-        import FreeCADGui
-
+    def autoClosedOnDeletedDocument(self) -> None:
+        """FreeCAD's call as it closes the dialog with its document, when the
+        command asked it to (``setAutoCloseOnDeletedDocument``), as
+        Assembly's task panels do."""
         self._end()
-        FreeCADGui.Control.closeDialog()
 
     def _show_result(self, failure: EditFailure | None) -> None:
         if failure is not None:

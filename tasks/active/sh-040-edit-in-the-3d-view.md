@@ -295,6 +295,16 @@ STANDING OBLIGATIONS (`CLAUDE.md`):
   Notification Area, as the editor's refusals do today; the spike's log
   file does not come along.
 
+CLOSING (user, 2026-10-15, after QA): the edit ends with its document
+through FreeCAD's own hook, `setAutoCloseOnDeletedDocument` on the dialog
+`showDialog` returns, as Assembly's task panels do, and the editor lets go
+of the view's widgets when it closes. No watcher of the 3D view's own
+closing: closing a document's extra 3D view while editing in it leaves the
+panel open until Close, accepted to keep the close path to FreeCAD's
+mechanism. A stale PySide wrapper held outside the editor, which a new view
+at the same address can be handed, is out of scope: the editor uses only
+the wrapper's methods, which reach the new view.
+
 ## Plan
 - [x] **Step 1** (`freecad/Shelving/editor/`): The elevation frame and the overlay drawing (faces, outlines, dimensions, back face, colors, sizes), with tests that need no GUI for the frame math and placement.
 - [x] **Step 2** (`freecad/Shelving/editor/`, `freecad/Shelving/commands/edit_unit.py`): The view editor's lifecycle: camera turn, fit and restore, overlay and callbacks added and removed on every exit, selection gate and whole-board picking, opening picks, hide-others.

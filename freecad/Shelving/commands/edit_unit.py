@@ -28,6 +28,14 @@ class _CommandResources(TypedDict):
     CmdType: Literal["NoTransaction"]
 
 
+class _TaskDialog(Protocol):
+    """The dialog ``FreeCADGui.Control.showDialog`` returns; the stubs do
+    not declare it."""
+
+    def setDocumentName(self, name: str, /) -> None: ...
+    def setAutoCloseOnDeletedDocument(self, close: bool, /) -> None: ...
+
+
 class _GuiDocument(Protocol):
     ActiveView: object
 
@@ -184,7 +192,7 @@ class EditUnitCommand:
             else None
         )
         try:
-            Gui.Control.showDialog(panel)
+            dialog = cast("_TaskDialog", Gui.Control.showDialog(panel))
         except Exception as err:  # noqa: BLE001 - the session must close
             # The session and the in-view editor would otherwise stay with no
             # dialog left to end them. showDialog raises RuntimeError when
@@ -197,6 +205,10 @@ class EditUnitCommand:
             )
             run.end("refused")
             return
+        # A Python task dialog otherwise outlives its document; Assembly's
+        # task panels ask for the same.
+        dialog.setDocumentName(container.Document.Name)
+        dialog.setAutoCloseOnDeletedDocument(True)
         run.lap("showDialog")
         if ancestors is not None:
             ancestors.snapshot("after showDialog")
