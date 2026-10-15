@@ -215,8 +215,8 @@ def _label_bounds_node(labels: Sequence[DimensionLabel], z_mm: float) -> Coin:
     bounding box reaches them. ``SoDatumLabel`` gives its own box no depth,
     and FreeCAD's orthographic camera clips just in front of the scene's
     box: with the camera square on to the unit, it clipped the dimensions'
-    lines and text and left only their arrowheads, which the node draws on
-    the face itself."""
+    lines and text and left only their arrowheads, which ``SoDatumLabel``
+    draws on the face itself."""
     group = coin.SoSeparator()
     style = coin.SoDrawStyle()
     style.style = coin.SoDrawStyle.INVISIBLE

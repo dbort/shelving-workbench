@@ -319,3 +319,8 @@ STANDING OBLIGATIONS (`CLAUDE.md`):
 
 ### Round 3: APPROVED
 - All three round 2 findings are fixed: the size fields' properties carry `Prop_NoPersist` and a save during the session writes none of them; `Session.close` survives a destroyed container; the view test's `kind` is a `Literal`. Nothing new blocks.
+
+### Round 4: APPROVED
+- Reviewed the QA fixes in abe363d: the overlay's bounding box reaches the dimensions, so a square-on camera no longer clips their lines and text (confirmed by the user on FreeCAD 1.1.4 for macOS); the camera restore survives its document closing; an unexpected Edit Unit refusal logs its traceback. Both new view tests fail without their fixes.
+- **N1: The unreproduced "QGraphicsView already deleted" refusal is recorded only in conversation** (`freecad/Shelving/commands/edit_unit.py:147`): give it a bug-log entry so the next QA run captures the Report view.
+- **N2: Ambiguous referent in the new docstring** (`freecad/Shelving/editor/overlay.py:214`): name `SoDatumLabel`.
