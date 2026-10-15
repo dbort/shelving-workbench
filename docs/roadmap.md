@@ -46,7 +46,7 @@ steps exactly as written.
 
 - [x] sh-037: 3D-view tests under Xvfb
 - [x] sh-038: locked openings, and a drag that moves only what it drags
-- [ ] sh-039: Undo and Redo inside an edit (blocked on sh-037)
+- [x] sh-039: Undo and Redo inside an edit (blocked on sh-037)
 - [ ] sh-040: Edit Unit works in the 3D view (blocked on sh-037, sh-038
   and sh-039)
 - [ ] sh-041: padlocks lock and unlock openings in the view (blocked on

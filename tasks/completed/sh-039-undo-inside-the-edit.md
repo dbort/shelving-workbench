@@ -15,45 +15,45 @@ reverts the whole session and a second reverts what came before it, under
 an open panel (bug-015). Milestone M14.
 
 ## Must Have
-- [ ] `pixi run tests` green; `pyrefly check` clean over the changed code.
-- [ ] Each edit made through `Session` is one FreeCAD transaction named
+- [x] `pixi run tests` green; `pyrefly check` clean over the changed code.
+- [x] Each edit made through `Session` is one FreeCAD transaction named
       for it, and a refused edit leaves none: a split, a merge, a typed
       size, a basis change, a unit resize, a whole drag from `begin_drag`
       to `end_drag` however many steps it took, a lock or unlock
       (sh-038), and deleting a left-alone object.
-- [ ] In the view tier (sh-037), with Edit Unit open on a unit after
+- [x] In the view tier (sh-037), with Edit Unit open on a unit after
       several edits, each `Std_Undo` steps back exactly one edit and each
       `Std_Redo` forward one: after every step the document's boards and
       the session's unit (every solved space) equal the state that edit
       produced, the panel shows that state, and a selected node that
       still exists stays selected.
-- [ ] `Std_Undo` past the session's first edit undoes the steps before the
+- [x] `Std_Undo` past the session's first edit undoes the steps before the
       session as FreeCAD always does, and the panel follows; when an Undo
       removes the unit or leaves it unreadable (Create Unit undone), the
       panel closes, and `Std_Redo` then works as it does without a panel.
-- [ ] The panel's only button is Close. Close leaves each edit as its own
+- [x] The panel's only button is Close. Close leaves each edit as its own
       undo step, removes the probe object without adding a step unless a
       step changed it (an f(x) binding does; Close then removes it in a
       "Remove Shelving Dimension" step), and leaves the Redo list as it
       was; in a session that used no f(x), `Std_Undo` after Close steps
       back exactly one edit. A session that made no edit, or only clicks and
       refused edits, leaves the undo and Redo lists as it found them.
-- [ ] A shelf added beside a board whose color and material were set
+- [x] A shelf added beside a board whose color and material were set
       keeps that color and material through an Undo and Redo of a later
       edit, and after Close.
-- [ ] An Undo during a drag ends the drag, and the session then matches
+- [x] An Undo during a drag ends the drag, and the session then matches
       the document.
-- [ ] FreeCAD's Gui Redo use-after-free (below) cannot be reached through
+- [x] FreeCAD's Gui Redo use-after-free (below) cannot be reached through
       the editor: a test runs the sequence that crashes plain FreeCAD
       (create, delete, undo, undo, a new edit, undo, redo, all inside a
       session through `Std_Undo` and `Std_Redo`) in a FreeCAD GUI process
       started with `MALLOC_PERTURB_=165` and
       `GLIBC_TUNABLES=glibc.malloc.tcache_count=0`, and the process exits
       cleanly.
-- [ ] `editor.one-session`'s "Run Edit, Undo once" step is gone from
+- [x] `editor.one-session`'s "Run Edit, Undo once" step is gone from
       `freecad/Shelving/qa/cases/30-editor.toml`, and every QA step that
       clicked Cancel clicks Close with its expectation to match.
-- [ ] `bug-015` is deleted from `.claude/docs/bug-log.md`.
+- [x] `bug-015` is deleted from `.claude/docs/bug-log.md`.
 
 ## Advice
 
