@@ -169,8 +169,8 @@ def test_a_dimension_reads_its_size_and_color() -> None:
     assert by_id["lower"].color == "locked"
     assert by_id["upper"].color == "unlocked"
     assert by_id["upper"].text == "346"
-    by_id = {label.region_id: label for label in _labels("upper")}
-    assert by_id["upper"].color == "selected"
+    selected = {label.region_id: label for label in _labels("upper")}
+    assert selected["upper"].color == "unlocked"
 
 
 def test_a_spacing_spans_through_the_next_board() -> None:

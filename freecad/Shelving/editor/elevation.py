@@ -43,7 +43,7 @@ from freecad.Shelving.core.solver import LayoutSolveError, solve
 Side = Literal["front", "back"]
 FaceKind = Literal["bay", "void"]
 OutlineRole = Literal["region", "selected"]
-LabelColor = Literal["locked", "unlocked", "selected"]
+LabelColor = Literal["locked", "unlocked"]
 
 # How far in front of the face outlines and dimensions sit, so they do not
 # z-fight with the board faces they lie on. Opening faces sit on the face
@@ -351,7 +351,6 @@ class _Planner:
     unit: Unit
     spaces: Mapping[str, Space]
     frame: ElevationFrame
-    selected_id: str | None
     outer_rows: _OuterRows = field(default_factory=dict)
 
     @property
@@ -453,10 +452,9 @@ class _Planner:
                 start_mm, end_mm = (low_mm, cross_mm), (high_mm, cross_mm)
             else:
                 start_mm, end_mm = (cross_mm, low_mm), (cross_mm, high_mm)
-            if item.id == self.selected_id:
-                color: LabelColor = "selected"
-            else:
-                color = "locked" if is_locked(item) else "unlocked"
+            # A selected region keeps its lock color, as the Sketcher's
+            # constraints keep theirs when their geometry is selected.
+            color: LabelColor = "locked" if is_locked(item) else "unlocked"
             size_mm = measure(self.unit, item.id, self.spaces).size_mm
             yield DimensionLabel(
                 region_id=item.id,
@@ -478,7 +476,7 @@ def plan_overlay(
     a face per bay and void, an outline per opening and for the selected
     node, and a dimension for every region in a run along an elevation
     axis. ``spaces`` must hold every node of ``unit``."""
-    planner = _Planner(unit, spaces, frame, selected_id)
+    planner = _Planner(unit, spaces, frame)
     faces: list[Face] = []
     outlines: list[Outline] = []
     labels: list[DimensionLabel] = []
@@ -492,9 +490,6 @@ def plan_overlay(
         rect = frame.rect(spaces[node.id])
         if isinstance(node, Bay | Void):
             kind: FaceKind = "void" if isinstance(node, Void) else "bay"
-            # The selection shows as an outline only: a fill in the
-            # selection color would hide the selected dimensions, drawn in
-            # that color too.
             faces.append(Face(node.id, kind, rect))
         if selected:
             outlines.append(Outline(rect, "selected"))
@@ -607,7 +602,7 @@ def arrow_for(
         return None
     rect = frame.rect(space)
     before = frame.rect(spaces[before_id])
-    longest_mm = _Planner(unit, spaces, frame, None).longest_mm
+    longest_mm = _Planner(unit, spaces, frame).longest_mm
     beside_mm = _ARROW_BESIDE_FRACTION * longest_mm
     vertical = axis == frame.vertical
     center_h_mm, center_v_mm = rect.center_mm

@@ -116,8 +116,8 @@ it closes, the lower bay is 280 mm and no new object appears in the tree."""
     "Open the drop-down list beside Undo on the Edit toolbar.",
   ]
   expected = """
-Set Size is the list's first entry, with no expression step and no Shelving
-object step above or below it."""
+Set Size is the list's first entry. Below it are only the steps the setup
+button made: Add Shelf, Add VarSet and Create Shelving Unit."""
 
 [[case]]
 id = "editor.large-unit"
@@ -222,10 +222,10 @@ again, and the panel stays open."""
   id = "undo-the-unit"
   instruction = ["Choose Edit, Undo."]
   expected = """
-Create Unit is undone: the unit disappears from the 3D view and the tree,
+Create Shelving Unit is undone: the unit disappears from the 3D view and the tree,
 the panel closes, and nothing is left drawn in the view."""
 
   [[case.step]]
   id = "redo-the-unit"
   instruction = ["Choose Edit, Redo."]
-  expected = "The unit comes back as Create Unit made it, with no panel open."
+  expected = "The unit comes back as one open bay, with no panel open."

@@ -51,8 +51,8 @@ bug-009. Milestone M14.
 - [ ] One `SoDatumLabel` per region in each run that lies in the
       elevation plane, reading the region's size as its basis measures
       it, colored with the View preferences `ConstrainedDimColor` when the
-      region is locked, `NonDrivingConstrDimColor` when unlocked, and
-      `SelectionColor` when selected, and sized as the Sketcher sizes its
+      region is locked and `NonDrivingConstrDimColor` when unlocked,
+      selected or not, and sized as the Sketcher sizes its
       dimensions (`EditSketcherFontSize`, the device pixel ratio and the
       screen's logical DPI). Its `norm` is the unit front face's normal in
       document coordinates on either face.
@@ -172,8 +172,10 @@ FINDINGS from the spike, each one a constraint
   counts as translucent, so use an `SoTransparencyType` of `BLEND` and
   draw fills, then outlines, then dimensions, with fills writing no depth
   (`SoDepthBuffer`), since labels draw their lines in the face's plane.
-- **Selection shows as an outline only:** a fill in the selection color
-  hides the selected dimensions, which use that color too.
+- **Selection shows as an outline only.** A selected region's dimensions
+  keep their lock color, as the Sketcher's constraints keep theirs when
+  their geometry is selected (user, 2026-10-15, after QA showed the
+  selection color hid whether an opening was locked).
 - **Overlay on the face the camera sees:** a camera `SoNodeSensor` decides
   the side; the sensor fires mid-render, so switch sides from a
   `QTimer.singleShot(0, ...)`. Recompute both faces on every redraw: a
@@ -304,6 +306,12 @@ panel open until Close, accepted to keep the close path to FreeCAD's
 mechanism. A stale PySide wrapper held outside the editor, which a new view
 at the same address can be handed, is out of scope: the editor uses only
 the wrapper's methods, which reach the new view.
+
+QA SETUP (user, 2026-10-15, after QA): a case should not start with the
+last case's Edit Unit panel open. The QA wizard contract forbids dock
+changes in this task, so the setup actions that open a new document reject
+any open task dialog first, through `Gui.Control.activeTaskDialog()`, as
+its Close button would.
 
 ## Plan
 - [x] **Step 1** (`freecad/Shelving/editor/`): The elevation frame and the overlay drawing (faces, outlines, dimensions, back face, colors, sizes), with tests that need no GUI for the frame math and placement.

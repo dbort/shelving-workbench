@@ -21,6 +21,7 @@ from freecad.Shelving.editor.elevation import (
     label_size_pt,
 )
 from freecad.Shelving.editor.panel import EditUnitPanel
+from freecad.Shelving.qa import actions as qa_actions
 from tests.freecad_view import overlay_nodes
 from tests.freecad_view.editor import (
     add_board,
@@ -400,9 +401,7 @@ def test_each_region_in_a_run_has_a_sketcher_dimension(
             for item in region.items:
                 if isinstance(item, Board):
                     continue
-                if item.id == session.selected_id:
-                    rgb = _rgb("SelectionColor", 0x1CAD1CFF)
-                elif is_locked(item):
+                if is_locked(item):
                     rgb = _rgb("ConstrainedDimColor", 0)
                 else:
                     rgb = _rgb("NonDrivingConstrDimColor", 0)
@@ -525,6 +524,22 @@ def test_closing_the_document_ends_the_edit(
     assert editor_of(reopened).viewport.isVisible()
     click_task_button("Close", fresh_driver)
     assert errors == []
+
+
+def test_a_qa_setup_closes_the_panel_the_last_case_left_open(
+    unit: FreeCAD.DocumentObject, driver: ViewDriver
+) -> None:
+    panel = edit_unit(unit, driver)
+    editor = editor_of(panel)
+    qa_actions.fresh_unit()
+    driver.pump()
+    assert editor.closed
+    assert panel.editor is None
+    assert not FreeCADGui.Control.activeDialog()
+    doc = cast("FreeCAD.Document", FreeCAD.ActiveDocument)
+    container = cast("FreeCAD.DocumentObject", doc.getObject("ShelvingUnit"))
+    reopened = edit_unit(container, ViewDriver.for_active_view())
+    assert reopened.editor is not None
 
 
 def test_closing_the_3d_view_under_the_edit_leaves_the_panel_working(

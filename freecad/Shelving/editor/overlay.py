@@ -66,8 +66,6 @@ class Style:
     label_size_pt: int
 
     def label_rgb(self, color: LabelColor) -> RGB:
-        if color == "selected":
-            return self.selected_rgb
         return self.locked_rgb if color == "locked" else self.unlocked_rgb
 
 

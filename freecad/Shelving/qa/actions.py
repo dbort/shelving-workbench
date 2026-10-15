@@ -48,6 +48,14 @@ def _new_document(name: str) -> FreeCAD.Document:
     scripted document starts with it off."""
     import FreeCAD
 
+    if FreeCAD.GuiUp:
+        import FreeCADGui
+
+        # A panel the last case left open would refuse the new case's Edit
+        # Unit; closing it as its Close button does lets it clean up.
+        dialog = FreeCADGui.Control.activeTaskDialog()
+        if dialog is not None:
+            dialog.reject()
     doc = FreeCAD.newDocument(name)
     doc.UndoMode = 1
     return doc
