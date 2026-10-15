@@ -76,12 +76,18 @@ UnitDimension = Literal["width", "depth", "height"]
 # dimension.
 SizeField = Literal["width", "depth", "height", "opening"]
 
+# FreeCAD's Prop_NoPersist property attribute; setPropertyStatus does not
+# accept it by name.
+_NO_PERSIST = 32
+
 # The container property each size field binds to, so the field resolves
 # names of document values and offers FreeCAD's f(x) dialog. The session
-# adds them at open() and removes them at close(), hidden, never saved and
-# outside any undo step: every container type can carry them, and none can
-# already hold an expression of the user's. One each, so an expression
-# typed into one field never shows up in another.
+# adds them at open() and removes them at close(), hidden and outside any
+# undo step, with FreeCAD's Prop_NoPersist, which keeps a save during the
+# edit from writing them into the file (Transient would keep only their
+# values out). Every container type can carry them, and none can already
+# hold an expression of the user's. One each, so an expression typed into
+# one field never shows up in another.
 FIELD_PROPERTIES: Mapping[SizeField, str] = {
     "width": "ShelvingFieldWidth",
     "depth": "ShelvingFieldDepth",
@@ -248,8 +254,10 @@ class Session:
         doc.UndoMode = 1
         for name in FIELD_PROPERTIES.values():
             if not hasattr(self.container, name):
-                self.container.addProperty("App::PropertyLength", name, "Shelving")
-                self.container.setPropertyStatus(name, ["Hidden", "Transient"])
+                self.container.addProperty(
+                    "App::PropertyLength", name, "Shelving", "", _NO_PERSIST
+                )
+                self.container.setPropertyStatus(name, "Hidden")
         self._history = EditHistory(doc, self, schedule or (lambda _settle: None))
 
     def settle(self) -> None:
@@ -265,9 +273,14 @@ class Session:
         self._drag = None
         if self._history is not None:
             self._history.finish()
-        for name in FIELD_PROPERTIES.values():
-            if hasattr(self.container, name):
-                self.container.removeProperty(name)
+        try:
+            for name in FIELD_PROPERTIES.values():
+                if hasattr(self.container, name):
+                    self.container.removeProperty(name)
+        except ReferenceError:
+            # The container was destroyed, as removing it outside any undo
+            # step or closing its document does, and its properties with it.
+            pass
 
     @property
     def dragging(self) -> bool:

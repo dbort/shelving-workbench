@@ -3,7 +3,9 @@ named step, Undo and Redo read back into the session, and Close.
 ``tests/freecad_view/test_undo_in_the_editor.py`` runs Undo and Redo
 through ``Std_Undo`` and ``Std_Redo`` with the 3D view up."""
 
+import zipfile
 from collections.abc import Iterator, Mapping
+from pathlib import Path
 from typing import Protocol, cast
 
 import FreeCAD
@@ -382,7 +384,7 @@ def test_an_undo_during_a_drag_ends_the_drag(doc: FreeCAD.Document) -> None:
 
 
 def test_the_size_fields_properties_last_only_the_session_and_record_nothing(
-    doc: FreeCAD.Document,
+    doc: FreeCAD.Document, tmp_path: Path
 ) -> None:
     container = _container(doc)
     names = list(doc.UndoNames)
@@ -390,10 +392,22 @@ def test_the_size_fields_properties_last_only_the_session_and_record_nothing(
     for name in FIELD_PROPERTIES.values():
         assert hasattr(container, name)
         status = cast("list[object]", container.getPropertyStatus(name))
-        assert "Hidden" in status and "Transient" in status
+        assert "Hidden" in status
     assert not doc.HasPendingTransaction
+    # A save during the edit leaves them out of the file.
+    saved = tmp_path / "during_edit.FCStd"
+    doc.saveCopy(str(saved))
+    with zipfile.ZipFile(saved) as archive:
+        document_xml = archive.read("Document.xml").decode("utf-8")
+    assert "ShelvingField" not in document_xml
     session.close()
     for name in FIELD_PROPERTIES.values():
         assert not hasattr(container, name)
     assert list(doc.UndoNames) == names
     assert doc.RedoNames == []
+
+
+def test_close_after_the_container_is_destroyed(doc: FreeCAD.Document) -> None:
+    session = _opened(doc)
+    doc.removeObject(_container(doc).Name)
+    session.close()

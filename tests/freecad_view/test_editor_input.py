@@ -4,7 +4,7 @@ navigation style, the add buttons and the delete key."""
 
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Protocol, cast
+from typing import Literal, Protocol, cast
 
 import FreeCAD
 import FreeCADGui
@@ -729,7 +729,9 @@ def _as_plain_group(container: FreeCAD.DocumentObject) -> FreeCAD.DocumentObject
 
 @pytest.mark.parametrize("kind", ["plain group", "placed by an expression"])
 def test_the_dimension_field_works_on_every_container(
-    unit: FreeCAD.DocumentObject, driver: ViewDriver, kind: str
+    unit: FreeCAD.DocumentObject,
+    driver: ViewDriver,
+    kind: Literal["plain group", "placed by an expression"],
 ) -> None:
     doc = unit.Document
     varset = cast("FreeCAD.DocumentObject", doc.addObject("App::VarSet", "VarSet"))
