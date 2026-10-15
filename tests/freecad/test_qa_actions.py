@@ -52,8 +52,8 @@ def test_the_fresh_unit_check_passes_on_a_fresh_unit() -> None:
     assert result.passed, result.detail
 
 
-def test_the_undoable_unit_is_an_undo_step_of_its_own() -> None:
-    actions.undoable_unit()
+def test_the_fresh_unit_is_an_undo_step_of_its_own() -> None:
+    actions.fresh_unit()
     doc = FreeCAD.ActiveDocument
     assert doc is not None
     assert doc.UndoNames == ["Create Shelving Unit"]

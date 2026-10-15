@@ -87,18 +87,8 @@ def fresh_unit() -> None:
     from freecad.Shelving.unit_ops import create_unit
 
     doc = FreeCAD.newDocument("QA_Unit")
-    create_unit(doc)
-    doc.recompute()
-
-
-@action("undoable_unit", label="Create a unit in a new document, as an undo step")
-def undoable_unit() -> None:
-    import FreeCAD
-
-    from freecad.Shelving.unit_ops import create_unit
-
-    doc = FreeCAD.newDocument("QA_Undo")
-    # A scripted document starts with undo off; the case undoes Create Unit.
+    # A scripted document starts with undo off, unlike one made with File,
+    # New; a case may undo Create Unit.
     doc.UndoMode = 1
     doc.openTransaction("Create Shelving Unit")
     create_unit(doc)
