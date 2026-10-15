@@ -88,9 +88,9 @@ Seen on FreeCAD 1.1.3 (conda-forge); `editor/history.py` relies on each.
 - Past `MaxUndoSize` (default 20) each commit drops the oldest step, so
   `UndoCount` stops growing; the stack carries names and no ids a script
   can read.
-- `Std_Undo` and `Std_Redo` are disabled while keyboard focus sits in a
-  task panel widget such as a combo box; with focus in the 3D view they
-  run.
+- `Std_Undo` and `Std_Redo` were disabled under Xvfb while keyboard
+  focus sat in a task panel's combo box, and ran with focus in the 3D
+  view. On macOS (1.1.4), Cmd-Z ran with focus on a task panel button.
 
 ## A `DocumentObject`'s `ViewObject` is `None`
 
