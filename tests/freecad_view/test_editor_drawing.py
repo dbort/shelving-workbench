@@ -527,6 +527,53 @@ def test_closing_the_document_ends_the_edit(
     assert errors == []
 
 
+def test_closing_the_3d_view_under_the_edit_leaves_the_panel_working(
+    unit: FreeCAD.DocumentObject,
+    driver: ViewDriver,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With the view it edits in closed and the document open in another,
+    the editor stands down at the next redraw: the panel keeps editing the
+    unit's size and following Undo until its Close, and nothing raises
+    (Advice, CLOSING)."""
+    errors: list[BaseException] = []
+
+    def record(
+        _kind: type[BaseException], value: BaseException, _trace: TracebackType | None
+    ) -> None:
+        errors.append(value)
+
+    monkeypatch.setattr(sys, "excepthook", record)
+    doc = unit.Document
+    FreeCADGui.runCommand("Std_ViewCreate")
+    extra = ViewDriver.for_active_view()
+    panel = edit_unit(unit, extra)
+    editor = editor_of(panel)
+    outside = _outside_box(doc, "Outside", 2000.0)
+    # Closing the extra view leaves the document its first one, so FreeCAD
+    # asks nothing.
+    FreeCADGui.runCommand("Std_CloseActiveWindow")
+    driver = ViewDriver.for_active_view()
+
+    panel._resize("width", 700.0)
+    driver.pump()
+    assert editor.closed
+    assert panel.session.unit_dimension_mm("width") == pytest.approx(700.0)
+    assert list(doc.UndoNames)[0] == "Resize Unit"
+    gui_step("Std_Undo", driver)
+    width = panel.unit_fields["width"].quantity_widget
+    assert width is not None
+    assert width.property("rawValue") == pytest.approx(600.0)
+    assert FreeCADGui.Control.activeDialog()
+    # No gate is left to refuse a pick.
+    FreeCADGui.Selection.clearSelection()
+    FreeCADGui.Selection.addSelection(doc.Name, outside.Name)
+    assert FreeCADGui.Selection.getSelection()
+    click_task_button("Close", driver)
+    assert not FreeCADGui.Control.activeDialog()
+    assert errors == []
+
+
 def test_hide_other_objects_hides_and_restores_exactly_those_it_hid(
     unit: FreeCAD.DocumentObject, driver: ViewDriver
 ) -> None:

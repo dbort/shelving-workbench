@@ -442,6 +442,26 @@ class ViewEditor:
         assert widgets is not None, "the editor is closed"
         return widgets.viewport
 
+    def _view_gone(self) -> bool:
+        """Whether the 3D view was closed under the editor. FreeCAD's view
+        object raises once its view is deleted; the view's widget wrapper
+        cannot tell, since PySide does not learn of a widget FreeCAD
+        destroys."""
+        try:
+            self.view.getSize()
+        except RuntimeError:
+            return True
+        return False
+
+    def _stood_down(self) -> bool:
+        """Close the editor when its 3D view was closed under it, as an extra
+        view of the document can be, and say whether it did. The panel
+        stays open, editing the unit's size, until its Close."""
+        if not self._view_gone():
+            return False
+        self.close(restore_camera=False)
+        return True
+
     # Setup and teardown
 
     def _open(self) -> None:
@@ -559,7 +579,7 @@ class ViewEditor:
         if self._closed:
             return
         self._closed = True
-        view_alive = Shiboken.isValid(self._viewer)
+        view_alive = not self._view_gone()
         self._close_field()
         if self._doc_name in FreeCAD.listDocuments():
             self.set_hide_others(False)
@@ -615,7 +635,7 @@ class ViewEditor:
 
     def _poll_turn(self) -> None:
         target = self._turn_target
-        if self._closed or target is None:
+        if self._closed or target is None or self._stood_down():
             return
         reached = self.view.getCameraOrientation().isSame(target, 1e-6)
         if not reached and time.monotonic() - self._turn_started_s < _TURN_TIMEOUT_S:
@@ -723,7 +743,7 @@ class ViewEditor:
         """Redraw from the session on the face the camera sees, and place the
         arrow, the add buttons and the field; the arrow stays put during a
         drag."""
-        if self._closed:
+        if self._closed or self._stood_down():
             return
         session = self.session
         unit = session.unit
@@ -829,6 +849,8 @@ class ViewEditor:
     def history_moved(self) -> None:
         """Drop what an Undo, a Redo or a change made elsewhere left stale,
         before the redraw that follows."""
+        if self._closed or self._stood_down():
+            return
         self._close_field()
         self._preview_direction = None
 
@@ -839,6 +861,8 @@ class ViewEditor:
         those this hid. Through the view objects, so neither the undo
         history nor the objects' saved visibility changes."""
         doc = self._doc
+        if hide and self._closed:
+            return
         if hide and not self._hidden:
             container = self.session.container
             keep = {container.Name}
