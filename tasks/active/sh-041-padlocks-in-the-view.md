@@ -131,3 +131,7 @@ STANDING OBLIGATIONS (`CLAUDE.md`):
 - **F1: The held board's padlock is never checked to be closed** (`tests/freecad_view/test_padlocks.py:352`): the test checks its visibility, tooltip, name and place but not its icon; assert the closed shape and the `ConstrainedDimColor` body on `editor.board_padlock`.
 - **N1: `settle()` still runs twice in `unlock_holders`** (`freecad/Shelving/editor/session.py:551`): harmless; round 1's N4 stands.
 - **N2: The pool bound counts every dimension** (`tests/freecad_view/test_padlocks.py:256`): looser than the editor's guarantee but matches the Must Have; acceptable.
+
+### Round 3: APPROVED
+- **N1: `lift` hard-codes the lift and lacks a unit** (`tests/freecad_view/test_padlocks.py:381`): name it `lift_mm` and derive it from `elevation.LIFT_MM` and `frame.z_sign`.
+- **N2: QA `held` step repeats a tested fact** (`freecad/Shelving/qa/cases/30-editor.toml:272`): the holding outline's color is asserted; the step need ask only about legibility.
