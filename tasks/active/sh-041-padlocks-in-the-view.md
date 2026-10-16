@@ -118,3 +118,11 @@ STANDING OBLIGATIONS (`CLAUDE.md`):
 - [x] **Step 4** (`freecad/Shelving/qa/cases/30-editor.toml`, `docs/scope-and-design.md`): The legibility case and the design prose.
 
 ## Review log
+
+### Round 1: REJECTED
+- **F1: Pool test does not count created widgets** (`tests/freecad_view/test_padlocks.py:249`): only `len(editor.padlocks)` and a post-drag `findChildren` are checked, so a list rebuilt with fresh buttons each step could pass; collect the distinct buttons seen across steps and bound that.
+- **F2: Units missing from pixel names** (`tests/freecad_view/test_padlocks.py:101`, `freecad/Shelving/editor/view_editor.py:946`): `_icon_pixel_alpha`'s `x`/`y` and `_move_to`'s `shift` hold logical pixels and need `_px`.
+- **N1: Viewport mapping change unannounced** (`freecad/Shelving/editor/view_editor.py:956`): `_move_to` now maps from the viewport rather than the QGraphicsView, which also moves the field and add bar; correct, but unmentioned.
+- **N2: QA `lock` step repeats a tested fact** (`freecad/Shelving/qa/cases/30-editor.toml:261`): ask only whether the closed padlock reads clearly on HiDPI.
+- **N3: `Style.outline_rgb` docstring states rationale, not contract** (`freecad/Shelving/editor/overlay.py:72`).
+- **N4: `settle()` runs twice in `unlock_holders`** (`freecad/Shelving/editor/session.py:555`).
