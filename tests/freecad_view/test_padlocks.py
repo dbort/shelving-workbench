@@ -4,15 +4,17 @@ arrow, which unlocks the openings holding it."""
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+from typing import cast
 
 import FreeCAD
+import FreeCADGui
 import pytest
 from PySide6 import QtCore, QtTest, QtWidgets
 
 from freecad.Shelving.core.edit import is_locked
 from freecad.Shelving.core.geometry import Space
 from freecad.Shelving.core.layout import Board, Division, Region
-from freecad.Shelving.editor.elevation import DimensionLabel
+from freecad.Shelving.editor.elevation import LIFT_MM, DimensionLabel
 from freecad.Shelving.editor.panel import EditUnitPanel
 from freecad.Shelving.editor.view_editor import ViewEditor
 from tests.freecad_view import overlay_nodes
@@ -204,6 +206,60 @@ def test_each_lockable_dimension_shows_its_padlock_past_its_text(
     click_task_button("Close", driver)
 
 
+def test_padlocks_follow_their_labels_when_the_view_resizes(
+    unit: FreeCAD.DocumentObject, driver: ViewDriver, dimension_style: None
+) -> None:
+    """A resize moves every projected point without moving the camera, as
+    moving the window to another display can."""
+    panel = edit_unit(unit, driver)
+    editor = editor_of(panel)
+    add_board(panel, "vertical", driver)
+    window = cast("QtWidgets.QMainWindow", FreeCADGui.getMainWindow())
+    size = window.size()
+    viewport_size = editor.viewport.size()
+    try:
+        window.resize(size.width() - 300, size.height() - 200)
+        driver.pump()
+        assert editor.viewport.size() != viewport_size
+        lockable = [x for x in editor.overlay.labels if x.lockable]
+        assert lockable
+        problems = [_misplaced(driver, editor, label) for label in lockable]
+    finally:
+        window.resize(size)
+        driver.pump()
+    assert problems == [None] * len(lockable)
+    click_task_button("Close", driver)
+
+
+def test_icons_redraw_for_a_screen_of_another_pixel_ratio(
+    unit: FreeCAD.DocumentObject,
+    driver: ViewDriver,
+    dimension_style: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    panel = edit_unit(unit, driver)
+    editor = editor_of(panel)
+    add_board(panel, "vertical", driver)
+    shown = [b for b in editor.padlocks if b.isVisible()]
+    assert shown
+    viewer = editor._viewer
+    ratio = 2 * viewer.devicePixelRatioF()
+    monkeypatch.setattr(viewer, "devicePixelRatioF", lambda: ratio)
+    QtCore.QCoreApplication.sendEvent(
+        editor.viewport, QtCore.QEvent(QtCore.QEvent.Type.DevicePixelRatioChange)
+    )
+    driver.pump()
+    icons = [
+        *((button, 14) for button in (*shown, editor.board_padlock)),
+        *((button, 24) for button in editor.add_bar.buttons.values()),
+    ]
+    for button, side_px in icons:
+        device_px = round(side_px * ratio)
+        assert QtCore.QSize(device_px, device_px) in button.icon().availableSizes()
+    monkeypatch.undo()
+    click_task_button("Close", driver)
+
+
 @dataclass
 class _DragWatch:
     """What every placement of the in-view widgets during a drag left."""
@@ -378,8 +434,10 @@ def test_a_held_board_shows_a_padlock_that_unlocks_the_openings_holding_it(
         for h_mm in (bottom_rect.h0_mm, bottom_rect.h1_mm)
         for v_mm in (bottom_rect.v0_mm, bottom_rect.v1_mm)
     }
-    lift = editor.to_document(0, 0, 0.5) - editor.to_document(0, 0, 0)
-    drawn = {_rounded(point - lift) for point in holding[0].points}
+    lift_mm = editor.to_document(
+        0, 0, editor.frame.z_sign * LIFT_MM
+    ) - editor.to_document(0, 0, 0)
+    drawn = {_rounded(point - lift_mm) for point in holding[0].points}
     assert drawn == corners
 
     spaces = dict(session.spaces)

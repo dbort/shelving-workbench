@@ -246,6 +246,7 @@ class AddBar(QtWidgets.QFrame):
     ) -> None:
         super().__init__(parent)
         self._on_hover = on_hover
+        self._rgb = rgb
         self.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
         self.setAutoFillBackground(True)
         layout = QtWidgets.QHBoxLayout(self)
@@ -258,7 +259,6 @@ class AddBar(QtWidgets.QFrame):
         )
         for direction, text in directions:
             button = QtWidgets.QToolButton(self)
-            button.setIcon(_board_icon(direction, self.devicePixelRatioF(), rgb))
             button.setIconSize(QtCore.QSize(_ICON_PX, _ICON_PX))
             button.setText(text)
             button.setToolTip(text)
@@ -270,7 +270,14 @@ class AddBar(QtWidgets.QFrame):
             button.installEventFilter(self)
             layout.addWidget(button)
             self.buttons[direction] = button
+        self.draw_icons(self.devicePixelRatioF())
         self.hide()
+
+    def draw_icons(self, ratio: float) -> None:
+        """Give each button its icon drawn at the device pixel ratio
+        ``ratio``."""
+        for direction, button in self.buttons.items():
+            button.setIcon(_board_icon(direction, ratio, self._rgb))
 
     @override
     def eventFilter(self, watched: QtCore.QObject, event: QtCore.QEvent) -> bool:
@@ -338,6 +345,34 @@ class _DeleteKeys(QtCore.QObject):
         if kind == QtCore.QEvent.Type.KeyPress:
             self._on_delete()
         return True
+
+
+class _ViewportGeometry(QtCore.QObject):
+    """Reports, on the next event-loop pass, a resize of the 3D view's
+    viewport or a move to a screen of another device pixel ratio. Both move
+    every projected point without moving the camera, as moving the window
+    to another display does. The pass lets Coin take the new size first."""
+
+    _KINDS = (QtCore.QEvent.Type.Resize, QtCore.QEvent.Type.DevicePixelRatioChange)
+
+    def __init__(
+        self, viewport: QtWidgets.QWidget, on_change: Callable[[], None]
+    ) -> None:
+        super().__init__(viewport)
+        self._on_change = on_change
+        self._queued = False
+
+    @override
+    def eventFilter(self, watched: QtCore.QObject, event: QtCore.QEvent) -> bool:
+        # A resizing window sends a stream of these; one pass serves them all.
+        if event.type() in self._KINDS and not self._queued:
+            self._queued = True
+            QtCore.QTimer.singleShot(0, self._report)
+        return False
+
+    def _report(self) -> None:
+        self._queued = False
+        self._on_change()
 
 
 # What a left press on the viewport is: one the editor takes for itself
@@ -542,14 +577,7 @@ class ViewEditor:
             label_size_pt(font_px, ratio, self._viewer.screen().logicalDotsPerInchX())
         )
         self._font_px = font_px
-        self._padlock_icons = {
-            locked: _padlock_icon(
-                locked,
-                ratio,
-                self.style.label_rgb("locked" if locked else "unlocked"),
-            )
-            for locked in (True, False)
-        }
+        self._padlock_icons = self._draw_padlock_icons(ratio)
         self.root: Coin = coin.SoSeparator()
         self._frame_transform: Coin = coin.SoTransform()
         self._drawing: Coin = coin.SoSeparator()
@@ -579,6 +607,10 @@ class ViewEditor:
         viewport.installEventFilter(clicks)
         self._installed.append((clicks.deleteLater, True))
         self._installed.append((lambda: viewport.removeEventFilter(clicks), True))
+        geometry = _ViewportGeometry(viewport, self._refit)
+        viewport.installEventFilter(geometry)
+        self._installed.append((geometry.deleteLater, True))
+        self._installed.append((lambda: viewport.removeEventFilter(geometry), True))
         app = cast("QtCore.QCoreApplication", QtCore.QCoreApplication.instance())
         keys = _DeleteKeys(
             self._viewer, lambda: QtCore.QTimer.singleShot(0, self._delete_selected)
@@ -1211,6 +1243,33 @@ class ViewEditor:
 
     # Padlocks
 
+    def _draw_padlock_icons(self, ratio: float) -> dict[bool, QtGui.QIcon]:
+        """The closed and open padlock icons, keyed by locked, drawn at the
+        device pixel ratio ``ratio``."""
+        self._icon_ratio = ratio
+        return {
+            locked: _padlock_icon(
+                locked,
+                ratio,
+                self.style.label_rgb("locked" if locked else "unlocked"),
+            )
+            for locked in (True, False)
+        }
+
+    def _refit(self) -> None:
+        """Place the widgets over the view again, after its viewport resized
+        or moved to another screen, redrawing their icons when the device
+        pixel ratio they were drawn at is no longer the view's."""
+        if self._closed or self._stood_down():
+            return
+        ratio = self._viewer.devicePixelRatioF()
+        if ratio != self._icon_ratio:
+            self._padlock_icons = self._draw_padlock_icons(ratio)
+            self.board_padlock.setIcon(self._padlock_icons[True])
+            self.add_bar.draw_icons(ratio)
+            self._update_padlocks()
+        self._place_widgets()
+
     def _update_padlocks(self) -> None:
         """Give each lockable dimension a padlock from the pool, growing it
         only when more are shown at once than ever before, and hide the
@@ -1228,8 +1287,10 @@ class ViewEditor:
         for button, label in zip(self.padlocks, labels, strict=False):
             locked = label.color == "locked"
             text = "Unlock this opening" if locked else "Lock this opening"
+            icon = self._padlock_icons[locked]
+            if button.icon().cacheKey() != icon.cacheKey():
+                button.setIcon(icon)
             if button.toolTip() != text:
-                button.setIcon(self._padlock_icons[locked])
                 button.setToolTip(text)
                 button.setAccessibleName(text)
             button.show()

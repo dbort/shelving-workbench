@@ -269,7 +269,19 @@ glance and without zooming in."""
   instruction = ["Click the shelf."]
   expected = """
 A closed padlock sits where the shelf's arrow would be, legible beside the
-dimensions, and the lower bay is outlined in the color of a locked size."""
+dimensions, and the lower bay's outline stands out from the other
+openings' at a glance."""
+
+  [[case.step]]
+  id = "display"
+  instruction = [
+    "Move the FreeCAD window to a display with a different scaling.",
+    "Move it back.",
+  ]
+  expected = """
+On each display, without a click, every padlock stays just past its own
+text and the shelf's padlock stays where its arrow would be, each as sharp
+as the text beside it."""
 
   [[case.step]]
   id = "busy"

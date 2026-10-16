@@ -23,7 +23,10 @@ type a size, and nothing unlocks. Milestone M14.
       in `NonDrivingConstrDimColor` when unlocked. An unlocked opening
       alone in its row shows none. Each padlock's rectangle stays clear of
       its label's anchor point, and padlocks move with their labels when
-      the camera moves and at every step of a drag.
+      the camera moves, when the 3D view resizes, and at every step of a
+      drag.
+- [ ] When the 3D view's device pixel ratio changes, the padlock and add
+      button icons are redrawn at the new ratio.
 - [ ] The padlock widgets are pooled: across a drag of many steps, the
       number of padlock widgets the editor has created never exceeds the
       largest number of dimensions shown at once.
@@ -105,6 +108,18 @@ Opening" or "Unlock Opening", and a held board's padlock makes "Unlock
 Board", whether it unlocks one opening or more. The Must Have's "Lock
 opening" and "Unlock opening" mean these.
 
+FINDING (user's manual QA, 2026-10-16, approved for a fix in this task):
+moving the window between displays resizes the 3D view, and the padlocks
+stay where they were until the next click, while the Coin drawing follows.
+The floating widgets are placed only on a camera change or a rebuild, and
+a resize moves every projected point without touching the camera. Re-place
+them on the viewport's `Resize`, and redraw the icons on
+`DevicePixelRatioChange` (Qt 6.6+), both a pass later so Coin has the new
+size. The add buttons and the size field share the placement path, so they
+follow too. The dimension text size stays as the edit opened it: the
+user saw the drawing follow correctly, and resizing Coin text per screen
+is out of scope.
+
 STANDING OBLIGATIONS (`CLAUDE.md`):
 - Typed Python: precise types; `pyrefly check` clean.
 - Shell stays simple: no shell.
@@ -116,6 +131,7 @@ STANDING OBLIGATIONS (`CLAUDE.md`):
 - [x] **Step 2** (`freecad/Shelving/editor/`): Clicks that lock and unlock through the session; the held board's padlock at the arrow's place, the holders' outline, and its unlock; no arrow or padlock on carcass boards.
 - [x] **Step 3** (`tests/freecad_view/`): View-tier tests for every Must Have, including the locked-middle chain drag.
 - [x] **Step 4** (`freecad/Shelving/qa/cases/30-editor.toml`, `docs/scope-and-design.md`): The legibility case and the design prose.
+- [x] **Step 5** (`freecad/Shelving/editor/view_editor.py`, `tests/freecad_view/test_padlocks.py`, `freecad/Shelving/qa/cases/30-editor.toml`): Re-place the floating widgets after a viewport resize and redraw their icons after a pixel ratio change, with view-tier tests and a QA step for moving between displays.
 
 ## Review log
 
