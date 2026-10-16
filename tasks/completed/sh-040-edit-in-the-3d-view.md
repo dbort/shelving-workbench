@@ -19,36 +19,36 @@ left alone. This retires the panel's elevation, and with it bug-004 and
 bug-009. Milestone M14.
 
 ## Must Have
-- [ ] `pixi run tests` green; `pyrefly check` clean over the changed code.
-- [ ] `freecad/Shelving/editor/scene.py` and `tests/test_editor_scene.py`
+- [x] `pixi run tests` green; `pyrefly check` clean over the changed code.
+- [x] `freecad/Shelving/editor/scene.py` and `tests/test_editor_scene.py`
       no longer exist, and the task panel holds no `QGraphicsView`.
-- [ ] The panel holds exactly: the Unit group (width, depth, height), the
+- [x] The panel holds exactly: the Unit group (width, depth, height), the
       selected opening's basis menu, the list of objects left alone (shown
       only when it is not empty, with its Delete Selected button), and a
       "Hide other objects" checkbox, unticked when the panel opens. No
       size field, Add Divider, Add Shelf or Delete button remains.
-- [ ] Every panel spin box and combo box ignores a wheel event unless it
+- [x] Every panel spin box and combo box ignores a wheel event unless it
       has focus: a `QWheelEvent` sent to an unfocused field leaves its
       value and the document unchanged.
-- [ ] In the view tier (sh-037), Edit Unit adds one overlay node to the
+- [x] In the view tier (sh-037), Edit Unit adds one overlay node to the
       active view's scene graph and every exit (Close, an Undo that removes
       the unit, an exception while the editor is built) removes it,
       restores FreeCAD's selection settings and the visibility of every
       object, and leaves each edit as its own undo step, as sh-039
       specifies.
-- [ ] Opening turns the camera with `view.setCameraOrientation` to face
+- [x] Opening turns the camera with `view.setCameraOrientation` to face
       the unit's front, orthographic, for a container at its default
       placement and for one moved and turned 30 degrees about Z, and
       every board's front corners then project inside the view. On close
       the camera is restored when the
       `Mod/Sketcher/General/RestoreCamera` preference is true (its
       default) and left where it is when false.
-- [ ] Each bay and void is a translucent face on the unit's front face:
+- [x] Each bay and void is a translucent face on the unit's front face:
       for both placements above, every face's corners lie within 0.01 mm
       of its solved region's front face in document coordinates. With the
       camera behind the unit the overlay is drawn on the back face, and
       back in front on the front face.
-- [ ] One `SoDatumLabel` per region in each run that lies in the
+- [x] One `SoDatumLabel` per region in each run that lies in the
       elevation plane, reading the region's size as its basis measures
       it, colored with the View preferences `ConstrainedDimColor` when the
       region is locked and `NonDrivingConstrDimColor` when unlocked,
@@ -56,7 +56,7 @@ bug-009. Milestone M14.
       dimensions (`EditSketcherFontSize`, the device pixel ratio and the
       screen's logical DPI). Its `norm` is the unit front face's normal in
       document coordinates on either face.
-- [ ] Picking is FreeCAD's selection, gated to the unit's boards: a click
+- [x] Picking is FreeCAD's selection, gated to the unit's boards: a click
       on any face, edge or vertex of a board selects the whole board in
       FreeCAD (no sub-element names) and in the session; a click on an
       opening selects that opening and clears FreeCAD's selection; a
@@ -64,46 +64,46 @@ bug-009. Milestone M14.
       `tests/freecad/fixtures/woodworking_magic_start_default.FCStd`, whose
       back panel lies behind every opening, a click on each opening selects
       that opening, and hovering an opening shows no forbidden cursor.
-- [ ] A click on a dimension's text, including one drawn over a board,
+- [x] A click on a dimension's text, including one drawn over a board,
       opens a quantity field there showing the region's size; typing a
       size and pressing Return applies it as one edit and closes the
       field, a refused size is reported exactly once, Escape closes the
       field without closing the task dialog, and the field follows the
       label when the camera moves.
-- [ ] A selected board that sh-038's query says may move shows one arrow
+- [x] A selected board that sh-038's query says may move shows one arrow
       along its run, beside the dimension of the region before it;
       dragging the arrow moves the board under sh-038's rule as one undo
       step, and the board and its arrow stay selected afterward. A held
       board and a carcass board show no arrow. Drags and clicks pass under
       the CAD, Gesture, Touchpad and OpenSCAD navigation styles, and
       under OpenInventor with Ctrl held.
-- [ ] The editor creates one dragger per session and, on Coin before
+- [x] The editor creates one dragger per session and, on Coin before
       4.0.4, never destroys it.
-- [ ] A selected bay shows two buttons at its center, Add shelf and Add
+- [x] A selected bay shows two buttons at its center, Add shelf and Add
       divider; with the pointer over one, the board it would add is drawn
       where the split would put it; clicking adds that board as one edit
       and selects it, showing its arrow. Neither button shows unless the
       selection is a bay.
-- [ ] With focus in the 3D view, Delete and Backspace delete the selected
+- [x] With focus in the 3D view, Delete and Backspace delete the selected
       inner board as one edit and `Std_Delete` does not run; on a carcass
       board they report a refusal in the Notification Area and change
       nothing. Deleting a board's object from the tree view during the edit
       leaves the overlay and panel showing the rescanned unit, and one Undo
       restores the board.
-- [ ] Ticking "Hide other objects" hides every visible object outside the
+- [x] Ticking "Hide other objects" hides every visible object outside the
       unit; unticking and Close restore exactly the objects it hid,
       and FreeCAD's undo names are unchanged by either.
-- [ ] `freecad/Shelving/qa/cases/30-editor.toml` covers the new editor
+- [x] `freecad/Shelving/qa/cases/30-editor.toml` covers the new editor
       with only what no test asserts: navigation and dragging on a real
       trackpad, the field landing on its label and the dimension text's
       legibility on a HiDPI screen, the f(x) dialog from the floating
       field, the camera's turn and return, and drag smoothness on a large
       unit.
-- [ ] `bug-004` and `bug-009` are deleted from
+- [x] `bug-004` and `bug-009` are deleted from
       `.claude/docs/bug-log.md`; `README.md`, `docs/scope-and-design.md`,
       `.claude/docs/code-map.md` and `freecad/Shelving/editor/__init__.py`
       describe the editor in the 3D view.
-- [ ] The panel's size fields bind no temporary object: after a session
+- [x] The panel's size fields bind no temporary object: after a session
       that used an f(x) expression, Close adds no undo step and leaves no
       object behind, and `Std_Undo` after Close steps back exactly one
       edit.
