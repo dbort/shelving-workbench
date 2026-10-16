@@ -113,12 +113,18 @@ def _icon_rgb(button: QtWidgets.QToolButton) -> tuple[float, float, float]:
 
 
 def _assert_shows(button: QtWidgets.QToolButton, locked: bool) -> None:
-    """``button`` is a closed padlock in the locked dimension color, or an
-    open one in the unlocked color, with the matching tooltip."""
-    assert button.isVisible()
+    """``button`` is an opening's padlock, closed and with the matching
+    tooltip when ``locked``, as :func:`_assert_drawn` checks."""
     text = _UNLOCK if locked else _LOCK
     assert button.toolTip() == text
     assert button.accessibleName() == text
+    _assert_drawn(button, locked)
+
+
+def _assert_drawn(button: QtWidgets.QToolButton, locked: bool) -> None:
+    """``button`` shows a closed padlock in the locked dimension color, or
+    an open one in the unlocked color."""
+    assert button.isVisible()
     name = "ConstrainedDimColor" if locked else "NonDrivingConstrDimColor"
     assert _close_rgb(_icon_rgb(button), _rgb(name)), _icon_rgb(button)
     # The shackle closes over the body's left side; open, it swings clear.
@@ -353,6 +359,7 @@ def test_a_held_board_shows_a_padlock_that_unlocks_the_openings_holding_it(
     assert padlock.isVisible()
     assert padlock.toolTip() == _UNLOCK_BOARD
     assert padlock.accessibleName() == _UNLOCK_BOARD
+    _assert_drawn(padlock, locked=True)
     rect = _geometry(editor, padlock)
     assert (
         rect.center() - _anchor(driver, editor, held.at_mm)

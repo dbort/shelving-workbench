@@ -543,6 +543,7 @@ class Session:
         step that moves nothing and keeps the selection. Returns an
         :class:`EditFailure` on refusal, such as locking a run's last
         unlocked region, leaving the session and document untouched."""
+        self.settle()
         name = "Lock Opening" if locked else "Unlock Opening"
         return self._set_locks(name, [region_id], locked)
 
@@ -552,7 +553,6 @@ class Session:
         move the board. Returns an :class:`EditFailure`, changing nothing,
         when no region holds the board or no unlock would free it."""
         self.settle()
-        # Read after the settle, so an Undo's read-back is already in.
         holders = self.held_by(board_id)
         if not holders:
             return EditFailure("no locked opening holds this board", board_id)
@@ -561,7 +561,8 @@ class Session:
     def _set_locks(
         self, name: str, region_ids: Sequence[str], locked: bool
     ) -> EditFailure | None:
-        self.settle()
+        """Lock or unlock ``region_ids`` as the one undo step ``name``. The
+        caller settles first."""
         candidate = self.unit
         try:
             for region_id in region_ids:
