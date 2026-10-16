@@ -1,5 +1,5 @@
 ---
-next_id: bug-017
+next_id: bug-018
 ---
 
 # Bug log
@@ -58,7 +58,10 @@ log happens only when the user asks.
   can auto-hide until hovered, so it is the leading suspect. A fresh
   FreeCAD 1.1.3 profile docks Tasks there too: under Xvfb (sh-037) the
   dialog's buttons stay hidden inside `OverlayRight` until hovered.
-  `AncestorWatch` in `editor/panel.py` logs the hidden ancestors. Fix:
+  `AncestorWatch` in `editor/panel.py` logs the hidden ancestors. sh-041's
+  manual QA on 1.1.4 logged the form's first `Show` 15.2 s after
+  `showDialog`, with `OverlayRight` reported as hidden itself until then.
+  Fix:
   `ad hoc`, once a slow run's log confirms the ancestor: raise the overlay
   through FreeCAD's API, or document the setting.
 - `bug-014` - **Edit Unit is disabled for boxes selected inside a
@@ -73,3 +76,15 @@ log happens only when the user asks.
   design question: the group directly holding every selection is the
   obvious answer, but a box nested in a subgroup or a PartDesign Body
   makes that group the subgroup rather than the unit.
+- `bug-017` - **a nested opening's dimension sits outside the longer one
+  holding it**: in a four-board unit with a shelf in the opening, a shelf
+  in the lower opening and a divider in the middle one, the middle
+  opening's height is drawn left of the unit's full interior height, so
+  the shorter dimension is the outer one. `_Planner.labels` in
+  `editor/elevation.py` claims outer rows with `_outer_row` in `_walk`'s
+  pre-order, so a containing division takes row 1 before any division
+  nested in it; drawing convention puts shorter dimensions nearer the part.
+  Found in sh-041's manual QA; `main` behaves the same, since sh-041 left
+  the row logic alone. Fix: `ad hoc`. Claiming rows innermost or shortest
+  span first is local to the planner, and the convention it follows is
+  not in question.
