@@ -99,6 +99,12 @@ CONSTRAINTS:
   "Unlock this opening", "Unlock the openings holding this board"),
   with no grammar keyed to a number, so they stay localizable.
 
+DECISION (user, 2026-10-16, during `/work`): undo steps keep the editor's
+Title Case and never vary with a count: an opening's padlock makes "Lock
+Opening" or "Unlock Opening", and a held board's padlock makes "Unlock
+Board", whether it unlocks one opening or more. The Must Have's "Lock
+opening" and "Unlock opening" mean these.
+
 STANDING OBLIGATIONS (`CLAUDE.md`):
 - Typed Python: precise types; `pyrefly check` clean.
 - Shell stays simple: no shell.
@@ -106,9 +112,9 @@ STANDING OBLIGATIONS (`CLAUDE.md`):
   the Notification Area.
 
 ## Plan
-- [ ] **Step 1** (`freecad/Shelving/editor/`): The padlock icon and the pooled padlock buttons placed past each lockable dimension's text, following the camera and every rebuild.
-- [ ] **Step 2** (`freecad/Shelving/editor/`): Clicks that lock and unlock through the session; the held board's padlock at the arrow's place, the holders' outline, and its unlock; no arrow or padlock on carcass boards.
-- [ ] **Step 3** (`tests/freecad_view/`): View-tier tests for every Must Have, including the locked-middle chain drag.
-- [ ] **Step 4** (`freecad/Shelving/qa/cases/30-editor.toml`, `docs/scope-and-design.md`): The legibility case and the design prose.
+- [x] **Step 1** (`freecad/Shelving/editor/`): The padlock icon and the pooled padlock buttons placed past each lockable dimension's text, following the camera and every rebuild.
+- [x] **Step 2** (`freecad/Shelving/editor/`): Clicks that lock and unlock through the session; the held board's padlock at the arrow's place, the holders' outline, and its unlock; no arrow or padlock on carcass boards.
+- [x] **Step 3** (`tests/freecad_view/`): View-tier tests for every Must Have, including the locked-middle chain drag.
+- [x] **Step 4** (`freecad/Shelving/qa/cases/30-editor.toml`, `docs/scope-and-design.md`): The legibility case and the design prose.
 
 ## Review log

@@ -54,6 +54,46 @@ def faces(root: _Coin) -> list[list[FreeCAD.Vector]]:
     return found
 
 
+def _sibling(path: _Coin, type_id: _Coin) -> _Coin:
+    """The node of ``type_id`` in the group holding ``path``'s tail."""
+    group = path.getNodeFromTail(1)
+    return next(
+        group.getChild(index)
+        for index in range(group.getNumChildren())
+        if group.getChild(index).isOfType(type_id)
+    )
+
+
+@dataclass(frozen=True)
+class Outline:
+    rgb: tuple[float, float, float]
+    width_px: float
+    # The closed outline's points, in document coordinates.
+    points: list[FreeCAD.Vector]
+
+
+def outlines(root: _Coin) -> list[Outline]:
+    """Every line set under ``root``. Each line set the editor draws has its
+    material, draw style and coordinates just before it in the same group."""
+    found: list[Outline] = []
+    for path in _paths(root, coin.SoLineSet.getClassTypeId()):
+        coordinates = _sibling(path, coin.SoCoordinate3.getClassTypeId())
+        material = _sibling(path, coin.SoMaterial.getClassTypeId())
+        style = _sibling(path, coin.SoDrawStyle.getClassTypeId())
+        color = material.diffuseColor[0].getValue()
+        found.append(
+            Outline(
+                rgb=(float(color[0]), float(color[1]), float(color[2])),
+                width_px=float(style.lineWidth.getValue()),
+                points=[
+                    _to_document(path, tuple(coordinates.point[index].getValue()))
+                    for index in range(coordinates.point.getNum())
+                ],
+            )
+        )
+    return found
+
+
 @dataclass(frozen=True)
 class Label:
     text: str

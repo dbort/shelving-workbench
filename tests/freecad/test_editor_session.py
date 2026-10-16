@@ -930,19 +930,23 @@ def test_dimensions_drag_basis_and_untagged() -> None:
             held = session.begin_drag(left_shelf_id, grab_mm)
             assert isinstance(held, EditFailure), held
             assert held.node_id == left_lower_id
-            assert session.set_locks([left_lower_id], locked=False) is None
+            assert session.unlock_holders(left_shelf_id) is None
             doc.recompute()
             assert _board_snapshot(container) == boards_before_toggle
             assert not isinstance(_rule_of(session.unit.root, left_lower_id), Fixed)
             assert session.held_by(left_shelf_id) == ()
+            assert isinstance(session.unlock_holders(left_shelf_id), EditFailure)
 
             # Locking both bays of the column would leave it nothing to take
             # up a change of the unit's height: refused, changing nothing.
-            refused = session.set_locks([left_lower_id, left_upper_id], locked=True)
+            assert session.set_lock(left_lower_id, locked=True) is None
+            refused = session.set_lock(left_upper_id, locked=True)
             assert isinstance(refused, EditFailure), refused
             assert refused.node_id == left_upper_id
             doc.recompute()
             assert _board_snapshot(container) == boards_before_toggle
+            assert not isinstance(_rule_of(session.unit.root, left_upper_id), Fixed)
+            assert session.set_lock(left_lower_id, locked=False) is None
             assert not isinstance(_rule_of(session.unit.root, left_lower_id), Fixed)
 
             # A drag resizes the bays on either side, locks neither, and

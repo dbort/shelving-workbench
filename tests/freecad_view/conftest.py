@@ -100,3 +100,37 @@ def driver() -> Iterator["ViewDriver"]:
     for name in list(FreeCAD.listDocuments()):
         FreeCAD.closeDocument(name)
     driver.pump()
+
+
+@pytest.fixture
+def dimension_style() -> Iterator[None]:
+    """Dimension colors and a text size of their own, so a test sees them
+    read. The selection color stays FreeCAD's: the 3D view keeps a changed
+    one after the preference is removed."""
+    import FreeCAD
+
+    params = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/View")
+    params.SetUnsigned("ConstrainedDimColor", 0xC01020FF)
+    params.SetUnsigned("NonDrivingConstrDimColor", 0x1020C0FF)
+    params.SetInt("EditSketcherFontSize", 21)
+    yield
+    for name in ("ConstrainedDimColor", "NonDrivingConstrDimColor"):
+        params.RemUnsigned(name)
+    params.RemInt("EditSketcherFontSize")
+
+
+@pytest.fixture
+def reported(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Every message the in-view editor reports, still shown in the
+    Notification Area."""
+    from freecad.Shelving.editor import view_editor as view_editor_module
+
+    messages: list[str] = []
+    real = view_editor_module.report_error
+
+    def record(message: str) -> None:
+        messages.append(message)
+        real(message)
+
+    monkeypatch.setattr(view_editor_module, "report_error", record)
+    return messages

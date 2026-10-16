@@ -1,6 +1,8 @@
 """The in-view editor's elevation frame and drawing plan, under plain
 pytest: ``elevation.py`` imports neither FreeCAD nor Qt."""
 
+import dataclasses
+
 import pytest
 
 from freecad.Shelving.core.edit import lock
@@ -20,8 +22,10 @@ from freecad.Shelving.editor.elevation import (
     DimensionLabel,
     Rect,
     arrow_for,
+    board_space,
     dragged_to_mm,
     elevation_frame,
+    held_padlock,
     label_at,
     label_size_pt,
     plan_overlay,
@@ -242,7 +246,7 @@ def test_region_at_finds_the_opening_under_a_point(
 
 
 def _label(region_id: str, at_mm: tuple[float, float]) -> DimensionLabel:
-    return DimensionLabel(region_id, at_mm, at_mm, "1", "unlocked", 0.5)
+    return DimensionLabel(region_id, at_mm, at_mm, "1", "unlocked", 0.5, lockable=True)
 
 
 def test_label_at_takes_the_nearest_within_reach_and_the_later_on_a_tie() -> None:
@@ -297,6 +301,51 @@ def test_held_and_carcass_boards_get_no_arrow() -> None:
     assert arrow.vertical
     relocked = lock(unlocked, "upper")
     assert arrow_for(relocked, solve(relocked), frame, "shelf") is None
+
+
+def test_every_dimension_but_a_lone_unlocked_regions_can_lock() -> None:
+    lockable = {label.region_id: label.lockable for label in _labels()}
+    assert lockable == {
+        "row": False,
+        "column": True,
+        "void": True,
+        "lower": True,
+        "upper": True,
+    }
+    locked_row = _bookcase()
+    root = locked_row.root
+    assert isinstance(root, Division)
+    root.items[1] = dataclasses.replace(root.items[1], rule=Fixed(564.0))
+    (row,) = [x for x in _labels(unit=locked_row) if x.region_id == "row"]
+    assert row.lockable
+
+
+def test_a_held_board_gets_a_padlock_where_its_arrow_would_be() -> None:
+    frame = elevation_frame(_UNIT)
+    padlock = held_padlock(_UNIT, _SPACES, frame, "shelf")
+    assert padlock is not None
+    assert padlock.holders == ("lower",)
+    # Beside the lower bay's dimension, level with the shelf, as an arrow.
+    unlocked = _bookcase()
+    _replace_lower(unlocked, Bay(id="lower"))
+    arrow = arrow_for(unlocked, solve(unlocked), frame, "shelf")
+    assert arrow is not None
+    assert padlock.at_mm[0] == pytest.approx(arrow.at_mm[0])
+    shelf = board_space(_UNIT, _SPACES, "shelf")
+    assert shelf is not None
+    assert padlock.at_mm[1] == pytest.approx(frame.rect(shelf).center_mm[1])
+    for movable_or_carcass in ("divider", "top", "lower"):
+        assert held_padlock(_UNIT, _SPACES, frame, movable_or_carcass) is None
+
+
+def test_a_selected_held_board_outlines_the_openings_holding_it() -> None:
+    frame = elevation_frame(_UNIT)
+    overlay = plan_overlay(_UNIT, _SPACES, frame, "shelf")
+    holding = [o.rect for o in overlay.outlines if o.role == "holding"]
+    assert holding == [frame.rect(_SPACES["lower"])]
+    for other in ("divider", "lower", None):
+        overlay = plan_overlay(_UNIT, _SPACES, frame, other)
+        assert all(o.role != "holding" for o in overlay.outlines)
 
 
 def _replace_lower(unit: Unit, bay: Bay) -> None:

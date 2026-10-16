@@ -229,3 +229,53 @@ the panel closes, and nothing is left drawn in the view."""
   id = "redo-the-unit"
   instruction = ["Choose Edit, Redo."]
   expected = "The unit comes back as one open bay, with no panel open."
+
+[[case]]
+id = "editor.padlocks"
+title = "Padlocks on a HiDPI screen and on a busy unit"
+
+  [[case.step]]
+  id = "start"
+  action = "shelf_unit_with_varset"
+  instruction = [
+    "Move FreeCAD to a HiDPI screen, such as a Mac's built-in display.",
+    "Select the container (ShelvingUnit).",
+    "Run Edit Unit.",
+  ]
+  expected = """
+A padlock sits just past the text of each bay's dimension, open and in the
+dimension's color. It is as sharp as the text beside it, covers none of
+the text, and reads as a padlock."""
+
+  [[case.step]]
+  id = "zoom"
+  instruction = [
+    "Zoom in until one bay fills the view.",
+    "Zoom out until the whole unit is a few centimeters tall.",
+  ]
+  expected = """
+At every zoom each padlock stays just past its own text, covers no
+dimension's text, and stays legible."""
+
+  [[case.step]]
+  id = "lock"
+  instruction = ["Click the lower bay's padlock."]
+  expected = """
+The padlock closes and turns the color of a locked size, as the dimension
+does, and nothing moves."""
+
+  [[case.step]]
+  id = "held"
+  instruction = ["Click the shelf."]
+  expected = """
+A closed padlock sits where the shelf's arrow would be, legible beside the
+dimensions, and the lower bay is outlined in the color of a locked size."""
+
+  [[case.step]]
+  id = "busy"
+  action = "large_unit"
+  instruction = ["Select the container (ShelvingUnit).", "Run Edit Unit."]
+  expected = """
+Every opening's dimension has its padlock, and the drawing still reads at
+the fitted zoom: each padlock is plainly its own dimension's, and the
+openings and their sizes can be read without zooming in."""
