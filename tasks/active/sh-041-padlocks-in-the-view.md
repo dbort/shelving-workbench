@@ -126,3 +126,8 @@ STANDING OBLIGATIONS (`CLAUDE.md`):
 - **N2: QA `lock` step repeats a tested fact** (`freecad/Shelving/qa/cases/30-editor.toml:261`): ask only whether the closed padlock reads clearly on HiDPI.
 - **N3: `Style.outline_rgb` docstring states rationale, not contract** (`freecad/Shelving/editor/overlay.py:72`).
 - **N4: `settle()` runs twice in `unlock_holders`** (`freecad/Shelving/editor/session.py:555`).
+
+### Round 2: REJECTED
+- **F1: The held board's padlock is never checked to be closed** (`tests/freecad_view/test_padlocks.py:352`): the test checks its visibility, tooltip, name and place but not its icon; assert the closed shape and the `ConstrainedDimColor` body on `editor.board_padlock`.
+- **N1: `settle()` still runs twice in `unlock_holders`** (`freecad/Shelving/editor/session.py:551`): harmless; round 1's N4 stands.
+- **N2: The pool bound counts every dimension** (`tests/freecad_view/test_padlocks.py:256`): looser than the editor's guarantee but matches the Must Have; acceptable.
