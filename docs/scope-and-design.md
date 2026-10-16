@@ -130,6 +130,26 @@ removed ones deleted. A write deletes only objects this workbench tagged;
 the editor deletes any other object only when you select it for deletion.
 A pinned part may move but is never rewritten.
 
+## Editing
+
+Edit Unit works in FreeCAD's 3D view, the way the Sketcher's edit mode
+does: the camera turns to face the unit's front, FreeCAD's own navigation
+stays as it is, and on Close the camera returns when the Sketcher's
+"Restore camera position after editing" preference asks it to. The
+openings and their dimensions are drawn over the real boards, on whichever
+face the camera sees. A click on a board selects the whole board through
+FreeCAD's own selection; a click on a dimension types its size on the spot;
+buttons over a selected opening add a shelf or a divider; an arrow drags
+the selected board; Delete removes it. The task panel holds only what has
+no place on the drawing: the unit's size, what a selected opening's size
+measures, and the objects the workbench leaves alone.
+
+The unit's container cannot enter FreeCAD's edit mode without workbench
+state in the document, so the editor adds its drawing and input handling
+to the view when it opens and takes every one of them away when it closes.
+Each edit is its own undo step, and FreeCAD's Undo and Redo work during
+the edit as they do anywhere else.
+
 Matching is by object identity, so a renamed, recolored or referenced
 panel survives a reflow. Material, color and grain live where Woodworking
 keeps them (`ShapeMaterial`, the view's appearance, a per-face `Grain`

@@ -169,8 +169,29 @@ GUI routes `sys.stdout` to the Report view; write to `sys.__stderr__`.
 - Unacceptable text blocks Return, so `editingFinished` fires only for
   resolved input. On Return, 1.1 replaces the text with the resolved value.
 
-A region's size is not a document property, so the editor binds its
-dimension field to a temporary probe object the session creates.
+A region's size is not a document property, so the session adds a hidden,
+transient `App::PropertyLength` per size field to the container at open,
+outside any undo step, and removes them at Close (`session.py`,
+`FIELD_PROPERTIES`). Bound there, a field resolves `VarSet` names and
+offers f(x). Accepting f(x) writes into whatever transaction is open, so
+the field opens one before the dialog shows and aborts it once it has read
+the resolved number, which leaves no undo step and no expression
+(`fields.py`). Clearing the expression before the abort is what makes the
+widget editable again: the abort alone leaves it read-only.
+
+## `SoDatumLabel` outside the Sketcher
+
+- Since FreeCAD 1.1.2 it draws its lines at the z its `pnts` carry, and
+  still draws its arrowheads at a fixed z near 0 (`ZARROW_TEXT_OFFSET`);
+  1.1.1 drew the lines at z 0 too. Its text is drawn without a depth test.
+- Its bounding box has no depth: z 0 whatever `pnts` say. FreeCAD's
+  orthographic camera clips just in front of the scene's box, so a label
+  lifted off a face can lose its lines and text, keeping its arrowheads,
+  when the camera looks square on. On a Mac (FreeCAD 1.1.4) it did; under
+  Xvfb (1.1.3) the margin happened to hold. The editor puts invisible
+  points at the labels' height to widen the box (`overlay.py`).
+- It reports itself transparent, so Coin sorts it with other transparent
+  shapes unless an `SoTransparencyType` of `BLEND` is in force.
 
 ## FreeCAD 1.1 offers a settings migration at the first GUI start
 

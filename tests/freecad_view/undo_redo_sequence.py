@@ -10,10 +10,8 @@ environment. The result goes to a file because FreeCAD's GUI takes over
 Python's standard output for its Report view.
 """
 
-import gc
 import os
 import sys
-from collections.abc import Callable
 from pathlib import Path
 
 
@@ -25,64 +23,35 @@ def main(result: Path) -> None:
     import FreeCADGui
     from PySide6 import QtWidgets
 
-    from freecad.Shelving.core.layout import Bay, Board, Division, Region
-    from freecad.Shelving.editor.panel import EditUnitPanel
-    from freecad.Shelving.unit_ops import create_unit
-    from tests.freecad_view.editor import gui_step
-    from tests.freecad_view.view import ViewDriver
-
-    def bays(region: Region) -> list[str]:
-        if isinstance(region, Bay):
-            return [region.id]
-        if not isinstance(region, Division):
-            return []
-        return [
-            b
-            for item in region.items
-            if not isinstance(item, Board)
-            for b in bays(item)
-        ]
-
     _app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
     FreeCADGui.showMainWindow()
+    # Only once FreeCAD's GUI has set up Coin: the editor imports pivy,
+    # whose import before that left the first 3D view's render reading
+    # freed memory.
+    from freecad.Shelving.unit_ops import create_unit
+    from tests.freecad_view.editor import (
+        add_board,
+        edit_unit,
+        gui_step,
+        press_delete,
+    )
+    from tests.freecad_view.view import ViewDriver
+
     FreeCADGui.activateWorkbench("ShelvingWorkbench")
     doc = FreeCAD.newDocument("UndoRedoSequence")
     driver = ViewDriver.for_active_view()
     container = create_unit(doc)
     doc.recompute()
-    FreeCADGui.Selection.addSelection(container)
-    FreeCADGui.runCommand("Shelving_EditUnit")
-    driver.pump(300)
-    (panel,) = [obj for obj in gc.get_objects() if isinstance(obj, EditUnitPanel)]
-    session = panel.session
-
-    def new_board_after(click: Callable[[], None]) -> str:
-        before = set(session.spaces)
-        click()
-        driver.pump(200)
-        (made,) = {
-            board_id
-            for board_id in set(session.spaces) - before
-            if doc.getObject(board_id) is not None
-        }
-        return made
+    panel = edit_unit(container, driver)
 
     # A freed read crashes only when the freed memory has been reused, so
     # the sequence runs several times.
     for _ in range(8):
-        session.select(bays(session.unit.root)[0])
-        panel._refresh()
-        shelf = new_board_after(panel.add_shelf_button.click)
-        session.select(shelf)
-        panel._refresh()
-        panel.delete_button.click()
-        driver.pump(200)
+        add_board(panel, "vertical", driver)
+        press_delete(driver)
         gui_step("Std_Undo", driver)
         gui_step("Std_Undo", driver)
-        session.select(bays(session.unit.root)[0])
-        panel._refresh()
-        panel.add_divider_button.click()
-        driver.pump(200)
+        add_board(panel, "horizontal", driver)
         gui_step("Std_Undo", driver)
         gui_step("Std_Redo", driver)
     panel.reject()

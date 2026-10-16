@@ -1,13 +1,14 @@
-"""The elevation editor's task panel, with FreeCAD's GUI up.
+"""The editor's task panel and its size fields, with FreeCAD's GUI up.
 
 ``FreeCADGui.UiLoader``, and with it the ``Gui::QuantitySpinBox`` the
-dimension field is built from, exists only once the GUI is running, which
+size fields are built from, exists only once the GUI is running, which
 this directory's ``conftest.py`` arranges (``.claude/docs/freecad-notes.md``,
 "GUI-only widget access").
 
-``EditUnitPanel`` is built directly rather than through
-``FreeCADGui.Control.showDialog``: the task dialog machinery adds nothing
-these tests assert.
+``EditUnitPanel`` is built directly, with no 3D view, rather than through
+``FreeCADGui.Control.showDialog``: the offscreen GUI cannot draw a 3D view,
+and the task dialog machinery adds nothing these tests assert. What happens
+in the view is ``tests/freecad_view/``'s.
 """
 
 import sys
@@ -23,17 +24,18 @@ from shiboken6 import Shiboken
 
 from freecad.Shelving.compat import override
 from freecad.Shelving.core.layout import (
+    Basis,
     Bay,
     Board,
     Division,
-    Fill,
     Fixed,
     Region,
     SizeRule,
 )
 from freecad.Shelving.editor import panel as panel_module
+from freecad.Shelving.editor.fields import DimensionField
 from freecad.Shelving.editor.panel import AncestorWatch, EditUnitPanel
-from freecad.Shelving.editor.session import PROBE_PROPERTY, Session, UnitDimension
+from freecad.Shelving.editor.session import Session, UnitDimension
 from freecad.Shelving.unit_ops import create_unit
 
 _TOL_MM = 1e-6
@@ -71,18 +73,22 @@ def _rule_of(region: Region, region_id: str) -> SizeRule | None:
     return None
 
 
+def _new_document(name: str) -> FreeCAD.Document:
+    """A fresh document holding a ``VarSet`` with ``Len = 300 mm``."""
+    doc = FreeCAD.newDocument(name)
+    varset = cast("FreeCAD.DocumentObject", doc.addObject("App::VarSet", "VarSet"))
+    varset.addProperty("App::PropertyLength", "Len")
+    setattr(varset, "Len", 300.0)  # noqa: B010 - a dynamic property
+    return doc
+
+
 class _Fixture:
     """A fresh document holding a ``VarSet`` with ``Len = 300 mm``, a unit
     with one shelf, and an open panel on it: ``lower`` and ``upper`` name
     the two bays either side of the shelf."""
 
     def __init__(self, name: str) -> None:
-        self.doc = FreeCAD.newDocument(name)
-        varset = cast(
-            "FreeCAD.DocumentObject", self.doc.addObject("App::VarSet", "VarSet")
-        )
-        varset.addProperty("App::PropertyLength", "Len")
-        setattr(varset, "Len", 300.0)  # noqa: B010 - a dynamic property
+        self.doc = _new_document(name)
         self.container = create_unit(self.doc)
         self.doc.recompute()
         self.panel = EditUnitPanel(self.container)
@@ -90,13 +96,9 @@ class _Fixture:
         self.panel.form.show()
         _process_events()
         self.select(_bay_ids(self.session.unit.root)[0])
-        self.panel.add_shelf_button.click()
+        assert self.session.split("vertical") is None
+        self.panel._refresh()
         self.lower, self.upper = _bay_ids(self.session.unit.root)
-        self.shelf = next(
-            item.id
-            for item in _shelf_run(self.session.unit.root).items
-            if isinstance(item, Board)
-        )
 
     @property
     def session(self) -> Session:
@@ -109,14 +111,6 @@ class _Fixture:
     def rule(self, region_id: str) -> SizeRule | None:
         return _rule_of(self.panel.session.unit.root, region_id)
 
-    def type_size(self, text: str) -> None:
-        line_edit = self.panel.size_field.line_edit
-        line_edit.setFocus()
-        line_edit.selectAll()
-        QtTest.QTest.keyClicks(line_edit, text)
-        QtTest.QTest.keyClick(line_edit, QtCore.Qt.Key.Key_Return)
-        _process_events()
-
     def close(self) -> None:
         self.panel.reject()
         FreeCAD.closeDocument(self.doc.Name)
@@ -126,7 +120,7 @@ class _Fixture:
 def reported(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     """Every message the panel sends to FreeCAD's Notification Area, in
     order, instead of sending it. Requested before the panel is built, since
-    the panel hands ``report_error`` to its size field at construction."""
+    the panel hands ``report_error`` to its fields at construction."""
     messages: list[str] = []
     monkeypatch.setattr(panel_module, "report_error", messages.append)
     return messages
@@ -145,66 +139,6 @@ def unit_panel(
         fixture.close()
 
 
-def _shelf_run(region: Region) -> Division:
-    """The ``Division`` the fixture's one shelf sits in."""
-    assert isinstance(region, Division)
-    for item in region.items:
-        if isinstance(item, Division):
-            if any(isinstance(child, Bay) for child in item.items):
-                return item
-            return _shelf_run(item)
-    raise AssertionError("no run holding a bay")
-
-
-def _mouse(
-    view: QtWidgets.QGraphicsView,
-    kind: QtCore.QEvent.Type,
-    pos: QtCore.QPoint,
-    buttons: QtCore.Qt.MouseButton,
-) -> None:
-    """Send one mouse event to ``view``'s viewport. ``QTest.mouseMove``
-    carries no held button in Qt 6, so a drag is built from raw events."""
-    viewport = view.viewport()
-    event = QtGui.QMouseEvent(
-        kind,
-        QtCore.QPointF(pos),
-        QtCore.QPointF(viewport.mapToGlobal(pos)),
-        QtCore.Qt.MouseButton.LeftButton,
-        buttons,
-        QtCore.Qt.KeyboardModifier.NoModifier,
-    )
-    QtWidgets.QApplication.sendEvent(viewport, event)
-    _process_events()
-
-
-def _shelf_viewport_pos(fixture: _Fixture) -> QtCore.QPoint:
-    """A viewport point on the shelf, away from every dimension label."""
-    space = fixture.session.spaces[fixture.shelf]
-    scene_point = QtCore.QPointF(
-        space.origin.x_mm + 40.0,
-        fixture.session.unit.size_mm.z_mm - space.origin.z_mm - space.size.z_mm / 2,
-    )
-    return fixture.panel.view.mapFromScene(scene_point)
-
-
-def _press_move_release(fixture: _Fixture, dy_px: int) -> None:
-    view = fixture.panel.view
-    start = _shelf_viewport_pos(fixture)
-    held = QtCore.Qt.MouseButton.LeftButton
-    _mouse(view, QtCore.QEvent.Type.MouseButtonPress, start, held)
-    # Two steps, so the second is a move after the drag has begun.
-    for step_px in (dy_px // 2, dy_px):
-        _mouse(
-            view, QtCore.QEvent.Type.MouseMove, start + QtCore.QPoint(0, step_px), held
-        )
-    _mouse(
-        view,
-        QtCore.QEvent.Type.MouseButtonRelease,
-        start + QtCore.QPoint(0, dy_px),
-        QtCore.Qt.MouseButton.NoButton,
-    )
-
-
 def test_standard_buttons_are_a_plain_int(unit_panel: _Fixture) -> None:
     """FreeCAD's task dialog rejects the Qt flag itself."""
     buttons = unit_panel.panel.getStandardButtons()
@@ -212,108 +146,90 @@ def test_standard_buttons_are_a_plain_int(unit_panel: _Fixture) -> None:
     assert buttons == QtWidgets.QDialogButtonBox.StandardButton.Close.value
 
 
-def test_the_field_is_freecads_quantity_widget(unit_panel: _Fixture) -> None:
-    widget = unit_panel.panel.size_field.quantity_widget
-    assert widget is not None
-    assert widget.inherits("Gui::QuantitySpinBox")
-
-
-def test_a_typed_size_and_a_varset_expression(
-    unit_panel: _Fixture, reported: list[str]
-) -> None:
-    unit_panel.select(unit_panel.lower)
-    unit_panel.type_size("250")
-    assert unit_panel.rule(unit_panel.lower) == Fixed(250.0)
-    unit_panel.type_size("VarSet.Len - 20 mm")
-    assert unit_panel.rule(unit_panel.lower) == Fixed(280.0)
-    assert reported == []
-
-
-def test_an_unchanged_focus_out_leaves_a_fill_region(unit_panel: _Fixture) -> None:
-    unit_panel.select(unit_panel.upper)
-    assert unit_panel.rule(unit_panel.upper) == Fill()
-    unit_panel.panel.size_field.line_edit.editingFinished.emit()
-    _process_events()
-    assert unit_panel.rule(unit_panel.upper) == Fill()
-
-
-def _accept_formula_dialog(expression: str) -> None:
-    dialogs = [
-        widget
-        for widget in QtWidgets.QApplication.allWidgets()
-        if widget.inherits("Gui::Dialog::DlgExpressionInput") and widget.isVisible()
-    ]
-    assert len(dialogs) == 1, dialogs
-    dialog = dialogs[0]
-    assert isinstance(dialog, QtWidgets.QDialog)
-    # FreeCAD 1.1's expression field is a Gui::ExpressionTextEdit, a
-    # QPlainTextEdit subclass.
-    (text_edit,) = [
-        child
-        for child in dialog.findChildren(QtWidgets.QPlainTextEdit)
-        if child.objectName() == "expression"
-    ]
-    text_edit.setPlainText(expression)
-    _process_events()
-    dialog.accept()
-    _process_events()
-
-
-def test_an_fx_binding_applies_then_leaves_the_field_editable(
+def test_the_panel_holds_only_the_units_size_the_basis_and_its_lists(
     unit_panel: _Fixture,
 ) -> None:
-    unit_panel.select(unit_panel.lower)
-    widget = unit_panel.panel.size_field.quantity_widget
-    assert widget is not None
-    widget.setFocus()
-    QtTest.QTest.keyClick(widget, QtCore.Qt.Key.Key_Equal)
-    _process_events()
-    _accept_formula_dialog("VarSet.Len - 20 mm")
-    assert unit_panel.rule(unit_panel.lower) == Fixed(280.0)
-    probe = unit_panel.session.probe
-    assert probe is not None
-    assert not any(path == PROBE_PROPERTY for path, _expr in probe.ExpressionEngine)
-    assert not unit_panel.panel.size_field.line_edit.isReadOnly()
-    # Typing still works after the selection moves away and back. (Upper
-    # cannot take a typed size here: with lower fixed it is the run's only
-    # slack absorber.)
-    unit_panel.select(unit_panel.upper)
-    unit_panel.select(unit_panel.lower)
-    unit_panel.type_size("250")
-    assert unit_panel.rule(unit_panel.lower) == Fixed(250.0)
-    # FreeCAD records the binding as a step of its own, so the probe goes
-    # in a step too: removed outside one, that step would name a destroyed
-    # object.
-    doc = unit_panel.session.container.Document
-    unit_panel.panel.reject()
-    assert doc.getObject("ShelvingDimensionProbe") is None
-    assert doc.UndoNames[0] == "Remove Shelving Dimension"
-
-
-def test_a_jittered_click_does_not_drag(unit_panel: _Fixture) -> None:
-    jitter_px = QtWidgets.QApplication.startDragDistance() - 1
-    _press_move_release(unit_panel, -jitter_px)
-    assert unit_panel.rule(unit_panel.lower) == Fill()
-    assert unit_panel.session.selected_id == unit_panel.shelf
-    assert unit_panel.panel.delete_button.isEnabled()
-
-
-def test_a_locked_opening_holds_the_shelf_above_it(
-    unit_panel: _Fixture, reported: list[str]
-) -> None:
-    """A typed size locks the lower opening, which with the bottom board
-    below it leaves the shelf nothing to move into: the press selects the
-    shelf and the move reports why once."""
-    unit_panel.select(unit_panel.lower)
-    unit_panel.type_size("300")
-    shelf_z_mm = unit_panel.session.spaces[unit_panel.shelf].origin.z_mm
-    _press_move_release(unit_panel, -40)
-    assert unit_panel.session.selected_id == unit_panel.shelf
-    assert reported == ["A locked opening holds this board in place."]
-    assert unit_panel.rule(unit_panel.lower) == Fixed(300.0)
-    assert unit_panel.session.spaces[unit_panel.shelf].origin.z_mm == pytest.approx(
-        shelf_z_mm
+    form = unit_panel.panel.form
+    assert form.findChildren(QtWidgets.QGraphicsView) == []
+    spins = form.findChildren(QtWidgets.QAbstractSpinBox)
+    assert sorted(spins, key=id) == sorted(
+        (f.widget for f in unit_panel.panel.unit_fields.values()), key=id
     )
+    assert form.findChildren(QtWidgets.QComboBox) == [unit_panel.panel.basis_combo]
+    buttons = [button.text() for button in form.findChildren(QtWidgets.QAbstractButton)]
+    assert sorted(buttons) == ["Delete Selected", "Hide other objects"]
+    assert not unit_panel.panel.hide_others_check.isChecked()
+    # The unit has nothing this workbench did not create.
+    assert not unit_panel.panel.untagged_box.isVisible()
+
+
+def _wheel_down(widget: QtWidgets.QWidget) -> None:
+    center = QtCore.QPointF(widget.rect().center())
+    event = QtGui.QWheelEvent(
+        center,
+        QtCore.QPointF(widget.mapToGlobal(center.toPoint())),
+        QtCore.QPoint(0, 0),
+        QtCore.QPoint(0, -120),
+        QtCore.Qt.MouseButton.NoButton,
+        QtCore.Qt.KeyboardModifier.NoModifier,
+        QtCore.Qt.ScrollPhase.NoScrollPhase,
+        False,
+    )
+    QtWidgets.QApplication.sendEvent(widget, event)
+    _process_events()
+
+
+def test_the_wheel_changes_no_field_it_passes_over(unit_panel: _Fixture) -> None:
+    unit_panel.select(unit_panel.lower)
+    form = unit_panel.panel.form
+    doc = unit_panel.doc
+    fields: list[QtWidgets.QWidget] = [
+        *form.findChildren(QtWidgets.QAbstractSpinBox),
+        *form.findChildren(QtWidgets.QComboBox),
+    ]
+    assert unit_panel.panel.basis_combo.isEnabled()
+    unit_panel.panel.hide_others_check.setFocus()
+    _process_events()
+    for widget in fields:
+        assert not widget.hasFocus()
+        undo_names = list(doc.UndoNames)
+        value = (
+            widget.currentIndex()
+            if isinstance(widget, QtWidgets.QComboBox)
+            else widget.property("rawValue")
+        )
+        _wheel_down(widget)
+        line_edit = widget.findChild(QtWidgets.QLineEdit)
+        if line_edit is not None:
+            _wheel_down(line_edit)
+        after = (
+            widget.currentIndex()
+            if isinstance(widget, QtWidgets.QComboBox)
+            else widget.property("rawValue")
+        )
+        assert after == value, widget
+        assert list(doc.UndoNames) == undo_names, widget
+
+
+def test_the_basis_menu_measures_the_selected_opening(unit_panel: _Fixture) -> None:
+    combo = unit_panel.panel.basis_combo
+    unit_panel.select(unit_panel.lower)
+    assert combo.isEnabled()
+    assert combo.currentIndex() == 0
+    combo.setCurrentIndex(1)
+    _process_events()
+    rule = unit_panel.rule(unit_panel.lower)
+    assert isinstance(rule, Fixed)
+    assert rule.basis is Basis.WITH_NEXT
+    # A board has no basis to choose.
+    shelf = next(
+        node_id
+        for node_id in unit_panel.session.spaces
+        if unit_panel.doc.getObject(node_id) is not None
+        and node_id not in ("bottom", "top", "left_side", "right_side")
+    )
+    unit_panel.select(shelf)
+    assert not combo.isEnabled()
 
 
 def test_untagged_objects_are_kept_unless_deleted() -> None:
@@ -349,38 +265,150 @@ def test_untagged_objects_are_kept_unless_deleted() -> None:
         assert doc.getObject("HandAdded") is None
         doc.undo()
         assert doc.getObject("HandAdded") is not None
-        assert doc.getObject("ShelvingDimensionProbe") is None
     finally:
         FreeCAD.closeDocument(doc.Name)
 
 
-def test_the_plain_field_fallback(
-    monkeypatch: pytest.MonkeyPatch, reported: list[str]
-) -> None:
+class _SizeField:
+    """A :class:`DimensionField` bound to a fresh unit's container, shown
+    in a window of its own, recording every size it reports."""
+
+    def __init__(self, name: str, apply_on_step: bool = False) -> None:
+        self.doc = _new_document(name)
+        self.container = create_unit(self.doc)
+        self.doc.recompute()
+        self.sizes_mm: list[float] = []
+        self.errors: list[str] = []
+        self.field = DimensionField(
+            self.container,
+            "Placement.Base.x",
+            self.sizes_mm.append,
+            self.errors.append,
+            apply_on_step=apply_on_step,
+        )
+        self.window = QtWidgets.QWidget()
+        QtWidgets.QVBoxLayout(self.window).addWidget(self.field.widget)
+        self.window.show()
+        self.field.show_mm(200.0)
+        _process_events()
+
+    def type(self, text: str) -> None:
+        line_edit = self.field.line_edit
+        line_edit.setFocus()
+        line_edit.selectAll()
+        QtTest.QTest.keyClicks(line_edit, text)
+        QtTest.QTest.keyClick(line_edit, QtCore.Qt.Key.Key_Return)
+        _process_events()
+
+    def close(self) -> None:
+        # A test may have handed the window to a parent that deleted it.
+        if Shiboken.isValid(self.window):
+            Shiboken.delete(self.window)
+        FreeCAD.closeDocument(self.doc.Name)
+
+
+@pytest.fixture
+def size_field(request: pytest.FixtureRequest) -> Iterator[_SizeField]:
+    fixture = _SizeField(request.node.name)
+    try:
+        yield fixture
+    finally:
+        fixture.close()
+
+
+def test_the_field_is_freecads_quantity_widget(size_field: _SizeField) -> None:
+    widget = size_field.field.quantity_widget
+    assert widget is not None
+    assert widget.inherits("Gui::QuantitySpinBox")
+
+
+def test_a_typed_size_and_a_varset_expression(size_field: _SizeField) -> None:
+    size_field.type("250")
+    size_field.type("VarSet.Len - 20 mm")
+    assert size_field.sizes_mm == [250.0, 280.0]
+    assert size_field.errors == []
+
+
+def test_an_unchanged_focus_out_reports_nothing(size_field: _SizeField) -> None:
+    size_field.field.line_edit.editingFinished.emit()
+    _process_events()
+    assert size_field.sizes_mm == []
+
+
+def _accept_formula_dialog(expression: str) -> None:
+    dialogs = [
+        widget
+        for widget in QtWidgets.QApplication.allWidgets()
+        if widget.inherits("Gui::Dialog::DlgExpressionInput") and widget.isVisible()
+    ]
+    assert len(dialogs) == 1, dialogs
+    dialog = dialogs[0]
+    assert isinstance(dialog, QtWidgets.QDialog)
+    # FreeCAD 1.1's expression field is a Gui::ExpressionTextEdit, a
+    # QPlainTextEdit subclass.
+    (text_edit,) = [
+        child
+        for child in dialog.findChildren(QtWidgets.QPlainTextEdit)
+        if child.objectName() == "expression"
+    ]
+    text_edit.setPlainText(expression)
+    _process_events()
+    dialog.accept()
+    _process_events()
+
+
+def _open_formula_dialog(widget: QtWidgets.QWidget) -> None:
+    widget.setFocus()
+    QtTest.QTest.keyClick(widget, QtCore.Qt.Key.Key_Equal)
+    _process_events()
+
+
+def test_an_fx_expression_applies_and_leaves_no_trace(size_field: _SizeField) -> None:
+    """The number is reported; the expression is gone from the bound
+    property, which never moved, no undo step records it, and the field is
+    editable again."""
+    doc = size_field.doc
+    doc.UndoMode = 1
+    undo_names = list(doc.UndoNames)
+    widget = size_field.field.quantity_widget
+    assert widget is not None
+    _open_formula_dialog(widget)
+    _accept_formula_dialog("VarSet.Len - 20 mm")
+    assert size_field.sizes_mm == [280.0]
+    assert list(size_field.container.ExpressionEngine) == []
+    assert FreeCAD.getActiveTransaction() is None
+    doc.recompute()
+    placement = cast("_Placed", size_field.container).Placement
+    assert placement.Base == FreeCAD.Vector(0, 0, 0)
+    assert list(doc.UndoNames) == undo_names
+    assert not size_field.field.line_edit.isReadOnly()
+    size_field.type("250")
+    assert size_field.sizes_mm == [280.0, 250.0]
+
+
+def test_the_plain_field_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
     """With no ``UiLoader`` the field is a plain line edit whose text goes
     to ``parseQuantity`` untouched, and a parse error is reported once,
     however the edit ends."""
     monkeypatch.setattr(FreeCADGui, "UiLoader", None, raising=False)
-    fixture = _Fixture("panel_smoke_fallback")
+    fixture = _SizeField("panel_smoke_fallback")
     try:
-        assert fixture.panel.size_field.quantity_widget is None
-        fixture.select(fixture.lower)
+        assert fixture.field.quantity_widget is None
         # parseQuantity reads this as 38.10 mm, where the quantity widget
         # reads the bare 1 as millimeters (.claude/docs/freecad-notes.md).
-        fixture.type_size('1 + 1/2"')
-        rule = fixture.rule(fixture.lower)
-        assert isinstance(rule, Fixed)
-        assert abs(rule.size_mm - 38.1) < _TOL_MM
-        fixture.type_size('12 1/2"')
-        assert len(reported) == 1
+        fixture.type('1 + 1/2"')
+        assert len(fixture.sizes_mm) == 1
+        assert abs(fixture.sizes_mm[0] - 38.1) < _TOL_MM
+        fixture.type('12 1/2"')
+        assert len(fixture.errors) == 1
         # Leaving the field afterwards ends the same edit; no second popup.
         QtWidgets.QApplication.sendEvent(
-            fixture.panel.size_field.line_edit,
+            fixture.field.line_edit,
             QtGui.QFocusEvent(QtCore.QEvent.Type.FocusOut),
         )
         _process_events()
-        assert len(reported) == 1, reported
-        assert fixture.rule(fixture.lower) == rule
+        assert len(fixture.errors) == 1, fixture.errors
+        assert len(fixture.sizes_mm) == 1
     finally:
         fixture.close()
 
@@ -401,129 +429,43 @@ class _KeyRecorder(QtWidgets.QWidget):
 
 
 def test_unreadable_text_is_never_applied_and_keeps_return(
-    unit_panel: _Fixture,
+    size_field: _SizeField,
 ) -> None:
     recorder = _KeyRecorder()
-    QtWidgets.QVBoxLayout(recorder).addWidget(unit_panel.panel.form)
+    QtWidgets.QVBoxLayout(recorder).addWidget(size_field.window)
     recorder.show()
     _process_events()
-    unit_panel.select(unit_panel.lower)
-    form_height_px = unit_panel.panel.form.sizeHint().height()
+    window_height_px = size_field.window.sizeHint().height()
 
-    unit_panel.type_size('12 1/2"')
-    assert unit_panel.rule(unit_panel.lower) == Fill()
+    size_field.type('12 1/2"')
+    assert size_field.sizes_mm == []
     assert recorder.returns == 0
-    # Typing adds nothing to the panel: a widget appearing mid-edit changes
-    # the panel's height, which makes the task panel scroll.
-    assert unit_panel.panel.form.sizeHint().height() == form_height_px
+    # Typing adds nothing around the field: a widget appearing mid-edit
+    # changes the panel's height, which makes the task panel scroll.
+    assert size_field.window.sizeHint().height() == window_height_px
 
     # Leaving the field with the text still unreadable applies nothing and
     # puts the last shown value back.
-    field = unit_panel.panel.size_field
+    field = size_field.field
     assert field.quantity_widget is not None
-    shown_text = f"{unit_panel.session.spaces[unit_panel.lower].size.z_mm:.2f}"
     QtWidgets.QApplication.sendEvent(
         field.quantity_widget, QtGui.QFocusEvent(QtCore.QEvent.Type.FocusOut)
     )
     _process_events()
-    assert unit_panel.rule(unit_panel.lower) == Fill()
-    assert field.line_edit.text().startswith(shown_text), field.line_edit.text()
+    assert size_field.sizes_mm == []
+    assert field.line_edit.text().startswith("200"), field.line_edit.text()
 
-    unit_panel.type_size("300")
-    assert unit_panel.rule(unit_panel.lower) == Fixed(300.0)
+    size_field.type("300")
+    assert size_field.sizes_mm == [300.0]
     assert recorder.returns == 0
-
-
-def test_an_unsolvable_size_explains_itself_without_ids(
-    unit_panel: _Fixture, reported: list[str]
-) -> None:
-    unit_panel.select(unit_panel.lower)
-    unit_panel.type_size("5000")
-    (message,) = reported
-    assert message.startswith("The fixed sizes add up to"), message
-    assert unit_panel.lower not in message
-    assert unit_panel.rule(unit_panel.lower) == Fill()
-
-
-def test_a_drag_past_its_limit_reports_once(
-    unit_panel: _Fixture, reported: list[str]
-) -> None:
-    view = unit_panel.panel.view
-    start = _shelf_viewport_pos(unit_panel)
-    held = QtCore.Qt.MouseButton.LeftButton
-    # Each of these moves is far enough down to pass the bottom board.
-    beyond_px = int(unit_panel.session.spaces[unit_panel.shelf].origin.z_mm) + 100
-    _mouse(view, QtCore.QEvent.Type.MouseButtonPress, start, held)
-    for step_px in (beyond_px, beyond_px + 20, beyond_px + 40):
-        _mouse(
-            view, QtCore.QEvent.Type.MouseMove, start + QtCore.QPoint(0, step_px), held
-        )
-    _mouse(
-        view,
-        QtCore.QEvent.Type.MouseButtonRelease,
-        start + QtCore.QPoint(0, beyond_px + 40),
-        QtCore.Qt.MouseButton.NoButton,
-    )
-    (message,) = reported
-    assert "cannot move past" in message, message
-
-
-def test_ancestor_watch_names_the_container_hiding_the_form() -> None:
-    """A form on a background tab: the snapshot shows which ancestor hides
-    it, bringing the tab forward reports the Show that reveals it, and once
-    the form has been shown nothing more is reported."""
-    tabs = QtWidgets.QTabWidget()
-    tabs.addTab(QtWidgets.QWidget(), "Model")
-    page = QtWidgets.QWidget()
-    form = QtWidgets.QWidget()
-    QtWidgets.QVBoxLayout(page).addWidget(form)
-    tabs.addTab(page, "Tasks")
-    tabs.show()
-    _process_events()
-    try:
-        lines: list[str] = []
-        watch = AncestorWatch(form, lines.append)
-        watch.snapshot("start")
-        assert any("not visible" in line for line in lines), lines
-        assert any("child on page 1, current page 0" in line for line in lines), lines
-        assert any("current tab 'Model'" in line for line in lines), lines
-
-        lines.clear()
-        tabs.setCurrentIndex(1)
-        _process_events()
-        assert any(
-            line.startswith("form shown: ") and "child on the current page" in line
-            for line in lines
-        ), lines
-
-        lines.clear()
-        tabs.setCurrentIndex(0)
-        tabs.setCurrentIndex(1)
-        _process_events()
-        watch.snapshot("after shown")
-        assert lines == []
-    finally:
-        tabs.close()
-
-
-def test_a_split_refusal_names_no_region_id(
-    unit_panel: _Fixture, reported: list[str]
-) -> None:
-    unit_panel.select(unit_panel.lower)
-    unit_panel.type_size("10")
-    unit_panel.select(unit_panel.lower)
-    unit_panel.panel.add_shelf_button.click()
-    _process_events()
-    (message,) = reported
-    assert "too small" in message, message
-    assert unit_panel.lower not in message
+    recorder.close()
 
 
 def test_a_destroyed_field_ignores_late_events(
-    unit_panel: _Fixture, monkeypatch: pytest.MonkeyPatch
+    size_field: _SizeField, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Closing the task panel deletes its form, and Qt can still deliver a
-    focus-out or ``editingFinished`` to the size field's callbacks during or
+    focus-out or ``editingFinished`` to a size field's callbacks during or
     after that. They must do nothing rather than touch the deleted widget,
     whose errors PySide6 would report through ``sys.excepthook`` (or, from
     a finalizer, ``sys.unraisablehook``)."""
@@ -542,19 +484,35 @@ def test_a_destroyed_field_ignores_late_events(
 
     monkeypatch.setattr(sys, "excepthook", record)
     monkeypatch.setattr(sys, "unraisablehook", record_unraisable)
-    field = unit_panel.panel.size_field
-    unit_panel.select(unit_panel.lower)
+    field = size_field.field
     field.line_edit.setFocus()
     # Unreadable text, so a late focus-out would try to restore the value.
     QtTest.QTest.keyClicks(field.line_edit, '12 1/2"')
-    Shiboken.delete(unit_panel.panel.form)
+    Shiboken.delete(size_field.window)
     _process_events()
     assert not Shiboken.isValid(field.widget)
 
     field._discard_unreadable()
     field._finished()
+    field._formula_dialog_toggled(False)
     _process_events()
     assert errors == []
+
+
+def test_an_fx_unit_size_leaves_close_adding_nothing(unit_panel: _Fixture) -> None:
+    doc = unit_panel.doc
+    objects_before = len(doc.Objects)
+    widget = unit_panel.panel.unit_fields["height"].quantity_widget
+    assert widget is not None
+    _open_formula_dialog(widget)
+    _accept_formula_dialog("VarSet.Len * 3 + 100 mm")
+    assert unit_panel.session.unit_dimension_mm("height") == pytest.approx(1000.0)
+    names = list(doc.UndoNames)
+    assert names[0] == "Resize Unit"
+    unit_panel.panel.reject()
+    assert list(doc.UndoNames) == names
+    assert len(doc.Objects) == objects_before
+    assert not doc.HasPendingTransaction
 
 
 class _Placed(Protocol):
@@ -664,8 +622,8 @@ def test_the_unit_fields_follow_every_edit(unit_panel: _Fixture) -> None:
     _type_unit_size(unit_panel, "width", "700")
     before = _board_ids(unit_panel.session.unit.root)
     unit_panel.select(unit_panel.upper)
-    unit_panel.panel.add_divider_button.click()
-    _process_events()
+    assert unit_panel.session.split("horizontal") is None
+    unit_panel.panel._refresh()
     sizes_mm: dict[UnitDimension, float] = {
         "width": 700.0,
         "depth": 300.0,
@@ -676,8 +634,8 @@ def test_the_unit_fields_follow_every_edit(unit_panel: _Fixture) -> None:
 
     (divider,) = _board_ids(unit_panel.session.unit.root) - before
     unit_panel.select(divider)
-    unit_panel.panel.delete_button.click()
-    _process_events()
+    assert unit_panel.session.merge() is None
+    unit_panel.panel._refresh()
     assert _board_ids(unit_panel.session.unit.root) == before
     for dimension, size_mm in sizes_mm.items():
         assert _unit_field_mm(unit_panel, dimension) == pytest.approx(size_mm)
@@ -743,16 +701,112 @@ def test_a_wheel_turn_past_a_limit_reports_once(
     assert 54.0 < unit_panel.session.unit_dimension_mm("height") < 60.0
 
 
-def test_the_elevation_keeps_a_usable_height_in_a_short_panel(
-    unit_panel: _Fixture,
-) -> None:
-    """The elevation keeps at least ``_MIN_VIEW_HEIGHT_PX`` in a short panel
-    and takes most of a tall one."""
-    form = unit_panel.panel.form
-    form.resize(400, 200)
+def test_ancestor_watch_names_the_container_hiding_the_form() -> None:
+    """A form on a background tab: the snapshot shows which ancestor hides
+    it, bringing the tab forward reports the Show that reveals it, and once
+    the form has been shown nothing more is reported."""
+    tabs = QtWidgets.QTabWidget()
+    tabs.addTab(QtWidgets.QWidget(), "Model")
+    page = QtWidgets.QWidget()
+    form = QtWidgets.QWidget()
+    QtWidgets.QVBoxLayout(page).addWidget(form)
+    tabs.addTab(page, "Tasks")
+    tabs.show()
     _process_events()
-    assert unit_panel.panel.view.height() >= panel_module._MIN_VIEW_HEIGHT_PX
-    form.resize(400, 1400)
-    _process_events()
-    # A tall panel's spare height goes to the elevation.
-    assert unit_panel.panel.view.height() > 1400 // 2
+    try:
+        lines: list[str] = []
+        watch = AncestorWatch(form, lines.append)
+        watch.snapshot("start")
+        assert any("not visible" in line for line in lines), lines
+        assert any("child on page 1, current page 0" in line for line in lines), lines
+        assert any("current tab 'Model'" in line for line in lines), lines
+
+        lines.clear()
+        tabs.setCurrentIndex(1)
+        _process_events()
+        assert any(
+            line.startswith("form shown: ") and "child on the current page" in line
+            for line in lines
+        ), lines
+
+        lines.clear()
+        tabs.setCurrentIndex(0)
+        tabs.setCurrentIndex(1)
+        _process_events()
+        watch.snapshot("after shown")
+        assert lines == []
+    finally:
+        tabs.close()
+
+
+def _plain_group_unit(doc: FreeCAD.Document) -> FreeCAD.DocumentObject:
+    """A fresh unit's boards moved into an ``App::DocumentObjectGroup``, a
+    container with no ``Placement`` of its own."""
+    part = create_unit(doc)
+    doc.recompute()
+    boards = list(cast("FreeCAD.DocumentObjectGroup", part).Group)
+    group = cast(
+        "FreeCAD.DocumentObjectGroup",
+        doc.addObject("App::DocumentObjectGroup", "Plain"),
+    )
+    for board in boards:
+        cast("FreeCAD.DocumentObjectGroup", part).removeObject(board)
+        group.addObject(board)
+    doc.removeObject(part.Name)
+    doc.recompute()
+    return cast("FreeCAD.DocumentObject", group)
+
+
+def test_a_plain_group_unit_takes_sizes_and_fx() -> None:
+    doc = _new_document("panel_plain_group")
+    try:
+        doc.UndoMode = 1
+        group = _plain_group_unit(doc)
+        assert not hasattr(group, "Placement")
+        panel = EditUnitPanel(group)
+        panel.form.show()
+        _process_events()
+        widget = panel.unit_fields["height"].quantity_widget
+        assert widget is not None
+        _open_formula_dialog(widget)
+        _accept_formula_dialog("VarSet.Len * 3 + 100 mm")
+        assert panel.session.unit_dimension_mm("height") == pytest.approx(1000.0)
+        line_edit = panel.unit_fields["width"].line_edit
+        line_edit.setFocus()
+        line_edit.selectAll()
+        QtTest.QTest.keyClicks(line_edit, "700")
+        QtTest.QTest.keyClick(line_edit, QtCore.Qt.Key.Key_Return)
+        _process_events()
+        assert panel.session.unit_dimension_mm("width") == pytest.approx(700.0)
+        assert list(doc.UndoNames)[:2] == ["Resize Unit", "Resize Unit"]
+        panel.reject()
+        assert [name for name in group.PropertiesList if "ShelvingField" in name] == []
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def test_a_unit_placed_by_an_expression_keeps_its_fields_editable() -> None:
+    doc = _new_document("panel_placed_by_expression")
+    try:
+        container = create_unit(doc)
+        container.setExpression("Placement.Base.x", "VarSet.Len")
+        doc.recompute()
+        panel = EditUnitPanel(container)
+        panel.form.show()
+        _process_events()
+        for field in panel.unit_fields.values():
+            assert not field.line_edit.isReadOnly()
+        line_edit = panel.unit_fields["width"].line_edit
+        line_edit.setFocus()
+        line_edit.selectAll()
+        QtTest.QTest.keyClicks(line_edit, "700")
+        QtTest.QTest.keyClick(line_edit, QtCore.Qt.Key.Key_Return)
+        _process_events()
+        assert panel.session.unit_dimension_mm("width") == pytest.approx(700.0)
+        panel.reject()
+        assert ("Placement.Base.x", "VarSet.Len") in [
+            (path.lstrip("."), expression)
+            for path, expression in container.ExpressionEngine
+        ]
+    finally:
+        FreeCAD.closeDocument(doc.Name)

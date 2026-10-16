@@ -30,8 +30,6 @@ class HistoryOwner(Protocol):
         a Redo, or a step the session did not make."""
         ...
 
-    def probe_name(self) -> str | None: ...
-
     def step_interrupted(self) -> None:
         """An Undo or Redo ended the open step, as one during a drag does."""
         ...
@@ -72,8 +70,6 @@ class EditHistory:
         self._gui_list_filled = False
         self._settle_queued = False
         self._finished = False
-        # Whether any step changed the probe object.
-        self.probe_recorded = False
         FreeCAD.addDocumentObserver(self)
 
     @property
@@ -154,16 +150,11 @@ class EditHistory:
             return
         touched = self._recording or set()
         self._recording = None
-        probe_only = touched <= {self._owner.probe_name()}
-        if not touched.isdisjoint({self._owner.probe_name()}):
-            self.probe_recorded = True
         if self._step_name is not None and not self._ending:
             # An Undo during a drag commits the drag's open step first.
             self._end_interrupted()
-        elif self._step_name is None and not self._own_moves and not probe_only:
-            # A step the session did not make. One that touched only the
-            # probe, as the f(x) dialog's binding does, leaves the unit as
-            # it was.
+        elif self._step_name is None and not self._own_moves and touched:
+            # A step the session did not make.
             self._queue_settle()
 
     def slotUndoDocument(self, doc: FreeCAD.Document) -> None:

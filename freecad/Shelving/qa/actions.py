@@ -17,6 +17,8 @@ from freecad.Shelving.qa.registry import CheckResult, action, check
 if TYPE_CHECKING:
     import FreeCAD
 
+    from freecad.Shelving.core.layout import Region
+
 _TEST_UNIT = "TestUnit"
 _FRESH_UNIT = "ShelvingUnit"
 
@@ -43,9 +45,18 @@ def _active_document() -> FreeCAD.Document:
 
 def _new_document(name: str) -> FreeCAD.Document:
     """A new document with undo on, as one made with File, New has; a
-    scripted document starts with it off."""
+    scripted document starts with it off. With the GUI up, any open task
+    dialog is first rejected, as its Close button would."""
     import FreeCAD
 
+    if FreeCAD.GuiUp:
+        import FreeCADGui
+
+        # A panel the last case left open would refuse the new case's Edit
+        # Unit; closing it as its Close button does lets it clean up.
+        dialog = FreeCADGui.Control.activeTaskDialog()
+        if dialog is not None:
+            dialog.reject()
     doc = FreeCAD.newDocument(name)
     doc.UndoMode = 1
     return doc
@@ -115,9 +126,23 @@ def fresh_unit() -> None:
         doc.recompute()
 
 
+def _bay_ids(region: Region) -> list[str]:
+    from freecad.Shelving.core.layout import Bay, Board, Division
+
+    if isinstance(region, Bay):
+        return [region.id]
+    if not isinstance(region, Division):
+        return []
+    return [
+        found
+        for item in region.items
+        if not isinstance(item, Board)
+        for found in _bay_ids(item)
+    ]
+
+
 @action("shelf_unit_with_varset", label="Create a shelf unit and VarSet.Len = 300 mm")
 def shelf_unit_with_varset() -> None:
-    from freecad.Shelving.core.layout import Bay, Division, Region
     from freecad.Shelving.editor.session import Session
 
     fresh_unit()
@@ -127,20 +152,9 @@ def shelf_unit_with_varset() -> None:
         varset.addProperty("App::PropertyLength", "Len")
         cast("_VarSet", varset).Len = "300 mm"
 
-    def first_bay(region: Region) -> str | None:
-        if isinstance(region, Bay):
-            return region.id
-        if isinstance(region, Division):
-            for item in region.items:
-                if isinstance(item, Bay | Division):
-                    found = first_bay(item)
-                    if found is not None:
-                        return found
-        return None
-
     session = Session(_object(_FRESH_UNIT))
     session.open()
-    session.select(first_bay(session.unit.root))
+    session.select(_bay_ids(session.unit.root)[0])
     failure = session.split("vertical")
     session.close()
     if failure is not None:
@@ -148,14 +162,41 @@ def shelf_unit_with_varset() -> None:
     doc.recompute()
 
 
-@action("add_untagged_cube", label="Add a 400 x 5 x 400 mm cube to the unit")
-def add_untagged_cube() -> None:
+@action("large_unit", label="Create a unit of four columns of six openings")
+def large_unit() -> None:
+    from freecad.Shelving.core.geometry import Space
+    from freecad.Shelving.editor.session import Session, SplitDirection
+
+    fresh_unit()
     doc = _active_document()
-    with _undo_step(doc, "Add Cube"):
-        cube = cast("_BoxFeature", doc.addObject("Part::Box", "Cube"))
-        cube.Length, cube.Width, cube.Height = 400.0, 5.0, 400.0
-        container = cast("FreeCAD.DocumentObjectGroup", _object(_FRESH_UNIT))
-        container.addObject(cast("FreeCAD.DocumentObject", cube))
+    with _undo_step(doc, "Divide Unit"):
+        # Never opened, so its splits land in this one step.
+        session = Session(_object(_FRESH_UNIT))
+
+        def split_largest(direction: SplitDirection, column_x_mm: float | None) -> None:
+            def extent_mm(space: Space) -> float:
+                return space.size.x_mm if direction == "horizontal" else space.size.z_mm
+
+            bays = [
+                (region_id, session.spaces[region_id])
+                for region_id in _bay_ids(session.unit.root)
+                if column_x_mm is None
+                or session.spaces[region_id].origin.x_mm == column_x_mm
+            ]
+            region_id, _space = max(bays, key=lambda bay: extent_mm(bay[1]))
+            session.select(region_id)
+            failure = session.split(direction)
+            if failure is not None:
+                raise RuntimeError(failure.message)
+
+        for _ in range(3):
+            split_largest("horizontal", None)
+        columns_mm = sorted(
+            {session.spaces[bay].origin.x_mm for bay in _bay_ids(session.unit.root)}
+        )
+        for column_x_mm in columns_mm:
+            for _ in range(5):
+                split_largest("vertical", column_x_mm)
         doc.recompute()
 
 

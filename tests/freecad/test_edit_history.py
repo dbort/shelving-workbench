@@ -3,7 +3,9 @@ named step, Undo and Redo read back into the session, and Close.
 ``tests/freecad_view/test_undo_in_the_editor.py`` runs Undo and Redo
 through ``Std_Undo`` and ``Std_Redo`` with the 3D view up."""
 
+import zipfile
 from collections.abc import Iterator, Mapping
+from pathlib import Path
 from typing import Protocol, cast
 
 import FreeCAD
@@ -13,7 +15,7 @@ from freecad.Shelving import properties
 from freecad.Shelving.container import read_container
 from freecad.Shelving.core.geometry import Space, Vec3
 from freecad.Shelving.core.layout import Basis, Bay, Board, Division, Region
-from freecad.Shelving.editor.session import PROBE_PROPERTY, EditFailure, Session
+from freecad.Shelving.editor.session import FIELD_PROPERTIES, EditFailure, Session
 from freecad.Shelving.unit_ops import create_unit
 from tests.freecad_materials import library_material
 
@@ -239,7 +241,7 @@ def test_undo_past_the_first_edit_goes_on_into_the_document(
         session.close()
 
 
-def test_close_keeps_the_steps_and_removes_the_probe(doc: FreeCAD.Document) -> None:
+def test_close_keeps_the_steps(doc: FreeCAD.Document) -> None:
     container = _container(doc)
     before_names = list(doc.UndoNames)
     before_boards = _boards(container)
@@ -250,7 +252,6 @@ def test_close_keeps_the_steps_and_removes_the_probe(doc: FreeCAD.Document) -> N
     _undo(session)
     one_shelf = _boards(container)
     session.close()
-    assert doc.getObject("ShelvingDimensionProbe") is None
     assert _boards(container) == one_shelf
     assert doc.UndoNames == ["Add Shelf", *before_names]
     assert doc.RedoNames == ["Add Shelf"]
@@ -276,11 +277,12 @@ def test_a_session_without_edits_leaves_both_lists_as_it_found_them(
     _undone_step_elsewhere(doc)
     before_undo, before_redo = list(doc.UndoNames), list(doc.RedoNames)
     assert before_redo == ["Move it"]
+    objects_before = len(doc.Objects)
     session = _opened(doc)
     session.close()
     assert doc.UndoNames == before_undo
     assert doc.RedoNames == before_redo
-    assert doc.getObject("ShelvingDimensionProbe") is None
+    assert len(doc.Objects) == objects_before
 
 
 def test_a_click_or_a_refused_edit_leaves_both_lists_as_it_found_them(
@@ -301,22 +303,6 @@ def test_a_click_or_a_refused_edit_leaves_both_lists_as_it_found_them(
     session.close()
     assert doc.UndoNames == before_undo
     assert doc.RedoNames == before_redo
-
-
-def test_a_probe_some_step_changed_goes_in_a_step_of_its_own(
-    doc: FreeCAD.Document,
-) -> None:
-    """Removing it outside any step would leave that step naming a
-    destroyed object."""
-    session = _opened(doc)
-    probe = session.probe
-    assert probe is not None
-    doc.openTransaction("Bind an expression")
-    probe.setExpression(PROBE_PROPERTY, "20 mm")
-    doc.commitTransaction()
-    session.close()
-    assert doc.getObject("ShelvingDimensionProbe") is None
-    assert doc.UndoNames[0] == "Remove Shelving Dimension"
 
 
 def test_an_added_shelf_keeps_its_stock_through_undo_redo_and_close(
@@ -395,3 +381,33 @@ def test_an_undo_during_a_drag_ends_the_drag(doc: FreeCAD.Document) -> None:
         assert session.spaces[shelf].origin.z_mm == pytest.approx(grab_mm.z_mm + 20.0)
     finally:
         session.close()
+
+
+def test_the_size_fields_properties_last_only_the_session_and_record_nothing(
+    doc: FreeCAD.Document, tmp_path: Path
+) -> None:
+    container = _container(doc)
+    names = list(doc.UndoNames)
+    session = _opened(doc)
+    for name in FIELD_PROPERTIES.values():
+        assert hasattr(container, name)
+        status = cast("list[object]", container.getPropertyStatus(name))
+        assert "Hidden" in status
+    assert not doc.HasPendingTransaction
+    # A save during the edit leaves them out of the file.
+    saved = tmp_path / "during_edit.FCStd"
+    doc.saveCopy(str(saved))
+    with zipfile.ZipFile(saved) as archive:
+        document_xml = archive.read("Document.xml").decode("utf-8")
+    assert "ShelvingField" not in document_xml
+    session.close()
+    for name in FIELD_PROPERTIES.values():
+        assert not hasattr(container, name)
+    assert list(doc.UndoNames) == names
+    assert doc.RedoNames == []
+
+
+def test_close_after_the_container_is_destroyed(doc: FreeCAD.Document) -> None:
+    session = _opened(doc)
+    doc.removeObject(_container(doc).Name)
+    session.close()

@@ -1,4 +1,4 @@
-"""The "Edit Unit" command: open the elevation editor on the selected container.
+"""The "Edit Unit" command: edit the selected container in the 3D view.
 
 ``FreeCADGui.Control.showDialog`` needs FreeCAD's GUI, so the headless tests
 drive :class:`freecad.Shelving.editor.session.Session` directly rather than
@@ -8,7 +8,8 @@ calls ``unit_ops`` functions.
 
 import os
 import time
-from typing import TYPE_CHECKING, Literal, TypedDict, cast
+import traceback
+from typing import TYPE_CHECKING, Literal, Protocol, TypedDict, cast
 
 import FreeCAD
 
@@ -27,6 +28,34 @@ class _CommandResources(TypedDict):
     CmdType: Literal["NoTransaction"]
 
 
+class _TaskDialog(Protocol):
+    """The dialog ``FreeCADGui.Control.showDialog`` returns; the stubs do
+    not declare it."""
+
+    def setDocumentName(self, name: str, /) -> None: ...
+    def setAutoCloseOnDeletedDocument(self, close: bool, /) -> None: ...
+
+
+class _GuiDocument(Protocol):
+    ActiveView: object
+
+    def mdiViewsOfType(self, type_name: str, /) -> list[object]: ...
+
+
+def _view_of(doc: FreeCAD.Document) -> object | None:
+    """The 3D view to edit ``doc`` in: the active view when it is one, else
+    the document's first, as FreeCAD's own edit mode picks one."""
+    import FreeCADGui as Gui
+
+    gui_doc = cast("_GuiDocument | None", Gui.getDocument(doc.Name))
+    if gui_doc is None:
+        return None
+    if hasattr(gui_doc.ActiveView, "graphicsView"):
+        return gui_doc.ActiveView
+    views = gui_doc.mdiViewsOfType("Gui::View3DInventor")
+    return views[0] if views else None
+
+
 def _selected_container() -> FreeCAD.DocumentObject | None:
     """The unit container the current selection names, per
     :func:`freecad.Shelving.container.unit_for_selection`."""
@@ -39,13 +68,13 @@ def _selected_container() -> FreeCAD.DocumentObject | None:
 
 
 class EditUnitCommand:
-    """`Gui.Command` that opens the elevation editor task panel on the
-    selected container."""
+    """`Gui.Command` that edits the selected container in the 3D view, with
+    its task panel."""
 
     def GetResources(self) -> _CommandResources:
         return {
             "MenuText": "Edit Unit",
-            "ToolTip": "Open the elevation editor for the selected unit",
+            "ToolTip": "Edit the selected unit in the 3D view",
             "Pixmap": _ICON,
             # FreeCAD otherwise wraps the command in a transaction of its
             # own, which holds back every commit the session makes until
@@ -85,6 +114,15 @@ class EditUnitCommand:
             )
             run.end("refused")
             return
+        view = _view_of(container.Document)
+        if view is None:
+            refusals.report_refusal(
+                "Edit Unit works in a 3D view, and this document has none open.",
+                (),
+                refusals.SUGGESTIONS["no_3d_view"],
+            )
+            run.end("refused")
+            return
         # Imported here rather than at module level: a PySide6 import
         # failure on some user's FreeCAD build would otherwise stop init_gui
         # from registering every Shelving command, not only this one.
@@ -92,10 +130,11 @@ class EditUnitCommand:
 
         from freecad.Shelving.editor.panel import EditUnitPanel
         from freecad.Shelving.editor.session import UnsolvableUnit
+        from freecad.Shelving.editor.view_editor import View3D
 
         run.lap("import panel")
         try:
-            panel = EditUnitPanel(container)
+            panel = EditUnitPanel(container, cast("View3D", view))
         except ScanError as err:
             refusals.report_refusal(
                 str(err), err.objects, refusals.SUGGESTIONS[err.reason]
@@ -111,6 +150,9 @@ class EditUnitCommand:
             run.end("refused")
             return
         except Exception as err:  # noqa: BLE001 - report, don't crash the GUI
+            # The one-line message asks for a report; the traceback is what
+            # a developer needs from it.
+            debug_log.log("edit unit failed:\n" + traceback.format_exc())
             refusals.report_refusal(str(err), (), refusals.SUGGESTIONS["unexpected"])
             run.end("refused")
             return
@@ -129,14 +171,16 @@ class EditUnitCommand:
             lambda name: run.lap(f"{name} at {debug_log.timestamp()}"),
         )
 
-        def _elevation_painted(paint_ms: float) -> None:
-            run.lap(
-                f"elevation first painted at {debug_log.timestamp()}, "
-                f"paint took {paint_ms:.1f} ms"
-            )
+        def _view_painted(name: str) -> None:
+            run.lap(f"{name} at {debug_log.timestamp()}")
             run.end()
 
-        panel.view.on_first_paint = _elevation_painted
+        if panel.editor is not None:
+            FirstEvents(
+                panel.editor.viewport,
+                {QtCore.QEvent.Type.Paint: "3D view first painted with the overlay"},
+                _view_painted,
+            )
         # A diagnostic for bug-011: it filters events on FreeCAD's own widgets,
         # so it runs only when its output would be printed.
         ancestors = (
@@ -148,12 +192,12 @@ class EditUnitCommand:
             else None
         )
         try:
-            Gui.Control.showDialog(panel)
+            dialog = cast("_TaskDialog", Gui.Control.showDialog(panel))
         except Exception as err:  # noqa: BLE001 - the session must close
-            # The probe object EditUnitPanel's session made would otherwise
-            # stay with no dialog left to remove it. showDialog raises
-            # RuntimeError when another task dialog is already active.
-            panel.session.close()
+            # The session and the in-view editor would otherwise stay with no
+            # dialog left to end them. showDialog raises RuntimeError when
+            # another task dialog is already active.
+            panel.reject()
             refusals.report_refusal(
                 f"Edit Unit could not open its panel: {err}",
                 (),
@@ -161,6 +205,10 @@ class EditUnitCommand:
             )
             run.end("refused")
             return
+        # A Python task dialog otherwise outlives its document; Assembly's
+        # task panels ask for the same.
+        dialog.setDocumentName(container.Document.Name)
+        dialog.setAutoCloseOnDeletedDocument(True)
         run.lap("showDialog")
         if ancestors is not None:
             ancestors.snapshot("after showDialog")
@@ -176,7 +224,7 @@ class EditUnitCommand:
         # A panel that is never painted (the Tasks pane hidden, say) would
         # otherwise leave the run open until the next Edit Unit abandons it.
         QtCore.QTimer.singleShot(
-            60_000, lambda: run.end("elevation not painted within 60 s")
+            60_000, lambda: run.end("3D view not painted within 60 s")
         )
 
 

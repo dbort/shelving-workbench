@@ -19,6 +19,8 @@ from tests.freecad_env import isolate_freecad_settings, load_freecad, remove_set
 
 if TYPE_CHECKING:
     # Imports FreeCAD, which only pytest_sessionstart may load.
+    import FreeCAD
+
     from tests.freecad_view.view import ViewDriver
 
 _HERE = Path(__file__).resolve().parent
@@ -56,6 +58,30 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     root = session.config.stash.get(_SETTINGS, None)
     if root is not None:
         remove_settings(root)
+
+
+@pytest.fixture
+def unit(driver: "ViewDriver") -> Iterator["FreeCAD.DocumentObject"]:
+    """A fresh unit in the driver's document, made in one step of its own,
+    with the workbench active as a toolbar click needs. A task dialog still
+    open at the end is closed."""
+    import FreeCAD
+    import FreeCADGui
+
+    from freecad.Shelving.unit_ops import create_unit
+
+    FreeCADGui.activateWorkbench("ShelvingWorkbench")
+    doc = cast("FreeCAD.Document", FreeCAD.ActiveDocument)
+    doc.UndoMode = 1
+    doc.openTransaction("Create Shelving Unit")
+    container = create_unit(doc)
+    doc.commitTransaction()
+    doc.recompute()
+    driver.pump()
+    yield container
+    if FreeCADGui.Control.activeDialog():
+        FreeCADGui.Control.closeDialog()
+        driver.pump()
 
 
 @pytest.fixture

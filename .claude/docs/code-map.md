@@ -14,11 +14,13 @@ Each layer imports only the layers listed above it.
 - `freecad/Shelving/properties.py`, `freecad/Shelving/container.py`,
   `freecad/Shelving/unit_ops.py`: reading and writing a FreeCAD document
   against the core. Tested headless in `tests/freecad/`.
-- `freecad/Shelving/editor/`: `scene.py` draws and hit-tests with no
-  document; `session.py` owns the document and its undo steps, one per
-  edit; `history.py` follows FreeCAD's undo stack for it; `panel.py` is
-  the Qt shell over a session. Tested in `tests/test_editor_scene.py`,
-  `tests/freecad/`, `tests/freecad_gui/` and `tests/freecad_view/`.
+- `freecad/Shelving/editor/`: `elevation.py` plans the drawing with no
+  document; `session.py` owns the document and its undo
+  steps, one per edit; `history.py` follows FreeCAD's undo stack for it;
+  `overlay.py` builds the Coin nodes, `view_editor.py` is the editor in
+  the 3D view, `fields.py` the size fields, and `panel.py` the task panel
+  over them. Tested in `tests/test_editor_elevation.py`, `tests/freecad/`,
+  `tests/freecad_gui/` and `tests/freecad_view/`.
 - `freecad/Shelving/refusals.py`: the one way a command reports a
   refusal, with the suggested next step for each reason, and the
   Notification Area error that it and the editor's refused edits use. Tested in

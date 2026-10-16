@@ -22,9 +22,9 @@ def test_every_case_file_loads() -> None:
     cases = load_cases()
     assert [case.id for case in cases][:2] == [
         "scan.refusal",
-        "editor.one-session",
+        "editor.camera",
     ]
-    assert len(cases) == 6
+    assert len(cases) == 8
     assert all(case.steps for case in cases)
 
 
@@ -74,17 +74,17 @@ def _progress() -> Progress:
     return Progress(
         started="2026-10-10 09:00:00",
         results={
-            "editor.unit-size": {
+            "editor.undo": {
                 "start": StepResult(
                     "pass", "", None, "", presses=("done", "failed: no unit")
                 ),
-                "close-and-undo": StepResult(
+                "keyboard-undo": StepResult(
                     "fail",
                     "The unit stayed taller",
                     CheckResult(passed=False, detail="600 x 300 x 1000 mm"),
                     "[shelving] edit unit\n",
                 ),
-                "step-and-wheel": StepResult("pass", "", None, "grew\n"),
+                "add-shelves": StepResult("pass", "", None, "grew\n"),
             }
         },
     )
@@ -101,11 +101,11 @@ def test_the_report_holds_each_recorded_step_and_the_run() -> None:
     assert report["started"] == "2026-10-10 09:00:00"
     assert report["finished"] == "2026-10-10 09:05:00"
     (case,) = report["cases"]
-    assert case["id"] == "editor.unit-size"
+    assert case["id"] == "editor.undo"
     assert [step["id"] for step in case["steps"]] == [
         "start",
-        "step-and-wheel",
-        "close-and-undo",
+        "add-shelves",
+        "keyboard-undo",
     ]
     assert case["steps"][0]["action"] == "fresh_unit"
     assert case["steps"][0]["presses"] == ["done", "failed: no unit"]
@@ -136,8 +136,8 @@ def test_a_repeated_step_id_is_refused() -> None:
         parse_cases({"case": [{"id": "c", "title": "C", "step": [step, step]}]}, "x")
 
 
-def test_the_unit_size_start_step_carries_its_size_check() -> None:
-    (case,) = [c for c in load_cases() if c.id == "editor.unit-size"]
+def test_the_camera_start_step_carries_the_fresh_unit_check() -> None:
+    (case,) = [c for c in load_cases() if c.id == "editor.camera"]
     (step,) = [s for s in case.steps if s.id == "start"]
     assert step.check == "fresh_unit_size"
 
