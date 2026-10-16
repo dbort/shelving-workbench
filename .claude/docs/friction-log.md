@@ -1,5 +1,5 @@
 ---
-next_id: friction-027
+next_id: friction-028
 ---
 
 # Friction log
@@ -54,3 +54,11 @@ the papercut and its fix in its message.
   later in the same run, so pixel-aimed tests passed alone and failed in
   the suite. Each such test sets its camera height from the view's size.
   Simpler if: the `driver` fixture gave each test's view a fixed size.
+- `friction-027` - **a comment typed after a case's last step reaches no
+  report**: in sh-041's manual QA, the user wrote a padlock finding on the
+  "Every step is recorded." page and pressed Finish case; the report has
+  no trace of it. `QAWizard._show_step` in `qa/dock.py` disables the
+  verdict buttons once every step is recorded but leaves `comment_edit`
+  open, and only `record` reads it. The user relayed the comment in chat.
+  Simpler if: the finished page either hides the comment box or saves its
+  text as a case-level comment in the report.
