@@ -549,8 +549,7 @@ def test_closing_the_3d_view_under_the_edit_leaves_the_panel_working(
 ) -> None:
     """With the view it edits in closed and the document open in another,
     the editor stands down at the next redraw: the panel keeps editing the
-    unit's size and following Undo until its Close, and nothing raises
-    (Advice, CLOSING)."""
+    unit's size and following Undo until its Close, and nothing raises."""
     errors: list[BaseException] = []
 
     def record(

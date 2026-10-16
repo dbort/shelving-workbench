@@ -233,7 +233,7 @@ def _label_bounds_node(labels: Sequence[DimensionLabel], z_mm: float) -> Coin:
 
 def arrow_geometry(rgb: RGB) -> Coin:
     """A double-headed arrow along local x from -1 to 1, for a dragger part:
-    Coin's own translator is pale grey and hard to see."""
+    Coin's own translator is pale gray and hard to see."""
     group = coin.SoSeparator()
     light = coin.SoLightModel()
     light.model = coin.SoLightModel.BASE_COLOR

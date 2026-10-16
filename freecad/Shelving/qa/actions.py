@@ -45,7 +45,8 @@ def _active_document() -> FreeCAD.Document:
 
 def _new_document(name: str) -> FreeCAD.Document:
     """A new document with undo on, as one made with File, New has; a
-    scripted document starts with it off."""
+    scripted document starts with it off. With the GUI up, any open task
+    dialog is first rejected, as its Close button would."""
     import FreeCAD
 
     if FreeCAD.GuiUp:
