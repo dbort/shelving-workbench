@@ -926,14 +926,14 @@ class ViewEditor:
                 + button.width() / 2
             )
             # A vertical dimension's text runs along its line, read upward.
-            shift = (
+            shift_px = (
                 QtCore.QPointF(reach_px, 0.0)
                 if label.horizontal
                 else QtCore.QPointF(0.0, -reach_px)
             )
             # A padlock off the viewport hides rather than float over the
             # panels around the view.
-            button.setVisible(self._move_to(button, label.text_at_mm, shift))
+            button.setVisible(self._move_to(button, label.text_at_mm, shift_px))
         if self.held is not None:
             self.board_padlock.setVisible(
                 self._move_to(self.board_padlock, self.held.at_mm)
@@ -943,16 +943,18 @@ class ViewEditor:
         self,
         widget: QtWidgets.QWidget,
         anchor_mm: tuple[float, float],
-        shift: QtCore.QPointF | None = None,
+        shift_px: QtCore.QPointF | None = None,
     ) -> bool:
         """Center ``widget``, a child of the view's parent, on the elevation
-        point ``anchor_mm``, moved by ``shift`` logical pixels. Returns
+        point ``anchor_mm``, moved by ``shift_px`` logical pixels. Returns
         whether that center lies on the viewport."""
         point = self._logical_point(self.to_document(*anchor_mm))
-        if shift is not None:
-            point += shift
+        if shift_px is not None:
+            point += shift_px
         local = point.toPoint()
         parent = widget.parentWidget()
+        # From the viewport, whose coordinates _logical_point gives: the
+        # QGraphicsView's frame can offset it.
         at = self.viewport.mapTo(parent, local) if parent is not None else local
         widget.move(at.x() - widget.width() // 2, at.y() - widget.height() // 2)
         return self.viewport.rect().contains(local)

@@ -70,8 +70,9 @@ class Style:
         return self.locked_rgb if color == "locked" else self.unlocked_rgb
 
     def outline_rgb(self, role: OutlineRole) -> RGB:
-        """A holding region takes the locked dimension color, so it reads as
-        the lock it is."""
+        """The selection color for "selected", the locked dimension color
+        for "holding", so a holding region reads as the lock it is, and a
+        dark gray for "region"."""
         if role == "selected":
             return self.selected_rgb
         if role == "holding":

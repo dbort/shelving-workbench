@@ -261,8 +261,8 @@ dimension's text, and stays legible."""
   id = "lock"
   instruction = ["Click the lower bay's padlock."]
   expected = """
-The padlock closes and turns the color of a locked size, as the dimension
-does, and nothing moves."""
+The closed padlock reads plainly as closed beside the open ones, at a
+glance and without zooming in."""
 
   [[case.step]]
   id = "held"

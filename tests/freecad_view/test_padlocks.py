@@ -98,10 +98,10 @@ def _misplaced(
     return None
 
 
-def _icon_pixel_alpha(button: QtWidgets.QToolButton, x: float, y: float) -> int:
+def _icon_pixel_alpha(button: QtWidgets.QToolButton, x_px: float, y_px: float) -> int:
     pixmap = button.icon().pixmap(QtCore.QSize(14, 14), button.devicePixelRatioF())
     ratio = pixmap.devicePixelRatio()
-    return pixmap.toImage().pixelColor(round(x * ratio), round(y * ratio)).alpha()
+    return pixmap.toImage().pixelColor(round(x_px * ratio), round(y_px * ratio)).alpha()
 
 
 def _icon_rgb(button: QtWidgets.QToolButton) -> tuple[float, float, float]:
@@ -208,6 +208,8 @@ class _DragWatch:
     most_padlocks: int = 0
     steps: int = 0
     problems: list[str] = field(default_factory=list)
+    # Every padlock button seen, held so no id is reused for a new one.
+    seen: dict[int, QtWidgets.QToolButton] = field(default_factory=dict)
 
     def wrap(self, place: Callable[[], None]) -> Callable[[], None]:
         def placed() -> None:
@@ -216,6 +218,8 @@ class _DragWatch:
             self.steps += 1
             self.most_labels = max(self.most_labels, len(editor.overlay.labels))
             self.most_padlocks = max(self.most_padlocks, len(editor.padlocks))
+            for button in editor.padlocks:
+                self.seen.setdefault(id(button), button)
             for label in editor.overlay.labels:
                 if label.lockable:
                     problem = _misplaced(self.driver, editor, label)
@@ -247,6 +251,9 @@ def test_padlocks_follow_a_drag_from_a_pool_that_never_outgrows_the_labels(
     assert watch.steps >= 16
     assert watch.problems == []
     assert 0 < watch.most_padlocks <= watch.most_labels
+    # Distinct buttons over the whole drag, so a pool rebuilt with fresh
+    # buttons at each step fails even when the list keeps its length.
+    assert len(watch.seen) <= watch.most_labels
     parent = editor.padlocks[0].parentWidget()
     assert parent is not None
     made = [

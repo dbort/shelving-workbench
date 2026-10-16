@@ -552,6 +552,7 @@ class Session:
         move the board. Returns an :class:`EditFailure`, changing nothing,
         when no region holds the board or no unlock would free it."""
         self.settle()
+        # Read after the settle, so an Undo's read-back is already in.
         holders = self.held_by(board_id)
         if not holders:
             return EditFailure("no locked opening holds this board", board_id)
