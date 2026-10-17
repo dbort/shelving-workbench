@@ -1210,7 +1210,7 @@ class ViewEditor:
         opening there, or nothing. FreeCAD knows no openings, so this is the
         one place the editor reads a modifier: under Inventor navigation,
         where FreeCAD selects only on Ctrl-click, a plain click is what
-        reaches an opening (user, 2026-10-17)."""
+        reaches an opening."""
         if self._closed:
             return
         self._close_field()

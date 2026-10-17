@@ -165,8 +165,9 @@ class StockGroup:
     board_ids: tuple[str, ...]
 
 
-# Thicknesses closer than this are one stock: a solve or a scan's snapping
-# can leave float noise in two boards cut from the same sheet.
+# Thicknesses that agree to this many decimal places are one stock: a solve
+# or a scan's snapping can leave float noise in two boards cut from the same
+# sheet.
 _THICKNESS_DIGITS = 6
 
 

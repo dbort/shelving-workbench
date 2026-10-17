@@ -359,7 +359,8 @@ and the middle opening's a locked clear size."""
     "Click the lower shelf.",
     "Ctrl-click the upper shelf.",
     "Click Change stock….",
-    "Check Thickness and type 12.",
+    "Check Thickness.",
+    "Type 12.",
     "Click OK.",
   ]
   expected = """

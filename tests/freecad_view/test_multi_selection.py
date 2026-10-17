@@ -224,3 +224,37 @@ def test_delete_with_a_carcass_board_refuses_them_all_once(
     assert doc.getObject("Shelf") is not None
     _assert_mirrored(panel, ("Shelf", "Left"))
     click_task_button("Close", driver)
+
+
+def test_a_stock_row_selects_its_boards_whole_with_the_view_open(
+    magic_start: tuple[FreeCAD.DocumentObject, ViewDriver],
+) -> None:
+    container, driver = magic_start
+    panel = edit_unit(container, driver)
+    session = panel.session
+    editor = editor_of(panel)
+
+    def click_row(index: int) -> QtWidgets.QTreeWidgetItem:
+        row = panel.stock_list.topLevelItem(index)
+        assert row is not None
+        panel.stock_list.itemClicked.emit(row, 0)
+        driver.pump()
+        return row
+
+    (group,) = session.stock_groups()
+    row = click_row(0)
+    assert set(session.selected_boards) == set(group.board_ids)
+    assert _freecad_boards(panel) == set(group.board_ids)
+    assert all(subs == () for _obj, subs in selection())
+    assert row.isSelected()
+    assert editor.arrow is None
+    editor.select("Shelf")
+    assert session.swap_stock(thickness_mm=12.0) is None
+    driver.pump()
+    panel._refresh()
+    row = click_row(1)
+    assert session.selected_boards == ("Shelf",)
+    assert selection() == [("Shelf", ())]
+    assert row.isSelected()
+    assert editor.arrow is not None and editor.arrow.board_id == "Shelf"
+    click_task_button("Close", driver)
