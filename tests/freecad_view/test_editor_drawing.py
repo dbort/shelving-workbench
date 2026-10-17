@@ -56,16 +56,15 @@ def _turn(container: FreeCAD.DocumentObject) -> None:
     container.Document.recompute()
 
 
-@pytest.fixture(
-    params=[
-        pytest.param("at the origin", marks=pytest.mark.full_only),
-        "moved and turned",
-    ]
-)
+@pytest.fixture
 def placed_unit(
     request: pytest.FixtureRequest, unit: FreeCAD.DocumentObject
 ) -> FreeCAD.DocumentObject:
-    if request.param == "moved and turned":
+    """The unit moved and turned, or left at the origin when a test
+    parametrizes it indirectly with "at the origin"."""
+    # A moved and turned unit exercises every transform an unmoved one
+    # does, so only a test or two also runs at the origin.
+    if getattr(request, "param", "moved and turned") == "moved and turned":
         _turn(unit)
     return unit
 
@@ -188,6 +187,11 @@ def _front_rotation(
     return _document_placement(container, elevation_frame(panel.session.unit)).Rotation
 
 
+@pytest.mark.parametrize(
+    "placed_unit",
+    [pytest.param("at the origin", marks=pytest.mark.full_only), "moved and turned"],
+    indirect=True,
+)
 def test_opening_turns_the_camera_to_the_units_front(
     placed_unit: FreeCAD.DocumentObject, driver: ViewDriver
 ) -> None:
@@ -237,17 +241,11 @@ def _camera_after_close(
         params.RemBool("RestoreCamera")
 
 
-@pytest.mark.parametrize(
-    "restore",
-    [
-        pytest.param(True, id="set", marks=pytest.mark.full_only),
-        pytest.param(None, id="default"),
-    ],
-)
 def test_close_restores_the_camera_as_the_sketcher_does(
-    unit: FreeCAD.DocumentObject, driver: ViewDriver, restore: bool | None
+    unit: FreeCAD.DocumentObject, driver: ViewDriver
 ) -> None:
-    before, editing, after = _camera_after_close(unit, driver, restore)
+    # Unset, the Sketcher's preference defaults to restoring.
+    before, editing, after = _camera_after_close(unit, driver, restore=None)
     assert not editing.isSame(before, 1e-6)
     assert after.isSame(before, 1e-6)
 

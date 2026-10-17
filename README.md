@@ -41,9 +41,10 @@ check, and the headless (`tests/freecad/`), offscreen-GUI
 (`tests/freecad_gui/`) and 3D-view (`tests/freecad_view/`) FreeCAD suites.
 `pixi run tests -- --offline` skips the checks that need the network.
 `pixi run tests -- --smoke` is a faster pass for use while working. It
-runs every check but leaves out the tests marked `full_only`: repeats of a
-behavior checked elsewhere, such as the same drag under each navigation
-style, and slow guards against rare regressions. The options combine.
+runs every check but leaves out the tests marked `full_only`. Those run a
+behavior the smoke pass checks with one representative input under other
+inputs, such as a drag under each further navigation style. Slow guards
+against rare regressions are left out too. The options combine.
 
 The FreeCAD suites use throwaway FreeCAD settings, never yours. Each needs
 a pytest run of its own, such as `pixi run pytest tests/freecad_gui -k

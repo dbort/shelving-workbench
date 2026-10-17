@@ -13,9 +13,9 @@ _SKIPPED = pytest.StashKey[list[Path]]()
 def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line(
         "markers",
-        "full_only: left out of `pixi run tests -- --smoke`, as a repeat of a "
-        "behavior the smoke run already checks or a slow guard against a rare "
-        "regression",
+        "full_only: left out of `pixi run tests -- --smoke`, as another input "
+        "for a behavior the smoke run checks with one representative input, or "
+        "a slow guard against a rare regression",
     )
 
 
