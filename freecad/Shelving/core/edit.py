@@ -640,9 +640,10 @@ def unlock(unit: Unit, region_id: str) -> Unit:
     return dataclasses.replace(unit, root=_with_rule(unit.root, region_id, rule))
 
 
-# The narrowest a drag leaves either region it resizes. A rescan, as Undo,
-# Redo and reopening run, drops a region whose faces sit within the scan's
-# clearance plus its snap, so the floor stays clear of both.
+# The narrowest a drag leaves either region it resizes. Undo, Redo and
+# reopening each rescan the boards, and a rescan drops a region whose faces
+# sit within the scan's clearance plus its snap, so the floor stays clear of
+# both.
 MIN_DRAG_GAP_MM = 5.0
 
 
