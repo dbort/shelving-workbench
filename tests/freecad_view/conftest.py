@@ -120,6 +120,19 @@ def dimension_style() -> Iterator[None]:
 
 
 @pytest.fixture
+def slow_turns() -> Iterator[None]:
+    """Camera animations long enough for a test to act while one still
+    runs: ``tools/freecad-test-user.cfg`` keeps them short for speed."""
+    import FreeCAD
+
+    params = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/View")
+    earlier_ms = params.GetInt("AnimationDuration")
+    params.SetInt("AnimationDuration", 1000)
+    yield
+    params.SetInt("AnimationDuration", earlier_ms)
+
+
+@pytest.fixture
 def reported(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     """Every message the in-view editor reports, still shown in the
     Notification Area."""

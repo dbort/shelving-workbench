@@ -42,14 +42,32 @@ _FIXTURE = (
 _NO_MODIFIER = QtCore.Qt.KeyboardModifier.NoModifier
 _CTRL = QtCore.Qt.KeyboardModifier.ControlModifier
 
+
 # Every navigation style a click and a drag must pass under, with the
 # modifier it selects with: OpenInventor navigation selects on Ctrl+click.
+# A smoke run keeps CAD navigation and the one style with a modifier.
 _STYLES = (
-    ("Gui::CADNavigationStyle", _NO_MODIFIER),
-    ("Gui::GestureNavigationStyle", _NO_MODIFIER),
-    ("Gui::TouchpadNavigationStyle", _NO_MODIFIER),
-    ("Gui::OpenSCADNavigationStyle", _NO_MODIFIER),
-    ("Gui::InventorNavigationStyle", _CTRL),
+    pytest.param(
+        ("Gui::CADNavigationStyle", _NO_MODIFIER), id="Gui::CADNavigationStyle"
+    ),
+    pytest.param(
+        ("Gui::GestureNavigationStyle", _NO_MODIFIER),
+        id="Gui::GestureNavigationStyle",
+        marks=pytest.mark.full_only,
+    ),
+    pytest.param(
+        ("Gui::TouchpadNavigationStyle", _NO_MODIFIER),
+        id="Gui::TouchpadNavigationStyle",
+        marks=pytest.mark.full_only,
+    ),
+    pytest.param(
+        ("Gui::OpenSCADNavigationStyle", _NO_MODIFIER),
+        id="Gui::OpenSCADNavigationStyle",
+        marks=pytest.mark.full_only,
+    ),
+    pytest.param(
+        ("Gui::InventorNavigationStyle", _CTRL), id="Gui::InventorNavigationStyle"
+    ),
 )
 
 
@@ -467,9 +485,7 @@ def _arrow_point(editor: ViewEditor) -> FreeCAD.Vector:
     return editor.to_document(*arrow.at_mm, editor.frame.z_sign * 2.0)
 
 
-@pytest.mark.parametrize(
-    "navigation", _STYLES, indirect=True, ids=[s for s, _ in _STYLES]
-)
+@pytest.mark.parametrize("navigation", _STYLES, indirect=True)
 def test_a_selected_board_drags_by_its_arrow_under_each_navigation_style(
     unit: FreeCAD.DocumentObject,
     driver: ViewDriver,
@@ -581,7 +597,13 @@ def test_the_add_buttons_show_over_a_selected_bay_and_preview_their_board(
     click_task_button("Close", driver)
 
 
-@pytest.mark.parametrize("key", [QtCore.Qt.Key.Key_Delete, QtCore.Qt.Key.Key_Backspace])
+@pytest.mark.parametrize(
+    "key",
+    [
+        QtCore.Qt.Key.Key_Delete,
+        pytest.param(QtCore.Qt.Key.Key_Backspace, marks=pytest.mark.full_only),
+    ],
+)
 def test_delete_and_backspace_delete_the_selected_board(
     unit: FreeCAD.DocumentObject, driver: ViewDriver, key: QtCore.Qt.Key
 ) -> None:
@@ -629,7 +651,7 @@ def test_a_board_deleted_from_the_tree_rescans_and_one_undo_restores_it(
     doc.openTransaction("Delete")
     doc.removeObject(shelf)
     doc.commitTransaction()
-    driver.pump(300)
+    driver.pump()
     assert shelf not in panel.session.spaces
     assert len(editor.overlay.labels) < labels
     gui_step("Std_Undo", driver)
@@ -652,7 +674,7 @@ def _accept_formula_dialog(expression: str, driver: ViewDriver) -> None:
         if child.objectName() == "expression"
     ]
     text_edit.setPlainText(expression)
-    driver.pump(50)
+    driver.pump()
     dialog.accept()
     driver.pump()
 
@@ -711,7 +733,13 @@ def _as_plain_group(container: FreeCAD.DocumentObject) -> FreeCAD.DocumentObject
     return cast("FreeCAD.DocumentObject", group)
 
 
-@pytest.mark.parametrize("kind", ["plain group", "placed by an expression"])
+@pytest.mark.parametrize(
+    "kind",
+    [
+        pytest.param("plain group", marks=pytest.mark.full_only),
+        "placed by an expression",
+    ],
+)
 def test_the_dimension_field_works_on_every_container(
     unit: FreeCAD.DocumentObject,
     driver: ViewDriver,

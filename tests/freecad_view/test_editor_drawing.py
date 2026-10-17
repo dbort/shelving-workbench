@@ -29,6 +29,7 @@ from tests.freecad_view.editor import (
     edit_unit,
     editor_of,
     gui_step,
+    press_task_button,
     run_command,
 )
 from tests.freecad_view.view import ViewDriver
@@ -55,11 +56,15 @@ def _turn(container: FreeCAD.DocumentObject) -> None:
     container.Document.recompute()
 
 
-@pytest.fixture(params=["at the origin", "moved and turned"])
+@pytest.fixture
 def placed_unit(
     request: pytest.FixtureRequest, unit: FreeCAD.DocumentObject
 ) -> FreeCAD.DocumentObject:
-    if request.param == "moved and turned":
+    """The unit moved and turned, or left at the origin when a test
+    parametrizes it indirectly with "at the origin"."""
+    # A moved and turned unit exercises every transform an unmoved one
+    # does, so only a test or two also runs at the origin.
+    if getattr(request, "param", "moved and turned") == "moved and turned":
         _turn(unit)
     return unit
 
@@ -182,11 +187,16 @@ def _front_rotation(
     return _document_placement(container, elevation_frame(panel.session.unit)).Rotation
 
 
+@pytest.mark.parametrize(
+    "placed_unit",
+    [pytest.param("at the origin", marks=pytest.mark.full_only), "moved and turned"],
+    indirect=True,
+)
 def test_opening_turns_the_camera_to_the_units_front(
     placed_unit: FreeCAD.DocumentObject, driver: ViewDriver
 ) -> None:
     driver.view.viewIsometric()
-    driver.pump(800)
+    driver.pump()
     panel = edit_unit(placed_unit, driver)
     view = cast("view_editor_module.View3D", driver.view)
     assert view.getCameraOrientation().isSame(_front_rotation(placed_unit, panel), 1e-6)
@@ -220,23 +230,22 @@ def _camera_after_close(
         params.SetBool("RestoreCamera", restore)
     try:
         driver.view.viewIsometric()
-        driver.pump(800)
+        driver.pump()
         view = cast("view_editor_module.View3D", driver.view)
         before = view.getCameraOrientation()
         edit_unit(unit, driver)
         editing = view.getCameraOrientation()
         click_task_button("Close", driver)
-        driver.pump(1500)
         return before, editing, view.getCameraOrientation()
     finally:
         params.RemBool("RestoreCamera")
 
 
-@pytest.mark.parametrize("restore", [True, None], ids=["set", "default"])
 def test_close_restores_the_camera_as_the_sketcher_does(
-    unit: FreeCAD.DocumentObject, driver: ViewDriver, restore: bool | None
+    unit: FreeCAD.DocumentObject, driver: ViewDriver
 ) -> None:
-    before, editing, after = _camera_after_close(unit, driver, restore)
+    # Unset, the Sketcher's preference defaults to restoring.
+    before, editing, after = _camera_after_close(unit, driver, restore=None)
     assert not editing.isSame(before, 1e-6)
     assert after.isSame(before, 1e-6)
 
@@ -249,13 +258,14 @@ def test_close_leaves_the_camera_when_the_sketcher_would(
     assert after.isSame(editing, 1e-6)
 
 
+@pytest.mark.full_only
 def test_a_restore_still_turning_leaves_the_next_session_alone(
-    unit: FreeCAD.DocumentObject, driver: ViewDriver
+    unit: FreeCAD.DocumentObject, driver: ViewDriver, slow_turns: None
 ) -> None:
     driver.view.viewIsometric()
-    driver.pump(800)
+    driver.pump()
     edit_unit(unit, driver)
-    click_task_button("Close", driver)
+    press_task_button("Close")
     panel = edit_unit(unit, driver)
     # Past the time a restore may wait for its turn before it jumps.
     driver.pump(3500)
@@ -322,7 +332,7 @@ def _look_from(
         driver.pump(50)
         if view.getCameraOrientation().isSame(rotation, 1e-6):
             break
-    driver.pump(300)
+    driver.pump()
 
 
 def test_each_opening_is_a_face_on_the_side_the_camera_sees(
@@ -444,10 +454,12 @@ def test_the_scene_bounds_reach_every_dimension(
     click_task_button("Close", driver)
 
 
+@pytest.mark.full_only
 def test_closing_the_document_while_the_camera_turns_back_raises_nothing(
     unit: FreeCAD.DocumentObject,
     driver: ViewDriver,
     monkeypatch: pytest.MonkeyPatch,
+    slow_turns: None,
 ) -> None:
     errors: list[BaseException] = []
 
@@ -458,10 +470,11 @@ def test_closing_the_document_while_the_camera_turns_back_raises_nothing(
 
     monkeypatch.setattr(sys, "excepthook", record)
     driver.view.viewIsometric()
-    driver.pump(800)
+    driver.pump()
     edit_unit(unit, driver)
-    click_task_button("Close", driver)
+    press_task_button("Close")
     FreeCAD.closeDocument(unit.Document.Name)
+    # As long as the rest of the turn back would have taken.
     driver.pump(1000)
     assert errors == []
 
@@ -486,7 +499,7 @@ def test_closing_the_document_ends_the_edit(
     panel = edit_unit(unit, driver)
     editor = editor_of(panel)
     FreeCAD.closeDocument(unit.Document.Name)
-    driver.pump(500)
+    driver.pump()
     assert editor.closed
     assert panel.editor is None
     assert not FreeCADGui.Control.activeDialog()

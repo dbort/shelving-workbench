@@ -22,7 +22,7 @@ def run_command(
     FreeCADGui.Selection.clearSelection()
     FreeCADGui.Selection.addSelection(selected)
     FreeCADGui.runCommand(command)
-    driver.pump(400)
+    driver.pump()
 
 
 def edit_unit(container: FreeCAD.DocumentObject, driver: ViewDriver) -> EditUnitPanel:
@@ -45,11 +45,12 @@ def edit_unit(container: FreeCAD.DocumentObject, driver: ViewDriver) -> EditUnit
     return panel
 
 
-def click_task_button(text: str, driver: ViewDriver) -> None:
-    """Press the open task dialog's ``text`` button. In a fresh profile
-    FreeCAD 1.1 docks Tasks in the right-hand overlay panel, which stays
-    hidden until hovered, so the button is pressed with ``click``, the
-    signal a mouse click on it emits."""
+def press_task_button(text: str) -> None:
+    """Press the open task dialog's ``text`` button, leaving what it sets
+    off for the caller to wait on. In a fresh profile FreeCAD 1.1 docks
+    Tasks in the right-hand overlay panel, which stays hidden until hovered,
+    so the button is pressed with ``click``, the signal a mouse click on it
+    emits."""
     main_window = cast("QtWidgets.QMainWindow", FreeCADGui.getMainWindow())
     (button,) = [
         button
@@ -58,7 +59,13 @@ def click_task_button(text: str, driver: ViewDriver) -> None:
         if button.text() == text
     ]
     button.click()
-    driver.pump(400)
+
+
+def click_task_button(text: str, driver: ViewDriver) -> None:
+    """Press the open task dialog's ``text`` button and wait until what it
+    set off has run, a camera turn back included."""
+    press_task_button(text)
+    driver.pump()
 
 
 def notification_count() -> int:
@@ -86,10 +93,10 @@ def gui_step(command: str, driver: ViewDriver) -> None:
     in the 3D view: FreeCAD disables both while it sits in one of a task
     panel's widgets, such as a basis menu."""
     driver.viewport.setFocus()
-    driver.pump(50)
+    driver.pump()
     assert command_active(command), command
     FreeCADGui.runCommand(command)
-    driver.pump(200)
+    driver.pump()
 
 
 def editor_of(panel: EditUnitPanel) -> ViewEditor:

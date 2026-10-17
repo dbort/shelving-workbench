@@ -54,6 +54,23 @@ its `driver` fixture gives each test a new document with an active 3D view.
   interval before each press.
 - **Drags** are press, several moves carrying the held button, release,
   with the event loop pumped between each.
+- **Waiting.** `pump()` runs the event loop until 30 ms pass with no event,
+  capped at 2 s. FreeCAD fires idle timers about every 40 ms, so the loop
+  is never silent for long, while work in progress produces an event every
+  few milliseconds. A camera animation and the editor's 20 ms turn poll
+  keep it busy, so `pump()` returns once a turn has finished.
+  `pump(ms)` runs for a fixed time instead. Use it only to stop partway
+  through something, such as a turn still running. Fixed waits sized
+  generously were most of the suite's run time.
+- **Short animations.** `tools/freecad-test-user.cfg` sets FreeCAD's
+  `AnimationDuration` to 100 ms. Animations stay on, so tests take the
+  animated path a user meets. A test that acts mid-turn takes the
+  `slow_turns` fixture and acts without a `pump()` in between, which
+  would wait the turn out. Tests assert where the camera starts and ends,
+  never that it moved in between. Whether a turn's frames ever move the
+  camera is unreliable to assert: with a 1 s turn, a turn back started
+  right after Edit Unit's turn sometimes had not moved after 500 ms. The
+  `editor.camera` manual QA case checks that turns run smoothly.
 - **Images.** `grab()` returns the view as drawn, in device pixels, and
   `color_at` reads it at a document point. Lighting and blending change a
   color, so compare the same point before and after rather than against a
@@ -67,7 +84,7 @@ its `driver` fixture gives each test a new document with an active 3D view.
 - **A new document's view appears only after Qt runs.** Read
   `ActiveView` before pumping and it is the previous, deleted view.
 - **Camera moves animate.** `viewFront` and `fitAll` animate when
-  navigation animations are on; pump until they finish before grabbing.
+  navigation animations are on; `pump()` waits them out before a grab.
 - **The Tasks dock is hidden.** In a fresh FreeCAD 1.1 profile the Tasks
   dock sits in the right-hand overlay panel, which stays hidden until
   hovered, so a task dialog's buttons are not visible; press them with

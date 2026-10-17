@@ -56,7 +56,7 @@ def main(result: Path) -> None:
         gui_step("Std_Redo", driver)
     panel.reject()
     FreeCADGui.Control.closeDialog()
-    driver.pump(200)
+    driver.pump()
     result.write_text("done", encoding="utf-8")
 
 

@@ -2,26 +2,27 @@
 #
 # The Shelving Workbench check harness: the single command that gates a merge.
 # Run it as `pixi run tests`; the checks below assume that environment's tools.
-# The lone option, `--offline` (`pixi run tests -- --offline`), exports
-# SHELVING_OFFLINE=1 so network-dependent checks skip themselves instead of
-# failing on an unreachable service.
+# `--offline` exports SHELVING_OFFLINE=1 so network-dependent checks skip
+# themselves instead of failing on an unreachable service. `--smoke` leaves
+# out the tests marked `full_only` (tests/conftest.py), most of them in the
+# slow 3D-view suite; the full run stays the merge gate. Pass either or both
+# after `--`: `pixi run tests -- --smoke --offline`.
 #
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-case "${1:-}" in
-	"") ;;
-	--offline) export SHELVING_OFFLINE=1 ;;
-	*)
-		echo "usage: run-tests.sh [--offline]" >&2
-		exit 2
-		;;
-esac
-if [ "$#" -gt 1 ]; then
-	echo "usage: run-tests.sh [--offline]" >&2
-	exit 2
-fi
+for arg in "$@"; do
+	case "$arg" in
+		--offline) export SHELVING_OFFLINE=1 ;;
+		# PYTEST_ADDOPTS reaches every pytest run below.
+		--smoke) export PYTEST_ADDOPTS="${PYTEST_ADDOPTS:-} -m 'not full_only'" ;;
+		*)
+			echo "usage: run-tests.sh [--offline] [--smoke]" >&2
+			exit 2
+			;;
+	esac
+done
 
 # The only tool with a heavy external dependency; the pixi environment
 # guarantees the rest.

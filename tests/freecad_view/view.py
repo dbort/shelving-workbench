@@ -43,11 +43,38 @@ class _GuiDocument(Protocol):
 Point = FreeCAD.Vector | QtCore.QPointF
 
 
+# FreeCAD's GUI keeps timers firing every 40 ms or so even when idle, so the
+# event loop is never silent for long; work Qt is still finishing produces
+# an event every few milliseconds. A gap this long between events means
+# everything already set off has run.
+_QUIET_MS = 30
+# The longest a settle runs when the loop never goes quiet.
+_SETTLE_LIMIT_MS = 2000
+
+
 def _pump(app: QtWidgets.QApplication, ms: int) -> None:
     end_s = time.monotonic() + ms / 1000
     while time.monotonic() < end_s:
         app.processEvents()
         time.sleep(0.005)
+
+
+def _settle() -> None:
+    dispatcher = QtCore.QAbstractEventDispatcher.instance()
+    assert dispatcher is not None
+    start_s = time.monotonic()
+    last_event_s = start_s
+    while True:
+        now_s = time.monotonic()
+        # Only the dispatcher reports whether a round found work; the
+        # application's processEvents is a wrapper that drops the answer.
+        if dispatcher.processEvents(QtCore.QEventLoop.ProcessEventsFlag.AllEvents):
+            last_event_s = now_s
+        elif now_s - last_event_s >= _QUIET_MS / 1000:
+            return
+        if now_s - start_s >= _SETTLE_LIMIT_MS / 1000:
+            return
+        time.sleep(0.002)
 
 
 @dataclass
@@ -69,7 +96,7 @@ class ViewDriver:
         app = cast("QtWidgets.QApplication", QtWidgets.QApplication.instance())
         # A new document's view appears only once Qt has run; read before
         # that, ActiveView is the previous view, already deleted.
-        _pump(app, 200)
+        _settle()
         gui_document = cast("_GuiDocument | None", FreeCADGui.ActiveDocument)
         if gui_document is None or not hasattr(gui_document.ActiveView, "graphicsView"):
             raise RuntimeError("the active document has no 3D view")
@@ -80,10 +107,15 @@ class ViewDriver:
     def viewport(self) -> QtWidgets.QWidget:
         return self.graphics_view.viewport()
 
-    def pump(self, ms: int = 150) -> None:
-        """Run Qt's event loop for ``ms``: layout, focus, rendering and
-        deferred ``QTimer.singleShot(0, ...)`` work all need it."""
-        _pump(self.app, ms)
+    def pump(self, ms: int | None = None) -> None:
+        """Run Qt's event loop until what has been set off has run: layout,
+        focus, rendering and deferred ``QTimer.singleShot(0, ...)`` work all
+        need it, and so does a camera animation. With ``ms``, run it for
+        that long instead, to stop partway through something still running."""
+        if ms is None:
+            _settle()
+        else:
+            _pump(self.app, ms)
 
     def qt_point(self, point: Point) -> QtCore.QPointF:
         """``point`` in the viewport's logical pixels, y down.

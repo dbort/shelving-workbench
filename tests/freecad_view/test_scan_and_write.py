@@ -25,7 +25,6 @@ from tests.freecad_view.view import ViewDriver
 # red, green and blue; shading moves an untouched board by a few units.
 _HIGHLIGHT_SHIFT = 60
 _STILL = 10
-_CAMERA_SETTLE_MS = 1500
 
 
 class _BoxFeature(Protocol):
@@ -164,7 +163,7 @@ def test_a_refusal_notifies_selects_and_highlights_the_overlap(
     unit_view.view.viewFront()
     unit_view.view.fitAll()
     # Both camera moves animate when navigation animations are on.
-    driver.pump(_CAMERA_SETTLE_MS)
+    driver.pump()
     FreeCADGui.Selection.clearSelection()
     left = FreeCAD.Vector(9.0, 0.0, 300.0)
     right = FreeCAD.Vector(591.0, 0.0, 300.0)

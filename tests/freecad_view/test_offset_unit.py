@@ -55,13 +55,14 @@ def _add_box(
     )
 
 
-@pytest.fixture(params=["in place", "moved and turned"])
+@pytest.fixture
 def offset_unit(
     request: pytest.FixtureRequest, driver: ViewDriver
 ) -> Iterator[FreeCAD.DocumentObject]:
     """A four-board carcass built by hand with its minimum corner at
-    ``_CORNER_MM`` in its ``App::Part``, which is itself either at the
-    document origin or moved and turned."""
+    ``_CORNER_MM`` in its ``App::Part``, which is itself moved and turned,
+    or left at the document origin when a test parametrizes it indirectly
+    with "in place"."""
     FreeCADGui.activateWorkbench("ShelvingWorkbench")
     doc = cast("FreeCAD.Document", FreeCAD.ActiveDocument)
     doc.UndoMode = 1
@@ -73,7 +74,9 @@ def offset_unit(
     _add_box(container, "Top", plank_mm, (0.0, 0.0, _HEIGHT_MM - _T_MM))
     _add_box(container, "Left", side_mm, (0.0, 0.0, _T_MM))
     _add_box(container, "Right", side_mm, (_WIDTH_MM - _T_MM, 0.0, _T_MM))
-    if request.param == "moved and turned":
+    # A moved and turned part exercises every transform an unmoved one
+    # does, so only a test or two also runs in place.
+    if getattr(request, "param", "moved and turned") == "moved and turned":
         cast("_Placed", container).Placement = FreeCAD.Placement(
             FreeCAD.Vector(400.0, -250.0, 30.0),
             FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 30),
@@ -178,6 +181,11 @@ def _assert_openings_on_bays(
         ), (bay_id, planned_corners, drawn)
 
 
+@pytest.mark.parametrize(
+    "offset_unit",
+    [pytest.param("in place", marks=pytest.mark.full_only), "moved and turned"],
+    indirect=True,
+)
 def test_each_opening_is_drawn_on_its_boards(
     offset_unit: FreeCAD.DocumentObject, driver: ViewDriver
 ) -> None:

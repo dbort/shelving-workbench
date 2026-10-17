@@ -40,6 +40,11 @@ covers ruff, pyrefly at its strict preset, the core unit suite, the
 check, and the headless (`tests/freecad/`), offscreen-GUI
 (`tests/freecad_gui/`) and 3D-view (`tests/freecad_view/`) FreeCAD suites.
 `pixi run tests -- --offline` skips the checks that need the network.
+`pixi run tests -- --smoke` is a faster pass for use while working. It
+runs every check but leaves out the tests marked `full_only`. Those run a
+behavior the smoke pass checks with one representative input under other
+inputs, such as a drag under each further navigation style. Slow guards
+against rare regressions are left out too. The options combine.
 
 The FreeCAD suites use throwaway FreeCAD settings, never yours. Each needs
 a pytest run of its own, such as `pixi run pytest tests/freecad_gui -k
