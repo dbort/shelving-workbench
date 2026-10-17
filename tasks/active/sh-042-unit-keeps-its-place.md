@@ -78,3 +78,8 @@ STANDING OBLIGATIONS (`CLAUDE.md`):
 - [x] **Step 4** (`docs/scope-and-design.md`, `.claude/docs/bug-log.md`): The design prose; delete bug-018.
 
 ## Review log
+
+### Round 1: APPROVED
+- **N1: Outlines after the edits are checked only against the solve** (`tests/freecad_view/test_offset_unit.py:209`): after `add_board`, `_assert_openings_on_bays` compares each outline with `session.spaces`, which come from the same solve that draws the overlay; only the first single-opening check compares against the document's own `Part::Box` placements. The session tier's `_assert_session_matches_document` ties spaces to the document, so not blocking; checking each bay against its bounding boards' document boxes would close the loop inside the view tier.
+- **N2: Camera fit on an offset unit has no test** (`freecad/Shelving/editor/view_editor.py:763`): `_fit` centers through `self._placement(frame)`, so it follows the offset, but no test checks it. Outside the Must Haves.
+- **N3: Loose return type in a test helper** (`tests/freecad/test_editor_session.py:1182`): `_tree_shape` returns `object`; a recursive type alias would follow the Typed Python obligation more closely. Test-only, and pyrefly passes.
