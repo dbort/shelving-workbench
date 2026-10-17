@@ -125,6 +125,28 @@ def test_closed_box_places_its_four_shell_boards_and_interior() -> None:
     _assert_space(spaces["interior"], origin=(18, 0, 18), size=(864, 300, 1764))
 
 
+def test_root_is_placed_at_the_units_position() -> None:
+    root = Division(
+        axis=Axis.X,
+        items=[
+            Board(thickness_mm=18.0, id="left"),
+            Bay(id="interior"),
+            Board(thickness_mm=18.0, id="right"),
+        ],
+        id="root",
+    )
+    unit = Unit(
+        size_mm=Vec3(600.0, 300.0, 900.0),
+        root=root,
+        position_mm=Vec3(100.0, -300.0, 50.0),
+    )
+    spaces = solve(unit)
+    _assert_space(spaces["root"], origin=(100, -300, 50), size=(600, 300, 900))
+    _assert_space(spaces["left"], origin=(100, -300, 50), size=(18, 300, 900))
+    _assert_space(spaces["interior"], origin=(118, -300, 50), size=(564, 300, 900))
+    _assert_space(spaces["right"], origin=(682, -300, 50), size=(18, 300, 900))
+
+
 def test_division_mixing_fixed_fill_and_boards() -> None:
     root = Division(
         axis=Axis.X,

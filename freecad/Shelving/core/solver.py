@@ -287,11 +287,11 @@ def _place(
 def solve(unit: Unit) -> dict[str, Space]:
     """One :class:`~freecad.Shelving.core.geometry.Space` per region and board id.
 
-    The root is placed at the unit's local-frame origin with extent
-    ``unit.size_mm``.
+    The root is placed at ``unit.position_mm`` with extent ``unit.size_mm``,
+    so every space is in the frame the unit's boards are written in.
     """
     out: dict[str, Space] = {}
-    root_space = Space(origin=Vec3(0.0, 0.0, 0.0), size=unit.size_mm)
+    root_space = Space(origin=unit.position_mm, size=unit.size_mm)
     _place(unit.root, root_space, out)
     return out
 

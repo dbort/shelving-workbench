@@ -191,7 +191,7 @@ Item = Board | Region
 
 @dataclass
 class Unit:
-    """A shelving unit: an outer size and a root region.
+    """A shelving unit: an outer size, a position, and a root region.
 
     Every board is a ``Board`` item somewhere in the tree, so a closed box, a
     stepped outline, and a framed wall differ only in the shape of that tree.
@@ -208,6 +208,11 @@ class Unit:
     # than not, so code deriving a left or a right from this must handle
     # not knowing.
     front_at_min: bool | None = None
+    # The minimum corner of the box ``size_mm`` measures, in the frame its
+    # boards are written in: a scan reads it from the same boards it reads
+    # the size from, so the two always describe one box, and nothing
+    # stores it.
+    position_mm: Vec3 = Vec3(0.0, 0.0, 0.0)
     id: str = field(default_factory=new_id)
 
     def __post_init__(self) -> None:

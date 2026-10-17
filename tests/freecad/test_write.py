@@ -327,6 +327,107 @@ def test_resize_updates_existing_boards_rather_than_recreating(
     assert bottom_box.Label == "MyBottom"
 
 
+_OFFSET_CORNER_MM = (100.0, -300.0, 50.0)
+
+
+def _add_offset_carcass(
+    doc: FreeCAD.Document, container: FreeCAD.DocumentObject
+) -> None:
+    """A 600 x 300 x 900 four-board carcass built by hand with its minimum
+    corner at :data:`_OFFSET_CORNER_MM` in ``container``'s coordinates."""
+    x_mm, y_mm, z_mm = _OFFSET_CORNER_MM
+    t_mm = _THICKNESS_MM
+    _add_box(doc, container, "Bottom", (600.0, 300.0, t_mm), (x_mm, y_mm, z_mm))
+    _add_box(
+        doc, container, "Top", (600.0, 300.0, t_mm), (x_mm, y_mm, z_mm + 900.0 - t_mm)
+    )
+    _add_box(
+        doc,
+        container,
+        "Left",
+        (t_mm, 300.0, 900.0 - 2 * t_mm),
+        (x_mm, y_mm, z_mm + t_mm),
+    )
+    _add_box(
+        doc,
+        container,
+        "Right",
+        (t_mm, 300.0, 900.0 - 2 * t_mm),
+        (x_mm + 600.0 - t_mm, y_mm, z_mm + t_mm),
+    )
+
+
+def _min_corner_mm(container: FreeCAD.DocumentObject) -> tuple[float, float, float]:
+    boxes, _skipped, _record = read_container(container)
+    return (
+        min(b.corner_mm.x_mm for b in boxes),
+        min(b.corner_mm.y_mm for b in boxes),
+        min(b.corner_mm.z_mm for b in boxes),
+    )
+
+
+def _board_corners_mm(
+    container: FreeCAD.DocumentObject,
+) -> dict[str, tuple[float, float, float]]:
+    boxes, _skipped, _record = read_container(container)
+    return {
+        b.name: (b.corner_mm.x_mm, b.corner_mm.y_mm, b.corner_mm.z_mm) for b in boxes
+    }
+
+
+def test_a_resize_keeps_an_offset_unit_where_its_boards_are() -> None:
+    """Each resize grows the unit from its boards' minimum corner,
+    never from the container's origin, and moves no board along an axis
+    the resize leaves alone."""
+    doc = _new_document("write_offset_resize")
+    try:
+        container = cast("FreeCAD.DocumentObject", doc.addObject("App::Part", "Unit"))
+        _add_offset_carcass(doc, container)
+        doc.recompute()
+        size_mm = [600.0, 300.0, 900.0]
+        for axis_index, new_size_mm in ((0, 750.0), (1, 400.0), (2, 1100.0)):
+            corners_before = _board_corners_mm(container)
+            size_mm[axis_index] = new_size_mm
+            result = resize_unit(container, Vec3(*size_mm))
+            doc.recompute()
+            assert result.deleted == (), result
+            assert _min_corner_mm(container) == pytest.approx(
+                _OFFSET_CORNER_MM, abs=_TOL_MM
+            )
+            corners_after = _board_corners_mm(container)
+            assert corners_after.keys() == corners_before.keys()
+            for name, before in corners_before.items():
+                for other in {0, 1, 2} - {axis_index}:
+                    assert abs(corners_after[name][other] - before[other]) <= _TOL_MM, (
+                        name,
+                        axis_index,
+                        other,
+                    )
+        boxes, _skipped, _record = read_container(container)
+        width_mm, depth_mm, height_mm = size_mm
+        assert max(b.corner_mm.x_mm + b.size_mm.x_mm for b in boxes) == pytest.approx(
+            _OFFSET_CORNER_MM[0] + width_mm
+        )
+        assert max(b.corner_mm.y_mm + b.size_mm.y_mm for b in boxes) == pytest.approx(
+            _OFFSET_CORNER_MM[1] + depth_mm
+        )
+        assert max(b.corner_mm.z_mm + b.size_mm.z_mm for b in boxes) == pytest.approx(
+            _OFFSET_CORNER_MM[2] + height_mm
+        )
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def test_create_unit_builds_at_the_containers_origin() -> None:
+    doc = _new_document("write_create_origin")
+    try:
+        container = create_unit(doc)
+        doc.recompute()
+        assert _min_corner_mm(container) == pytest.approx((0.0, 0.0, 0.0), abs=_TOL_MM)
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
 def test_left_alone_objects_are_never_touched() -> None:
     """A hand-added box thin along the depth axis (set aside as a panel
     rather than placed in the tree) and a skewed box (unreadable, so always

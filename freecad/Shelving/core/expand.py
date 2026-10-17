@@ -5,10 +5,11 @@ A board's geometry is its parent division's solved
 inset by the board's own ``Insets``. A ``Void`` contributes no board: it has
 no id in the boards it would otherwise occupy, only in the solved space map.
 
-All lengths are float millimeters in the unit's local frame: origin at the
-front-bottom-left corner, ``+X`` right (width), ``+Y`` back (depth), ``+Z`` up
-(height). A :attr:`BoardSpec.placement` is the board's minimum corner in that
-frame, the point a caller would extrude the box from before translating.
+All lengths are float millimeters in the unit's frame, the coordinates its
+boards are written in, with the unit's minimum corner at ``Unit.position_mm``:
+``+X`` right (width), ``+Y`` back (depth), ``+Z`` up (height). A
+:attr:`BoardSpec.placement` is the board's minimum corner in that frame, the
+point a caller would extrude the box from before translating.
 """
 
 from collections.abc import Mapping, Sequence
@@ -23,7 +24,7 @@ from freecad.Shelving.core.solver import solve
 class BoardSpec:
     """One physical board: its node id, role, extent and minimum corner.
 
-    ``size`` and ``placement`` are :class:`Vec3` in the unit's local frame.
+    ``size`` and ``placement`` are :class:`Vec3` in the unit's frame.
     """
 
     node_id: str

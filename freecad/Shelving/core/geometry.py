@@ -1,8 +1,8 @@
 """3D geometry primitives shared by the region model, the solver, and expansion.
 
-Every length here is a float millimeter in the unit's local frame: origin at
-the front-bottom-left corner, ``+X`` right (width), ``+Y`` back (depth), ``+Z``
-up (height).
+Every length here is a float millimeter in the unit's frame, the coordinates
+its boards are written in: ``+X`` right (width), ``+Y`` back (depth), ``+Z``
+up (height), with the unit's minimum corner at ``Unit.position_mm``.
 """
 
 from dataclasses import dataclass
@@ -16,7 +16,7 @@ AxisIndex = Literal[0, 1, 2]
 
 @dataclass(frozen=True)
 class Vec3:
-    """A point or an extent in the unit's local frame, millimeters."""
+    """A point or an extent in the unit's frame, millimeters."""
 
     x_mm: float
     y_mm: float
