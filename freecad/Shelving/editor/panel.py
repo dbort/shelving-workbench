@@ -17,6 +17,7 @@ from collections.abc import Callable, Mapping, Sequence
 from functools import partial
 
 import FreeCAD
+import FreeCADGui
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from freecad.Shelving.compat import override
@@ -353,7 +354,12 @@ class EditUnitPanel:
             return
         # The fields start from the first selected board's stock.
         group = next(g for g in self.session.stock_groups() if boards[0] in g.board_ids)
-        dialog = StockDialog(self.form, group.thickness_mm, group.color)
+        # Parented to the main window, as FreeCAD's own dialogs are: the
+        # form sits inside the Tasks overlay panel, and on a Mac a dialog
+        # parented there opened with controls that took no clicks.
+        dialog = StockDialog(
+            FreeCADGui.getMainWindow(), group.thickness_mm, group.color
+        )
         dialog.setAttribute(QtCore.Qt.WidgetAttribute.WA_DeleteOnClose)
         dialog.accepted.connect(lambda: self._swap_stock(dialog))
 
@@ -363,9 +369,11 @@ class EditUnitPanel:
 
         dialog.finished.connect(closed)
         self.stock_dialog = dialog
-        # Window-modal without a nested event loop, as a task panel's own
-        # dialogs open.
-        dialog.open()
+        # Application-modal, as FreeCAD's exec() dialogs are, and shown
+        # without a nested event loop. open() would make it window-modal,
+        # which macOS shows as a sheet on the main window.
+        dialog.setWindowModality(QtCore.Qt.WindowModality.ApplicationModal)
+        dialog.show()
 
     def _swap_stock(self, dialog: StockDialog) -> None:
         change = dialog.change()
