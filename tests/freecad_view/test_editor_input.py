@@ -13,7 +13,6 @@ from PySide6 import QtCore, QtTest, QtWidgets
 
 from freecad.Shelving.container import unit_for_selection
 from freecad.Shelving.core.layout import Basis, Board, Division, Fixed, Region
-from freecad.Shelving.editor import view_editor as view_editor_module
 from freecad.Shelving.editor.elevation import (
     LABEL_HIT_PX,
     DimensionLabel,
@@ -61,21 +60,6 @@ class _Placed(Protocol):
 class _NavigationView(Protocol):
     def getNavigationType(self) -> str: ...
     def setNavigationType(self, name: str, /) -> None: ...
-
-
-@pytest.fixture
-def reported(monkeypatch: pytest.MonkeyPatch) -> list[str]:
-    """Every message the in-view editor reports, still shown in the
-    Notification Area."""
-    messages: list[str] = []
-    real = view_editor_module.report_error
-
-    def record(message: str) -> None:
-        messages.append(message)
-        real(message)
-
-    monkeypatch.setattr(view_editor_module, "report_error", record)
-    return messages
 
 
 def _selection() -> list[tuple[str, tuple[str, ...]]]:
@@ -535,7 +519,7 @@ def test_a_held_board_and_a_carcass_board_show_no_arrow(
     session = panel.session
     shelf = add_board(panel, "vertical", driver)
     assert editor.arrow is not None
-    assert session.set_locks([bay_ids(session.unit.root)[0]], locked=True) is None
+    assert session.set_lock(bay_ids(session.unit.root)[0], locked=True) is None
     editor.select(shelf)
     assert editor.arrow is None
     editor.select("top")

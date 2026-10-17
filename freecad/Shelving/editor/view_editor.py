@@ -37,12 +37,14 @@ from freecad.Shelving.editor.elevation import (
     Arrow,
     DimensionLabel,
     ElevationFrame,
+    HeldPadlock,
     Overlay,
     Rect,
     arrow_for,
     board_ids,
     dragged_to_mm,
     elevation_frame,
+    held_padlock,
     label_at,
     label_size_pt,
     plan_overlay,
@@ -51,6 +53,7 @@ from freecad.Shelving.editor.elevation import (
 )
 from freecad.Shelving.editor.fields import DimensionField
 from freecad.Shelving.editor.overlay import (
+    RGB,
     Coin,
     Style,
     arrow_geometry,
@@ -67,6 +70,13 @@ from freecad.Shelving.refusals import report_error
 
 # The add buttons' icon side, in logical pixels.
 _ICON_PX = 24
+# A padlock's icon side, and its gap from its dimension's text, in logical
+# pixels.
+_PADLOCK_PX = 14
+_PADLOCK_GAP_PX = 4
+# SoDatumLabel's text width per character, in ems of its font size: an
+# estimate, since Coin lays the text out where Qt cannot measure it.
+_CHAR_EM = 0.6
 # How long the turn toward the unit may animate before the fit goes ahead.
 _TURN_TIMEOUT_S = 3.0
 _POLL_MS = 20
@@ -170,6 +180,58 @@ def _board_icon(
     return QtGui.QIcon(pixmap)
 
 
+def _padlock_icon(locked: bool, ratio: float, rgb: RGB) -> QtGui.QIcon:
+    """A padlock in ``rgb``: a filled body under a shackle, closed when
+    ``locked``, swung open off the body's left side otherwise."""
+    side_px = _PADLOCK_PX
+    pixmap = QtGui.QPixmap(round(side_px * ratio), round(side_px * ratio))
+    pixmap.setDevicePixelRatio(ratio)
+    pixmap.fill(QtCore.Qt.GlobalColor.transparent)
+    painter = QtGui.QPainter(pixmap)
+    painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+    color = QtGui.QColor.fromRgbF(*rgb)
+    pen = QtGui.QPen(color)
+    pen.setWidthF(1.6)
+    painter.setPen(pen)
+    body = QtCore.QRectF(2, side_px * 0.45, side_px - 4, side_px * 0.5)
+    shackle = QtCore.QRectF(4, 1.5, side_px - 8, side_px * 0.6)
+    if not locked:
+        shackle.translate(side_px * 0.18, -1)
+    painter.drawArc(shackle, 0, 180 * 16)
+    painter.drawLine(
+        QtCore.QPointF(shackle.right(), shackle.center().y()),
+        QtCore.QPointF(shackle.right(), body.top()),
+    )
+    if locked:
+        painter.drawLine(
+            QtCore.QPointF(shackle.left(), shackle.center().y()),
+            QtCore.QPointF(shackle.left(), body.top()),
+        )
+    painter.fillRect(body, color)
+    painter.end()
+    return QtGui.QIcon(pixmap)
+
+
+def _padlock_button(
+    parent: QtWidgets.QWidget | None, on_click: Callable[[], None]
+) -> QtWidgets.QToolButton:
+    button = QtWidgets.QToolButton(parent)
+    button.setAutoRaise(True)
+    button.setIconSize(QtCore.QSize(_PADLOCK_PX, _PADLOCK_PX))
+    button.setFixedSize(_PADLOCK_PX + 4, _PADLOCK_PX + 4)
+    button.setStyleSheet("QToolButton { border: none; padding: 0; }")
+    # As the add buttons do: keyboard focus stays in the 3D view.
+    button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+    button.clicked.connect(on_click)
+    button.hide()
+    return button
+
+
+def _bind_index(on_click: Callable[[int], None], index: int) -> Callable[[], None]:
+    """:func:`_bind` for a padlock's place in the pool."""
+    return lambda: on_click(index)
+
+
 class AddBar(QtWidgets.QFrame):
     """The Add shelf and Add divider buttons over the selected bay.
     Hovering one reports its split to ``on_hover``; leaving reports
@@ -184,6 +246,7 @@ class AddBar(QtWidgets.QFrame):
     ) -> None:
         super().__init__(parent)
         self._on_hover = on_hover
+        self._rgb = rgb
         self.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
         self.setAutoFillBackground(True)
         layout = QtWidgets.QHBoxLayout(self)
@@ -196,7 +259,6 @@ class AddBar(QtWidgets.QFrame):
         )
         for direction, text in directions:
             button = QtWidgets.QToolButton(self)
-            button.setIcon(_board_icon(direction, self.devicePixelRatioF(), rgb))
             button.setIconSize(QtCore.QSize(_ICON_PX, _ICON_PX))
             button.setText(text)
             button.setToolTip(text)
@@ -208,7 +270,14 @@ class AddBar(QtWidgets.QFrame):
             button.installEventFilter(self)
             layout.addWidget(button)
             self.buttons[direction] = button
+        self.draw_icons(self.devicePixelRatioF())
         self.hide()
+
+    def draw_icons(self, ratio: float) -> None:
+        """Give each button its icon drawn at the device pixel ratio
+        ``ratio``."""
+        for direction, button in self.buttons.items():
+            button.setIcon(_board_icon(direction, ratio, self._rgb))
 
     @override
     def eventFilter(self, watched: QtCore.QObject, event: QtCore.QEvent) -> bool:
@@ -276,6 +345,34 @@ class _DeleteKeys(QtCore.QObject):
         if kind == QtCore.QEvent.Type.KeyPress:
             self._on_delete()
         return True
+
+
+class _ViewportGeometry(QtCore.QObject):
+    """Reports, on the next event-loop pass, a resize of the 3D view's
+    viewport or a move to a screen of another device pixel ratio. Both move
+    every projected point without moving the camera, as moving the window
+    to another display does. The pass lets Coin take the new size first."""
+
+    _KINDS = (QtCore.QEvent.Type.Resize, QtCore.QEvent.Type.DevicePixelRatioChange)
+
+    def __init__(
+        self, viewport: QtWidgets.QWidget, on_change: Callable[[], None]
+    ) -> None:
+        super().__init__(viewport)
+        self._on_change = on_change
+        self._queued = False
+
+    @override
+    def eventFilter(self, watched: QtCore.QObject, event: QtCore.QEvent) -> bool:
+        # A resizing window sends a stream of these; one pass serves them all.
+        if event.type() in self._KINDS and not self._queued:
+            self._queued = True
+            QtCore.QTimer.singleShot(0, self._report)
+        return False
+
+    def _report(self) -> None:
+        self._queued = False
+        self._on_change()
 
 
 # What a left press on the viewport is: one the editor takes for itself
@@ -420,6 +517,12 @@ class ViewEditor:
         self._field_region: str | None = None
         self._field_applied = False
         self._add_anchor: tuple[float, float] | None = None
+        # One padlock per lockable dimension, reused across rebuilds, which a
+        # drag runs at every step; never shrunk, so it holds as many as were
+        # ever shown at once. Button i is the padlock of _padlock_labels[i].
+        self.padlocks: list[QtWidgets.QToolButton] = []
+        self._padlock_labels: list[DimensionLabel] = []
+        self.held: HeldPadlock | None = None
         self.saved_camera = view.getCamera()
         self._saved_orientation = view.getCameraOrientation()
         global _editors_opened
@@ -473,6 +576,8 @@ class ViewEditor:
         self.style: Style = view_style(
             label_size_pt(font_px, ratio, self._viewer.screen().logicalDotsPerInchX())
         )
+        self._font_px = font_px
+        self._padlock_icons = self._draw_padlock_icons(ratio)
         self.root: Coin = coin.SoSeparator()
         self._frame_transform: Coin = coin.SoTransform()
         self._drawing: Coin = coin.SoSeparator()
@@ -489,12 +594,23 @@ class ViewEditor:
         )
         self._installed.append((self.add_bar.deleteLater, True))
         self._installed.append((self.add_bar.hide, True))
+        self.board_padlock = _padlock_button(parent, self._unlock_held)
+        self.board_padlock.setIcon(self._padlock_icons[True])
+        text = "Unlock the openings holding this board"
+        self.board_padlock.setToolTip(text)
+        self.board_padlock.setAccessibleName(text)
+        self._installed.append((self.board_padlock.deleteLater, True))
+        self._installed.append((self.board_padlock.hide, True))
 
         viewport = self.viewport
         clicks = _ViewportClicks(viewport, self._sort_press, self._click)
         viewport.installEventFilter(clicks)
         self._installed.append((clicks.deleteLater, True))
         self._installed.append((lambda: viewport.removeEventFilter(clicks), True))
+        geometry = _ViewportGeometry(viewport, self._refit)
+        viewport.installEventFilter(geometry)
+        self._installed.append((geometry.deleteLater, True))
+        self._installed.append((lambda: viewport.removeEventFilter(geometry), True))
         app = cast("QtCore.QCoreApplication", QtCore.QCoreApplication.instance())
         keys = _DeleteKeys(
             self._viewer, lambda: QtCore.QTimer.singleShot(0, self._delete_selected)
@@ -768,6 +884,7 @@ class ViewEditor:
         if not self._dragging:
             self._place_arrow()
             self._place_add_bar()
+        self._update_padlocks()
         self._place_widgets()
 
     def _update_preview(self) -> None:
@@ -790,6 +907,16 @@ class ViewEditor:
             else None
         )
         self.arrow = arrow
+        self.held = (
+            held_padlock(session.unit, session.spaces, self.frame, selected)
+            if selected is not None and session.can_merge()
+            else None
+        )
+        if self.held is None:
+            self.board_padlock.hide()
+        else:
+            self.board_padlock.show()
+            self.board_padlock.raise_()
         if arrow is None:
             self._dragger_switch.whichChild.setValue(coin.SO_SWITCH_NONE)
             return
@@ -823,16 +950,46 @@ class ViewEditor:
         if self._field_host is not None and self._field_anchor is not None:
             if Shiboken.isValid(self._field_host):
                 self._move_to(self._field_host, self._field_anchor)
+        text_char_px = _CHAR_EM * self._font_px
+        for button, label in zip(self.padlocks, self._padlock_labels, strict=False):
+            reach_px = (
+                len(label.text) * text_char_px / 2
+                + _PADLOCK_GAP_PX
+                + button.width() / 2
+            )
+            # A vertical dimension's text runs along its line, read upward.
+            shift_px = (
+                QtCore.QPointF(reach_px, 0.0)
+                if label.horizontal
+                else QtCore.QPointF(0.0, -reach_px)
+            )
+            # A padlock off the viewport hides rather than float over the
+            # panels around the view.
+            button.setVisible(self._move_to(button, label.text_at_mm, shift_px))
+        if self.held is not None:
+            self.board_padlock.setVisible(
+                self._move_to(self.board_padlock, self.held.at_mm)
+            )
 
     def _move_to(
-        self, widget: QtWidgets.QWidget, anchor_mm: tuple[float, float]
-    ) -> None:
+        self,
+        widget: QtWidgets.QWidget,
+        anchor_mm: tuple[float, float],
+        shift_px: QtCore.QPointF | None = None,
+    ) -> bool:
         """Center ``widget``, a child of the view's parent, on the elevation
-        point ``anchor_mm``."""
-        local = self._logical_point(self.to_document(*anchor_mm)).toPoint()
+        point ``anchor_mm``, moved by ``shift_px`` logical pixels. Returns
+        whether that center lies on the viewport."""
+        point = self._logical_point(self.to_document(*anchor_mm))
+        if shift_px is not None:
+            point += shift_px
+        local = point.toPoint()
         parent = widget.parentWidget()
-        at = self._viewer.mapTo(parent, local) if parent is not None else local
+        # From the viewport, whose coordinates _logical_point gives: the
+        # QGraphicsView's frame can offset it.
+        at = self.viewport.mapTo(parent, local) if parent is not None else local
         widget.move(at.x() - widget.width() // 2, at.y() - widget.height() // 2)
+        return self.viewport.rect().contains(local)
 
     def _queue_change(self) -> None:
         """Run :attr:`on_change` once the Coin callback being handled has
@@ -1083,6 +1240,91 @@ class ViewEditor:
     @property
     def field_host(self) -> QtWidgets.QFrame | None:
         return self._field_host
+
+    # Padlocks
+
+    def _draw_padlock_icons(self, ratio: float) -> dict[bool, QtGui.QIcon]:
+        """The closed and open padlock icons, keyed by locked, drawn at the
+        device pixel ratio ``ratio``."""
+        self._icon_ratio = ratio
+        return {
+            locked: _padlock_icon(
+                locked,
+                ratio,
+                self.style.label_rgb("locked" if locked else "unlocked"),
+            )
+            for locked in (True, False)
+        }
+
+    def _refit(self) -> None:
+        """Place the widgets over the view again, after its viewport resized
+        or moved to another screen, redrawing their icons when the device
+        pixel ratio they were drawn at is no longer the view's."""
+        if self._closed or self._stood_down():
+            return
+        ratio = self._viewer.devicePixelRatioF()
+        if ratio != self._icon_ratio:
+            self._padlock_icons = self._draw_padlock_icons(ratio)
+            self.board_padlock.setIcon(self._padlock_icons[True])
+            self.add_bar.draw_icons(ratio)
+            self._update_padlocks()
+        self._place_widgets()
+
+    def _update_padlocks(self) -> None:
+        """Give each lockable dimension a padlock from the pool, growing it
+        only when more are shown at once than ever before, and hide the
+        rest."""
+        labels = [label for label in self.overlay.labels if label.lockable]
+        parent = self._viewer.parentWidget()
+        while len(self.padlocks) < len(labels):
+            button = _padlock_button(
+                parent, _bind_index(self._toggle_lock, len(self.padlocks))
+            )
+            self.padlocks.append(button)
+            self._installed.append((button.deleteLater, True))
+            self._installed.append((button.hide, True))
+        self._padlock_labels = labels
+        for button, label in zip(self.padlocks, labels, strict=False):
+            locked = label.color == "locked"
+            text = "Unlock this opening" if locked else "Lock this opening"
+            icon = self._padlock_icons[locked]
+            if button.icon().cacheKey() != icon.cacheKey():
+                button.setIcon(icon)
+            if button.toolTip() != text:
+                button.setToolTip(text)
+                button.setAccessibleName(text)
+            button.show()
+            button.raise_()
+        for button in self.padlocks[len(labels) :]:
+            button.hide()
+
+    def padlock_for(self, region_id: str) -> QtWidgets.QToolButton | None:
+        """The padlock on ``region_id``'s dimension, or ``None`` when its
+        dimension has none or is not drawn."""
+        for button, label in zip(self.padlocks, self._padlock_labels, strict=False):
+            if label.region_id == region_id:
+                return button
+        return None
+
+    def _toggle_lock(self, index: int) -> None:
+        if self._closed or index >= len(self._padlock_labels):
+            return
+        label = self._padlock_labels[index]
+        self._close_field()
+        failure = self.session.set_lock(label.region_id, label.color == "unlocked")
+        if failure is not None:
+            report_error(failure.message)
+        self._on_change()
+
+    def _unlock_held(self) -> None:
+        held = self.held
+        if self._closed or held is None:
+            return
+        self._close_field()
+        failure = self.session.unlock_holders(held.board_id)
+        if failure is not None:
+            report_error(failure.message)
+        self._on_change()
 
     # The add buttons
 

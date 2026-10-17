@@ -31,46 +31,13 @@ forward that is not editing the source.
 
 The user guide leads with scanning geometry you already have, documents
 what each refusal means, and states the three limits a user will meet. It
-and the release have no task until M14 ships, so the guide describes the
-editor users will keep.
+and the release have no task yet.
 
 *Verify in FreeCAD:* install from the GitHub repository through the Addon
 Manager on a clean profile, model a real unit, move it into a second
 document with an ordinary placement, confirm an over-constrained input
 produces a clear error and no stale geometry, and walk the user guide's
 steps exactly as written.
-
-## M14: Editing in the 3D view
-
-**Status:** Tasks sh-037, sh-038, sh-039, sh-040, sh-041
-
-- [x] sh-037: 3D-view tests under Xvfb
-- [x] sh-038: locked openings, and a drag that moves only what it drags
-- [x] sh-039: Undo and Redo inside an edit (blocked on sh-037)
-- [x] sh-040: Edit Unit works in the 3D view (blocked on sh-037, sh-038
-  and sh-039)
-- [ ] sh-041: padlocks lock and unlock openings in the view (blocked on
-  sh-040)
-
-The editor moves out of the task panel into FreeCAD's own 3D view, so zoom,
-pan and orbit are FreeCAD's navigation. The camera turns to face the unit
-as the Sketcher's does, and the unit's real boards are what the user picks
-and drags. Openings are drawn over the boards with dimensions in the
-Sketcher's style; clicking a dimension types a size on the spot, buttons
-over a selected opening add a shelf or a divider, and an arrow drags the
-selected board. A slim task panel keeps the unit's size and the controls
-with no place on the drawing.
-
-An opening is locked at its size or unlocked to share what is left. A drag
-moves only the dragged board, together with any board joined to it through
-locked openings, and a padlock on each dimension locks or unlocks it. Undo
-and Redo step through the edits inside a session, one edit each, and the
-edits stay as their own steps after the panel closes.
-
-*Verify in FreeCAD:* open a unit with Edit Unit, watch the camera turn to
-it, orbit behind it and back, lock the opening between two shelves and drag
-one of them, add a shelf from the view, undo and redo a few edits with
-Cmd-Z, click Close, and undo the last edit with one Cmd-Z.
 
 ## M11: Back panels
 

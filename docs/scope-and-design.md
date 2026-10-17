@@ -144,6 +144,15 @@ the selected board; Delete removes it. The task panel holds only what has
 no place on the drawing: the unit's size, what a selected opening's size
 measures, and the objects the workbench leaves alone.
 
+Each opening's dimension carries a padlock just past its text, closed for a
+locked opening and open for an unlocked one, in the dimension's own color.
+Clicking it locks or unlocks the opening, and typing a size locks it. An
+unlocked opening alone in its run shows no padlock, since it can never
+lock. A selected board held in place shows a closed padlock where its arrow
+would be and outlines the locked openings holding it; clicking that padlock
+unlocks them, and the arrow takes its place. The padlock is the only way to
+unlock: the shares behind unlocked openings never appear in the interface.
+
 The unit's container cannot enter FreeCAD's edit mode without workbench
 state in the document, so the editor adds its drawing and input handling
 to the view when it opens and takes every one of them away when it closes.

@@ -538,12 +538,31 @@ class Session:
             lambda: self._apply(candidate, select=region_id),
         )
 
-    def set_locks(self, region_ids: Sequence[str], locked: bool) -> EditFailure | None:
-        """Lock each of ``region_ids`` when ``locked``, else unlock each, as
-        one write that moves nothing and keeps the selection. Returns an
+    def set_lock(self, region_id: str, locked: bool) -> EditFailure | None:
+        """Lock ``region_id`` when ``locked``, else unlock it, as one undo
+        step that moves nothing and keeps the selection. Returns an
         :class:`EditFailure` on refusal, such as locking a run's last
         unlocked region, leaving the session and document untouched."""
         self.settle()
+        name = "Lock Opening" if locked else "Unlock Opening"
+        return self._set_locks(name, [region_id], locked)
+
+    def unlock_holders(self, board_id: str) -> EditFailure | None:
+        """Unlock every region :meth:`held_by` names for ``board_id``, as one
+        undo step that moves nothing and keeps the selection, so a drag may
+        move the board. Returns an :class:`EditFailure`, changing nothing,
+        when no region holds the board or no unlock would free it."""
+        self.settle()
+        holders = self.held_by(board_id)
+        if not holders:
+            return EditFailure("no locked opening holds this board", board_id)
+        return self._set_locks("Unlock Board", holders, False)
+
+    def _set_locks(
+        self, name: str, region_ids: Sequence[str], locked: bool
+    ) -> EditFailure | None:
+        """Lock or unlock ``region_ids`` as the one undo step ``name``. The
+        caller settles first."""
         candidate = self.unit
         try:
             for region_id in region_ids:
@@ -552,7 +571,6 @@ class Session:
             return EditFailure(str(err), err.node_id)
         except LayoutSolveError as err:
             return EditFailure(describe_solve_error(err), err.node_id)
-        name = "Lock Openings" if locked else "Unlock Openings"
         return self._step(name, lambda: self._apply(candidate, select=self.selected_id))
 
     def held_by(self, board_id: str) -> tuple[str, ...] | None:

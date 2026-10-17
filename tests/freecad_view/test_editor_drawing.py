@@ -3,7 +3,6 @@ every way out puts back, the camera's turn, and the openings and
 dimensions drawn over the boards."""
 
 import sys
-from collections.abc import Iterator
 from types import TracebackType
 from typing import Protocol, cast
 
@@ -354,21 +353,6 @@ def _rgb(name: str, default: int) -> tuple[float, float, float]:
     )
 
 
-@pytest.fixture
-def dimension_style() -> Iterator[None]:
-    """Dimension colors and a text size of their own, so a test sees them
-    read. The selection color stays FreeCAD's: the 3D view keeps a changed
-    one after the preference is removed."""
-    params = FreeCAD.ParamGet(_VIEW_PARAMS)
-    params.SetUnsigned("ConstrainedDimColor", 0xC01020FF)
-    params.SetUnsigned("NonDrivingConstrDimColor", 0x1020C0FF)
-    params.SetInt("EditSketcherFontSize", 21)
-    yield
-    for name in ("ConstrainedDimColor", "NonDrivingConstrDimColor"):
-        params.RemUnsigned(name)
-    params.RemInt("EditSketcherFontSize")
-
-
 def _close_rgb(a: tuple[float, float, float], b: tuple[float, float, float]) -> bool:
     return all(abs(x - y) < 1e-3 for x, y in zip(a, b, strict=True))
 
@@ -382,7 +366,7 @@ def test_each_region_in_a_run_has_a_sketcher_dimension(
     add_board(panel, "vertical", driver)
     session = panel.session
     lower = bay_ids(session.unit.root)[0]
-    assert session.set_locks([lower], locked=True) is None
+    assert session.set_lock(lower, locked=True) is None
     upper = bay_ids(session.unit.root)[1]
     session.select(upper)
     panel._refresh()

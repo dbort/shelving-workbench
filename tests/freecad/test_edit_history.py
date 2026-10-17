@@ -148,10 +148,10 @@ def test_each_edit_is_one_step_named_for_it(doc: FreeCAD.Document) -> None:
         assert session.set_size(250.0) is None
         names = list(doc.UndoNames)
         assert isinstance(session.set_size(5000.0), EditFailure)
-        assert isinstance(session.set_locks([lower, upper], locked=True), EditFailure)
+        assert isinstance(session.set_lock(upper, locked=True), EditFailure)
         assert doc.UndoNames == names
         assert session.set_basis(Basis.WITH_NEXT) is None
-        assert session.set_locks([lower], locked=False) is None
+        assert session.set_lock(lower, locked=False) is None
         assert session.resize("height", 950.0) is None
         grab_mm = session.spaces[shelf].origin
         assert session.begin_drag(shelf, grab_mm) is None
@@ -167,7 +167,7 @@ def test_each_edit_is_one_step_named_for_it(doc: FreeCAD.Document) -> None:
             "Add Divider",
             "Move Board",
             "Resize Unit",
-            "Unlock Openings",
+            "Unlock Opening",
             "Change What a Size Measures",
             "Set Size",
             "Add Shelf",

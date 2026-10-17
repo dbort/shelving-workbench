@@ -42,7 +42,7 @@ from freecad.Shelving.core.solver import LayoutSolveError, solve
 
 Side = Literal["front", "back"]
 FaceKind = Literal["bay", "void"]
-OutlineRole = Literal["region", "selected"]
+OutlineRole = Literal["region", "selected", "holding"]
 LabelColor = Literal["locked", "unlocked"]
 
 # How far in front of the face outlines and dimensions sit, so they do not
@@ -288,6 +288,9 @@ class DimensionLabel:
     color: LabelColor
     # Where the text's center sits along the line, as a fraction from start.
     text_fraction: float
+    # Whether the region can lock or unlock: false only for an unlocked
+    # region alone in its run, which could never lock.
+    lockable: bool
 
     @property
     def text_at_mm(self) -> tuple[float, float]:
@@ -302,6 +305,11 @@ class DimensionLabel:
     def length_mm(self) -> float:
         (h0_mm, v0_mm), (h1_mm, v1_mm) = self.start_mm, self.end_mm
         return math.hypot(h1_mm - h0_mm, v1_mm - v0_mm)
+
+    @property
+    def horizontal(self) -> bool:
+        """Whether the line runs along the elevation's horizontal."""
+        return self.start_mm[1] == self.end_mm[1]
 
     @property
     def text_shift_mm(self) -> float:
@@ -408,6 +416,7 @@ class _Planner:
             return
         run_is_horizontal = division.axis == frame.horizontal
         outside_mm = _OUTER_ROW_FRACTION * self.longest_mm
+        alone = sum(not isinstance(item, Board) for item in division.items) == 1
         for index, item in enumerate(division.items):
             if isinstance(item, Board):
                 continue
@@ -454,7 +463,8 @@ class _Planner:
                 start_mm, end_mm = (cross_mm, low_mm), (cross_mm, high_mm)
             # A selected region keeps its lock color, as the Sketcher's
             # constraints keep theirs when their geometry is selected.
-            color: LabelColor = "locked" if is_locked(item) else "unlocked"
+            locked = is_locked(item)
+            color: LabelColor = "locked" if locked else "unlocked"
             size_mm = measure(self.unit, item.id, self.spaces).size_mm
             yield DimensionLabel(
                 region_id=item.id,
@@ -463,6 +473,7 @@ class _Planner:
                 text=format_mm(size_mm),
                 color=color,
                 text_fraction=text_fraction,
+                lockable=locked or not alone,
             )
 
 
@@ -474,9 +485,15 @@ def plan_overlay(
 ) -> Overlay:
     """What to draw for ``unit`` solved as ``spaces`` on ``frame``'s face:
     a face per bay and void, an outline per opening and for the selected
-    node, and a dimension for every region in a run along an elevation
-    axis. ``spaces`` must hold every node of ``unit``."""
+    node, a "holding" outline for each locked region holding a selected
+    board that :func:`held_padlock` gives a padlock, and a dimension for
+    every region in a run along an elevation axis. ``spaces`` must hold
+    every node of ``unit``."""
     planner = _Planner(unit, spaces, frame)
+    padlock = (
+        None if selected_id is None else held_padlock(unit, spaces, frame, selected_id)
+    )
+    holding = frozenset(() if padlock is None else padlock.holders)
     faces: list[Face] = []
     outlines: list[Outline] = []
     labels: list[DimensionLabel] = []
@@ -493,6 +510,8 @@ def plan_overlay(
             faces.append(Face(node.id, kind, rect))
         if selected:
             outlines.append(Outline(rect, "selected"))
+        elif node.id in holding:
+            outlines.append(Outline(rect, "holding"))
         elif isinstance(node, Bay | Void):
             outlines.append(Outline(rect, "region"))
         if isinstance(node, Division):
@@ -590,6 +609,14 @@ def arrow_for(
     past its line, so a view zoomed in on that region shows both."""
     if held_by(unit, board_id) != ():
         return None
+    return _arrow_place(unit, spaces, frame, board_id)
+
+
+def _arrow_place(
+    unit: Unit, spaces: Mapping[str, Space], frame: ElevationFrame, board_id: str
+) -> Arrow | None:
+    """:func:`arrow_for`'s arrow whether or not a locked opening holds the
+    board."""
     try:
         axis = run_axis(unit, board_id)
         before_id = region_before(unit, board_id)
@@ -631,6 +658,34 @@ def arrow_for(
             (origin.z_mm + top.z_mm) / 2,
         ),
     )
+
+
+@dataclass(frozen=True)
+class HeldPadlock:
+    """The padlock a held board shows in place of its arrow."""
+
+    board_id: str
+    # Where the board's arrow would sit.
+    at_mm: tuple[float, float]
+    # The locked regions holding the board, low side first: what clicking
+    # the padlock unlocks.
+    holders: tuple[str, ...]
+
+
+def held_padlock(
+    unit: Unit, spaces: Mapping[str, Space], frame: ElevationFrame, board_id: str
+) -> HeldPadlock | None:
+    """The padlock for ``board_id`` when locked regions hold it and unlocking
+    them would give it an arrow; ``None`` for a board a drag may move, a
+    carcass board, a board whose run runs through the depth, and a
+    region."""
+    holders = held_by(unit, board_id)
+    if not holders:
+        return None
+    place = _arrow_place(unit, spaces, frame, board_id)
+    if place is None:
+        return None
+    return HeldPadlock(board_id, place.at_mm, holders)
 
 
 def dragged_to_mm(arrow: Arrow, offset_mm: float) -> Vec3:

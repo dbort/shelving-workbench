@@ -25,6 +25,7 @@ from freecad.Shelving.editor.elevation import (
     DimensionLabel,
     ElevationFrame,
     LabelColor,
+    OutlineRole,
     Overlay,
     Rect,
 )
@@ -67,6 +68,16 @@ class Style:
 
     def label_rgb(self, color: LabelColor) -> RGB:
         return self.locked_rgb if color == "locked" else self.unlocked_rgb
+
+    def outline_rgb(self, role: OutlineRole) -> RGB:
+        """The selection color for "selected", the locked dimension color
+        for "holding", so a holding region reads as the lock it is, and a
+        dark gray for "region"."""
+        if role == "selected":
+            return self.selected_rgb
+        if role == "holding":
+            return self.locked_rgb
+        return _OUTLINE_RGB
 
 
 def view_style(label_size_pt: int) -> Style:
@@ -185,13 +196,12 @@ def drawing_node(
         rgb = _VOID_RGB if face.kind == "void" else _BAY_RGB
         fills.addChild(face_node(face.rect, 0.0, rgb, _FILL_TRANSPARENCY))
     for outline in overlay.outlines:
-        selected = outline.role == "selected"
         outlines.addChild(
             outline_node(
                 outline.rect,
                 lift_mm,
-                style.selected_rgb if selected else _OUTLINE_RGB,
-                _THICK_LINE_PX if selected else _THIN_LINE_PX,
+                style.outline_rgb(outline.role),
+                _THIN_LINE_PX if outline.role == "region" else _THICK_LINE_PX,
             )
         )
     if preview is not None:
