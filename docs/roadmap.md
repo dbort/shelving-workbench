@@ -82,7 +82,7 @@ and change its size, and confirm the cripples and jacks follow.
 
 **Status:** Tasks sh-042, sh-043
 
-- [ ] sh-042: a unit keeps its place in its container
+- [x] sh-042: a unit keeps its place in its container
 - [ ] sh-043: choose the unit's fixed point (blocked on sh-042)
 
 A unit stays where its boards are through every edit, and its fixed point
