@@ -1,5 +1,5 @@
 ---
-next_id: bug-018
+next_id: bug-019
 ---
 
 # Bug log
@@ -88,3 +88,12 @@ log happens only when the user asks.
   the row logic alone. Fix: `ad hoc`. Claiming rows innermost or shortest
   span first is local to the planner, and the convention it follows is
   not in question.
+- `bug-018` - **a unit away from its container's origin jumps there on
+  its first edit**: a carcass whose boards start at (100, -300, 50) in its
+  `App::Part` is written back from (0, 0, 0) by a depth resize, and every
+  other edit writes the same way. `scan` measures the unit's size but not
+  its position, and `solve` places the root at the origin, so
+  `write_container` moves every board. Found while planning sh-043 by
+  resizing such a container through `unit_ops.resize_unit` headless.
+  Fix: `sh-042 task`; the position has to reach the solve, the writer and
+  the editor's frame together.
