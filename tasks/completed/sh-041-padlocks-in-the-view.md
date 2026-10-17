@@ -16,8 +16,8 @@ sh-038's locks in the user's hands; until now the only way to lock is to
 type a size, and nothing unlocks. Milestone M14.
 
 ## Must Have
-- [ ] `pixi run tests` green; `pyrefly check` clean over the changed code.
-- [ ] In the view tier (sh-037), every opening's dimension shows a padlock
+- [x] `pixi run tests` green; `pyrefly check` clean over the changed code.
+- [x] In the view tier (sh-037), every opening's dimension shows a padlock
       just past its text along the dimension line: closed and in the View
       preference `ConstrainedDimColor` when the opening is locked, open and
       in `NonDrivingConstrDimColor` when unlocked. An unlocked opening
@@ -25,32 +25,32 @@ type a size, and nothing unlocks. Milestone M14.
       its label's anchor point, and padlocks move with their labels when
       the camera moves, when the 3D view resizes, and at every step of a
       drag.
-- [ ] When the 3D view's device pixel ratio changes, the padlock and add
+- [x] When the 3D view's device pixel ratio changes, the padlock and add
       button icons are redrawn at the new ratio.
-- [ ] The padlock widgets are pooled: across a drag of many steps, the
+- [x] The padlock widgets are pooled: across a drag of many steps, the
       number of padlock widgets the editor has created never exceeds the
       largest number of dimensions shown at once.
-- [ ] Clicking a padlock locks or unlocks its opening as one undo step
+- [x] Clicking a padlock locks or unlocks its opening as one undo step
       ("Lock opening" or "Unlock opening"), every solved space is the same
       before and after, and the padlock shows the new state. Clicking the
       padlock of a row's last unlocked opening shows sh-038's refusal in
       the Notification Area and changes nothing.
-- [ ] Typing a size into an unlocked opening's dimension closes its
+- [x] Typing a size into an unlocked opening's dimension closes its
       padlock.
-- [ ] A selected board that sh-038's query says is held shows a closed
+- [x] A selected board that sh-038's query says is held shows a closed
       padlock where its arrow would be, and no arrow, and the locked
       openings the query names are outlined in `ConstrainedDimColor`.
       Clicking that padlock unlocks exactly those openings as one undo
       step, after which the arrow shows on the board. A carcass board
       shows neither arrow nor padlock.
-- [ ] With the opening between two shelves locked, dragging either
+- [x] With the opening between two shelves locked, dragging either
       shelf's arrow moves both shelves by the same distance and leaves the
       locked opening's size unchanged.
-- [ ] `freecad/Shelving/qa/cases/30-editor.toml` gains a case for what no
+- [x] `freecad/Shelving/qa/cases/30-editor.toml` gains a case for what no
       test asserts: whether the padlocks stay clear of the dimension text
       and legible at several zoom levels on a HiDPI screen, and whether
       there are too many of them to read the drawing.
-- [ ] `docs/scope-and-design.md` describes locking and unlocking in the
+- [x] `docs/scope-and-design.md` describes locking and unlocking in the
       view.
 
 ## Advice
