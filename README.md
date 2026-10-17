@@ -85,7 +85,9 @@ The vocabulary the documentation and the code share.
 - **The drag rule**: dragging a board moves it, together with every board
   joined to it through locked openings, by the same distance. Only the
   nearest unlocked opening on each side changes size, and both stay
-  unlocked; a drag never locks or unlocks anything. A board with nothing
+  unlocked; a drag never locks or unlocks anything. A board dragged as far
+  as it goes stops with a 5 mm opening beside it, or with that opening's
+  current size when it is already narrower. A board with nothing
   but boards and locked openings between it and the end of its row is
   held until one of those openings is unlocked.
 - **Local frame**: origin at the unit's front-bottom-left corner, +X right,

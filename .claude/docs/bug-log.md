@@ -1,5 +1,5 @@
 ---
-next_id: bug-019
+next_id: bug-020
 ---
 
 # Bug log
@@ -88,3 +88,12 @@ log happens only when the user asks.
   the row logic alone. Fix: `ad hoc`. Claiming rows innermost or shortest
   span first is local to the planner, and the convention it follows is
   not in question.
+- `bug-019` - **a typed opening size under about 3.5 mm is lost on Undo,
+  Redo or reopening**: typing 2 mm into a bay's size field is accepted and
+  drawn, but Undo then Redo reads the column back as one bay, the 2 mm
+  opening gone. The editor rescans the boards on every read-back, and the
+  scanner drops board faces within its 3 mm clearance plus 0.5 mm snap of
+  each other. `set_size` in `core/edit.py` accepts any positive size.
+  Found while making a drag stop at `MIN_DRAG_GAP_MM` instead of refusing,
+  and reproduced headless. Fix: `ad hoc`: refuse a typed size below that
+  minimum, through the size field's existing refusal.
