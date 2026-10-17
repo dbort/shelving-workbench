@@ -124,8 +124,8 @@ def _document_box(container: FreeCAD.DocumentObject, name: str) -> Space:
 def _facing_corners(
     editor: ViewEditor, container: FreeCAD.DocumentObject, space: Space
 ) -> list[FreeCAD.Vector]:
-    """The four corners of ``space``, in ``container``'s coordinates, on
-    the face toward the camera, in document coordinates."""
+    """The four corners, in document coordinates, of the face of ``space``
+    toward the camera. ``space`` is in ``container``'s coordinates."""
     placement = container_placement(container)
     corners = [placement.multVec(corner) for corner in _corners(space)]
     toward = editor.to_document(0.0, 0.0, editor.frame.z_sign) - editor.to_document(
