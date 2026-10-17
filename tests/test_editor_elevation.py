@@ -325,7 +325,7 @@ def test_a_held_board_gets_a_padlock_where_its_arrow_would_be() -> None:
     padlock = held_padlock(_UNIT, _SPACES, frame, "shelf")
     assert padlock is not None
     assert padlock.holders == ("lower",)
-    # Beside the lower bay's dimension, level with the shelf, as an arrow.
+    # Beside the lower bay's dimension, level with the shelf, where an arrow would sit.
     unlocked = _bookcase()
     _replace_lower(unlocked, Bay(id="lower"))
     arrow = arrow_for(unlocked, solve(unlocked), frame, "shelf")

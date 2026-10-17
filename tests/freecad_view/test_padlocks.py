@@ -115,8 +115,8 @@ def _icon_rgb(button: QtWidgets.QToolButton) -> tuple[float, float, float]:
 
 
 def _assert_shows(button: QtWidgets.QToolButton, locked: bool) -> None:
-    """``button`` is an opening's padlock, closed and with the matching
-    tooltip when ``locked``, as :func:`_assert_drawn` checks."""
+    """``button`` is an opening's padlock whose tooltip and drawing, as
+    :func:`_assert_drawn` checks it, match ``locked``."""
     text = _UNLOCK if locked else _LOCK
     assert button.toolTip() == text
     assert button.accessibleName() == text
