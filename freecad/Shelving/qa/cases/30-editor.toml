@@ -20,8 +20,8 @@ around it. The open bay is drawn as a light face over the unit's front."""
   id = "close"
   instruction = ["Click Close."]
   expected = """
-The camera turns back to where you left it before Edit Unit, and nothing is
-drawn over the boards any more."""
+The camera turns smoothly back to where you left it before Edit Unit, and
+nothing is drawn over the boards any more."""
 
 [[case]]
 id = "editor.navigation"

@@ -29,7 +29,9 @@ The repo's whole verification surface: static analysis, the core unit
 suite, the repository-consistency checks, the workflow lint, a
 `freecadcmd` import check, and the headless and GUI FreeCAD test suites.
 It must be green before every review and on the merged result before
-`/ship` commits the merge. A check that needs live infrastructure becomes
+`/ship` commits the merge. `pixi run tests -- --smoke` leaves out the
+`full_only` tests and suits iteration between those points; it never
+stands in for the full run at one. A check that needs live infrastructure becomes
 a durable test inside `pixi run tests`, never a one-off command. A check
 that needs the network follows the `SHELVING_OFFLINE` contract in
 `tools/check_action_pins.py`: skip on `1`, run when unset or empty, treat

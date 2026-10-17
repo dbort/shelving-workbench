@@ -10,6 +10,15 @@ from tests.collection import collectable_targets, reaches, skipped_freecad_dir
 _SKIPPED = pytest.StashKey[list[Path]]()
 
 
+def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line(
+        "markers",
+        "full_only: left out of `pixi run tests -- --smoke`, as a repeat of a "
+        "behavior the smoke run already checks or a slow guard against a rare "
+        "regression",
+    )
+
+
 def pytest_ignore_collect(collection_path: Path, config: pytest.Config) -> bool | None:
     skipped = skipped_freecad_dir(
         collection_path, config.args, config.invocation_params.dir

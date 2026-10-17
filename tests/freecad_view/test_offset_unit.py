@@ -55,7 +55,9 @@ def _add_box(
     )
 
 
-@pytest.fixture(params=["in place", "moved and turned"])
+@pytest.fixture(
+    params=[pytest.param("in place", marks=pytest.mark.full_only), "moved and turned"]
+)
 def offset_unit(
     request: pytest.FixtureRequest, driver: ViewDriver
 ) -> Iterator[FreeCAD.DocumentObject]:

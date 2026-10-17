@@ -1,5 +1,5 @@
 ---
-next_id: friction-028
+next_id: friction-029
 ---
 
 # Friction log
@@ -62,3 +62,11 @@ the papercut and its fix in its message.
   open, and only `record` reads it. The user relayed the comment in chat.
   Simpler if: the finished page either hides the comment box or saves its
   text as a case-level comment in the report.
+- `friction-028` - **where the 3D-view suite's time goes**: speeding up
+  `tests/freecad_view/` needed time per wait call site, and `--durations`
+  gives only time per test. Native profiling is out on the aarch64 dev VM:
+  `py-spy --native` is unsupported there and `perf_event_paranoid` is 4.
+  The workaround was a scratch pytest plugin that wrapped `_pump` and
+  `_settle` in `tests/freecad_view/view.py` and summed their time by
+  caller. Simpler if: the view driver could report its waits by call site
+  behind an opt-in environment variable.
