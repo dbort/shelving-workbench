@@ -6,6 +6,7 @@ Drives :class:`freecad.Shelving.editor.session.Session` directly rather than
 GUI up.
 """
 
+import dataclasses
 import shutil
 from pathlib import Path
 from typing import Protocol, cast
@@ -1153,6 +1154,106 @@ def test_a_session_resizes_its_unit() -> None:
         finally:
             if not closed:
                 session.close()
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+_OFFSET_MM = Vec3(100.0, -300.0, 50.0)
+
+
+def _min_corner_mm(container: FreeCAD.DocumentObject) -> Vec3:
+    boxes, _skipped, _record = read_container(container)
+    return Vec3(
+        min(b.corner_mm.x_mm for b in boxes),
+        min(b.corner_mm.y_mm for b in boxes),
+        min(b.corner_mm.z_mm for b in boxes),
+    )
+
+
+def _assert_near_mm(actual: Vec3, expected: Vec3) -> None:
+    for got_mm, want_mm in (
+        (actual.x_mm, expected.x_mm),
+        (actual.y_mm, expected.y_mm),
+        (actual.z_mm, expected.z_mm),
+    ):
+        assert abs(got_mm - want_mm) <= 1e-6, (actual, expected)
+
+
+def _tree_shape(region: Region) -> object:
+    """``region``'s kinds, division axes and board ids in order: what a
+    rescan must read back, region ids aside, since a scan mints those
+    fresh."""
+    if isinstance(region, Division):
+        return (
+            region.axis,
+            [
+                item.id if isinstance(item, Board) else _tree_shape(item)
+                for item in region.items
+            ],
+        )
+    return type(region).__name__
+
+
+def test_session_edits_keep_an_offset_unit_where_its_boards_are() -> None:
+    """Through the editor, a resize, a split, a typed size and a
+    board drag each leave the unit's minimum corner where its boards put
+    it, and a rescan reads back that corner and the same tree."""
+    doc = FreeCAD.newDocument("editor_offset")
+    try:
+        container = cast("FreeCAD.DocumentObject", doc.addObject("App::Part", "Unit"))
+        offset_unit = dataclasses.replace(
+            _tiny_unit(), size_mm=Vec3(600.0, 300.0, 900.0), position_mm=_OFFSET_MM
+        )
+        write_container(container, offset_unit)
+        doc.recompute()
+        _assert_near_mm(_min_corner_mm(container), _OFFSET_MM)
+
+        session = Session(container)
+        session.open()
+        try:
+            _assert_near_mm(session.unit.position_mm, _OFFSET_MM)
+            assert session.resize("width", 750.0) is None
+            doc.recompute()
+            _assert_near_mm(_min_corner_mm(container), _OFFSET_MM)
+
+            _split_bay(session, _find_bay_id(session.unit.root), "horizontal")
+            _assert_near_mm(_min_corner_mm(container), _OFFSET_MM)
+            left_bay_id = _find_bay_ids_in_order(session.unit.root)[0]
+            shelf_id = _split_bay(session, left_bay_id, "vertical")
+            _assert_near_mm(_min_corner_mm(container), _OFFSET_MM)
+
+            lower_bay_id = _find_bay_ids_in_order(session.unit.root)[0]
+            session.select(lower_bay_id)
+            assert session.set_size(300.0) is None
+            doc.recompute()
+            _assert_near_mm(_min_corner_mm(container), _OFFSET_MM)
+            assert session.set_lock(lower_bay_id, locked=False) is None
+
+            shelf_z_mm = _z_mm(container, shelf_id)
+            space = session.spaces[shelf_id]
+            top = space.max_corner()
+            grab_mm = Vec3(
+                (space.origin.x_mm + top.x_mm) / 2,
+                (space.origin.y_mm + top.y_mm) / 2,
+                (space.origin.z_mm + top.z_mm) / 2,
+            )
+            assert session.begin_drag(shelf_id, grab_mm) is None
+            moved_mm = Vec3(grab_mm.x_mm, grab_mm.y_mm, grab_mm.z_mm + 40.0)
+            assert session.drag_to(moved_mm) is None
+            session.end_drag()
+            doc.recompute()
+            assert abs(_z_mm(container, shelf_id) - (shelf_z_mm + 40.0)) < 1e-6
+            _assert_near_mm(_min_corner_mm(container), _OFFSET_MM)
+            _assert_session_matches_document(session)
+            shape = _tree_shape(session.unit.root)
+        finally:
+            session.close()
+        doc.recompute()
+
+        fresh = Session(container)
+        _assert_near_mm(fresh.unit.position_mm, _OFFSET_MM)
+        assert _tree_shape(fresh.unit.root) == shape
+        _assert_session_matches_document(fresh)
     finally:
         FreeCAD.closeDocument(doc.Name)
 

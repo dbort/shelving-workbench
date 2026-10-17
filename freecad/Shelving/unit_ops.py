@@ -121,7 +121,8 @@ def unit_size_mm(container: FreeCAD.DocumentObject) -> Vec3:
 
 def resize_unit(container: FreeCAD.DocumentObject, size_mm: Vec3) -> WriteResult:
     """Rescan ``container``, substitute ``size_mm`` for its outer size, and
-    write the result back."""
+    write the result back. The unit's minimum corner stays where its boards
+    put it, so the unit grows or shrinks on its maximum sides."""
     unit = dataclasses.replace(_rescanned_unit(container), size_mm=size_mm)
     return write_container(container, unit)
 

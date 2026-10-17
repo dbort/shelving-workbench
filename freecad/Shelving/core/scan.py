@@ -689,7 +689,7 @@ def _make_board(
         ctx.depth_hi_mm - board.d1_mm,
     )
     pinned_size_mm = (
-        _unit_size_mm(
+        _from_elevation_mm(
             ctx.horizontal,
             ctx.vertical,
             ctx.depth_axis,
@@ -923,7 +923,7 @@ def _recover_rules(sizes_mm: Sequence[float], snap_mm: float) -> list[SizeRule]:
     return [Weighted(weight=size_mm) for size_mm in sizes_mm]
 
 
-def _unit_size_mm(
+def _from_elevation_mm(
     horizontal: Axis,
     vertical: Axis,
     depth_axis: Axis,
@@ -1016,7 +1016,7 @@ def scan(
         )
 
     unit = Unit(
-        size_mm=_unit_size_mm(
+        size_mm=_from_elevation_mm(
             horizontal,
             vertical,
             depth_axis,
@@ -1027,6 +1027,9 @@ def scan(
         root=root,
         depth_axis=depth_axis,
         front_at_min=front_at_min,
+        position_mm=_from_elevation_mm(
+            horizontal, vertical, depth_axis, grid.hs_mm[0], grid.vs_mm[0], depth_lo_mm
+        ),
     )
     return ScanResult(
         unit=unit,

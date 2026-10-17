@@ -21,6 +21,7 @@ from freecad.Shelving.core.solver import solve
 from freecad.Shelving.editor.elevation import (
     DimensionLabel,
     Rect,
+    Side,
     arrow_for,
     board_space,
     dragged_to_mm,
@@ -127,6 +128,38 @@ def test_a_depth_along_x_draws_y_across() -> None:
     assert frame.horizontal == Axis.Y
     assert frame.z_dir == Vec3(-1.0, 0.0, 0.0)
     assert frame.rect(solve(unit)["bay"]) == Rect(0.0, 0.0, 900.0, 600.0)
+
+
+@pytest.mark.parametrize("front_at_min", [None, False])
+@pytest.mark.parametrize("side", ["front", "back"])
+def test_an_offset_unit_draws_the_same_elevation_from_its_position(
+    front_at_min: bool | None, side: Side
+) -> None:
+    """The frame starts at the unit's position, so an offset unit's overlay
+    and arrows in elevation coordinates are the origin unit's, and only the
+    arrow's unit-frame grab point carries the offset."""
+    shift_mm = Vec3(100.0, -300.0, 50.0)
+
+    def shifted(point: Vec3) -> Vec3:
+        return Vec3(
+            point.x_mm + shift_mm.x_mm,
+            point.y_mm + shift_mm.y_mm,
+            point.z_mm + shift_mm.z_mm,
+        )
+
+    at_origin = _bookcase(front_at_min)
+    offset = dataclasses.replace(at_origin, position_mm=shift_mm)
+    origin_frame = elevation_frame(at_origin, side)
+    offset_frame = elevation_frame(offset, side)
+    assert _close(offset_frame.origin_mm, shifted(origin_frame.origin_mm))
+    assert plan_overlay(offset, solve(offset), offset_frame, "shelf") == plan_overlay(
+        at_origin, solve(at_origin), origin_frame, "shelf"
+    )
+    origin_arrow = arrow_for(at_origin, solve(at_origin), origin_frame, "divider")
+    offset_arrow = arrow_for(offset, solve(offset), offset_frame, "divider")
+    assert origin_arrow is not None and offset_arrow is not None
+    assert offset_arrow.at_mm == origin_arrow.at_mm
+    assert _close(offset_arrow.grab_mm, shifted(origin_arrow.grab_mm))
 
 
 def test_unit_and_elevation_points_round_trip() -> None:

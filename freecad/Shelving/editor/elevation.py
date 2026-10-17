@@ -193,10 +193,11 @@ def elevation_frame(unit: Unit, side: Side = "front") -> ElevationFrame:
     depth_mm = unit.size_mm.component_mm(depth_index)
     front_mm = depth_mm if toward_sign > 0 else 0.0
     face_mm = front_mm if side == "front" else depth_mm - front_mm
-    origin = [0.0, 0.0, 0.0]
-    origin[depth_index] = face_mm
+    position = unit.position_mm
+    origin = [position.x_mm, position.y_mm, position.z_mm]
+    origin[depth_index] += face_mm
     if h_dir.component_mm(horizontal.component_index) < 0:
-        origin[horizontal.component_index] = unit.size_mm.component_mm(
+        origin[horizontal.component_index] += unit.size_mm.component_mm(
             horizontal.component_index
         )
     return ElevationFrame(

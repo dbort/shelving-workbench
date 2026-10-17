@@ -14,26 +14,26 @@ real boards. This is the ground sh-043's fixed point stands on, and it
 fixes bug-018. Milestone M15.
 
 ## Must Have
-- [ ] `pixi run tests` green; `pyrefly check` clean over the changed code.
-- [ ] A container holding a four-board carcass whose minimum corner is at
+- [x] `pixi run tests` green; `pyrefly check` clean over the changed code.
+- [x] A container holding a four-board carcass whose minimum corner is at
       (100, -300, 50) in container coordinates, resized through
       `unit_ops.resize_unit` along each axis in turn, keeps that minimum
       corner at (100, -300, 50) within 1e-6 mm, and each board keeps its
       position along every axis the resize did not change.
-- [ ] The same container edited through `Session` (a resize, a split, a
+- [x] The same container edited through `Session` (a resize, a split, a
       typed size, a board drag) keeps its minimum corner, and a rescan of
       the written result reads back the same corner and the same tree.
-- [ ] A unit scanned from boards at the container's origin writes exactly
+- [x] A unit scanned from boards at the container's origin writes exactly
       the placements it wrote before (the existing scan, write and
       fixture tests pass unchanged).
-- [ ] In the view tier, Edit Unit on the offset container draws each
+- [x] In the view tier, Edit Unit on the offset container draws each
       opening's outline on its boards: every outline corner lies on the
       matching bay's bounds in document coordinates within 1e-6 mm, and a
       drag of a shelf's arrow by a given distance moves that shelf's
       document placement by the same distance.
-- [ ] `unit_ops.create_unit` still builds its unit at the container's
+- [x] `unit_ops.create_unit` still builds its unit at the container's
       origin.
-- [ ] `docs/scope-and-design.md` states that a unit's position comes from
+- [x] `docs/scope-and-design.md` states that a unit's position comes from
       its boards, as its size does.
 
 ## Advice
@@ -72,9 +72,14 @@ STANDING OBLIGATIONS (`CLAUDE.md`):
   geometry staying put.
 
 ## Plan
-- [ ] **Step 1** (`freecad/Shelving/core/layout.py`, `freecad/Shelving/core/scan.py`, `freecad/Shelving/core/solver.py`): `Unit` carries its position, `scan` sets it from the layout boards' minimum corner, and `solve` places the root there; core tests for an offset scan and solve.
-- [ ] **Step 2** (`freecad/Shelving/container.py`, `freecad/Shelving/unit_ops.py`, `freecad/Shelving/editor/session.py`): Writes and rescans keep the position through every edit; FreeCAD-tier tests for the offset container's resizes and session edits.
-- [ ] **Step 3** (`freecad/Shelving/editor/elevation.py`, `freecad/Shelving/editor/view_editor.py`): The elevation frame and the drag mapping start from the unit's position; view-tier tests for the outlines and a drag on the offset container.
-- [ ] **Step 4** (`docs/scope-and-design.md`, `.claude/docs/bug-log.md`): The design prose; delete bug-018.
+- [x] **Step 1** (`freecad/Shelving/core/layout.py`, `freecad/Shelving/core/scan.py`, `freecad/Shelving/core/solver.py`): `Unit` carries its position, `scan` sets it from the layout boards' minimum corner, and `solve` places the root there; core tests for an offset scan and solve.
+- [x] **Step 2** (`freecad/Shelving/container.py`, `freecad/Shelving/unit_ops.py`, `freecad/Shelving/editor/session.py`): Writes and rescans keep the position through every edit; FreeCAD-tier tests for the offset container's resizes and session edits.
+- [x] **Step 3** (`freecad/Shelving/editor/elevation.py`, `freecad/Shelving/editor/view_editor.py`): The elevation frame and the drag mapping start from the unit's position; view-tier tests for the outlines and a drag on the offset container.
+- [x] **Step 4** (`docs/scope-and-design.md`, `.claude/docs/bug-log.md`): The design prose; delete bug-018.
 
 ## Review log
+
+### Round 1: APPROVED
+- **N1: Outlines after the edits are checked only against the solve** (`tests/freecad_view/test_offset_unit.py:209`): after `add_board`, `_assert_openings_on_bays` compares each outline with `session.spaces`, which come from the same solve that draws the overlay; only the first single-opening check compares against the document's own `Part::Box` placements. The session tier's `_assert_session_matches_document` ties spaces to the document, so not blocking; checking each bay against its bounding boards' document boxes would close the loop inside the view tier.
+- **N2: Camera fit on an offset unit has no test** (`freecad/Shelving/editor/view_editor.py:763`): `_fit` centers through `self._placement(frame)`, so it follows the offset, but no test checks it. Outside the Must Haves.
+- **N3: Loose return type in a test helper** (`tests/freecad/test_editor_session.py:1182`): `_tree_shape` returns `object`; a recursive type alias would follow the Typed Python obligation more closely. Test-only, and pyrefly passes.

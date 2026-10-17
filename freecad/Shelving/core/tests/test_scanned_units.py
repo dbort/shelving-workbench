@@ -204,7 +204,7 @@ def test_a_ruled_board_spans_its_slot_in_the_scan_grid(name: str) -> None:
                 continue
             assert isinstance(item.rule, Fixed)
             ruled += 1
-            low_mm = _component_mm(spaces[item.id].origin, axis) + lines_mm[0]
+            low_mm = _component_mm(spaces[item.id].origin, axis)
             high_mm = low_mm + item.rule.size_mm
             assert min(abs(low_mm - line_mm) for line_mm in lines_mm) < 1e-6
             assert min(abs(high_mm - line_mm) for line_mm in lines_mm) < 1e-6

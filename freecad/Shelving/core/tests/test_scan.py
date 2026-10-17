@@ -283,6 +283,76 @@ def _closed_box(
     ]
 
 
+_OFFSET_MM = Vec3(100.0, -300.0, 50.0)
+
+
+def _shifted(boxes: Sequence[Box], offset_mm: Vec3) -> list[Box]:
+    return [
+        dataclasses.replace(
+            box,
+            corner_mm=Vec3(
+                box.corner_mm.x_mm + offset_mm.x_mm,
+                box.corner_mm.y_mm + offset_mm.y_mm,
+                box.corner_mm.z_mm + offset_mm.z_mm,
+            ),
+        )
+        for box in boxes
+    ]
+
+
+def _box_multiset(
+    boxes: Sequence[Box],
+) -> list[tuple[float, float, float, float, float, float]]:
+    return _board_multiset(
+        [BoardSpec(b.name, b.name, b.size_mm, b.corner_mm) for b in boxes]
+    )
+
+
+def test_offset_boards_scan_to_their_minimum_corner() -> None:
+    boxes = _shifted(
+        _closed_box([_box("Shelf", (18.0, 0.0, 400.0), (964.0, 300.0, 18.0))]),
+        _OFFSET_MM,
+    )
+    unit = scan(boxes).unit
+    assert unit.position_mm == _OFFSET_MM
+    assert unit.size_mm == Vec3(1000.0, 300.0, 1000.0)
+    assert _board_multiset(expand(unit)) == _box_multiset(boxes)
+
+
+@pytest.mark.parametrize("depth_axis", list(Axis))
+def test_position_maps_back_to_model_axes_whichever_axis_is_depth(
+    depth_axis: Axis,
+) -> None:
+    """The two walls thin through ``depth_axis`` are set aside, so the
+    position is the minimum corner of the other four."""
+    result = scan(_shifted(_six_sided_shell(), _OFFSET_MM), depth_axis=depth_axis)
+    aside = {panel.name for panel in result.panels}
+    placed = [
+        box for box in _shifted(_six_sided_shell(), _OFFSET_MM) if box.name not in aside
+    ]
+    assert result.unit.position_mm == Vec3(
+        min(box.corner_mm.x_mm for box in placed),
+        min(box.corner_mm.y_mm for box in placed),
+        min(box.corner_mm.z_mm for box in placed),
+    )
+    assert _board_multiset(expand(result.unit)) == _box_multiset(placed)
+
+
+def test_set_aside_panels_and_skipped_parts_do_not_move_the_position() -> None:
+    """A back proud of the carcass and wider than it is set aside, so it
+    counts toward neither the size nor the position."""
+    back = _box("Back", (-40.0, -20.0, -30.0), (1080.0, 6.0, 1060.0))
+    skipped = Skipped(name="Pad", label="Pad", type="PartDesign::Body", reason="x")
+    result = scan(
+        [*_shifted(_closed_box([]), _OFFSET_MM), _shifted([back], _OFFSET_MM)[0]],
+        depth_axis=Axis.Y,
+        skipped=[skipped],
+    )
+    assert [p.name for p in result.panels] == ["Back"]
+    assert result.unit.position_mm == _OFFSET_MM
+    assert result.unit.size_mm == Vec3(1000.0, 300.0, 1000.0)
+
+
 def test_overlap_is_refused_naming_both() -> None:
     boxes = _closed_box(
         [

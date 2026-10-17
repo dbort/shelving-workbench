@@ -99,6 +99,14 @@ are one joint, so a shelf held a millimeter off each side does not create
 two one-millimeter compartments. Space connected to the outside of the
 bounding box is a void; enclosed space is a bay.
 
+A unit's position comes from its boards, as its size does: the two are the
+bounding box, in the container's coordinates, of the boards the tree
+places. A back or front panel set aside, an unreadable part, or an object
+left alone counts toward neither. A resize keeps that box's minimum corner
+where it is and grows the unit on its far sides, the way a `Part::Box`
+grows from its `Placement`, so a unit built anywhere in its container
+stays there through every edit.
+
 It never guesses. Every arrangement it cannot express is refused with the
 objects named, and every object it cannot read is reported, because a
 silently dropped panel turns enclosed bays into open ones and yields a
@@ -179,7 +187,8 @@ one a copied object can carry wrongly.
   another document is a relocation.
 - **On the container:** the unit's id, depth axis, facing, and a record of
   region rules keyed by their bounding boards. Positions always come from
-  the solids; a missing or stale record falls back to inference.
+  the solids, the unit's own size and position included; a missing or
+  stale record falls back to inference.
 - **Named values** shared between units will live in an ordinary
   `VarSet`.
 
