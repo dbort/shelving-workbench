@@ -19,6 +19,13 @@ points it at throwaway settings before the import.
 This import skips FreeCAD's own startup: add-on discovery and the frozen
 namespace path below.
 
+## Qt versions
+
+The macOS FreeCAD 1.1.4 app runs Qt 6.8.3; pixi's conda-forge build runs
+Qt 6.11. Code that runs in both can use Qt API up to 6.8, such as
+`QEvent.Type.DevicePixelRatioChange` (6.6), which `editor/view_editor.py`
+watches for.
+
 ## `freecadcmd` script quirks
 
 - An uncaught exception exits 0 with an `Exception while processing file`
