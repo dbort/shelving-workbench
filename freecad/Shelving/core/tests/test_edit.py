@@ -17,9 +17,11 @@ from freecad.Shelving.core.edit import (
     merge_at,
     move_board,
     region_before,
+    remove_boards,
     run_axis,
     set_basis,
     set_size,
+    set_thickness,
     set_unit_size,
     split_region,
     unlock,
@@ -41,7 +43,7 @@ from freecad.Shelving.core.layout import (
     Weighted,
 )
 from freecad.Shelving.core.scan import DEFAULT_CLEARANCE_MM, DEFAULT_SNAP_MM
-from freecad.Shelving.core.solver import solve
+from freecad.Shelving.core.solver import LayoutSolveError, solve
 
 
 def _closed_box_unit() -> Unit:
@@ -1427,3 +1429,166 @@ def test_splitting_a_locked_bay_gives_locked_halves_and_merging_them_locks() -> 
     half_unlocked = unlock(split, halves[1].id)
     merged = merge_at(half_unlocked, new_board.id)
     assert not isinstance(_rules_by_id(merged.root)[halves[0].id], Fixed)
+
+
+def _stock_unit() -> Unit:
+    """A column with a locked spacing over its first shelf, a locked clear
+    opening under its second, and a free opening at the top."""
+    return Unit(
+        size_mm=Vec3(600.0, 300.0, 900.0),
+        root=Division(
+            axis=Axis.Z,
+            items=[
+                Board(thickness_mm=18.0, id="bottom"),
+                Bay(rule=Fixed(300.0, Basis.WITH_NEXT), id="spaced"),
+                Board(thickness_mm=18.0, id="s1"),
+                Bay(rule=Fixed(282.0, Basis.CLEAR), id="clear"),
+                Board(thickness_mm=18.0, id="s2"),
+                Bay(id="free"),
+                Board(thickness_mm=18.0, id="top"),
+            ],
+        ),
+        depth_axis=Axis.Y,
+    )
+
+
+def _top_face_mm(spaces: Mapping[str, Space], node_id: str) -> float:
+    space = spaces[node_id]
+    return space.origin.z_mm + space.size.z_mm
+
+
+def test_set_thickness_keeps_the_unit_size_and_a_spacing_holds_its_shelf() -> None:
+    """A spacing is quoted to the top of the shelf after it, so that top
+    stays put; a clear opening keeps its own height, so the shelf over it
+    comes down by the thickness it lost."""
+    unit = _stock_unit()
+    before = solve(unit)
+    edited = set_thickness(unit, ["s1", "s2"], 12.0)
+    after = solve(edited)
+    assert edited.size_mm == unit.size_mm
+    assert after[edited.root.id] == before[unit.root.id]
+    assert _top_face_mm(after, "s1") == pytest.approx(_top_face_mm(before, "s1"))
+    assert _top_face_mm(after, "s2") == pytest.approx(_top_face_mm(before, "s2") - 6.0)
+    assert after["s1"].size.z_mm == pytest.approx(12.0)
+    assert after["bottom"] == before["bottom"]
+    assert after["top"] == before["top"]
+    # The argument is left as it was.
+    assert solve(unit) == before
+
+
+def test_set_thickness_that_cannot_fit_fails_the_solve() -> None:
+    edited = set_thickness(_stock_unit(), ["bottom", "s1", "s2", "top"], 200.0)
+    with pytest.raises(LayoutSolveError):
+        solve(edited)
+
+
+@pytest.mark.parametrize(
+    ("board_ids", "thickness_mm", "named"),
+    [
+        (["s1", "nowhere"], 12.0, "nowhere"),
+        (["s1", "free"], 12.0, "free"),
+        (["s1"], 0.0, "s1"),
+        (["s1"], -3.0, "s1"),
+    ],
+)
+def test_set_thickness_refuses(
+    board_ids: list[str], thickness_mm: float, named: str
+) -> None:
+    with pytest.raises(EditError) as raised:
+        set_thickness(_stock_unit(), board_ids, thickness_mm)
+    assert raised.value.node_id == named
+
+
+def _two_column_unit() -> Unit:
+    """Two columns of two bays each, side by side between three boards."""
+    return Unit(
+        size_mm=Vec3(900.0, 300.0, 900.0),
+        root=Division(
+            axis=Axis.X,
+            items=[
+                Board(thickness_mm=18.0, id="left"),
+                Division(
+                    axis=Axis.Z,
+                    items=[Bay(id="a1"), Board(thickness_mm=18.0, id="sa"), Bay()],
+                ),
+                Board(thickness_mm=18.0, id="mid"),
+                Division(
+                    axis=Axis.Z,
+                    items=[Bay(id="b1"), Board(thickness_mm=18.0, id="sb"), Bay()],
+                ),
+                Board(thickness_mm=18.0, id="right"),
+            ],
+        ),
+        depth_axis=Axis.Y,
+    )
+
+
+def _all_board_ids(region: Region) -> set[str]:
+    if not isinstance(region, Division):
+        return set()
+    ids: set[str] = set()
+    for item in region.items:
+        ids |= {item.id} if isinstance(item, Board) else _all_board_ids(item)
+    return ids
+
+
+def test_remove_boards_removes_two_inner_boards_of_one_run() -> None:
+    unit = Unit(
+        size_mm=Vec3(600.0, 300.0, 900.0),
+        root=Division(
+            axis=Axis.Z,
+            items=[
+                Board(thickness_mm=18.0, id="bottom"),
+                Bay(id="low"),
+                Board(thickness_mm=18.0, id="s1"),
+                Bay(rule=Weighted(2.0)),
+                Board(thickness_mm=18.0, id="s2"),
+                Bay(),
+                Board(thickness_mm=18.0, id="top"),
+            ],
+        ),
+        depth_axis=Axis.Y,
+    )
+    before = solve(unit)
+    edited = remove_boards(unit, ["s1", "s2"])
+    after = solve(edited)
+    assert edited == merge_at(merge_at(unit, "s1"), "s2")
+    assert _all_board_ids(edited.root) == {"bottom", "top"}
+    assert after["bottom"] == before["bottom"]
+    assert after["top"] == before["top"]
+    assert after["low"].size.z_mm == pytest.approx(864.0)
+
+
+def test_remove_boards_removes_one_board_in_each_of_two_runs() -> None:
+    unit = _two_column_unit()
+    before = solve(unit)
+    edited = remove_boards(unit, ["sa", "sb"])
+    after = solve(edited)
+    assert _all_board_ids(edited.root) == {"left", "mid", "right"}
+    for board_id in ("left", "mid", "right"):
+        assert after[board_id] == before[board_id]
+    assert after["a1"].size.z_mm == pytest.approx(900.0)
+    assert after["b1"].size.z_mm == pytest.approx(900.0)
+
+
+def test_remove_boards_refuses_the_whole_set_for_an_end_of_run_board() -> None:
+    unit = _two_column_unit()
+    snapshot = copy.deepcopy(unit)
+    with pytest.raises(EditError) as raised:
+        remove_boards(unit, ["sa", "left"])
+    assert raised.value.node_id == "left"
+    assert unit == snapshot
+
+
+def test_remove_boards_skips_a_board_an_earlier_removal_discarded() -> None:
+    """Removing ``mid`` discards the column after it whole, ``sb`` with it."""
+    unit = _two_column_unit()
+    edited = remove_boards(unit, ["mid", "sb"])
+    assert edited == merge_at(unit, "mid")
+    assert _all_board_ids(edited.root) == {"left", "sa", "right"}
+
+
+def test_remove_boards_refuses_an_id_that_was_never_a_board() -> None:
+    with pytest.raises(EditError) as raised:
+        remove_boards(_two_column_unit(), ["sa", "nowhere"])
+    assert raised.value.node_id == "nowhere"

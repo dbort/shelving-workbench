@@ -147,3 +147,34 @@ def reported(monkeypatch: pytest.MonkeyPatch) -> list[str]:
 
     monkeypatch.setattr(view_editor_module, "report_error", record)
     return messages
+
+
+# The Woodworking workbench's Magic Start unit at its defaults.
+_MAGIC_START = (
+    _HERE.parent / "freecad" / "fixtures" / "woodworking_magic_start_default.FCStd"
+)
+
+
+@pytest.fixture
+def magic_start(
+    driver: "ViewDriver",
+) -> Iterator[tuple["FreeCAD.DocumentObject", "ViewDriver"]]:
+    """The Woodworking workbench's magicStart unit, whose back panel lies
+    behind every opening, and a driver for its own 3D view."""
+    import FreeCAD
+    import FreeCADGui
+
+    from freecad.Shelving.container import unit_for_selection
+    from tests.freecad_view.view import ViewDriver
+
+    FreeCADGui.activateWorkbench("ShelvingWorkbench")
+    doc = FreeCAD.openDocument(str(_MAGIC_START))
+    own = ViewDriver.for_active_view()
+    container = unit_for_selection(
+        [cast("FreeCAD.DocumentObject", doc.getObject("LinkGroup"))]
+    )
+    assert container is not None
+    yield container, own
+    if FreeCADGui.Control.activeDialog():
+        FreeCADGui.Control.closeDialog()
+        own.pump()

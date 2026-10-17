@@ -15,34 +15,34 @@ material or color together, each change one undo step, and Delete removes
 every selected board at once.
 
 ## Must Have
-- [ ] `pixi run tests` green; `pyrefly check` clean over the changed code.
-- [ ] A core edit sets the run-axis thickness of a given set of boards and
+- [x] `pixi run tests` green; `pyrefly check` clean over the changed code.
+- [x] A core edit sets the run-axis thickness of a given set of boards and
       returns the new `Unit`. It refuses an unknown id, a non-board id and a
       non-positive thickness. Core tests on one unit assert:
       - the unit's outside size is unchanged;
       - a locked `Basis.WITH_NEXT` region's next board keeps its position,
         and a locked `Basis.CLEAR` region's next board moves;
       - a thickness that cannot fit raises the solver's error.
-- [ ] A core edit removes a given set of boards as `merge_at` removes one,
+- [x] A core edit removes a given set of boards as `merge_at` removes one,
       returning the new `Unit`. A board an earlier removal in the same edit
       already discarded is skipped; if any removal raises, the edit raises
       that `EditError` and returns nothing. Core tests cover two inner
       boards in one run, two in different runs, and a set holding an
       end-of-run board.
-- [ ] A pure core function groups (board id, thickness, material name or
+- [x] A pure core function groups (board id, thickness, material name or
       `None`, color or `None`) records into stocks, one per distinct
       (thickness, material, color), ordered by board count, most first,
       ties by first board in input order. Tested in the fast suite.
-- [ ] The session lists the unit's stock groups, each with its board ids.
+- [x] The session lists the unit's stock groups, each with its board ids.
       Left-alone objects are never in a group. Headless, where color is
       unknown, the grouping uses thickness and material only. Asserted on a
       copy of `tests/freecad/fixtures/woodworking_magic_start_default.FCStd`:
       one group holding the five layout boards, with the back board in none.
-- [ ] The session holds a multi-board selection alongside its single one:
+- [x] The session holds a multi-board selection alongside its single one:
       while two or more boards are selected, `Session.selected_id` is
       `None` and `can_split`, `can_merge` and `selected_measurement` answer
       as for no selection.
-- [ ] A session stock swap applies to the selected boards, as one undo
+- [x] A session stock swap applies to the selected boards, as one undo
       step, any combination of: a thickness, a material from FreeCAD's
       library (by UUID, set as `ShapeMaterial`), and a color. It keeps the
       selection. Asserted headless on the Magic Start copy:
@@ -52,13 +52,13 @@ every selected board at once.
       - a swap with no field set returns `None` and adds no undo step;
       - one Undo restores every board's geometry and `ShapeMaterial`;
       - no swap changes a board's `Grain`.
-- [ ] In `tests/freecad_gui/`:
+- [x] In `tests/freecad_gui/`:
       - a material swap with no explicit color repaints the boards in the
         material's appearance diffuse color;
       - an explicit color wins over the material's;
       - after a swap every face of each board has the same color, so
         per-face colors are replaced.
-- [ ] In `tests/freecad_gui/`, the panel holds a "Stock" group below the
+- [x] In `tests/freecad_gui/`, the panel holds a "Stock" group below the
       Unit group, one row per stock group in the session's order, each row
       showing the thickness, the material name, a color swatch when color
       is known, and the board count as a bare number. Clicking a row puts
@@ -66,7 +66,7 @@ every selected board at once.
       A row shows as selected exactly when the selection is its boards.
       "Change stock…" is enabled exactly when one or more boards are
       selected, and the basis control is disabled while two or more are.
-- [ ] In the view tier (`tests/freecad_view/`), under CAD navigation, on
+- [x] In the view tier (`tests/freecad_view/`), under CAD navigation, on
       the Magic Start copy:
       - Ctrl-click on a board adds it to the selection, and Ctrl-click on
         a selected board removes it; the session's board set matches
@@ -83,12 +83,12 @@ every selected board at once.
         step, and one Undo restores both;
       - Delete with an inner board and a carcass board selected reports a
         refusal once in the Notification Area and changes nothing.
-- [ ] The "Change stock…" dialog has three optional fields: a thickness
+- [x] The "Change stock…" dialog has three optional fields: a thickness
       quantity field, FreeCAD's `MatGui::MaterialTreeWidget`, and a color.
       Each starts unset; accepting with none set changes nothing. A swap
       that cannot fit is reported in the Notification Area. Asserted in
       `tests/freecad_gui/`.
-- [ ] QA cases in `freecad/Shelving/qa/cases/` cover, with only what no
+- [x] QA cases in `freecad/Shelving/qa/cases/` cover, with only what no
       test asserts:
       - selecting by stock row, by Ctrl-click in the view and in the tree,
         and how FreeCAD's highlight reads on several boards;
@@ -96,7 +96,7 @@ every selected board at once.
       - a material swap recoloring boards;
       - a thickness swap in which a spacing-based shelf holds and a
         clear-based one moves.
-- [ ] `README.md`'s glossary entry for a stock no longer says stock is never
+- [x] `README.md`'s glossary entry for a stock no longer says stock is never
       changed on an existing board and names the stock swap;
       `docs/scope-and-design.md`'s matching sentence says the same.
 
@@ -161,6 +161,18 @@ DECISIONS (user, 2026-10-17, re-plan after sh-040):
   carcass board), the whole delete is refused and reported once.
 - The stock list stays in the panel; "Change stock…" sits under it.
 
+DECISION (user, 2026-10-17, during /work): **an opening click reads its
+modifier.** Under Inventor navigation FreeCAD selects only on Ctrl-click and
+a plain click on empty space leaves its selection alone, so the strict rule
+above would leave an Inventor user no click that reaches an opening once a
+board is selected. A click on an opening carrying Ctrl (Command on a Mac),
+FreeCAD's add-to-selection modifier, keeps a board selection; any other
+click on an opening selects it, in every style, as sh-040 did. Boards still
+follow FreeCAD's selection alone. Found while implementing: FreeCAD answers
+a Ctrl-click on a board selected as a whole object by adding the clicked
+element rather than removing the board, so the editor reads a board held
+both whole and by an element as that board deselected.
+
 SELECTION INTERFACE: keep `Session.selected_id` as the single selection and
 add the board set beside it, `None` id during a multi-selection, so every
 existing guard on `selected_id is None` stays correct. Its users:
@@ -203,11 +215,11 @@ STANDING OBLIGATIONS (`CLAUDE.md`):
   editor's other refusals do.
 
 ## Plan
-- [ ] **Step 1** (`freecad/Shelving/core/`): The thickness edit over a set of boards, the multi-board removal over `merge_at`, and the pure stock-grouping function, with core tests.
-- [ ] **Step 2** (`freecad/Shelving/editor/session.py`): The board set beside `selected_id`, kept through `reload`; the stock groups (reading `ShapeMaterial` and, with a GUI, the dominant face color); the stock swap (thickness through the core edit and the write path, `ShapeMaterial` from a library UUID, color repainting every face); deleting the selected boards as one step. Bring every `selected_id` user listed in Advice along.
-- [ ] **Step 3** (`freecad/Shelving/editor/view_editor.py`): Mirror FreeCAD's selection through the observer and `_click`, ignore Ctrl-click on an opening during a board selection, hide the arrow and add buttons during a multi-selection, and route Delete to the multi-board delete.
-- [ ] **Step 4** (`freecad/Shelving/editor/panel.py`, a new dialog module in `freecad/Shelving/editor/`): The Stock group and its rows, the basis control disabled during a multi-selection, and the "Change stock…" dialog with its three optional fields.
-- [ ] **Step 5** (`tests/freecad/`, `tests/freecad_gui/`, `tests/freecad_view/`): Tests for every Must Have at the tier it names.
-- [ ] **Step 6** (`freecad/Shelving/qa/cases/30-editor.toml`, `freecad/Shelving/qa/actions.py`, `README.md`, `docs/scope-and-design.md`, `.claude/docs/code-map.md`, `freecad/Shelving/editor/__init__.py`): The QA cases, the glossary and design-doc wording, and the new dialog module in the code map and the editor package docstring.
+- [x] **Step 1** (`freecad/Shelving/core/`): The thickness edit over a set of boards, the multi-board removal over `merge_at`, and the pure stock-grouping function, with core tests.
+- [x] **Step 2** (`freecad/Shelving/editor/session.py`): The board set beside `selected_id`, kept through `reload`; the stock groups (reading `ShapeMaterial` and, with a GUI, the dominant face color); the stock swap (thickness through the core edit and the write path, `ShapeMaterial` from a library UUID, color repainting every face); deleting the selected boards as one step. Bring every `selected_id` user listed in Advice along.
+- [x] **Step 3** (`freecad/Shelving/editor/view_editor.py`): Mirror FreeCAD's selection through the observer and `_click`, ignore Ctrl-click on an opening during a board selection, hide the arrow and add buttons during a multi-selection, and route Delete to the multi-board delete.
+- [x] **Step 4** (`freecad/Shelving/editor/panel.py`, a new dialog module in `freecad/Shelving/editor/`): The Stock group and its rows, the basis control disabled during a multi-selection, and the "Change stock…" dialog with its three optional fields.
+- [x] **Step 5** (`tests/freecad/`, `tests/freecad_gui/`, `tests/freecad_view/`): Tests for every Must Have at the tier it names.
+- [x] **Step 6** (`freecad/Shelving/qa/cases/30-editor.toml`, `freecad/Shelving/qa/actions.py`, `README.md`, `docs/scope-and-design.md`, `.claude/docs/code-map.md`, `freecad/Shelving/editor/__init__.py`): The QA cases, the glossary and design-doc wording, and the new dialog module in the code map and the editor package docstring.
 
 ## Review log

@@ -20,7 +20,7 @@ this session never reads theirs.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Callable, Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from typing import Literal
 
 import FreeCAD
@@ -39,10 +39,12 @@ from freecad.Shelving.core.edit import (
     measure,
     merge_at,
     move_board,
+    remove_boards,
     require_movable,
     run_axis,
     set_basis,
     set_size,
+    set_thickness,
     set_unit_size,
     split_region,
     unlock,
@@ -64,6 +66,7 @@ from freecad.Shelving.core.record import (
 )
 from freecad.Shelving.core.scan import elevation_axes, scan
 from freecad.Shelving.core.solver import LayoutSolveError, describe_solve_error, solve
+from freecad.Shelving.core.stock import BoardStock, Color, StockGroup, group_stocks
 from freecad.Shelving.debug_log import Stopwatch
 from freecad.Shelving.editor.history import EditHistory, Schedule
 
@@ -132,6 +135,17 @@ def _find_node(region: Region, node_id: str) -> Region | Board | None:
             if found is not None:
                 return found
     return None
+
+
+def _boards(region: Region) -> Iterator[Board]:
+    """Every board under ``region``, in pre-order."""
+    if not isinstance(region, Division):
+        return
+    for item in region.items:
+        if isinstance(item, Board):
+            yield item
+        else:
+            yield from _boards(item)
 
 
 def _renamed_spaces(
@@ -218,9 +232,10 @@ class Session:
         except LayoutSolveError as err:
             raise UnsolvableUnit(err, self.unit) from err
         watch.lap("solve")
-        # A region or board id. A split or merge clears it, since the id it
-        # just edited no longer names anything the caller can act on.
-        self.selected_id: str | None = None
+        # Empty, one region or board id, or several board ids: never a
+        # region beside anything else. A split or merge clears it, since the
+        # id it just edited no longer names anything the caller can act on.
+        self._selection: tuple[str, ...] = ()
         # Untagged objects the layout does not place: what a write leaves
         # alone. Before the first write that is every set-aside part
         # carrying no board properties, since write_container deletes a
@@ -291,7 +306,7 @@ class Session:
     # What EditHistory needs; see HistoryOwner.
 
     def reload(self) -> None:
-        """Rescan the container, keeping a selected node that still exists
+        """Rescan the container, keeping each selected node that still exists
         selected, then tell :attr:`on_change`. Sets :attr:`lost` instead of
         rescanning when the container no longer reads."""
         try:
@@ -303,20 +318,24 @@ class Session:
             if self.on_change is not None:
                 self.on_change()
             return
-        selected = self.selected_id
-        if selected is not None and selected not in spaces:
-            # A board keeps its id, its object's name, across a rescan; a
-            # region is found again by the boards bounding it.
-            old_keys = {
-                region_id: key for key, region_id in region_keys(self.unit).items()
-            }
-            key = old_keys.get(selected)
-            selected = None if key is None else region_keys(unit).get(key)
+        # A board keeps its id, its object's name, across a rescan; a
+        # region is found again by the boards bounding it.
+        old_keys = {region_id: key for key, region_id in region_keys(self.unit).items()}
+        new_ids = region_keys(unit)
+        selected: list[str] = []
+        for node_id in self._selection:
+            if node_id in spaces:
+                selected.append(node_id)
+                continue
+            key = old_keys.get(node_id)
+            found = None if key is None else new_ids.get(key)
+            if found is not None:
+                selected.append(found)
         self.unit = unit
         self.spaces = spaces
         self._set_aside_reasons = reasons
         self.left_alone = self._unplaced(reasons)
-        self.selected_id = selected
+        self._selection = tuple(selected)
         if self.on_change is not None:
             self.on_change()
 
@@ -339,8 +358,28 @@ class Session:
             history.end(keep=failure is None)
         return failure
 
+    @property
+    def selected_id(self) -> str | None:
+        """The single selected region or board; ``None`` when nothing is
+        selected and when several boards are."""
+        return self._selection[0] if len(self._selection) == 1 else None
+
+    @property
+    def selected_boards(self) -> tuple[str, ...]:
+        """Every selected board, in the order they were selected: the one
+        board of a single selection, empty while the selection is a region
+        or nothing."""
+        boards = {board.id for board in _boards(self.unit.root)}
+        return tuple(node_id for node_id in self._selection if node_id in boards)
+
     def select(self, node_id: str | None) -> None:
-        self.selected_id = node_id
+        """Make ``node_id`` the single selection, or clear it for ``None``."""
+        self._selection = () if node_id is None else (node_id,)
+
+    def select_boards(self, board_ids: Sequence[str]) -> None:
+        """Select the boards ``board_ids`` names, each once; one board is a
+        single selection, as :meth:`select` makes it."""
+        self._selection = tuple(dict.fromkeys(board_ids))
 
     def can_split(self) -> bool:
         """Whether the current selection is a ``Bay``: the only region
@@ -378,7 +417,7 @@ class Session:
             reason=self._set_aside_reasons.get(name, _UNPLACED_REASON),
         )
 
-    def _apply(self, candidate: Unit, select: str | None = None) -> EditFailure | None:
+    def _apply(self, candidate: Unit, select: Sequence[str] = ()) -> EditFailure | None:
         """Adopt ``candidate`` as this session's state and write it to the
         document, selecting ``select``, or return an :class:`EditFailure`
         when it fails to solve, leaving the session and document untouched."""
@@ -401,7 +440,7 @@ class Session:
             spaces = _renamed_spaces(spaces, result.id_renames)
         self.unit = candidate
         self.spaces = spaces
-        self.selected_id = select
+        self._selection = tuple(select)
         self.left_alone = tuple(self._left_alone(name) for name in result.left_alone)
         return None
 
@@ -454,7 +493,7 @@ class Session:
         except EditError as err:
             return EditFailure(str(err), err.node_id)
         return self._step(
-            "Resize Unit", lambda: self._apply(candidate, select=self.selected_id)
+            "Resize Unit", lambda: self._apply(candidate, select=self._selection)
         )
 
     def split(self, direction: SplitDirection) -> EditFailure | None:
@@ -478,6 +517,105 @@ class Session:
             return EditFailure(str(err), err.node_id)
         name = "Add Divider" if direction == "horizontal" else "Add Shelf"
         return self._step(name, lambda: self._apply(candidate))
+
+    def delete_boards(self) -> EditFailure | None:
+        """Remove every selected board as :meth:`merge` removes one, as one
+        undo step, clearing the selection. Returns an :class:`EditFailure`,
+        removing none, when no board is selected or any one is refused."""
+        self.settle()
+        boards = self.selected_boards
+        if not boards:
+            return EditFailure("select the boards to delete", None)
+        try:
+            candidate = remove_boards(self.unit, boards)
+        except EditError as err:
+            return EditFailure(str(err), err.node_id)
+        return self._step("Delete Boards", lambda: self._apply(candidate))
+
+    def stock_groups(self) -> Sequence[StockGroup]:
+        """The unit's boards grouped by stock, as
+        :func:`~freecad.Shelving.core.stock.group_stocks` orders them, from
+        their thickness, ``ShapeMaterial`` name and most common face color.
+        Without a GUI no board's color is known, so only thickness and
+        material tell groups apart. An object the layout leaves alone is in
+        no group."""
+        doc = self.container.Document
+        records: list[BoardStock] = []
+        for board in _boards(self.unit.root):
+            obj = doc.getObject(board.id)
+            records.append(
+                BoardStock(
+                    board_id=board.id,
+                    thickness_mm=board.thickness_mm,
+                    material=None
+                    if obj is None
+                    else properties.read_material_name(obj),
+                    color=None if obj is None else properties.dominant_color(obj),
+                )
+            )
+        return group_stocks(records)
+
+    def swap_stock(
+        self,
+        thickness_mm: float | None = None,
+        material_uuid: str | None = None,
+        color: Color | None = None,
+    ) -> EditFailure | None:
+        """Give every selected board whichever of ``thickness_mm``, the
+        library material ``material_uuid`` and ``color`` is set, as one undo
+        step that keeps the selection.
+
+        The thickness goes through
+        :func:`~freecad.Shelving.core.edit.set_thickness` and the write path.
+        The material becomes each board's ``ShapeMaterial``, and with a GUI
+        every face is repainted in ``color``, or in the material's diffuse
+        color when ``color`` is ``None``. Grain is never touched. Returns
+        ``None``, adding no step, when none of the three is set; an
+        :class:`EditFailure`, changing nothing, when no board is selected,
+        the library holds no such material, or the thickness is refused or
+        does not fit.
+        """
+        self.settle()
+        if thickness_mm is None and material_uuid is None and color is None:
+            return None
+        boards = self.selected_boards
+        if not boards:
+            return EditFailure("select the boards whose stock to change", None)
+        material = None
+        if material_uuid is not None:
+            material = properties.library_material(material_uuid)
+            if material is None:
+                return EditFailure(
+                    "FreeCAD's material library has no such material", None
+                )
+        candidate: Unit | None = None
+        if thickness_mm is not None:
+            try:
+                candidate = set_thickness(self.unit, boards, thickness_mm)
+            except EditError as err:
+                return EditFailure(str(err), err.node_id)
+        paint_rgb = color
+        if paint_rgb is None and material is not None:
+            paint_rgb = properties.material_color(material)
+        selection = self._selection
+        doc = self.container.Document
+
+        def swap() -> EditFailure | None:
+            if candidate is not None:
+                failure = self._apply(candidate, select=selection)
+                if failure is not None:
+                    return failure
+            for board_id in boards:
+                obj = doc.getObject(board_id)
+                if obj is None:
+                    continue
+                if material is not None:
+                    properties.write_material(obj, material)
+                if paint_rgb is not None:
+                    properties.paint(obj, paint_rgb)
+            return None
+
+        return self._step("Change Stock", swap)
 
     def merge(self) -> EditFailure | None:
         """Remove the selected ``Board`` and merge its neighboring regions.
@@ -517,7 +655,9 @@ class Session:
             candidate = set_size(self.unit, region_id, size_mm, basis)
         except EditError as err:
             return EditFailure(str(err), err.node_id)
-        return self._step("Set Size", lambda: self._apply(candidate, select=region_id))
+        return self._step(
+            "Set Size", lambda: self._apply(candidate, select=(region_id,))
+        )
 
     def set_basis(self, basis: Basis) -> EditFailure | None:
         """Change what the selected region's size measures, moving nothing.
@@ -535,7 +675,7 @@ class Session:
             return EditFailure(describe_solve_error(err), err.node_id)
         return self._step(
             "Change What a Size Measures",
-            lambda: self._apply(candidate, select=region_id),
+            lambda: self._apply(candidate, select=(region_id,)),
         )
 
     def set_lock(self, region_id: str, locked: bool) -> EditFailure | None:
@@ -571,7 +711,7 @@ class Session:
             return EditFailure(str(err), err.node_id)
         except LayoutSolveError as err:
             return EditFailure(describe_solve_error(err), err.node_id)
-        return self._step(name, lambda: self._apply(candidate, select=self.selected_id))
+        return self._step(name, lambda: self._apply(candidate, select=self._selection))
 
     def held_by(self, board_id: str) -> tuple[str, ...] | None:
         """:func:`~freecad.Shelving.core.edit.held_by` for this session's
@@ -619,7 +759,7 @@ class Session:
             candidate = move_board(self.unit, board_id, low_face_mm)
         except EditError as err:
             return EditFailure(str(err), err.node_id)
-        return self._apply(candidate, select=board_id)
+        return self._apply(candidate, select=(board_id,))
 
     def end_drag(self) -> None:
         """End the drag, closing its undo step; a drag that moved nothing

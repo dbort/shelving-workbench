@@ -28,11 +28,13 @@ string values plus "property absent" would conflate "never written" with
 
 from __future__ import annotations
 
+from collections import Counter
 from typing import Protocol, cast
 
 import FreeCAD
 
 from freecad.Shelving.core.layout import Axis
+from freecad.Shelving.core.stock import Color
 
 GROUP_NAME = "Shelving"
 
@@ -84,6 +86,18 @@ class FreeCADMaterial(Protocol):
 
     Name: str
     UUID: str
+
+    def hasAppearanceProperty(self, name: str, /) -> bool: ...
+
+    # A color comes back as text such as "(0.8984, 0.7305, 0.3906, 1.0)".
+    def getAppearanceValue(self, name: str, /) -> str: ...
+
+
+class _MaterialManager(Protocol):
+    """A ``Materials.MaterialManager``, which ``freecad-stubs`` does not type."""
+
+    # Raises LookupError for a UUID the library does not hold.
+    def getMaterial(self, uuid: str, /) -> FreeCADMaterial: ...
 
 
 class _MaterialObject(Protocol):
@@ -297,6 +311,65 @@ def read_material_name(obj: FreeCAD.DocumentObject) -> str | None:
     return cast("_MaterialObject", obj).ShapeMaterial.Name
 
 
+def library_material(uuid: str) -> FreeCADMaterial | None:
+    """The material ``uuid`` names in FreeCAD's material library, the user's
+    own libraries included, or ``None`` when the library holds none."""
+    # freecad-stubs has no stub for the Materials module; _MaterialManager
+    # types the one call made on it.
+    import Materials  # pyrefly: ignore[missing-import]
+
+    manager = cast("_MaterialManager", Materials.MaterialManager())
+    try:
+        return manager.getMaterial(uuid)
+    except LookupError:
+        return None
+
+
+def write_material(obj: FreeCAD.DocumentObject, material: FreeCADMaterial) -> None:
+    """Give ``obj`` the ``ShapeMaterial`` ``material``; nothing for an object
+    without one. Leaves its appearance alone."""
+    if hasattr(obj, "ShapeMaterial"):
+        cast("_MaterialObject", obj).ShapeMaterial = material
+
+
+def material_color(material: FreeCADMaterial) -> Color | None:
+    """``material``'s appearance diffuse color, or ``None`` when it has none
+    or the library's text for it does not read as one."""
+    if not material.hasAppearanceProperty("DiffuseColor"):
+        return None
+    # The Material workbench's own editor reads this text the same way.
+    parts = material.getAppearanceValue("DiffuseColor").strip().strip("()").split(",")
+    try:
+        channels = [float(part) for part in parts[:3]]
+    except ValueError:
+        return None
+    if len(channels) != 3:
+        return None
+    return (_channel(channels[0]), _channel(channels[1]), _channel(channels[2]))
+
+
+def _channel(value: float) -> int:
+    return max(0, min(255, round(value * 255)))
+
+
+def dominant_color(obj: FreeCAD.DocumentObject) -> Color | None:
+    """The diffuse color most of ``obj``'s appearance entries carry, the
+    first of them on a tie, or ``None`` without a GUI, where no object has
+    an appearance."""
+    view = _appearance_view(obj)
+    if view is None or not view.ShapeAppearance:
+        return None
+    counts = Counter(
+        (
+            _channel(m.DiffuseColor[0]),
+            _channel(m.DiffuseColor[1]),
+            _channel(m.DiffuseColor[2]),
+        )
+        for m in view.ShapeAppearance
+    )
+    return counts.most_common(1)[0][0]
+
+
 def read_grain(obj: FreeCAD.DocumentObject) -> list[str] | None:
     """``obj``'s Woodworking ``Grain`` list, or ``None`` when it has none."""
     if not hasattr(obj, GRAIN_PROP):
@@ -335,7 +408,7 @@ def copy_stock(source: FreeCAD.DocumentObject, target: FreeCAD.DocumentObject) -
         target_view.ShapeAppearance = list(source_view.ShapeAppearance)
 
 
-def paint(obj: FreeCAD.DocumentObject, rgb: tuple[int, int, int]) -> None:
+def paint(obj: FreeCAD.DocumentObject, rgb: Color) -> None:
     """Give every face of ``obj`` the diffuse color ``rgb`` (0 to 255 per
     channel), keeping the rest of its appearance. Does nothing without a GUI.
     """

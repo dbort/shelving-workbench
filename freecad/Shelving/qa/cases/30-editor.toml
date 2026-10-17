@@ -291,3 +291,115 @@ as the text beside it."""
 Every opening's dimension has its padlock, and the drawing still reads at
 the fitted zoom: each padlock is plainly its own dimension's, and the
 openings and their sizes can be read without zooming in."""
+
+[[case]]
+id = "editor.stock_selection"
+title = "Selecting several boards by stock, in the view and in the tree"
+
+  [[case.step]]
+  id = "start"
+  action = "two_shelf_unit"
+  instruction = ["Select the container (ShelvingUnit).", "Run Edit Unit."]
+  expected = """
+Below the Unit group, the Stock group lists one row: the boards' thickness,
+their material, a swatch in their color and 6. Change stock… is disabled."""
+
+  [[case.step]]
+  id = "row"
+  instruction = ["Click the Stock row."]
+  expected = """
+All six boards show in FreeCAD's selection color in the 3D view, each one
+whole, and are selected in the tree. No arrow, add buttons or padlock on a
+board shows, and Change stock… is enabled."""
+
+  [[case.step]]
+  id = "view"
+  instruction = [
+    "Click the lower shelf.",
+    "Ctrl-click the upper shelf (Command-click on a Mac).",
+  ]
+  expected = """
+Both shelves show in the selection color, each one whole rather than only
+the face you clicked, and nothing else does. The Stock row is not selected
+and no arrow shows."""
+
+  [[case.step]]
+  id = "view_again"
+  instruction = ["Ctrl-click the upper shelf again."]
+  expected = """
+Only the lower shelf stays in the selection color, and its arrow shows
+beside it."""
+
+  [[case.step]]
+  id = "tree"
+  instruction = [
+    "Click the top board in the tree.",
+    "Ctrl-click the bottom board in the tree.",
+  ]
+  expected = """
+Both show in the selection color in the 3D view and nothing else does; no
+arrow shows. The selection reads as plainly on these two boards as it did
+on the shelves."""
+
+[[case]]
+id = "editor.stock_thickness"
+title = "A thickness swap holds a spaced shelf and moves a clear one"
+
+  [[case.step]]
+  id = "start"
+  action = "two_shelf_unit"
+  instruction = ["Select the container (ShelvingUnit).", "Run Edit Unit."]
+  expected = """
+The lower opening's dimension is a locked spacing through the lower shelf,
+and the middle opening's a locked clear size."""
+
+  [[case.step]]
+  id = "swap"
+  instruction = [
+    "Click the lower shelf.",
+    "Ctrl-click the upper shelf.",
+    "Click Change stock….",
+    "Check Thickness and type 12.",
+    "Click OK.",
+  ]
+  expected = """
+Both shelves are 12 mm thick. The lower shelf's top face stays where it
+was, while the upper shelf's top face comes down 6 mm with its bottom face
+in place. The unit's outside is unchanged, and the Stock group lists two
+rows, 4 boards and 2."""
+
+[[case]]
+id = "editor.stock_material"
+title = "A material from your own library recolors the boards"
+
+  [[case.step]]
+  id = "library"
+  instruction = [
+    "Open FreeCAD's Material editor.",
+    "Create a material named QA Walnut in your own material library.",
+    "Give its appearance a dark brown diffuse color.",
+    "Save it and close the Material editor.",
+  ]
+  expected = "QA Walnut is saved in your own library."
+
+  [[case.step]]
+  id = "start"
+  action = "fresh_unit"
+  check = "fresh_unit_size"
+  instruction = [
+    "Select the container (ShelvingUnit).",
+    "Run Edit Unit.",
+    "Click the Stock row.",
+    "Click Change stock….",
+    "Check Material.",
+  ]
+  expected = """
+The material field is FreeCAD's material picker, as the FEM and CAM
+workbenches show it, and QA Walnut is listed under your own library."""
+
+  [[case.step]]
+  id = "apply"
+  instruction = ["Select QA Walnut.", "Click OK."]
+  expected = """
+Every board turns dark brown, every face of each board alike. The Stock
+row reads QA Walnut beside a dark brown swatch."""
