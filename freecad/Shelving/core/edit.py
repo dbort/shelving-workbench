@@ -640,6 +640,12 @@ def unlock(unit: Unit, region_id: str) -> Unit:
     return dataclasses.replace(unit, root=_with_rule(unit.root, region_id, rule))
 
 
+# The narrowest a drag leaves either region it resizes. A rescan, as Undo,
+# Redo and reopening run, drops a region whose faces sit within the scan's
+# clearance plus its snap, so the floor stays clear of both.
+MIN_DRAG_GAP_MM = 5.0
+
+
 @dataclasses.dataclass(frozen=True)
 class _Side:
     """What lies past a board toward one end of its run."""
@@ -710,15 +716,19 @@ def require_movable(unit: Unit, board_id: str) -> None:
 
 def move_board(unit: Unit, board_id: str, low_face_mm: float) -> Unit:
     """``unit`` with the board named ``board_id`` dragged so its low face
-    along its run's axis sits at ``low_face_mm`` (a unit-frame coordinate).
+    along its run's axis sits at ``low_face_mm`` (a unit-frame coordinate),
+    or as near to it as the run allows.
 
     Every board joined to it through locked regions moves by the same
     distance. Only the first unlocked region on each side changes size, and
     both stay unlocked, reweighted so every other region of the run keeps
-    its solved size. Raises :class:`EditError` naming ``board_id`` when
-    :func:`held_by` gives ``None``, naming the nearest holding region when
-    it gives a non-empty tuple, and naming a resized region the move would
-    leave no positive size.
+    its solved size. Neither resized region shrinks below
+    :data:`MIN_DRAG_GAP_MM`, or below its current size when that is already
+    smaller: a ``low_face_mm`` past that point stops the board there, as a
+    scroll bar's thumb stops at the end of its track. Raises
+    :class:`EditError` naming ``board_id`` when :func:`held_by` gives
+    ``None``, and naming the nearest holding region when it gives a
+    non-empty tuple.
     """
     require_movable(unit, board_id)
     found = _sides(unit, board_id)
@@ -728,16 +738,20 @@ def move_board(unit: Unit, board_id: str, low_face_mm: float) -> Unit:
     assert low.free_index is not None and high.free_index is not None
     axis_index = _axis_index(parent.axis)
     spaces = solve(unit)
-    shift_mm = low_face_mm - spaces[board_id].origin_mm(axis_index)
     before = parent.items[low.free_index]
     after = parent.items[high.free_index]
-    before_mm = spaces[before.id].extent_mm(axis_index) + shift_mm
-    after_mm = spaces[after.id].extent_mm(axis_index) - shift_mm
-    for region, size_mm in ((before, before_mm), (after, after_mm)):
-        if size_mm <= 0:
-            raise EditError(
-                region.id, "The board cannot move past the far side of this opening."
-            )
+    old_before_mm = spaces[before.id].extent_mm(axis_index)
+    old_after_mm = spaces[after.id].extent_mm(axis_index)
+    # A floor at the current size keeps a region already narrower than the
+    # minimum from pushing the board away the moment a drag starts.
+    lowest_shift_mm = min(MIN_DRAG_GAP_MM, old_before_mm) - old_before_mm
+    highest_shift_mm = old_after_mm - min(MIN_DRAG_GAP_MM, old_after_mm)
+    shift_mm = min(
+        max(low_face_mm - spaces[board_id].origin_mm(axis_index), lowest_shift_mm),
+        highest_shift_mm,
+    )
+    before_mm = old_before_mm + shift_mm
+    after_mm = old_after_mm - shift_mm
     # Both resized regions are unlocked, so the run has an anchor, and the
     # two new weights keep the run's total weight.
     anchor = _other_driven_anchor(parent.items, (), spaces, axis_index)

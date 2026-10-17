@@ -8,6 +8,7 @@ from collections.abc import Collection, Mapping
 import pytest
 
 from freecad.Shelving.core.edit import (
+    MIN_DRAG_GAP_MM,
     EditError,
     Measurement,
     held_by,
@@ -39,6 +40,7 @@ from freecad.Shelving.core.layout import (
     Void,
     Weighted,
 )
+from freecad.Shelving.core.scan import DEFAULT_CLEARANCE_MM, DEFAULT_SNAP_MM
 from freecad.Shelving.core.solver import solve
 
 
@@ -1163,16 +1165,30 @@ def test_move_board_refuses_a_carcass_board_and_a_non_board(board_id: str) -> No
     assert err.value.node_id == board_id
 
 
-def test_move_board_refuses_a_drag_past_the_region_below() -> None:
-    with pytest.raises(EditError) as err:
-        move_board(_column_unit(Fill()), "shelf", 10.0)
-    assert err.value.node_id == "lower"
+def test_move_board_stops_a_drag_past_the_region_below_at_the_minimum_gap() -> None:
+    moved = move_board(_column_unit(Fill()), "shelf", -100.0)
+    spaces = solve(moved)
+    assert spaces["lower"].size.z_mm == pytest.approx(MIN_DRAG_GAP_MM)
+    assert spaces["shelf"].origin.z_mm == pytest.approx(18.0 + MIN_DRAG_GAP_MM)
 
 
-def test_move_board_refuses_a_drag_past_the_region_above() -> None:
-    with pytest.raises(EditError) as err:
-        move_board(_three_bays(), "shelf1", 500.0)
-    assert err.value.node_id == "bay2"
+def test_move_board_stops_a_drag_past_the_region_above_at_the_minimum_gap() -> None:
+    moved = move_board(_three_bays(), "shelf1", 900.0)
+    assert _heights_mm(moved) == pytest.approx([395.0, MIN_DRAG_GAP_MM, 200.0])
+
+
+def test_move_board_never_grows_a_region_already_under_the_minimum_gap() -> None:
+    narrow = unlock(set_size(_column_unit(Fill()), "lower", 2.0, Basis.CLEAR), "lower")
+    assert solve(narrow)["lower"].size.z_mm == pytest.approx(2.0)
+    for low_face_mm in (-100.0, 18.0):
+        moved = move_board(narrow, "shelf", low_face_mm)
+        assert solve(moved)["lower"].size.z_mm == pytest.approx(2.0)
+    raised = move_board(narrow, "shelf", 100.0)
+    assert solve(raised)["lower"].size.z_mm == pytest.approx(82.0)
+
+
+def test_the_minimum_drag_gap_survives_a_rescan() -> None:
+    assert MIN_DRAG_GAP_MM > DEFAULT_CLEARANCE_MM + DEFAULT_SNAP_MM
 
 
 def test_measure_reports_both_numbers_and_the_basis_a_size_would_use() -> None:

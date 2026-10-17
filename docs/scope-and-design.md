@@ -71,7 +71,10 @@ to the unit's size has somewhere to go.
 A drag moves a board and every board joined to it through locked regions;
 only the first unlocked region on each side changes size. A board with
 only locked regions between it and the end of its run is held until one
-is unlocked.
+is unlocked. A drag past the end of its travel stops the board there
+without a message, the way a scroll bar's thumb stops at the end of its
+track, leaving the shrinking region 5 mm: a narrower opening would vanish
+the next time the unit is read back from its boards.
 
 A fixed size measures the clear opening, or includes the next board, which
 is how a shelf spacing quoted top face to top face is given. The two place

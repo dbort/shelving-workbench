@@ -13,6 +13,7 @@ import pytest
 
 from freecad.Shelving import properties
 from freecad.Shelving.container import read_container
+from freecad.Shelving.core.edit import MIN_DRAG_GAP_MM
 from freecad.Shelving.core.geometry import Space, Vec3
 from freecad.Shelving.core.layout import Basis, Bay, Board, Division, Region
 from freecad.Shelving.editor.session import FIELD_PROPERTIES, EditFailure, Session
@@ -188,6 +189,27 @@ def test_a_drag_that_moves_nothing_leaves_no_step(doc: FreeCAD.Document) -> None
         assert session.begin_drag(shelf, session.spaces[shelf].origin) is None
         session.end_drag()
         assert doc.UndoNames == names
+    finally:
+        session.close()
+
+
+def test_a_drag_past_the_end_keeps_its_opening_through_undo_and_redo(
+    doc: FreeCAD.Document,
+) -> None:
+    session = _opened(doc)
+    try:
+        shelf = _add_shelf(session)
+        grab_mm = session.spaces[shelf].origin
+        assert session.begin_drag(shelf, grab_mm) is None
+        below_bottom_mm = Vec3(grab_mm.x_mm, grab_mm.y_mm, -500.0)
+        assert session.drag_to(below_bottom_mm) is None
+        session.end_drag()
+        dragged = _record(session)
+        lower = _bay_ids(session.unit.root)[0]
+        assert session.spaces[lower].size.z_mm == pytest.approx(MIN_DRAG_GAP_MM)
+        _undo(session)
+        _redo(session)
+        assert _record(session) == dragged
     finally:
         session.close()
 
