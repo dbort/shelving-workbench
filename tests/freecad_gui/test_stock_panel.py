@@ -7,7 +7,8 @@ from collections.abc import Iterator
 import FreeCAD
 import FreeCADGui
 import pytest
-from PySide6 import QtWidgets
+from PySide6 import QtCore, QtWidgets
+from PySide6.QtTest import QTest
 
 from freecad.Shelving.core.layout import Bay, Board, Division, Region
 from freecad.Shelving.editor import panel as panel_module
@@ -216,6 +217,36 @@ def test_the_dialog_offers_freecads_three_fields_each_unset(
     assert panel.stock_dialog is None
     assert doc.UndoCount == steps
     assert panel.session.stock_groups() == groups
+
+
+def test_a_click_on_an_unchecked_field_checks_it(panel: EditUnitPanel) -> None:
+    dialog = _open_dialog(panel, ["top"])
+    rows = (
+        (dialog.thickness_check, dialog.thickness_field),
+        (dialog.material_check, dialog.material_field),
+        (dialog.color_check, dialog.color_field),
+    )
+    for check, field in rows:
+        # The press lands where a user's would: on the child under the
+        # field's center, which for the spin box is its line edit.
+        target = field.childAt(field.rect().center()) or field
+        QTest.mouseClick(
+            target, QtCore.Qt.MouseButton.LeftButton, pos=target.rect().center()
+        )
+        _process_events()
+        assert check.isChecked()
+        assert field.isEnabled()
+        focused = dialog.focusWidget()
+        assert focused is not None
+        assert focused is field or field.isAncestorOf(focused)
+        if field is dialog.thickness_field:
+            # Typing then replaces the shown thickness.
+            (line_edit,) = field.findChildren(QtWidgets.QLineEdit)
+            assert line_edit.text()
+            assert line_edit.selectedText() == line_edit.text()
+    assert all(check.isChecked() for check, _field in rows)
+    dialog.reject()
+    _process_events()
 
 
 def test_the_dialog_swaps_the_checked_fields(panel: EditUnitPanel) -> None:

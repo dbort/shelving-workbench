@@ -359,14 +359,15 @@ and the middle opening's a locked clear size."""
     "Click the lower shelf.",
     "Ctrl-click the upper shelf.",
     "Click Change stock….",
-    "Check Thickness.",
+    "Click the Thickness field.",
     "Type 12.",
     "Click OK.",
   ]
   expected = """
-Both shelves are 12 mm thick. The lower shelf's top face stays where it
-was, while the upper shelf's top face comes down 6 mm with its bottom face
-in place. The unit's outside is unchanged, and the Stock group lists two
+The click checks Thickness and selects the shown thickness, so typing
+replaces it. Both shelves are 12 mm thick. The lower shelf's top face
+stays where it was, while the upper shelf's top face comes down 6 mm with
+its bottom face in place. The unit's outside is unchanged, and the Stock group lists two
 rows, 4 boards and 2."""
 
 [[case]]

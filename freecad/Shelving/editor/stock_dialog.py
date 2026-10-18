@@ -6,9 +6,10 @@ as the panel's size fields build it, the material is the
 ``MatGui::MaterialTreeWidget`` the FEM and CAM workbenches pick materials
 with, and the color is FreeCAD's ``Gui::ColorButton``. A blank field could
 not tell "leave as it is" from a value, so each has a checkbox, unchecked
-at the start, and an unchecked field changes nothing. The dialog only
-collects the change; :meth:`freecad.Shelving.editor.session.Session.swap_stock`
-makes it.
+at the start, and an unchecked field changes nothing. A click on an
+unchecked field checks it: a disabled field whose checkbox goes unnoticed
+reads as broken. The dialog only collects the change;
+:meth:`freecad.Shelving.editor.session.Session.swap_stock` makes it.
 """
 
 from __future__ import annotations
@@ -45,6 +46,32 @@ class StockChange:
     color: Color | None
 
 
+class _ClickToCheck(QtCore.QObject):
+    """Checks ``check`` and focuses ``field`` on a press on the disabled
+    ``field``, consuming the press. Qt still runs a disabled widget's event
+    filters, and a press on a disabled child propagates up to ``field``."""
+
+    def __init__(self, field: QtWidgets.QWidget, check: QtWidgets.QCheckBox) -> None:
+        super().__init__(field)
+        self._check = check
+        field.installEventFilter(self)
+
+    @override
+    def eventFilter(self, watched: QtCore.QObject, event: QtCore.QEvent) -> bool:
+        if event.type() != QtCore.QEvent.Type.MouseButtonPress or not isinstance(
+            watched, QtWidgets.QWidget
+        ):
+            return False
+        if watched.isEnabled():
+            return False
+        self._check.setChecked(True)
+        watched.setFocus(QtCore.Qt.FocusReason.MouseFocusReason)
+        # Typing then replaces the shown thickness instead of adding to it.
+        if isinstance(watched, QtWidgets.QAbstractSpinBox):
+            watched.selectAll()
+        return True
+
+
 def _created(class_name: str) -> QtWidgets.QWidget:
     # freecad-stubs declares UiLoader.createWidget without parameters, and
     # only a running GUI has UiLoader at all.
@@ -71,7 +98,8 @@ class StockDialog(QtWidgets.QDialog):
         self.setWindowTitle("Change Stock")
         layout = QtWidgets.QVBoxLayout(self)
         explanation = QtWidgets.QLabel(
-            "Check each part of the stock to change on the selected boards."
+            "Check or click each part of the stock to change on the selected"
+            " boards. An unchecked part stays as it is."
         )
         explanation.setWordWrap(True)
         layout.addWidget(explanation)
@@ -108,6 +136,7 @@ class StockDialog(QtWidgets.QDialog):
             grid.addWidget(field, row, 1)
             field.setEnabled(False)
             check.toggled.connect(field.setEnabled)
+            _ClickToCheck(field, check)
 
         buttons = QtWidgets.QDialogButtonBox(
             QtWidgets.QDialogButtonBox.StandardButton.Ok

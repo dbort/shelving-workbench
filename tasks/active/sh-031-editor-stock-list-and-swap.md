@@ -173,6 +173,13 @@ a Ctrl-click on a board selected as a whole object by adding the clicked
 element rather than removing the board, so the editor reads a board held
 both whole and by an element as that board deselected.
 
+DECISION (user, 2026-10-17, after manual QA): **a click on an unchecked
+stock field checks it.** The QA tester missed the dialog's checkboxes and
+read the disabled fields as broken. A press on a disabled field checks its
+box, enables and focuses the field, and selects a spin box's text; the
+checkboxes stay as the unset state, and the dialog's text names both ways.
+No FreeCAD dialog does this; the reason is that observation.
+
 SELECTION INTERFACE: keep `Session.selected_id` as the single selection and
 add the board set beside it, `None` id during a multi-selection, so every
 existing guard on `selected_id is None` stays correct. Its users:
