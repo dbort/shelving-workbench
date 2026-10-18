@@ -3,7 +3,6 @@ openings, the size field on a dimension, the drag arrow under each
 navigation style, the add buttons and the delete key."""
 
 from collections.abc import Iterator
-from pathlib import Path
 from typing import Literal, Protocol, cast
 
 import FreeCAD
@@ -11,10 +10,8 @@ import FreeCADGui
 import pytest
 from PySide6 import QtCore, QtTest, QtWidgets
 
-from freecad.Shelving.container import unit_for_selection
 from freecad.Shelving.core.layout import Basis, Board, Division, Fixed, Region
 from freecad.Shelving.editor.elevation import (
-    LABEL_HIT_PX,
     DimensionLabel,
     board_space,
     label_at,
@@ -25,20 +22,20 @@ from tests.freecad_view import overlay_nodes
 from tests.freecad_view.editor import (
     add_board,
     bay_ids,
+    board_targets,
     click_region,
     click_task_button,
+    device_point,
     edit_unit,
     editor_of,
     gui_step,
+    picked,
+    selection,
+    zoom_at,
+    zoom_on,
 )
 from tests.freecad_view.view import ViewDriver
 
-_FIXTURE = (
-    Path(__file__).resolve().parents[1]
-    / "freecad"
-    / "fixtures"
-    / "woodworking_magic_start_default.FCStd"
-)
 _NO_MODIFIER = QtCore.Qt.KeyboardModifier.NoModifier
 _CTRL = QtCore.Qt.KeyboardModifier.ControlModifier
 
@@ -80,122 +77,22 @@ class _NavigationView(Protocol):
     def setNavigationType(self, name: str, /) -> None: ...
 
 
-def _selection() -> list[tuple[str, tuple[str, ...]]]:
-    return [
-        (cast("str", entry.ObjectName), tuple(entry.SubElementNames))
-        for entry in FreeCADGui.Selection.getSelectionEx()
-    ]
-
-
-def _device(editor: ViewEditor, point: FreeCAD.Vector) -> tuple[int, int]:
-    return editor.view.getPointOnViewport(point)
-
-
-def _clear_of_labels(editor: ViewEditor, point: FreeCAD.Vector) -> bool:
-    x_px, y_px = _device(editor, point)
-    return (
-        label_at(editor.overlay.labels, editor._project, x_px, y_px, LABEL_HIT_PX + 4)
-        is None
-    )
-
-
-def _zoom_on(
-    editor: ViewEditor, node_id: str, height_mm: float, driver: ViewDriver
-) -> None:
-    """Center the camera on ``node_id``, ``height_mm`` of the elevation
-    tall: a board is a few pixels thick in the fitted view, inside
-    FreeCAD's pick radius of its edges."""
-    session = editor.session
-    space = (
-        board_space(session.unit, session.spaces, node_id) or session.spaces[node_id]
-    )
-    _zoom_at(editor, editor.frame.rect(space).center_mm, height_mm, driver)
-
-
-def _zoom_at(
-    editor: ViewEditor,
-    at_mm: tuple[float, float],
-    height_mm: float,
-    driver: ViewDriver,
-) -> None:
-    """Center the camera on the elevation point ``at_mm``, ``height_mm`` of
-    the elevation tall. The 3D view's size changes from run to run, so a
-    test that needs a scale sets it."""
-    center_mm = editor.to_document(*at_mm)
-    camera = editor.view.getCameraNode()
-    position_mm = FreeCAD.Vector(*camera.position.getValue().getValue())
-    toward = editor.to_document(0, 0, 1) - editor.to_document(0, 0, 0)
-    # The camera keeps its distance along the view direction.
-    moved_mm = center_mm + toward * (position_mm - center_mm).dot(toward)
-    camera.position.setValue(moved_mm.x, moved_mm.y, moved_mm.z)
-    camera.height.setValue(height_mm)
-    driver.pump()
-
-
-def _picked(editor: ViewEditor, point: FreeCAD.Vector) -> tuple[str | None, str]:
-    """The board FreeCAD's pick finds at ``point``, and the element kind."""
-    info = editor.view.getObjectInfo(_device(editor, point))
-    if info is None:
-        return None, ""
-    board = editor._board_in(
-        str(info.get("Object", "")), str(info.get("SubName") or "")
-    )
-    return board, str(info.get("Component", ""))
-
-
-def _board_targets(editor: ViewEditor, board_id: str) -> dict[str, FreeCAD.Vector]:
-    """A point where FreeCAD picks ``board_id``'s face, one where it picks
-    one of its edges and one where it picks one of its vertices, each clear
-    of every dimension. Edges and vertices are found just outside the face,
-    within FreeCAD's pick radius of them."""
-    session = editor.session
-    space = board_space(session.unit, session.spaces, board_id)
-    assert space is not None
-    rect = editor.frame.rect(space)
-    candidates: list[tuple[float, float]] = []
-    for fraction in (0.2, 0.35, 0.5, 0.65, 0.8):
-        h_mm = rect.h0_mm + fraction * (rect.h1_mm - rect.h0_mm)
-        candidates.append((h_mm, (rect.v0_mm + rect.v1_mm) / 2))
-        for out_mm in (0.0, 0.5, 1.0, 2.0, 3.0):
-            candidates.append((h_mm, rect.v1_mm + out_mm))
-            candidates.append((h_mm, rect.v0_mm - out_mm))
-    for h_mm, h_out in ((rect.h0_mm, -1.0), (rect.h1_mm, 1.0)):
-        for v_mm, v_out in ((rect.v0_mm, -1.0), (rect.v1_mm, 1.0)):
-            for out_mm in (0.0, 0.5, 1.0, 2.0):
-                for h_only, v_only in ((1.0, 1.0), (1.0, 0.0), (0.0, 1.0)):
-                    candidates.append(
-                        (h_mm + h_out * out_mm * h_only, v_mm + v_out * out_mm * v_only)
-                    )
-    targets: dict[str, FreeCAD.Vector] = {}
-    for h_mm, v_mm in candidates:
-        point = editor.to_document(h_mm, v_mm)
-        board, component = _picked(editor, point)
-        kind = component.rstrip("0123456789")
-        if (
-            board == board_id
-            and kind not in targets
-            and _clear_of_labels(editor, point)
-        ):
-            targets[kind] = point
-    return targets
-
-
 def test_a_click_anywhere_on_a_board_selects_the_whole_board(
     unit: FreeCAD.DocumentObject, driver: ViewDriver
 ) -> None:
     panel = edit_unit(unit, driver)
     editor = editor_of(panel)
     # The top board's end, where its corners stand clear of other boards.
-    _zoom_at(editor, (560.0, 880.0), 200.0, driver)
-    targets = _board_targets(editor, "top")
+    zoom_at(editor, (560.0, 880.0), 200.0, driver)
+    targets = board_targets(editor, "top")
     assert set(targets) == {"Face", "Edge", "Vertex"}, targets
     for kind, point in targets.items():
         editor.select(bay_ids(panel.session.unit.root)[0])
-        assert _selection() == []
+        assert selection() == []
         driver.click(point)
         driver.pump()
         assert panel.session.selected_id == "top", kind
-        assert _selection() == [("top", ())], kind
+        assert selection() == [("top", ())], kind
     click_task_button("Close", driver)
 
 
@@ -204,11 +101,11 @@ def test_a_click_on_an_opening_selects_it_and_clears_freecads_selection(
 ) -> None:
     panel = edit_unit(unit, driver)
     add_board(panel, "vertical", driver)
-    assert _selection() != []
+    assert selection() != []
     upper = bay_ids(panel.session.unit.root)[1]
     click_region(panel, upper, driver)
     assert panel.session.selected_id == upper
-    assert _selection() == []
+    assert selection() == []
     click_task_button("Close", driver)
 
 
@@ -227,32 +124,13 @@ def test_a_click_on_an_object_outside_the_unit_selects_nothing(
     click_region(panel, bay_ids(panel.session.unit.root)[0], driver)
     assert panel.session.selected_id is not None
     target = FreeCAD.Vector(750.0, 0.0, 450.0)
-    info = editor_of(panel).view.getObjectInfo(_device(editor_of(panel), target))
+    info = editor_of(panel).view.getObjectInfo(device_point(editor_of(panel), target))
     assert info is not None and info.get("Object") == "Outside"
     driver.click(target)
     driver.pump()
     assert panel.session.selected_id is None
-    assert _selection() == []
+    assert selection() == []
     click_task_button("Close", driver)
-
-
-@pytest.fixture
-def magic_start(
-    driver: ViewDriver,
-) -> Iterator[tuple[FreeCAD.DocumentObject, ViewDriver]]:
-    """The Woodworking workbench's magicStart unit, whose back panel lies
-    behind every opening, and a driver for its own 3D view."""
-    FreeCADGui.activateWorkbench("ShelvingWorkbench")
-    doc = FreeCAD.openDocument(str(_FIXTURE))
-    own = ViewDriver.for_active_view()
-    container = unit_for_selection(
-        [cast("FreeCAD.DocumentObject", doc.getObject("LinkGroup"))]
-    )
-    assert container is not None
-    yield container, own
-    if FreeCADGui.Control.activeDialog():
-        FreeCADGui.Control.closeDialog()
-        own.pump()
 
 
 def test_each_opening_in_front_of_a_back_panel_is_picked_and_allowed(
@@ -266,7 +144,7 @@ def test_each_opening_in_front_of_a_back_panel_is_picked_and_allowed(
     behind = 0
     for face in faces:
         point = editor.to_document(*face.rect.center_mm)
-        info = editor.view.getObjectInfo(_device(editor, point))
+        info = editor.view.getObjectInfo(device_point(editor, point))
         if info is not None and info.get("Object") == "Back":
             behind += 1
         driver.hover(point)
@@ -274,7 +152,7 @@ def test_each_opening_in_front_of_a_back_panel_is_picked_and_allowed(
         driver.click(point)
         driver.pump()
         assert panel.session.selected_id == face.region_id
-        assert _selection() == []
+        assert selection() == []
     # The case this guards: openings with the back panel right behind them.
     assert behind >= 2
     click_task_button("Close", driver)
@@ -431,7 +309,7 @@ def test_a_dimension_over_a_board_opens_its_field_rather_than_the_board(
     # Far enough out that the dimension left of the unit lies within reach
     # of the side board.
     height_px = editor.view.getSize()[1]
-    _zoom_at(editor, (300.0, 450.0), 4.0 * height_px, driver)
+    zoom_at(editor, (300.0, 450.0), 4.0 * height_px, driver)
     found: tuple[DimensionLabel, FreeCAD.Vector] | None = None
     boards = [
         space
@@ -446,9 +324,9 @@ def test_a_dimension_over_a_board_opens_its_field_rather_than_the_board(
                     rect.h0_mm + h_step / 40 * (rect.h1_mm - rect.h0_mm),
                     rect.v0_mm + (v_step + 0.5) / 5 * (rect.v1_mm - rect.v0_mm),
                 )
-                x_px, y_px = _device(editor, point)
+                x_px, y_px = device_point(editor, point)
                 label = label_at(editor.overlay.labels, editor._project, x_px, y_px)
-                if label is not None and _picked(editor, point)[0] is not None:
+                if label is not None and picked(editor, point)[0] is not None:
                     found = (label, point)
                     break
             if found:
@@ -461,7 +339,7 @@ def test_a_dimension_over_a_board_opens_its_field_rather_than_the_board(
     driver.pump()
     assert editor.field is not None
     assert session.selected_id == label.region_id
-    assert _selection() == []
+    assert selection() == []
     click_task_button("Close", driver)
 
 
@@ -495,16 +373,18 @@ def test_a_selected_board_drags_by_its_arrow_under_each_navigation_style(
     editor = editor_of(panel)
     session = panel.session
     shelf = add_board(panel, "vertical", driver)
-    _zoom_on(editor, shelf, 300.0, driver)
-    # Select it again by a click in the view, as the style selects.
+    zoom_on(editor, shelf, 300.0, driver)
+    # A Ctrl-click on an opening keeps a board selection, Inventor
+    # navigation's select gesture included, so a plain click leaves the
+    # shelf for the opening in every style.
     upper = bay_ids(session.unit.root)[1]
     driver.click(
-        editor.to_document(*editor.frame.rect(session.spaces[upper]).center_mm),
-        navigation,
+        editor.to_document(*editor.frame.rect(session.spaces[upper]).center_mm)
     )
     driver.pump()
     assert session.selected_id == upper
-    targets = _board_targets(editor, shelf)
+    # Select it again by a click in the view, as the style selects.
+    targets = board_targets(editor, shelf)
     driver.click(targets["Face"], navigation)
     driver.pump()
     assert session.selected_id == shelf
@@ -522,7 +402,7 @@ def test_a_selected_board_drags_by_its_arrow_under_each_navigation_style(
     assert session.spaces[shelf].origin.z_mm > z_before_mm + 5.0
     assert list(unit.Document.UndoNames) == ["Move Board", *names]
     assert session.selected_id == shelf
-    assert _selection() == [(shelf, ())]
+    assert selection() == [(shelf, ())]
     assert editor.arrow is not None and editor.arrow.board_id == shelf
     click_task_button("Close", driver)
 

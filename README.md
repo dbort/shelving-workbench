@@ -106,8 +106,13 @@ The vocabulary the documentation and the code share.
 - **Pinned part**: a part that is not a simple box, read by its bounding
   box. Its size drives the layout around it and it is never rewritten.
 - **Stock**: a board's thickness, material, appearance, and grain. Kept
-  where the Woodworking workbench keeps them, and never changed on an
-  existing board.
+  where the Woodworking workbench keeps them. Edit Unit lists each distinct
+  thickness, material and color among the unit's boards, with how many
+  boards use it.
+- **Stock swap**: changing the thickness, material or color of the selected
+  boards together, as one undo step. A new material repaints the boards in
+  that material's color unless the swap also sets a color. Grain is never
+  changed.
 - **Carcass board**: a board with no bay between one of its faces and the
   unit's edge along its run. A floor raised over a plinth gap is carcass.
 - **Source board**: the existing board a new board copies its stock from,

@@ -1,6 +1,6 @@
 """Tree-rewriting edits for the elevation editor: split a bay, merge a board,
-size a region, change what a size measures, lock or unlock a region, drag a
-board.
+remove several boards, size a region, change what a size measures, lock or
+unlock a region, drag a board, change boards' thickness.
 
 A region with a ``Fixed`` rule is locked: it keeps its size. One with a
 ``Weighted`` or ``Fill`` rule is unlocked and shares what is left of its
@@ -419,6 +419,97 @@ def _merged_rule(
         return Fill()
     anchor_weight, anchor_size_mm = anchor
     return Weighted(weight=target_mm * anchor_weight / anchor_size_mm)
+
+
+def remove_boards(unit: Unit, board_ids: Sequence[str]) -> Unit:
+    """``unit`` with each board ``board_ids`` names removed by
+    :func:`merge_at`, in order.
+
+    A board that an earlier removal in this call discarded, as the second
+    neighbor of a merge discards a whole subtree, is skipped. Raises the
+    first :class:`EditError` any removal raises, so a refused board refuses
+    the whole edit, including one ``board_ids`` names that is not a board of
+    ``unit``.
+    """
+    present = _board_ids(unit.root)
+    result = unit
+    for board_id in board_ids:
+        if board_id in present and board_id not in _board_ids(result.root):
+            continue
+        result = merge_at(result, board_id)
+    return result
+
+
+def _board_ids(region: Region) -> frozenset[str]:
+    if not isinstance(region, Division):
+        return frozenset()
+    ids: set[str] = set()
+    for item in region.items:
+        if isinstance(item, Board):
+            ids.add(item.id)
+        else:
+            ids |= _board_ids(item)
+    return frozenset(ids)
+
+
+def set_thickness(unit: Unit, board_ids: Collection[str], thickness_mm: float) -> Unit:
+    """``unit`` with each board ``board_ids`` names given ``thickness_mm``
+    along its run, its outer size and every rule unchanged.
+
+    The solve decides where the change goes: a locked ``Basis.WITH_NEXT``
+    spacing keeps the board after it where it was, a locked
+    ``Basis.CLEAR`` opening keeps its own size and lets that board move,
+    and a thickness the run cannot hold fails the solve. Raises
+    :class:`EditError` naming the offending id when ``thickness_mm`` is not
+    positive, or when an id names nothing in ``unit``, a region, or a board
+    whose size along its run comes from its own ``rule`` rather than its
+    thickness.
+    """
+    if thickness_mm <= 0:
+        raise EditError(
+            next(iter(board_ids), unit.id),
+            f"A thickness must be more than zero; got {thickness_mm:.1f} mm.",
+        )
+    for board_id in board_ids:
+        found = _locate(unit.root, board_id)
+        if found is None:
+            raise EditError(board_id, "That is not part of this unit.")
+        item = found[0].items[found[1]]
+        if not isinstance(item, Board):
+            raise EditError(board_id, "That is an opening, not a board.")
+        if item.rule is not None:
+            raise EditError(
+                board_id,
+                "This board's size along its row is set by the layout, not by "
+                "its thickness.",
+            )
+    targets = frozenset(board_ids)
+    return dataclasses.replace(
+        unit, root=_with_thickness(unit.root, targets, thickness_mm)
+    )
+
+
+def _with_thickness(
+    region: Region, board_ids: frozenset[str], thickness_mm: float
+) -> Region:
+    """``region`` with every board in ``board_ids`` at ``thickness_mm``,
+    copying only the paths down to them."""
+    if not isinstance(region, Division):
+        return region
+    new_items: list[Item] = []
+    changed = False
+    for item in region.items:
+        if isinstance(item, Board):
+            new_item: Item = (
+                dataclasses.replace(item, thickness_mm=thickness_mm)
+                if item.id in board_ids
+                else item
+            )
+        else:
+            new_item = _with_thickness(item, board_ids, thickness_mm)
+        changed = changed or new_item is not item
+        new_items.append(new_item)
+    return dataclasses.replace(region, items=new_items) if changed else region
 
 
 def _locate(region: Region, node_id: str) -> tuple[Division, int] | None:

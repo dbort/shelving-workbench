@@ -17,7 +17,12 @@ from freecad.Shelving.core.layout import (
 )
 from freecad.Shelving.core.scan import boxes_from_json, scan
 from freecad.Shelving.core.solver import solve
-from freecad.Shelving.core.stock import is_carcass, source_board
+from freecad.Shelving.core.stock import (
+    BoardStock,
+    group_stocks,
+    is_carcass,
+    source_board,
+)
 
 REAL_MAGICSTART_F1 = (
     Path(__file__).parent / "fixtures" / "real_magicstart_f1.boxes.json"
@@ -198,3 +203,45 @@ def test_with_no_parallel_board_the_nearest_board_of_any_kind_wins() -> None:
 def test_a_unit_with_no_board_has_no_source() -> None:
     unit = Unit(size_mm=Vec3(600.0, 300.0, 900.0), root=Bay(id="target"))
     assert _source_id(unit, "target", Axis.Z) is None
+
+
+def test_group_stocks_groups_by_thickness_material_and_color() -> None:
+    oak = (200, 150, 90)
+    records = [
+        BoardStock("a", 18.0, "Oak", oak),
+        BoardStock("b", 12.0, "Oak", oak),
+        BoardStock("c", 18.0, "Oak", oak),
+        BoardStock("d", 18.0, "Pine", oak),
+        BoardStock("e", 18.0, "Oak", (0, 0, 0)),
+        BoardStock("f", 18.0 + 1e-9, "Oak", oak),
+        BoardStock("g", 12.0, "Oak", oak),
+        BoardStock("h", 18.0, None, None),
+    ]
+    groups = group_stocks(records)
+    assert [group.board_ids for group in groups] == [
+        ("a", "c", "f"),
+        ("b", "g"),
+        ("d",),
+        ("e",),
+        ("h",),
+    ]
+    assert (groups[0].thickness_mm, groups[0].material, groups[0].color) == (
+        18.0,
+        "Oak",
+        oak,
+    )
+    assert (groups[4].material, groups[4].color) == (None, None)
+
+
+def test_group_stocks_breaks_a_tie_by_the_first_board_listed() -> None:
+    records = [
+        BoardStock("x", 12.0, None, None),
+        BoardStock("y", 18.0, None, None),
+        BoardStock("z", 18.0, None, None),
+        BoardStock("w", 12.0, None, None),
+    ]
+    assert [group.board_ids for group in group_stocks(records)] == [
+        ("x", "w"),
+        ("y", "z"),
+    ]
+    assert group_stocks([]) == []

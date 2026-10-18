@@ -9,6 +9,8 @@ import FreeCAD
 import pytest
 
 from freecad.Shelving import init_gui, qa
+from freecad.Shelving.core.layout import Basis, Bay, Board, Division, Fixed, Region
+from freecad.Shelving.editor.session import Session
 from freecad.Shelving.qa import actions
 from freecad.Shelving.qa.model import Case, load_cases
 from freecad.Shelving.qa.registry import ACTIONS, CHECKS
@@ -52,11 +54,39 @@ def test_the_fresh_unit_check_passes_on_a_fresh_unit() -> None:
     assert result.passed, result.detail
 
 
+def test_the_two_shelf_unit_holds_one_shelf_by_spacing_and_one_by_clear() -> None:
+    actions.two_shelf_unit()
+    doc = FreeCAD.ActiveDocument
+    assert doc is not None
+    container = doc.getObject("ShelvingUnit")
+    assert container is not None
+    session = Session(container)
+    rules = [node.rule for node in _bays(session.unit.root)]
+    assert len(rules) == 3
+    assert isinstance(rules[0], Fixed) and rules[0].basis is Basis.WITH_NEXT
+    assert isinstance(rules[1], Fixed) and rules[1].basis is Basis.CLEAR
+    assert not isinstance(rules[2], Fixed)
+
+
+def _bays(region: Region) -> list[Bay]:
+    if isinstance(region, Bay):
+        return [region]
+    if not isinstance(region, Division):
+        return []
+    return [
+        bay
+        for item in region.items
+        if not isinstance(item, Board)
+        for bay in _bays(item)
+    ]
+
+
 @pytest.mark.parametrize(
     ("setup", "names"),
     [
         ((actions.fresh_unit,), ["Create Shelving Unit"]),
         ((actions.large_unit,), ["Divide Unit", "Create Shelving Unit"]),
+        ((actions.two_shelf_unit,), ["Add Shelves", "Create Shelving Unit"]),
         (
             (actions.test_unit, actions.add_overlap_box),
             ["Add Overlap", "Create TestUnit"],

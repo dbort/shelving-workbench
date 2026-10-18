@@ -1,7 +1,8 @@
 """Board appearance, which exists only with FreeCAD's GUI up: a new board's
-copy of its source board's, Create Unit's color, and a hand-set color
-surviving a write (``.claude/docs/freecad-notes.md``, "A ``DocumentObject``'s
-``ViewObject`` is ``None``")."""
+copy of its source board's, Create Unit's color, a hand-set color
+surviving a write, and the colors a stock swap paints
+(``.claude/docs/freecad-notes.md``, "A ``DocumentObject``'s ``ViewObject``
+is ``None``")."""
 
 from collections.abc import Iterator
 from typing import Protocol, cast
@@ -9,10 +10,12 @@ from typing import Protocol, cast
 import FreeCAD
 import pytest
 
+from freecad.Shelving import properties
 from freecad.Shelving.core.geometry import Vec3
 from freecad.Shelving.core.layout import Bay, Board, Division, Region
 from freecad.Shelving.editor.session import Session
 from freecad.Shelving.unit_ops import create_unit, resize_unit
+from tests.freecad_materials import library_material
 
 _MAGIC_START_RGB = (247, 185, 108)
 _BOARDS = ("bottom", "top", "left_side", "right_side")
@@ -175,3 +178,79 @@ def test_a_resize_keeps_a_hand_set_board_color(doc: FreeCAD.Document) -> None:
         700.0
     )
     assert _appearance(top) == pytest.approx(expected)
+
+
+def _swap_session(doc: FreeCAD.Document) -> Session:
+    """An open session on a new unit with every board selected."""
+    container = create_unit(doc)
+    doc.recompute()
+    session = Session(container)
+    session.open()
+    session.select_boards(sorted(_board_ids(session.unit.root)))
+    return session
+
+
+def _diffuse_rgb(view: _AppearanceView) -> set[tuple[float, ...]]:
+    """Each distinct diffuse color among the faces, rounded to 0 to 255."""
+    return {
+        tuple(round(c * 255) for c in diffuse) for diffuse, _t, _s in _appearance(view)
+    }
+
+
+def test_a_material_swap_repaints_in_the_materials_color(
+    doc: FreeCAD.Document,
+) -> None:
+    session = _swap_session(doc)
+    try:
+        wood = library_material("Wood")
+        assert session.swap_stock(material_uuid=wood.UUID) is None
+        expected = properties.material_color(wood)
+        assert expected is not None and expected != _MAGIC_START_RGB
+        for name in _BOARDS:
+            assert _diffuse_rgb(_view(doc, name)) == {expected}, name
+        assert {group.color for group in session.stock_groups()} == {expected}
+    finally:
+        session.close()
+
+
+def test_an_explicit_color_wins_over_the_materials(doc: FreeCAD.Document) -> None:
+    session = _swap_session(doc)
+    try:
+        wood = library_material("Wood")
+        assert session.swap_stock(material_uuid=wood.UUID, color=(10, 120, 200)) is None
+        for name in _BOARDS:
+            assert _diffuse_rgb(_view(doc, name)) == {(10, 120, 200)}, name
+    finally:
+        session.close()
+
+
+def test_a_swap_replaces_per_face_colors(doc: FreeCAD.Document) -> None:
+    session = _swap_session(doc)
+    try:
+        top = _view(doc, "top")
+        top.ShapeAppearance = [
+            _material((0.1 * i, 0.5, 1.0 - 0.1 * i)) for i in range(6)
+        ]
+        session.select_boards(["top"])
+        assert session.swap_stock(color=(40, 50, 60)) is None
+        assert _diffuse_rgb(top) == {(40, 50, 60)}
+        top.ShapeAppearance = [
+            _material((0.1 * i, 0.5, 1.0 - 0.1 * i)) for i in range(6)
+        ]
+        assert session.swap_stock(material_uuid=library_material("Wood").UUID) is None
+        assert len(_diffuse_rgb(top)) == 1
+    finally:
+        session.close()
+
+
+def test_the_stock_groups_tell_colors_apart(doc: FreeCAD.Document) -> None:
+    session = _swap_session(doc)
+    try:
+        (group,) = session.stock_groups()
+        assert group.color == _MAGIC_START_RGB
+        session.select_boards(["top"])
+        assert session.swap_stock(color=(1, 2, 3)) is None
+        groups = session.stock_groups()
+        assert [(g.board_ids, g.color) for g in groups][1] == (("top",), (1, 2, 3))
+    finally:
+        session.close()

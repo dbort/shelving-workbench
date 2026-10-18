@@ -5,5 +5,6 @@ with a slim task panel beside it.
 pytest; ``session.py`` and ``history.py`` run under ``freecadcmd``. The
 in-view editor needs a real 3D view, which only the Xvfb tier has, so
 every decision worth testing without one lives in ``elevation.py`` or the
-session.
+session. ``stock_dialog.py`` is the Change Stock dialog the panel opens;
+like the panel, it needs FreeCAD's GUI.
 """

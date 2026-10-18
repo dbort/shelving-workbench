@@ -162,6 +162,33 @@ def shelf_unit_with_varset() -> None:
     doc.recompute()
 
 
+@action(
+    "two_shelf_unit",
+    label="Create a unit with a shelf held by a spacing and one by a clear size",
+)
+def two_shelf_unit() -> None:
+    from freecad.Shelving.core.layout import Basis
+    from freecad.Shelving.editor.session import Session
+
+    fresh_unit()
+    doc = _active_document()
+    with _undo_step(doc, "Add Shelves"):
+        # Never opened, so its edits land in this one step.
+        session = Session(_object(_FRESH_UNIT))
+        for _ in range(2):
+            session.select(_bay_ids(session.unit.root)[-1])
+            failure = session.split("vertical")
+            if failure is not None:
+                raise RuntimeError(failure.message)
+        lower, middle, _upper = _bay_ids(session.unit.root)
+        for region_id, basis in ((lower, Basis.WITH_NEXT), (middle, Basis.CLEAR)):
+            session.select(region_id)
+            failure = session.set_basis(basis)
+            if failure is not None:
+                raise RuntimeError(failure.message)
+        doc.recompute()
+
+
 @action("large_unit", label="Create a unit of four columns of six openings")
 def large_unit() -> None:
     from freecad.Shelving.core.geometry import Space

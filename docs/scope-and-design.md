@@ -173,10 +173,12 @@ the edit as they do anywhere else.
 Matching is by object identity, so a renamed, recolored or referenced
 panel survives a reflow. Material, color and grain live where Woodworking
 keeps them (`ShapeMaterial`, the view's appearance, a per-face `Grain`
-list) and are never written to an existing panel. A new panel copies them,
-and its thickness, from a source board lying the same way: a shelf in the
-same opening, then the nearest such shelf, then the nearest outer panel,
-then the nearest panel of any kind.
+list), and a reflow never writes them. A new panel copies them, and its
+thickness, from a source board lying the same way: a shelf in the same
+opening, then the nearest such shelf, then the nearest outer panel, then
+the nearest panel of any kind. A stock swap changes the thickness, the
+`ShapeMaterial` or the color of the selected panels together, as one undo
+step, and never their grain.
 
 ## What is stored
 

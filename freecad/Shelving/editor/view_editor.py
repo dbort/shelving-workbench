@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import math
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal, Protocol, cast
 
@@ -380,18 +380,22 @@ class _ViewportGeometry(QtCore.QObject):
 # or one whose click it reads after FreeCAD has handled it.
 PressKind = Literal["take", "leave", "click"]
 
+# FreeCAD's add-to-selection modifier, which Qt reports for Command on a Mac.
+_ADD_MODIFIER = QtCore.Qt.KeyboardModifier.ControlModifier
+
 
 class _ViewportClicks(QtCore.QObject):
     """Reads left clicks on the 3D view's viewport before navigation and
     FreeCAD's selection see them. ``on_press`` sorts each press; a press
     taken is consumed with its release, so no board beneath it is picked,
-    and a click is reported to ``on_click`` once FreeCAD has handled it."""
+    and a click is reported to ``on_click`` once FreeCAD has handled it,
+    with whether it carried FreeCAD's add-to-selection modifier."""
 
     def __init__(
         self,
         viewport: QtWidgets.QWidget,
         on_press: Callable[[QtCore.QPointF], PressKind],
-        on_click: Callable[[QtCore.QPointF], None],
+        on_click: Callable[[QtCore.QPointF, bool], None],
     ) -> None:
         super().__init__(viewport)
         self._on_press = on_press
@@ -424,8 +428,9 @@ class _ViewportClicks(QtCore.QObject):
             return False
         moved_px = (position - press).manhattanLength()
         if moved_px < QtWidgets.QApplication.startDragDistance():
+            adding = bool(mouse.modifiers() & _ADD_MODIFIER)
             # FreeCAD's selection handles this release after the filter.
-            QtCore.QTimer.singleShot(0, lambda: self._on_click(position))
+            QtCore.QTimer.singleShot(0, lambda: self._on_click(position, adding))
         return False
 
 
@@ -446,8 +451,55 @@ class _SelectionObserver:
     def __init__(self, editor: ViewEditor) -> None:
         self._editor = editor
 
-    def addSelection(self, doc: str, obj: str, sub: str, _point: object) -> None:
-        self._editor.freecad_selected(doc, obj, sub)
+    def addSelection(self, doc: str, _obj: str, _sub: str, _point: object) -> None:
+        self._editor.freecad_selection_changed(doc)
+
+    def removeSelection(self, doc: str, _obj: str, _sub: str) -> None:
+        self._editor.freecad_selection_changed(doc)
+
+    def setSelection(self, doc: str) -> None:
+        self._editor.freecad_selection_changed(doc)
+
+    def clearSelection(self, doc: str) -> None:
+        self._editor.freecad_selection_changed(doc)
+
+
+class _SelectionEntry(Protocol):
+    """One object of ``FreeCADGui.Selection.getSelectionEx``; the stubs do
+    not declare its attributes."""
+
+    ObjectName: str
+    SubElementNames: Sequence[str]
+
+
+@dataclass(frozen=True)
+class _Picked:
+    """One entry of FreeCAD's selection."""
+
+    # The object it was picked through, and the path below it.
+    obj: str
+    sub: str
+    # The unit's board it names, if any.
+    board: str | None
+    # Whether it is the whole object rather than one of its elements.
+    whole: bool
+
+
+def select_in_freecad(doc_name: str, names: Sequence[str]) -> None:
+    """Make FreeCAD's selection in ``doc_name`` exactly the whole objects
+    ``names``, touching it only when it differs."""
+    entries = cast(
+        "list[_SelectionEntry]", FreeCADGui.Selection.getSelectionEx(doc_name, 0, True)
+    )
+    current = [
+        (entry.ObjectName, tuple(sub for sub in entry.SubElementNames if sub))
+        for entry in entries
+    ]
+    if current == [(name, ()) for name in names]:
+        return
+    FreeCADGui.Selection.clearSelection()
+    for name in names:
+        FreeCADGui.Selection.addSelection(doc_name, name)
 
 
 # How many editors have opened in this process. A camera restore still
@@ -506,6 +558,7 @@ class ViewEditor:
         self._turn_started_s = 0.0
         self._refresh_queued = False
         self._side_queued = False
+        self._follow_queued = False
         self.arrow: Arrow | None = None
         self._dragging = False
         self._drag_failure_reported = False
@@ -1058,19 +1111,76 @@ class ViewEditor:
                 return name
         return None
 
-    def freecad_selected(self, doc_name: str, obj_name: str, sub_name: str) -> None:
-        """FreeCAD's selection gained ``obj_name``/``sub_name``. A board's
-        face, edge or vertex becomes the whole board, and a board picked in
-        the tree becomes the session's selection. Runs inside FreeCAD's
-        selection change, so every change waits."""
-        if doc_name != self._doc_name or self._closed:
+    def freecad_selection_changed(self, doc_name: str) -> None:
+        """FreeCAD's selection changed, in the tree, the view or a script.
+        Runs inside FreeCAD's selection change, so following it waits."""
+        if self._closed or doc_name not in (self._doc_name, ""):
             return
-        board = self._board_in(obj_name, sub_name)
-        if board is None:
+        if not self._follow_queued:
+            self._follow_queued = True
+            QtCore.QTimer.singleShot(0, self._follow_freecad)
+
+    def _freecad_entries(self) -> list[_Picked]:
+        """Each object and each element in FreeCAD's selection in the unit's
+        document, one per entry: a whole object selected beside one of its
+        own faces is two."""
+        # Single entries: grouped by object, a whole object's own entry
+        # disappears behind its elements'.
+        entries = cast(
+            "list[_SelectionEntry]",
+            FreeCADGui.Selection.getSelectionEx(self._doc_name, 0, True),
+        )
+        picked: list[_Picked] = []
+        for entry in entries:
+            for sub in entry.SubElementNames or ("",):
+                picked.append(
+                    _Picked(
+                        entry.ObjectName,
+                        sub,
+                        self._board_in(entry.ObjectName, sub),
+                        not sub.rsplit(".", 1)[-1],
+                    )
+                )
+        return picked
+
+    def _follow_freecad(self) -> None:
+        """Make the session's selection FreeCAD's whenever FreeCAD's holds
+        only the unit's boards, and hold each of them in FreeCAD whole.
+
+        A board held whole beside one of its own elements was Ctrl-clicked
+        while selected: FreeCAD adds the element it does not find selected
+        rather than removing the whole board, so that board leaves the
+        selection. An emptied selection drops a board selection; a region
+        selection stays, since FreeCAD's selection never holds a region.
+        """
+        self._follow_queued = False
+        if self._closed:
             return
-        whole = not sub_name.rsplit(".", 1)[-1]
-        if not whole or board != self.session.selected_id:
-            QtCore.QTimer.singleShot(0, lambda: self.select(board))
+        entries = self._freecad_entries()
+        if any(entry.board is None for entry in entries):
+            # A part the unit sets aside: _click turns it into the opening.
+            return
+        whole = {entry.board for entry in entries if entry.whole}
+        parts = {entry.board for entry in entries if not entry.whole}
+        boards = [
+            board
+            for board in dict.fromkeys(entry.board for entry in entries)
+            if board is not None and board not in whole & parts
+        ]
+        session = self.session
+        if parts:
+            select_in_freecad(self._doc_name, boards)
+        if not boards:
+            if session.selected_boards:
+                self.select(None)
+            return
+        if len(boards) == 1:
+            if boards[0] != session.selected_id:
+                self.select(boards[0])
+            return
+        if tuple(boards) != session.selected_boards:
+            session.select_boards(boards)
+            self._on_change()
 
     def select(self, node_id: str | None) -> None:
         """Select ``node_id`` in the session, and in FreeCAD's selection when
@@ -1079,21 +1189,28 @@ class ViewEditor:
             return
         self.session.select(node_id)
         board = node_id if node_id in self._boards else None
-        current = cast(
-            "list[FreeCAD.DocumentObject]",
-            FreeCADGui.Selection.getSelection(self._doc.Name),
-        )
-        sub_selected = FreeCADGui.Selection.hasSubSelection(self._doc.Name, True)
-        wanted: list[str] = [] if board is None else [board]
-        if [obj.Name for obj in current] != wanted or sub_selected:
-            FreeCADGui.Selection.clearSelection()
-            if board is not None:
-                FreeCADGui.Selection.addSelection(self._doc.Name, board)
+        select_in_freecad(self._doc_name, [] if board is None else [board])
         self._on_change()
 
-    def _click(self, position: QtCore.QPointF) -> None:
-        """A click FreeCAD has handled: a board under the pointer selects
-        that board, anywhere else the opening there, or nothing."""
+    def select_boards(self, board_ids: Sequence[str]) -> None:
+        """Select exactly the boards ``board_ids``, in the session and, whole,
+        in FreeCAD's selection."""
+        if self._closed:
+            return
+        self.session.select_boards(board_ids)
+        select_in_freecad(self._doc_name, list(dict.fromkeys(board_ids)))
+        self._on_change()
+
+    def _click(self, position: QtCore.QPointF, adding: bool) -> None:
+        """A click FreeCAD has handled. On a board the session takes
+        FreeCAD's selection, so an add-to-selection gesture adds the board.
+        Elsewhere, an ``adding`` click keeps a board selection, as FreeCAD
+        keeps it for one on empty space, and only takes a part the unit sets
+        aside back out of FreeCAD's selection; any other click selects the
+        opening there, or nothing. FreeCAD knows no openings, so this is the
+        one place the editor reads a modifier: under Inventor navigation,
+        where FreeCAD selects only on Ctrl-click, a plain click is what
+        reaches an opening."""
         if self._closed:
             return
         self._close_field()
@@ -1104,8 +1221,16 @@ class ViewEditor:
                 str(info.get("Object", "")), str(info.get("SubName", "") or "")
             )
             if board is not None:
-                self.select(board)
+                self._follow_freecad()
                 return
+        entries = self._freecad_entries()
+        if adding and any(entry.board is not None for entry in entries):
+            for entry in entries:
+                if entry.board is None:
+                    FreeCADGui.Selection.removeSelection(
+                        self._doc_name, entry.obj, entry.sub
+                    )
+            return
         self.select(self._region_at(device))
 
     def _region_at(self, device: tuple[int, int]) -> str | None:
@@ -1350,12 +1475,24 @@ class ViewEditor:
     # Delete
 
     def _delete_selected(self) -> None:
-        if self._closed or not self.session.can_merge():
+        """Delete the selected board, or every one of several as one step,
+        refusing them all when any is refused, as ``Std_Delete`` does."""
+        if self._closed:
             return
-        failure = self.session.merge()
+        session = self.session
+        if len(session.selected_boards) > 1:
+            failure = session.delete_boards()
+        elif session.can_merge():
+            failure = session.merge()
+        else:
+            return
         if failure is not None:
             report_error(failure.message)
-        self.select(self.session.selected_id)
+            # The selection is as it was; the redraw shows nothing changed.
+            self._on_change()
+            return
+        self._boards = board_ids(session.unit)
+        self.select(session.selected_id)
 
     # Dragging
 

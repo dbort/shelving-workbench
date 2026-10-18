@@ -4,8 +4,8 @@ in-view editor working on it.
 ``EditUnitPanel`` satisfies the duck-typed protocol
 ``FreeCADGui.Control.showDialog`` expects: a ``form`` attribute (the
 ``QWidget`` shown in the task panel), ``getStandardButtons``, ``accept``,
-``reject``. The unit's own size and the selected opening's basis are
-edited here; everything else is edited in the 3D view
+``reject``. The unit's own size, its boards' stock and the selected
+opening's basis are edited here; everything else is edited in the 3D view
 (:mod:`freecad.Shelving.editor.view_editor`). ``FreeCADGui.Control`` does
 not exist under ``freecadcmd``, so :mod:`tests.freecad_gui.test_panel`
 exercises this module under the offscreen GUI instead.
@@ -13,14 +13,15 @@ exercises this module under the offscreen GUI instead.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from functools import partial
 
 import FreeCAD
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 
 from freecad.Shelving.compat import override
 from freecad.Shelving.core.layout import Basis
+from freecad.Shelving.core.stock import Color, StockGroup
 from freecad.Shelving.debug_log import Stopwatch
 from freecad.Shelving.editor.fields import DimensionField, WheelFilter
 from freecad.Shelving.editor.session import (
@@ -29,7 +30,8 @@ from freecad.Shelving.editor.session import (
     Session,
     UnitDimension,
 )
-from freecad.Shelving.editor.view_editor import View3D, ViewEditor
+from freecad.Shelving.editor.stock_dialog import StockDialog
+from freecad.Shelving.editor.view_editor import View3D, ViewEditor, select_in_freecad
 from freecad.Shelving.refusals import report_error
 
 _UNIT_DIMENSIONS: tuple[tuple[UnitDimension, str], ...] = (
@@ -37,6 +39,11 @@ _UNIT_DIMENSIONS: tuple[tuple[UnitDimension, str], ...] = (
     ("depth", "Depth"),
     ("height", "Height"),
 )
+
+# The stock list's columns; a row's board count stands alone in the last, so
+# no text depends on how many boards it counts.
+STOCK_COLUMNS = ("Thickness", "Material", "Color", "Boards")
+_SWATCH_PX = 16
 
 _BASIS_CHOICES: tuple[tuple[str, Basis], ...] = (
     ("Clear opening", Basis.CLEAR),
@@ -74,6 +81,18 @@ class FirstEvents(QtCore.QObject):
             if not self._pending:
                 watched.removeEventFilter(self)
         return False
+
+
+def _swatch(color: Color) -> QtGui.QIcon:
+    pixmap = QtGui.QPixmap(_SWATCH_PX, _SWATCH_PX)
+    pixmap.fill(QtGui.QColor(*color))
+    return QtGui.QIcon(pixmap)
+
+
+def _thickness_text(thickness_mm: float) -> str:
+    """``thickness_mm`` in the user's unit system, as FreeCAD shows a
+    length."""
+    return FreeCAD.Units.Quantity(thickness_mm, FreeCAD.Units.Length).UserString
 
 
 def _describe(widget: QtWidgets.QWidget, child: QtWidgets.QWidget | None) -> str:
@@ -235,6 +254,25 @@ class EditUnitPanel:
         # is enough.
         self._reported_step_burst: tuple[UnitDimension, int] | None = None
 
+        self.stock_box = QtWidgets.QGroupBox("Stock")
+        stock_layout = QtWidgets.QVBoxLayout(self.stock_box)
+        self.stock_list = QtWidgets.QTreeWidget()
+        self.stock_list.setColumnCount(len(STOCK_COLUMNS))
+        self.stock_list.setHeaderLabels(list(STOCK_COLUMNS))
+        self.stock_list.setRootIsDecorated(False)
+        self.stock_list.setUniformRowHeights(True)
+        self.stock_list.setSelectionMode(
+            QtWidgets.QAbstractItemView.SelectionMode.SingleSelection
+        )
+        stock_layout.addWidget(self.stock_list)
+        self.change_stock_button = QtWidgets.QPushButton("Change stock…")
+        stock_layout.addWidget(self.change_stock_button)
+        layout.addWidget(self.stock_box)
+        # The groups the rows show, in row order.
+        self.stock_groups: Sequence[StockGroup] = ()
+        # The open Change Stock dialog, if any.
+        self.stock_dialog: StockDialog | None = None
+
         basis_row = QtWidgets.QFormLayout()
         self.basis_combo = QtWidgets.QComboBox()
         for text, _basis in _BASIS_CHOICES:
@@ -269,6 +307,8 @@ class EditUnitPanel:
         layout.addStretch(1)
 
         self.basis_combo.currentIndexChanged.connect(self._set_basis)
+        self.stock_list.itemClicked.connect(self._stock_clicked)
+        self.change_stock_button.clicked.connect(self._open_stock_dialog)
         self.delete_untagged_button.clicked.connect(self._delete_untagged)
         self.hide_others_check.toggled.connect(self._hide_others)
         watch.lap("widgets")
@@ -290,6 +330,80 @@ class EditUnitPanel:
 
     def _set_basis(self, index: int) -> None:
         self._show_result(self.session.set_basis(_BASIS_CHOICES[index][1]))
+
+    def _stock_clicked(self, item: QtWidgets.QTreeWidgetItem, _column: int) -> None:
+        index = self.stock_list.indexOfTopLevelItem(item)
+        if 0 <= index < len(self.stock_groups):
+            self.select_stock(self.stock_groups[index])
+
+    def select_stock(self, group: StockGroup) -> None:
+        """Select exactly ``group``'s boards, in the session and in FreeCAD's
+        selection."""
+        if self.editor is not None:
+            # The editor's change callback is this panel's refresh.
+            self.editor.select_boards(group.board_ids)
+            return
+        self.session.select_boards(group.board_ids)
+        select_in_freecad(self.session.container.Document.Name, group.board_ids)
+        self._refresh()
+
+    def _open_stock_dialog(self) -> None:
+        boards = self.session.selected_boards
+        if not boards:
+            return
+        # The fields start from the first selected board's stock.
+        group = next(g for g in self.session.stock_groups() if boards[0] in g.board_ids)
+        dialog = StockDialog(self.form, group.thickness_mm, group.color)
+        dialog.setAttribute(QtCore.Qt.WidgetAttribute.WA_DeleteOnClose)
+        dialog.accepted.connect(lambda: self._swap_stock(dialog))
+
+        def closed(_result: int) -> None:
+            if self.stock_dialog is dialog:
+                self.stock_dialog = None
+
+        dialog.finished.connect(closed)
+        self.stock_dialog = dialog
+        # Window-modal without a nested event loop, as a task panel's own
+        # dialogs open.
+        dialog.open()
+
+    def _swap_stock(self, dialog: StockDialog) -> None:
+        change = dialog.change()
+        self._show_result(
+            self.session.swap_stock(
+                change.thickness_mm, change.material_uuid, change.color
+            )
+        )
+
+    def _refresh_stock(self) -> None:
+        """Rebuild the rows when the groups changed, and show as selected
+        the row whose boards are exactly the selection."""
+        groups = self.session.stock_groups()
+        if list(groups) != list(self.stock_groups):
+            self.stock_groups = groups
+            self.stock_list.clear()
+            for group in groups:
+                item = QtWidgets.QTreeWidgetItem(
+                    [
+                        _thickness_text(group.thickness_mm),
+                        group.material or "",
+                        "",
+                        str(len(group.board_ids)),
+                    ]
+                )
+                if group.color is not None:
+                    item.setIcon(2, _swatch(group.color))
+                self.stock_list.addTopLevelItem(item)
+        selected = set(self.session.selected_boards)
+        self.stock_list.blockSignals(True)
+        self.stock_list.clearSelection()
+        for index, group in enumerate(groups):
+            if selected and set(group.board_ids) == selected:
+                item = self.stock_list.topLevelItem(index)
+                if item is not None:
+                    item.setSelected(True)
+        self.stock_list.blockSignals(False)
+        self.change_stock_button.setEnabled(bool(selected))
 
     def _hide_others(self, hide: bool) -> None:
         if self.editor is not None:
@@ -371,12 +485,15 @@ class EditUnitPanel:
             # With no board after the region there is no spacing to measure.
             self.basis_combo.setEnabled(measurement.spacing_mm is not None)
         self.basis_combo.blockSignals(False)
+        self._refresh_stock()
         self._rebuild_untagged_rows()
         self.untagged_box.setVisible(bool(self.session.left_alone))
         if self.editor is not None:
             self.editor.rebuild()
 
     def _end(self) -> None:
+        if self.stock_dialog is not None:
+            self.stock_dialog.reject()
         if self.editor is not None:
             self.editor.close()
             # Let go of the editor, and with it its last hold on the view's

@@ -157,7 +157,7 @@ def test_the_panel_holds_only_the_units_size_the_basis_and_its_lists(
     )
     assert form.findChildren(QtWidgets.QComboBox) == [unit_panel.panel.basis_combo]
     buttons = [button.text() for button in form.findChildren(QtWidgets.QAbstractButton)]
-    assert sorted(buttons) == ["Delete Selected", "Hide other objects"]
+    assert sorted(buttons) == ["Change stock…", "Delete Selected", "Hide other objects"]
     assert not unit_panel.panel.hide_others_check.isChecked()
     # The unit has nothing this workbench did not create.
     assert not unit_panel.panel.untagged_box.isVisible()

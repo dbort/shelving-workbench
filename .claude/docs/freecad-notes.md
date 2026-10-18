@@ -99,6 +99,25 @@ Seen on FreeCAD 1.1.3 (conda-forge); `editor/history.py` relies on each.
   focus sat in a task panel's combo box, and ran with focus in the 3D
   view. On macOS (1.1.4), Cmd-Z ran with focus on a task panel button.
 
+## Selection gestures in the 3D view
+
+Seen on FreeCAD 1.1.3 under Xvfb; `editor/view_editor.py` relies on each.
+
+- `Gui.Selection.getSelectionEx(doc, 0)` groups entries by object, and an
+  object selected whole beside one of its own elements shows only the
+  element. `getSelectionEx(doc, 0, True)` lists every entry on its own.
+- Ctrl-click on an object selected whole does not deselect it: FreeCAD
+  finds the clicked element unselected and adds it. Ctrl-click on a
+  selected element removes it, and Ctrl-click on empty space keeps the
+  selection.
+- Under Inventor navigation, selecting is Ctrl-click and adds as under CAD
+  navigation; a plain click on an object or on empty space leaves the
+  selection as it was.
+- Setting `ShapeMaterial` leaves the view's `ShapeAppearance` alone. A
+  library material's appearance values come back as text, a color as
+  `"(0.8984, 0.7305, 0.3906, 1.0)"`, which the Material workbench's own
+  editor parses the same way.
+
 ## A `DocumentObject`'s `ViewObject` is `None`
 
 Without the GUI every object's `ViewObject` is `None`, so color and other

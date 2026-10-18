@@ -1,8 +1,10 @@
-"""Which existing board a board the editor creates takes its stock from.
+"""A board's stock: which existing board a board the editor creates takes
+it from, and how the editor groups a unit's boards by it.
 
 A board's stock is its thickness plus whatever material, appearance and grain
 the document gives it. The core sees only the thickness; it names the source
-board so the write path can copy the rest from that board's object.
+board so the write path can copy the rest from that board's object, and
+groups what the document layer reads back.
 
 Imports no Qt and no FreeCAD, so the fast suite exercises it directly.
 """
@@ -10,7 +12,7 @@ Imports no Qt and no FreeCAD, so the fast suite exercises it directly.
 from __future__ import annotations
 
 import math
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 
 from freecad.Shelving.core.geometry import Space
@@ -133,3 +135,63 @@ def source_board(
             assert isinstance(nearest.item, Board)
             return nearest.item
     return None
+
+
+# A color as 0 to 255 per red, green and blue channel.
+Color = tuple[int, int, int]
+
+
+@dataclass(frozen=True)
+class BoardStock:
+    """What the document gives one board, as :func:`group_stocks` reads it."""
+
+    board_id: str
+    thickness_mm: float
+    # The name of the board's FreeCAD material; None when it has none.
+    material: str | None
+    # The board's most common face color; None when it is not known, as
+    # without FreeCAD's GUI.
+    color: Color | None
+
+
+@dataclass(frozen=True)
+class StockGroup:
+    """The boards sharing one stock."""
+
+    thickness_mm: float
+    material: str | None
+    color: Color | None
+    # In the order the records listed them.
+    board_ids: tuple[str, ...]
+
+
+# Thicknesses that agree to this many decimal places are one stock: a solve
+# or a scan's snapping can leave float noise in two boards cut from the same
+# sheet.
+_THICKNESS_DIGITS = 6
+
+
+def group_stocks(records: Iterable[BoardStock]) -> Sequence[StockGroup]:
+    """One group per distinct (thickness, material, color) among
+    ``records``, the group holding most boards first, a tie going to the
+    group whose first board comes first in ``records``. A group's
+    thickness is its first board's."""
+    groups: dict[tuple[float, str | None, Color | None], list[BoardStock]] = {}
+    for record in records:
+        key = (
+            round(record.thickness_mm, _THICKNESS_DIGITS),
+            record.material,
+            record.color,
+        )
+        groups.setdefault(key, []).append(record)
+    # dict keeps first-seen order, and sorted is stable, so ties keep it.
+    ordered = sorted(groups.values(), key=lambda members: -len(members))
+    return [
+        StockGroup(
+            thickness_mm=members[0].thickness_mm,
+            material=members[0].material,
+            color=members[0].color,
+            board_ids=tuple(member.board_id for member in members),
+        )
+        for members in ordered
+    ]
