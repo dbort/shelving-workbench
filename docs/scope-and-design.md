@@ -177,8 +177,8 @@ list), and a reflow never writes them. A new panel copies them, and its
 thickness, from a source board lying the same way: a shelf in the same
 opening, then the nearest such shelf, then the nearest outer panel, then
 the nearest panel of any kind. A stock swap changes the thickness, the
-`ShapeMaterial` or the color of the selected panels, one undo step each,
-and never their grain.
+`ShapeMaterial` or the color of the selected panels together, as one undo
+step, and never their grain.
 
 ## What is stored
 
