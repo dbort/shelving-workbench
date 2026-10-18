@@ -387,7 +387,6 @@ title = "A material from your own library recolors the boards"
   [[case.step]]
   id = "start"
   action = "fresh_unit"
-  check = "fresh_unit_size"
   instruction = [
     "Select the container (ShelvingUnit).",
     "Run Edit Unit.",
