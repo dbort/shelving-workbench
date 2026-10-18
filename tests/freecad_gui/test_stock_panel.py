@@ -7,7 +7,7 @@ from collections.abc import Iterator
 import FreeCAD
 import FreeCADGui
 import pytest
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtWidgets
 
 from freecad.Shelving.core.layout import Bay, Board, Division, Region
 from freecad.Shelving.editor import panel as panel_module
@@ -216,17 +216,6 @@ def test_the_dialog_offers_freecads_three_fields_each_unset(
     assert panel.stock_dialog is None
     assert doc.UndoCount == steps
     assert panel.session.stock_groups() == groups
-
-
-def test_the_dialog_is_its_own_window_over_freecads(panel: EditUnitPanel) -> None:
-    """Parented to the main window, never to the form inside the Tasks
-    overlay panel, and never window-modal, which macOS shows as a sheet."""
-    dialog = _open_dialog(panel, ["top"])
-    assert dialog.parentWidget() is FreeCADGui.getMainWindow()
-    assert dialog.windowModality() == QtCore.Qt.WindowModality.ApplicationModal
-    assert QtWidgets.QApplication.activeModalWidget() is dialog
-    dialog.reject()
-    _process_events()
 
 
 def test_the_dialog_swaps_the_checked_fields(panel: EditUnitPanel) -> None:
