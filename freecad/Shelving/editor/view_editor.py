@@ -1440,11 +1440,13 @@ class ViewEditor:
         ratio ``ratio``: Coin draws an image's pixels one to one."""
         image = marker_image(ratio, self.style.marker_rgb)
         self.marker_image = image
-        # Coin's rows run bottom to top.
-        flipped = image.flipped(QtCore.Qt.Orientation.Vertical)
-        self.marker.set_image(
-            flipped.width(), flipped.height(), bytes(flipped.constBits())
-        )
+        pixels = bytes(image.constBits())
+        stride = image.bytesPerLine()
+        # Coin's rows run bottom to top, Qt's top to bottom.
+        rows = [
+            pixels[start : start + stride] for start in range(0, len(pixels), stride)
+        ]
+        self.marker.set_image(image.width(), image.height(), b"".join(reversed(rows)))
 
     def _refit(self) -> None:
         """Place the widgets over the view again, after its viewport resized
