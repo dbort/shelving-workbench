@@ -17,7 +17,10 @@ along the depth axis (a back or a front panel) projects over the whole
 elevation rather than dividing it, and is set aside into
 :attr:`ScanResult.panels` instead of placed: a back set within the carcass
 and one sitting proud behind it need different trees, and scanning cannot
-tell them apart from an axis-aligned box alone.
+tell them apart from an axis-aligned box alone. A panel that reads as a back
+also lands in :attr:`Unit.backs <freecad.Shelving.core.layout.Unit.backs>`,
+with the board face each of its edges lies on, so a write can carry it with
+the boards around it.
 
 Scanning runs on a cell grid whose lines are every board edge. A flood fill
 from the grid's border through uncovered cells marks the outside. At each
@@ -38,12 +41,16 @@ from typing import Literal
 from freecad.Shelving.core.geometry import AxisIndex, Vec3
 from freecad.Shelving.core.layout import (
     Axis,
+    Back,
+    BackEdge,
     Basis,
     Bay,
     Board,
     Division,
+    Face,
     Fill,
     Fixed,
+    FollowedFace,
     Insets,
     Item,
     Region,
@@ -289,29 +296,20 @@ def infer_facing(
     depth_index = _axis_index(depth_axis)
     members: list[Box] = []
     panels: list[Box] = []
-    thin_mm_by_name: dict[str, float] = {}
     for box in boxes:
-        thin_axis = _classify_thin_axis(box)
-        thin_mm_by_name[box.name] = _component_mm(box.size_mm, _axis_index(thin_axis))
-        if thin_axis is depth_axis:
-            panels.append(box)
-        else:
-            members.append(box)
+        (panels if _classify_thin_axis(box) is depth_axis else members).append(box)
     if not members:
         return None, FacingEvidence.NONE
     member_spans_mm = [_span_mm(b, depth_index) for b in members]
     lo_mm = min(member_lo_mm for member_lo_mm, _ in member_spans_mm)
     hi_mm = max(member_hi_mm for _, member_hi_mm in member_spans_mm)
 
-    # A panel much thinner than the stock around it is backing material, not
-    # a door. Without this a Woodworking cabinet's overlay back, which sits
-    # proud behind the carcass, reads as a front and mirrors the whole
-    # elevation.
-    thin_stock_mm = _median(sorted(thin_mm_by_name[b.name] for b in members)) / 2.0
+    backing_below_mm = _backing_below_mm(members)
     votes = set[bool]()
     for box in panels:
-        backing = thin_mm_by_name[box.name] < thin_stock_mm
-        votes.add(_panel_vote(_span_mm(box, depth_index), lo_mm, hi_mm, backing))
+        backing = _component_mm(box.size_mm, depth_index) < backing_below_mm
+        _, vote = _panel_reading(_span_mm(box, depth_index), lo_mm, hi_mm, backing)
+        votes.add(vote)
     if len(votes) == 1:
         return votes.pop(), FacingEvidence.PANEL
 
@@ -323,21 +321,39 @@ def infer_facing(
     return inset_at_min_mm > inset_at_max_mm, FacingEvidence.FLUSH_BACK
 
 
-def _panel_vote(
+def _backing_below_mm(members: Sequence[Box]) -> float:
+    """The thickness a depth-thin panel must be under to read as backing
+    material: half the members' median thickness.
+
+    A panel much thinner than the stock around it is backing material, not
+    a door. Without this a Woodworking cabinet's overlay back, which sits
+    proud behind the carcass, reads as a front and mirrors the whole
+    elevation.
+    """
+    thicknesses_mm = sorted(
+        _component_mm(b.size_mm, _axis_index(_classify_thin_axis(b))) for b in members
+    )
+    return _median(thicknesses_mm) / 2.0
+
+
+def _panel_reading(
     span_mm: tuple[float, float], lo_mm: float, hi_mm: float, backing: bool
-) -> bool:
-    """Whether this panel says the front is at the low end of ``depth_axis``.
+) -> tuple[bool, bool]:
+    """Whether a depth-thin panel spanning ``span_mm`` reads as a back, and
+    whether it says the front is at the low end of the depth axis, for
+    members spanning ``lo_mm`` to ``hi_mm`` there.
 
     A panel proud of the members is a door when it is stock-thickness and an
-    overlay back when it is thin, and those point opposite ways.
+    overlay back when it is thin, and those point opposite ways. One set
+    within the members is a back whatever its thickness.
     """
     d0_mm, d1_mm = span_mm
     if d1_mm <= lo_mm:
-        return not backing
+        return backing, not backing
     if d0_mm >= hi_mm:
-        return backing
+        return backing, backing
     # Set within the members: a back, so the front is the far end.
-    return (d0_mm + d1_mm) / 2.0 > (lo_mm + hi_mm) / 2.0
+    return True, (d0_mm + d1_mm) / 2.0 > (lo_mm + hi_mm) / 2.0
 
 
 def _median(sorted_values_mm: Sequence[float]) -> float:
@@ -937,14 +953,129 @@ def _from_elevation_mm(
     )
 
 
+def _overlap_mm(a0_mm: float, a1_mm: float, b0_mm: float, b1_mm: float) -> float:
+    return min(a1_mm, b1_mm) - max(a0_mm, b0_mm)
+
+
+def _edge(
+    edge_mm: float,
+    outer_offset_mm: float,
+    members: Sequence[_Elevated],
+    panel: _Elevated,
+    *,
+    across: bool,
+    edge_axis: Axis,
+    snap_mm: float,
+) -> BackEdge:
+    """What a back's edge at ``edge_mm`` follows: a face of a member lying
+    on it within ``snap_mm`` and overlapping ``panel`` along the edge's own
+    run, or the outer face alone when none does.
+
+    ``across`` says the edge is a position on the horizontal axis. Every
+    face a match could take gives the same position at the read, so the
+    choice only has to be deterministic: a face across a board's thickness
+    (a floor's underside) before a board's end, then the lowest id.
+    """
+    candidates: list[tuple[int, str, int, Face]] = []
+    for member in members:
+        if across:
+            faces_mm = (member.h0_mm, member.h1_mm)
+            run_mm = _overlap_mm(member.v0_mm, member.v1_mm, panel.v0_mm, panel.v1_mm)
+        else:
+            faces_mm = (member.v0_mm, member.v1_mm)
+            run_mm = _overlap_mm(member.h0_mm, member.h1_mm, panel.h0_mm, panel.h1_mm)
+        if run_mm <= snap_mm:
+            continue
+        end_rank = 0 if member.thin_axis is edge_axis else 1
+        for face_rank, (face, face_mm) in enumerate(
+            zip((Face.MIN, Face.MAX), faces_mm, strict=True)
+        ):
+            if abs(face_mm - edge_mm) <= snap_mm:
+                candidates.append((end_rank, member.name, face_rank, face))
+    if not candidates:
+        return BackEdge(outer_offset_mm=outer_offset_mm)
+    _, board_id, _, face = min(candidates)
+    return BackEdge(
+        outer_offset_mm=outer_offset_mm,
+        follows=FollowedFace(board_id=board_id, face=face),
+    )
+
+
+def _backs(
+    panels: Sequence[Box],
+    members: Sequence[Box],
+    elevated: Sequence[_Elevated],
+    grid: _Grid,
+    ctx: _ScanContext,
+    front_at_min: bool | None,
+) -> tuple[Back, ...]:
+    """The panels that read as backs, by the same reading
+    :func:`infer_facing` takes its votes from, each with what its edges
+    follow.
+
+    A panel is a back only when it reads as one and its own vote agrees with
+    ``front_at_min``, so a panel that gave the facing and a panel that
+    follows as a back never disagree. With the facing unknown front and rear
+    cannot be told apart, and nothing is.
+    """
+    if front_at_min is None:
+        return ()
+    backing_below_mm = _backing_below_mm(members)
+    out: list[Back] = []
+    for box in panels:
+        panel = _elevate(box, ctx.horizontal, ctx.vertical, ctx.depth_axis)
+        is_back, vote = _panel_reading(
+            (panel.d0_mm, panel.d1_mm),
+            ctx.depth_lo_mm,
+            ctx.depth_hi_mm,
+            panel.thickness_mm < backing_below_mm,
+        )
+        if is_back and vote is front_at_min:
+            out.append(_back(box, panel, elevated, grid, ctx, front_at_min))
+    return tuple(out)
+
+
+def _back(
+    box: Box,
+    panel: _Elevated,
+    members: Sequence[_Elevated],
+    grid: _Grid,
+    ctx: _ScanContext,
+    front_at_min: bool,
+) -> Back:
+    def edge(edge_mm: float, outer_offset_mm: float, *, across: bool) -> BackEdge:
+        return _edge(
+            edge_mm,
+            outer_offset_mm,
+            members,
+            panel,
+            across=across,
+            edge_axis=ctx.horizontal if across else ctx.vertical,
+            snap_mm=ctx.snap_mm,
+        )
+
+    rear_mm = ctx.depth_hi_mm if front_at_min else ctx.depth_lo_mm
+    return Back(
+        name=box.name,
+        irregular=box.irregular,
+        h_min=edge(panel.h0_mm, panel.h0_mm - grid.hs_mm[0], across=True),
+        h_max=edge(panel.h1_mm, grid.hs_mm[-1] - panel.h1_mm, across=True),
+        v_min=edge(panel.v0_mm, panel.v0_mm - grid.vs_mm[0], across=False),
+        v_max=edge(panel.v1_mm, grid.vs_mm[-1] - panel.v1_mm, across=False),
+        rear_offset_mm=panel.d0_mm - rear_mm,
+        size_mm=box.size_mm,
+    )
+
+
 @dataclass(frozen=True)
 class ScanResult:
     """Everything a scan produced: the ``Unit`` it could build, plus what it
     could not place and what it could not read at all."""
 
     unit: Unit
-    # Boards thin through the depth axis, set aside rather than placed: see
-    # the module docstring for why a back or a front cannot be placed safely.
+    # Boards thin through the depth axis, set aside rather than placed in
+    # the tree: see the module docstring for why. The ones that read as
+    # backs are also in ``unit.backs``.
     panels: tuple[Box, ...]
     # Parts the caller already knew it could not read, carried through
     # rather than dropped so a missing board is visible in the result.
@@ -1030,6 +1161,7 @@ def scan(
         position_mm=_from_elevation_mm(
             horizontal, vertical, depth_axis, grid.hs_mm[0], grid.vs_mm[0], depth_lo_mm
         ),
+        backs=_backs(panels, members, elevated, grid, ctx, front_at_min),
     )
     return ScanResult(
         unit=unit,

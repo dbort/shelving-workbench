@@ -189,6 +189,64 @@ Region = Bay | Void | Division
 Item = Board | Region
 
 
+class Face(enum.StrEnum):
+    """Which of a board's two faces along one axis: the one at the axis's
+    minimum or the one at its maximum."""
+
+    MIN = "min"
+    MAX = "max"
+
+
+@dataclass(frozen=True)
+class FollowedFace:
+    """A board face one edge of a ``Back`` lies on."""
+
+    board_id: str
+    # Along the axis the edge is a position on.
+    face: Face
+
+
+@dataclass(frozen=True)
+class BackEdge:
+    """What one elevation edge of a ``Back`` follows."""
+
+    # How far the edge lies inside the unit's outer face on its own side,
+    # measured at the read. The edge keeps this distance when ``follows`` is
+    # ``None`` or names a board the unit no longer has.
+    outer_offset_mm: float
+    follows: FollowedFace | None = None
+
+
+@dataclass(frozen=True)
+class Back:
+    """A panel thin through the unit's depth that moves and resizes with
+    the boards around it, though it is no ``Board`` of the tree.
+
+    Its four elevation edges each follow a board face or the unit's outer
+    face; through the depth it keeps its thickness and its distance from
+    the carcass's rear face.
+    """
+
+    # The document object's ``Name``.
+    name: str
+    # A part that is not a plain box keeps its shape and only moves, with
+    # its low corner on its two ``*_min`` edges.
+    irregular: bool
+    # The edges at the minimum and maximum of the elevation's horizontal
+    # axis, then of its vertical axis (``scan.elevation_axes``).
+    h_min: BackEdge
+    h_max: BackEdge
+    v_min: BackEdge
+    v_max: BackEdge
+    # The panel's minimum along the depth axis less the carcass's rear face
+    # there: the depth axis's maximum when the front is at its minimum, and
+    # its minimum otherwise.
+    rear_offset_mm: float
+    # The extent the read measured; the depth component is the panel's
+    # thickness, and an irregular panel keeps all three.
+    size_mm: Vec3
+
+
 @dataclass
 class Unit:
     """A shelving unit: an outer size, a position, and a root region.
@@ -213,6 +271,11 @@ class Unit:
     # the size from, so the two always describe one box, and nothing
     # stores it.
     position_mm: Vec3 = Vec3(0.0, 0.0, 0.0)
+    # The backs a scan recognized, each placed from the solved boards on
+    # every write and never part of ``size_mm``. Derived at each read and
+    # stored nowhere, so a back moved by hand is followed from where it now
+    # is.
+    backs: tuple[Back, ...] = ()
     id: str = field(default_factory=new_id)
 
     def __post_init__(self) -> None:

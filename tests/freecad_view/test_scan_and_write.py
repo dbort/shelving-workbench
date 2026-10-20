@@ -116,7 +116,7 @@ def test_edit_unit_reads_a_hand_built_unit_and_close_changes_nothing(
     nodes = _nodes(panel.session.unit.root)
     assert sum(isinstance(node, Bay) for node in nodes) == 2
     assert "Shelf" in {node.id for node in nodes if isinstance(node, Board)}
-    assert panel.session.left_alone == ()
+    assert panel.session.untagged == ()
     click_task_button("Close", driver)
     assert not FreeCADGui.Control.activeDialog()
     assert _snapshot() == before

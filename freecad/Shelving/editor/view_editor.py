@@ -920,7 +920,7 @@ class ViewEditor:
         back = self._camera_sensor is not None and self._camera_back()
         self.frame = elevation_frame(unit, "back" if back else "front")
         self._boards = board_ids(unit)
-        self._aside = frozenset(entry.name for entry in session.left_alone)
+        self._aside = frozenset(entry.name for entry in session.untagged)
         placement = self._placement(self.frame)
         base_mm = placement.Base
         self._frame_transform.translation.setValue(base_mm.x, base_mm.y, base_mm.z)
