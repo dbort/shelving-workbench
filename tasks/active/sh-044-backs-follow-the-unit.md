@@ -163,3 +163,7 @@ follows during a drag through the same write the tests exercise.
 - **F2: the irregular-back test never checks that the low corner follows the low edges** (`tests/freecad/test_backs.py:273`, `freecad/Shelving/core/tests/test_backs.py:277`): both tests change only depth, so the irregular shift along the elevation axes is always zero. Add a case where a low edge moves, such as the floor drag with the notched `Part::Cut` back.
 - **N1: `BackSpec` lists its fields in the class docstring and leaves the Vec3s without a unit suffix** (`freecad/Shelving/core/backs.py:24-33`): comment each field on its declaration; consider `size_mm`/`corner_mm`.
 - **N2: a board-tagged panel that reads as a back is now moved and kept rather than deleted** (`freecad/Shelving/container.py`): it appears in `Session.untagged` after a write, while `_unplaced` hides tagged objects before the first write, so the two lists disagree.
+
+### Round 2: APPROVED
+- **N1: The `Session.__init__` comment no longer matches `_unplaced`** (`freecad/Shelving/editor/session.py:241-244`): it says the list before the first write is every set-aside part carrying no board properties, but `_unplaced` now also keeps a tagged back.
+- **N2: A back that is only moved can still block an edit** (`freecad/Shelving/core/backs.py`, `freecad/Shelving/container.py`): `place_backs` refuses when a non-irregular back would get no width or height, including a plain `Part::Feature` back that `_write_back` only moves and never resizes. Rare; no change needed in this task.
