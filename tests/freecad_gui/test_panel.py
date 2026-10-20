@@ -294,7 +294,7 @@ def test_a_back_is_listed_as_following_the_boards_and_deletes(
     tmp_path: Path,
 ) -> None:
     """Magic Start's back gets a row saying it follows the boards beside a
-    door's row with its own reason; the explanation no longer says every
+    door's row with its own reason; the explanation does not say every
     listed object is left alone; Delete Selected deletes the back, and a
     resize after it still works."""
     path = tmp_path / _MAGIC_START.name

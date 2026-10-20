@@ -207,8 +207,8 @@ def _assert_unit_ids_match_document(session: Session) -> None:
     relies on to match a board by name rather than delete and recreate it
     (bug-008). ``Session._apply`` maintains this after every accepted
     edit, adopting a freshly-created board's real ``Name`` via
-    ``WriteResult.id_renames``. An object the session lists as left alone
-    is not a board of the unit and is not counted."""
+    ``WriteResult.id_renames``. An object the session lists as untagged,
+    left alone or a back, is not a board of the unit and is not counted."""
     left_alone = {entry.name for entry in session.untagged}
     document_board_names = {
         obj.Name for obj in _board_objects(session.container)

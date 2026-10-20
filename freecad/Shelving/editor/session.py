@@ -242,8 +242,9 @@ class Session:
         self._selection: tuple[str, ...] = ()
         # Untagged objects the tree does not place: what a write leaves
         # alone, and the backs. Before the first write that is every
-        # set-aside part carrying no board properties, since write_container
-        # deletes a tagged one; after it, exactly what the write reported.
+        # set-aside part that is one of the unit's backs or carries no board
+        # properties, since write_container deletes any other tagged one and
+        # never deletes a back; after it, exactly what the write reported.
         self.untagged: tuple[Untagged, ...] = self._unplaced(self._set_aside_reasons)
         # The board being dragged and the pointer's offset from its low
         # face along its run's axis, between begin_drag and end_drag.

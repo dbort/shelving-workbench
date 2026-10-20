@@ -1015,8 +1015,8 @@ def _backs(
 
     A panel is a back only when it reads as one and its own vote agrees with
     ``front_at_min``, so a panel that gave the facing and a panel that
-    follows as a back never disagree. With the facing unknown front and rear
-    cannot be told apart, and nothing is.
+    follows as a back never disagree. With the facing unknown, front and
+    rear cannot be told apart, and no panel is a back.
     """
     if front_at_min is None:
         return ()
