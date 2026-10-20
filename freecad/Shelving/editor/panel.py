@@ -5,8 +5,8 @@ in-view editor working on it.
 ``FreeCADGui.Control.showDialog`` expects: a ``form`` attribute (the
 ``QWidget`` shown in the task panel), ``getStandardButtons``, ``accept``,
 ``reject``. The unit's own size and fixed point, its boards' stock and
-the selected opening's basis are edited here; everything else is edited in the 3D view
-(:mod:`freecad.Shelving.editor.view_editor`). ``FreeCADGui.Control`` does
+the selected opening's basis are edited here; everything else is edited in
+the 3D view (:mod:`freecad.Shelving.editor.view_editor`). ``FreeCADGui.Control`` does
 not exist under ``freecadcmd``, so :mod:`tests.freecad_gui.test_panel`
 exercises this module under the offscreen GUI instead.
 """

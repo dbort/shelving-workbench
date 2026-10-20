@@ -81,8 +81,8 @@ _MARKER_PX = 16
 # Inkscape's rotation-center marker on its 8.81 mm square, as the user's
 # reference SVG draws it: a plus whose arms meet in a chamfered hub, with a
 # round hole at the center.
-_MARKER_SIDE = 8.8134
-_MARKER_OUTLINE = (
+_MARKER_SIDE_MM = 8.8134
+_MARKER_OUTLINE_MM = (
     (3.3507, 0.0),
     (3.3507, 1.7601),
     (1.7601, 3.3507),
@@ -100,8 +100,8 @@ _MARKER_OUTLINE = (
     (5.4622, 1.7601),
     (5.4622, 0.0),
 )
-_MARKER_HOLE_CENTER = (4.40645, 4.40645)
-_MARKER_HOLE_RADIUS = 1.47218
+_MARKER_HOLE_CENTER_MM = (4.40645, 4.40645)
+_MARKER_HOLE_RADIUS_MM = 1.47218
 # SoDatumLabel's text width per character, in ems of its font size: an
 # estimate, since Coin lays the text out where Qt cannot measure it.
 _CHAR_EM = 0.6
@@ -249,14 +249,18 @@ def marker_image(ratio: float, rgb: RGB) -> QtGui.QImage:
     image.fill(QtCore.Qt.GlobalColor.transparent)
     path = QtGui.QPainterPath()
     path.setFillRule(QtCore.Qt.FillRule.OddEvenFill)
-    path.addPolygon(QtGui.QPolygonF([QtCore.QPointF(x, y) for x, y in _MARKER_OUTLINE]))
+    path.addPolygon(
+        QtGui.QPolygonF([QtCore.QPointF(x, y) for x, y in _MARKER_OUTLINE_MM])
+    )
     path.closeSubpath()
     path.addEllipse(
-        QtCore.QPointF(*_MARKER_HOLE_CENTER), _MARKER_HOLE_RADIUS, _MARKER_HOLE_RADIUS
+        QtCore.QPointF(*_MARKER_HOLE_CENTER_MM),
+        _MARKER_HOLE_RADIUS_MM,
+        _MARKER_HOLE_RADIUS_MM,
     )
     painter = QtGui.QPainter(image)
     painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
-    painter.scale(side_px / _MARKER_SIDE, side_px / _MARKER_SIDE)
+    painter.scale(side_px / _MARKER_SIDE_MM, side_px / _MARKER_SIDE_MM)
     painter.fillPath(path, QtGui.QColor.fromRgbF(*rgb))
     painter.end()
     return image
