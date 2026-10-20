@@ -22,15 +22,16 @@ from freecad.Shelving.core.solver import EPS_MM
 
 @dataclass(frozen=True)
 class BackSpec:
-    """Where one back goes: its object's ``Name``, its extent and its
-    minimum corner, in the unit's frame."""
+    """Where one back goes, in the unit's frame."""
 
+    # The back's document object ``Name``.
     name: str
     irregular: bool
-    # For an irregular back, the extent it was read with: it is moved,
-    # never reshaped.
-    size: Vec3
-    placement: Vec3
+    # Its extent; for an irregular back, the extent it was read with, since
+    # it is moved and never reshaped.
+    size_mm: Vec3
+    # Its minimum corner.
+    corner_mm: Vec3
 
 
 class BackFitError(ValueError):
@@ -97,9 +98,9 @@ def place_backs(unit: Unit, boards: Sequence[BoardSpec]) -> list[BackSpec]:
         h0_mm = _edge_mm(back.h_min, horizontal, False, unit, by_id)
         v0_mm = _edge_mm(back.v_min, vertical, False, unit, by_id)
         d0_mm = rear_mm + back.rear_offset_mm
-        placement = _vec(axes, (h0_mm, v0_mm, d0_mm))
+        corner_mm = _vec(axes, (h0_mm, v0_mm, d0_mm))
         if back.irregular:
-            out.append(BackSpec(back.name, True, back.size_mm, placement))
+            out.append(BackSpec(back.name, True, back.size_mm, corner_mm))
             continue
         h_mm = _edge_mm(back.h_max, horizontal, True, unit, by_id) - h0_mm
         v_mm = _edge_mm(back.v_max, vertical, True, unit, by_id) - v0_mm
@@ -108,8 +109,8 @@ def place_backs(unit: Unit, boards: Sequence[BoardSpec]) -> list[BackSpec]:
                 back.name,
                 f"back {back.name!r} would be {h_mm:.1f} x {v_mm:.1f} mm",
             )
-        size = _vec(axes, (h_mm, v_mm, back.size_mm.component_mm(depth_index)))
-        out.append(BackSpec(back.name, False, size, placement))
+        size_mm = _vec(axes, (h_mm, v_mm, back.size_mm.component_mm(depth_index)))
+        out.append(BackSpec(back.name, False, size_mm, corner_mm))
     return out
 
 

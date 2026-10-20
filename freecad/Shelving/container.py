@@ -616,19 +616,19 @@ def _write_back(
         placed.Placement = parents.multiply(own)
         bound = placed.BoundBox
         shift_mm = FreeCAD.Vector(
-            spec.placement.x_mm - bound.XMin,
-            spec.placement.y_mm - bound.YMin,
-            spec.placement.z_mm - bound.ZMin,
+            spec.corner_mm.x_mm - bound.XMin,
+            spec.corner_mm.y_mm - bound.YMin,
+            spec.corner_mm.z_mm - bound.ZMin,
         )
         placeable.Placement = FreeCAD.Placement(
             own.Base + parents.Rotation.inverted().multVec(shift_mm), own.Rotation
         )
         return
-    size_mm = (spec.size.x_mm, spec.size.y_mm, spec.size.z_mm)
+    size_mm = (spec.size_mm.x_mm, spec.size_mm.y_mm, spec.size_mm.z_mm)
     # The box spans [0, Length] x [0, Width] x [0, Height] in its own frame;
     # each of those runs along one model axis once rotated, toward its
     # minimum when the rotation flips it.
-    low_mm = [spec.placement.x_mm, spec.placement.y_mm, spec.placement.z_mm]
+    low_mm = [spec.corner_mm.x_mm, spec.corner_mm.y_mm, spec.corner_mm.z_mm]
     lengths_mm: list[float] = []
     for local in (
         FreeCAD.Vector(1, 0, 0),

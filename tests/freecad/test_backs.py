@@ -12,6 +12,7 @@ import Part
 import pytest
 
 from freecad.Shelving import properties
+from freecad.Shelving.container import read_container
 from freecad.Shelving.core.geometry import Vec3
 from freecad.Shelving.editor.session import EditFailure, Session, UnitDimension
 from freecad.Shelving.unit_ops import (
@@ -438,3 +439,159 @@ def test_with_the_facing_unknown_no_panel_moves() -> None:
         assert {n: _bound(doc, n) for n in before} == before
     finally:
         FreeCAD.closeDocument(doc.Name)
+
+
+def _unit_bound(container: FreeCAD.DocumentObject, name: str) -> _Bound:
+    """``name``'s bounding box in the unit's frame, nested containers'
+    placements included, as ``read_container`` reads it."""
+    container.Document.recompute()
+    boxes, _skipped, _record = read_container(container)
+    (box,) = (box for box in boxes if box.name == name)
+    corner, size = box.corner_mm, box.size_mm
+    return (
+        corner.x_mm,
+        corner.x_mm + size.x_mm,
+        corner.y_mm,
+        corner.y_mm + size.y_mm,
+        corner.z_mm,
+        corner.z_mm + size.z_mm,
+    )
+
+
+def _assert_back_follows_then_rescans(
+    container: FreeCAD.DocumentObject, name: str, size_mm: Vec3, expected: _Bound
+) -> None:
+    doc = container.Document
+    rotation_before = _placement(doc, name).Rotation
+    result = resize_unit(container, size_mm)
+    assert result.backs == (name,)
+    after = _unit_bound(container, name)
+    _assert_bound(after, expected)
+    assert _placement(doc, name).Rotation.isSame(rotation_before, 1e-9)
+    rescan_unit(container)
+    _assert_bound(_unit_bound(container, name), after)
+
+
+def test_a_rotated_box_back_is_resized_along_the_model_axes(
+    magic_start: FreeCAD.DocumentObject,
+) -> None:
+    """Turned a quarter about X, the back's Width runs up the unit and its
+    Height runs toward the front, from the Placement's corner at the rear."""
+    doc = magic_start.Document
+    back = cast("_BoxFeature", doc.getObject("Back"))
+    back.Length, back.Width, back.Height = 500.0, 660.0, 3.0
+    back.Placement = FreeCAD.Placement(
+        FreeCAD.Vector(0.0, 400.0, 100.0),
+        FreeCAD.Rotation(FreeCAD.Vector(1.0, 0.0, 0.0), 90.0),
+    )
+    _assert_bound(_bound(doc, "Back"), (0.0, 500.0, 397.0, 400.0, 100.0, 760.0))
+
+    _assert_back_follows_then_rescans(
+        magic_start,
+        "Back",
+        Vec3(620.0, 447.0, 800.0),
+        (0.0, 620.0, 447.0, 450.0, 100.0, 800.0),
+    )
+    assert (float(back.Length), float(back.Width), float(back.Height)) == pytest.approx(
+        (620.0, 700.0, 3.0), abs=_TOL_MM
+    )
+
+
+def test_a_back_in_a_nested_placed_container_lands_in_the_units_frame() -> None:
+    container = _carcass("backs_nested")
+    doc = container.Document
+    try:
+        holder = cast(
+            "FreeCAD.DocumentObject", doc.addObject("App::Part", "BackHolder")
+        )
+        cast("_Placeable", holder).Placement = FreeCAD.Placement(
+            FreeCAD.Vector(600.0, 400.0, 0.0),
+            FreeCAD.Rotation(FreeCAD.Vector(0.0, 0.0, 1.0), 180.0),
+        )
+        cast("FreeCAD.DocumentObjectGroup", container).addObject(holder)
+        _add_box(holder, "Back", (600.0, 3.0, 900.0), (0.0, 97.0, 0.0))
+        doc.recompute()
+        _assert_bound(
+            _unit_bound(container, "Back"), (0.0, 600.0, 300.0, 303.0, 0.0, 900.0)
+        )
+
+        _assert_back_follows_then_rescans(
+            container,
+            "Back",
+            Vec3(700.0, 350.0, 1000.0),
+            (0.0, 700.0, 350.0, 353.0, 0.0, 1000.0),
+        )
+        assert _placement(doc, "BackHolder").Base.isEqual(
+            FreeCAD.Vector(600.0, 400.0, 0.0), _TOL_MM
+        )
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def test_a_plain_back_that_is_no_part_box_is_moved_and_not_resized() -> None:
+    container = _carcass("backs_part_feature")
+    doc = container.Document
+    try:
+        feature = cast("_ShapeFeature", doc.addObject("Part::Feature", "Back"))
+        feature.Shape = Part.makeBox(600.0, 3.0, 900.0)
+        cast("_Placeable", feature).Placement = FreeCAD.Placement(
+            FreeCAD.Vector(0.0, 300.0, 0.0), FreeCAD.Rotation()
+        )
+        cast("FreeCAD.DocumentObjectGroup", container).addObject(
+            cast("FreeCAD.DocumentObject", feature)
+        )
+        doc.recompute()
+
+        _assert_back_follows_then_rescans(
+            container,
+            "Back",
+            Vec3(700.0, 350.0, 1000.0),
+            (0.0, 600.0, 350.0, 353.0, 0.0, 900.0),
+        )
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def test_an_irregular_backs_low_corner_follows_the_floor(
+    magic_start: FreeCAD.DocumentObject,
+) -> None:
+    doc = magic_start.Document
+    _replace_back_with_a_notched_one(magic_start)
+    volume_before_mm3 = _volume_mm3(doc, "NotchedBack")
+    before = _bound(doc, "NotchedBack")
+    session = Session(magic_start)
+    session.open()
+    try:
+        assert session.unlock_holders("Floor") is None
+        assert session.begin_drag("Floor", Vec3(250.0, 100.0, 105.0)) is None
+        assert session.drag_to(Vec3(250.0, 100.0, 125.0)) is None
+        session.end_drag()
+    finally:
+        session.close()
+
+    after = _bound(doc, "NotchedBack")
+    _assert_bound(after, (*before[:4], 120.0, before[5] + 20.0))
+    assert _volume_mm3(doc, "NotchedBack") == pytest.approx(
+        volume_before_mm3, abs=_TOL_MM
+    )
+    rescan_unit(magic_start)
+    _assert_bound(_bound(doc, "NotchedBack"), after)
+
+
+def test_a_tagged_back_is_listed_before_and_after_a_write(
+    magic_start: FreeCAD.DocumentObject,
+) -> None:
+    """A back carrying board properties is kept by every write, so the
+    list shows it from the start, not only once a write has run."""
+    back = magic_start.Document.getObject("Back")
+    assert back is not None
+    properties.ensure_board_properties(back)
+    session = Session(magic_start)
+    session.open()
+    try:
+        assert [e.name for e in session.untagged] == ["Back"]
+        assert session.resize("width", 600.0) is None
+        assert [e.name for e in session.untagged] == ["Back"]
+        assert magic_start.Document.getObject("Back") is back
+    finally:
+        session.close()

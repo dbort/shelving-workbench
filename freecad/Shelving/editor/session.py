@@ -404,13 +404,15 @@ class Session:
         return isinstance(node, Board)
 
     def _unplaced(self, reasons: Mapping[str, str]) -> tuple[Untagged, ...]:
-        """Each part ``reasons`` names that carries no board properties,
-        since write_container deletes a tagged one."""
+        """Each part ``reasons`` names that is a back of ``self.unit`` or
+        carries no board properties: what the next write keeps, since
+        write_container deletes any other tagged one."""
         doc = self.container.Document
+        backs = {back.name for back in self.unit.backs}
         return tuple(
             self._untagged(name)
             for name in sorted(reasons)
-            if not properties.has_board_properties(doc.getObject(name))
+            if name in backs or not properties.has_board_properties(doc.getObject(name))
         )
 
     def _label(self, name: str) -> str:

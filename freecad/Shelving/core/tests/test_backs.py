@@ -210,30 +210,30 @@ def test_a_magic_start_back_sits_where_it_was_read() -> None:
 def test_a_deeper_magic_start_keeps_its_back_on_the_sides_rear_face() -> None:
     spec = _placed(_resized(scan(_magic_start()).unit, 0.0, 50.0, 0.0))
 
-    assert spec.placement.y_mm == pytest.approx(447.0, abs=_TOL_MM)
-    assert spec.size.y_mm == pytest.approx(3.0, abs=_TOL_MM)
+    assert spec.corner_mm.y_mm == pytest.approx(447.0, abs=_TOL_MM)
+    assert spec.size_mm.y_mm == pytest.approx(3.0, abs=_TOL_MM)
 
 
 def test_a_wider_magic_start_back_spans_both_sides() -> None:
     spec = _placed(_resized(scan(_magic_start()).unit, 120.0, 0.0, 0.0))
 
-    assert spec.placement.x_mm == pytest.approx(0.0, abs=_TOL_MM)
-    assert spec.size.x_mm == pytest.approx(620.0, abs=_TOL_MM)
+    assert spec.corner_mm.x_mm == pytest.approx(0.0, abs=_TOL_MM)
+    assert spec.size_mm.x_mm == pytest.approx(620.0, abs=_TOL_MM)
 
 
 def test_a_taller_magic_start_back_runs_from_the_floor_to_the_new_top() -> None:
     spec = _placed(_resized(scan(_magic_start()).unit, 0.0, 0.0, 40.0))
 
-    assert spec.placement.z_mm == pytest.approx(100.0, abs=_TOL_MM)
-    assert spec.placement.z_mm + spec.size.z_mm == pytest.approx(800.0, abs=_TOL_MM)
+    assert spec.corner_mm.z_mm == pytest.approx(100.0, abs=_TOL_MM)
+    assert spec.corner_mm.z_mm + spec.size_mm.z_mm == pytest.approx(800.0, abs=_TOL_MM)
 
 
 def test_an_edge_on_the_outer_face_keeps_its_distance_from_it() -> None:
     unit = scan(_carcass(_box("Back", (10.0, 300.0, 0.0), (580.0, 3.0, 900.0)))).unit
     spec = _placed(_resized(unit, 100.0, 0.0, 0.0))
 
-    assert spec.placement.x_mm == pytest.approx(10.0, abs=_TOL_MM)
-    assert spec.size.x_mm == pytest.approx(680.0, abs=_TOL_MM)
+    assert spec.corner_mm.x_mm == pytest.approx(10.0, abs=_TOL_MM)
+    assert spec.size_mm.x_mm == pytest.approx(680.0, abs=_TOL_MM)
 
 
 def test_a_renamed_board_is_still_followed() -> None:
@@ -256,8 +256,8 @@ def test_an_edge_whose_board_is_gone_falls_to_the_outer_face() -> None:
 
     spec = _placed(_resized(merged, 100.0, 0.0, 0.0))
 
-    assert spec.placement.x_mm == pytest.approx(18.0, abs=_TOL_MM)
-    assert spec.placement.x_mm + spec.size.x_mm == pytest.approx(
+    assert spec.corner_mm.x_mm == pytest.approx(18.0, abs=_TOL_MM)
+    assert spec.corner_mm.x_mm + spec.size_mm.x_mm == pytest.approx(
         700.0 - 309.0, abs=_TOL_MM
     )
 
@@ -287,5 +287,21 @@ def test_an_irregular_back_moves_its_low_corner_and_keeps_its_size() -> None:
     spec = _placed(deeper)
 
     assert spec.irregular is True
-    assert spec.size == Vec3(500.0, 3.0, 660.0)
-    assert spec.placement == Vec3(0.0, 447.0, 100.0)
+    assert spec.size_mm == Vec3(500.0, 3.0, 660.0)
+    assert spec.corner_mm == Vec3(0.0, 447.0, 100.0)
+
+
+def test_an_irregular_backs_low_edge_follows_a_moving_divider() -> None:
+    """A back over the right opening starts at the divider's right face;
+    widening the unit moves the divider, and the back's low corner with it."""
+    unit = scan(
+        _carcass(
+            _box("Back", (309.0, 280.0, 18.0), (273.0, 6.0, 864.0), irregular=True)
+        )
+    ).unit
+    assert _only_back(unit).h_min.follows == _follows("Divider", Face.MAX)
+
+    spec = _placed(_resized(unit, 100.0, 0.0, 0.0))
+
+    assert spec.corner_mm == Vec3(359.0, 280.0, 18.0)
+    assert spec.size_mm == Vec3(273.0, 6.0, 864.0)
