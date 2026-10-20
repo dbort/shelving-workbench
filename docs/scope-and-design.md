@@ -133,13 +133,35 @@ A part that is not a simple box is read by its bounding box and pinned: it
 takes part in the layout, its size drives the space around it, and it is
 never regenerated.
 
+A panel thin through the depth stays out of the tree. Once the facing is
+known, a panel set within the carcass's depth, or proud behind it and under
+half the stock's thickness, is the unit's back. That is the same reading
+the facing hint takes, so the panel that settles the facing and the panel
+that follows as the back never disagree, and with the facing unknown no
+panel is a back. A stock-thick panel proud of the front reads as a door and
+stays where it is: a door belongs to one opening, and following the unit's
+outline would misplace it after a split.
+
+At every read, each of a back's four edges is matched to the board face it
+lies on, as a Part attachment follows its support's face. A face across a
+board's thickness, such as the floor's underside, wins over a board's end
+at the same place. An edge on no board face follows the unit's outer face
+on its side at the distance it has from it, and so does an edge whose board
+an edit removes, until the next read matches it afresh. Through the depth a
+back keeps its thickness and its distance from the carcass's rear face.
+Nothing about a back is stored, so a back moved by hand is followed from
+where it now is, and the unit's size still measures the carcass alone.
+
 ## Writing geometry
 
 **In:** a region tree and a container. **Out:** plain `Part::Box` solids
 in that container: matched ones updated in place, new ones created,
 removed ones deleted. A write deletes only objects this workbench tagged;
 the editor deletes any other object only when you select it for deletion.
-A pinned part may move but is never rewritten.
+A pinned part may move but is never rewritten. A back is moved and resized
+onto the faces it follows, and only moved when it is not a plain box, but
+it is never tagged or deleted; an edit that would leave it no width or
+height is refused.
 
 ## Editing
 
@@ -153,7 +175,8 @@ FreeCAD's own selection; a click on a dimension types its size on the spot;
 buttons over a selected opening add a shelf or a divider; an arrow drags
 the selected board; Delete removes it. The task panel holds only what has
 no place on the drawing: the unit's size, what a selected opening's size
-measures, and the objects the workbench leaves alone.
+measures, and the objects the workbench did not create, each saying
+whether it follows the boards as a back or is left alone.
 
 Each opening's dimension carries a padlock just past its text, closed for a
 locked opening and open for an unlocked one, in the dimension's own color.

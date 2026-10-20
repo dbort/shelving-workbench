@@ -92,7 +92,7 @@ def test_the_magic_start_boards_are_one_stock_and_the_back_is_in_none(
     assert group.thickness_mm == pytest.approx(18.0)
     assert group.material == "Default"
     assert group.color is None
-    assert "Back" in {entry.name for entry in session.left_alone}
+    assert "Back" in {entry.name for entry in session.untagged}
 
 
 def test_two_selected_boards_are_no_single_selection(session: Session) -> None:

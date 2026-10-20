@@ -37,6 +37,7 @@ import FreeCAD
 import Part
 
 from freecad.Shelving import properties
+from freecad.Shelving.core.backs import BackSpec, place_backs
 from freecad.Shelving.core.expand import BoardSpec, expand
 from freecad.Shelving.core.geometry import Vec3
 from freecad.Shelving.core.layout import Axis, Board, Division, Item, Region, Unit
@@ -360,7 +361,11 @@ class WriteResult:
     updated: tuple[str, ...]
     created: tuple[str, ...]
     deleted: tuple[str, ...]
+    # Untagged objects the write did not touch at all.
     left_alone: tuple[str, ...]
+    # The unit's backs the write placed: untagged too, but moved and sized
+    # to follow the boards.
+    backs: tuple[str, ...]
     id_renames: Mapping[str, str]
     """Each ``Board.id`` passed in mapped to the ``Name`` its newly-created
     document object received, only for a board created in this call whose id
@@ -386,15 +391,16 @@ def _boards_by_id(region: Region) -> dict[str, Board]:
 
 def _existing_leaves(
     container: FreeCAD.DocumentObject,
-) -> dict[str, FreeCAD.DocumentObject]:
+) -> dict[str, tuple[FreeCAD.DocumentObject, FreeCAD.Placement]]:
     """Every leaf part already under ``container``, by ``Name``, at any
-    nesting depth: what ``read_container`` would also read as boards or
-    skip, the set ``write_container`` reconciles against."""
-    leaves: dict[str, FreeCAD.DocumentObject] = {}
+    nesting depth, with the placement composed from the containers between
+    it and ``container``: what ``read_container`` would also read as boards
+    or skip, the set ``write_container`` reconciles against."""
+    leaves: dict[str, tuple[FreeCAD.DocumentObject, FreeCAD.Placement]] = {}
     seen: set[str] = set()
     for child in _children(container):
-        for leaf, _placement in _walk(child, FreeCAD.Placement(), seen):
-            leaves[leaf.Name] = leaf
+        for leaf, placement in _walk(child, FreeCAD.Placement(), seen):
+            leaves[leaf.Name] = (leaf, placement)
     return leaves
 
 
@@ -582,6 +588,67 @@ def _write_geometry(obj: FreeCAD.DocumentObject, spec: BoardSpec, board: Board) 
         box.Height = spec.size.z_mm
 
 
+def _axis_of(direction: FreeCAD.Vector) -> int:
+    """The index of the model axis an axis-aligned unit ``direction`` lies
+    along."""
+    components = (abs(direction.x), abs(direction.y), abs(direction.z))
+    return components.index(max(components))
+
+
+def _write_back(
+    obj: FreeCAD.DocumentObject, parents: FreeCAD.Placement, spec: BackSpec
+) -> None:
+    """Put ``obj``'s bounding box in the unit's frame at ``spec``, keeping
+    its rotation and, through ``parents``, any nested container's placement.
+
+    Only a plain ``Part::Box`` back is resized, through Length, Width and
+    Height; any other back is moved and keeps its shape, since the
+    workbench has no parameters to reshape it by.
+    """
+    placeable = cast("_Placeable", obj)
+    own = placeable.Placement
+    rotation = parents.Rotation.multiply(own.Rotation)
+    if spec.irregular or not obj.isDerivedFrom("Part::Box"):
+        shape = _shape(obj)
+        # read_container read the back from this shape.
+        assert shape is not None
+        placed = shape.copy()
+        placed.Placement = parents.multiply(own)
+        bound = placed.BoundBox
+        shift_mm = FreeCAD.Vector(
+            spec.corner_mm.x_mm - bound.XMin,
+            spec.corner_mm.y_mm - bound.YMin,
+            spec.corner_mm.z_mm - bound.ZMin,
+        )
+        placeable.Placement = FreeCAD.Placement(
+            own.Base + parents.Rotation.inverted().multVec(shift_mm), own.Rotation
+        )
+        return
+    size_mm = (spec.size_mm.x_mm, spec.size_mm.y_mm, spec.size_mm.z_mm)
+    # The box spans [0, Length] x [0, Width] x [0, Height] in its own frame;
+    # each of those runs along one model axis once rotated, toward its
+    # minimum when the rotation flips it.
+    low_mm = [spec.corner_mm.x_mm, spec.corner_mm.y_mm, spec.corner_mm.z_mm]
+    lengths_mm: list[float] = []
+    for local in (
+        FreeCAD.Vector(1, 0, 0),
+        FreeCAD.Vector(0, 1, 0),
+        FreeCAD.Vector(0, 0, 1),
+    ):
+        direction = rotation.multVec(local)
+        axis = _axis_of(direction)
+        length_mm = size_mm[axis]
+        lengths_mm.append(length_mm)
+        if (direction.x, direction.y, direction.z)[axis] < 0:
+            low_mm[axis] += length_mm
+    origin_mm = FreeCAD.Vector(*low_mm)
+    placeable.Placement = FreeCAD.Placement(
+        parents.Rotation.inverted().multVec(origin_mm - parents.Base), own.Rotation
+    )
+    box = cast("_BoxFeature", obj)
+    box.Length, box.Width, box.Height = lengths_mm
+
+
 def _add_child(container: FreeCAD.DocumentObject, obj: FreeCAD.DocumentObject) -> None:
     """Make ``obj`` a direct child of ``container``. An ``App::LinkGroup``
     has no ``addObject``; it lists its children in ``ElementList``, the way
@@ -641,16 +708,24 @@ def write_container(container: FreeCAD.DocumentObject, unit: Unit) -> WriteResul
     (a panel set aside by ``freecad.Shelving.core.scan.scan``, or a part
     ``read_container`` could not read) when it has no defensible place in
     the tree, which is what keeps stray geometry untouched;
-    "carries no provenance" alone does not. Writes ``container``'s own
+    "carries no provenance" alone does not. Each of ``unit.backs`` is
+    placed where :func:`~freecad.Shelving.core.backs.place_backs` puts it,
+    changing only its Placement and, for a plain ``Part::Box``, its Length,
+    Width and Height; it is never tagged or deleted, and is reported in
+    ``WriteResult.backs``. A back that would have no width or height raises
+    :class:`~freecad.Shelving.core.backs.BackFitError` before anything is
+    written. Writes ``container``'s own
     four properties, including the rule record from
     ``freecad.Shelving.core.record.rules_to_json``. Opens no transaction;
     the caller owns that.
     """
     doc = container.Document
     specs = expand(unit)
+    back_specs = place_backs(unit, specs)
     boards_by_id = _boards_by_id(unit.root)
     labels = _derive_labels(unit)
-    existing = _existing_leaves(container)
+    leaves = _existing_leaves(container)
+    existing = {name: leaf for name, (leaf, _parents) in leaves.items()}
     matched_names: set[str] = set()
     # A board created in this call keeps whatever id `unit` gave it (a fresh
     # uuid for a hand-built Unit, since nothing has scanned it from a real
@@ -702,6 +777,17 @@ def write_container(container: FreeCAD.DocumentObject, unit: Unit) -> WriteResul
         else:
             updated.append(obj.Name)
 
+    placed_backs: list[str] = []
+    for back_spec in back_specs:
+        # A back deleted since the read has nothing to place; the next read
+        # no longer finds it.
+        found = leaves.get(back_spec.name)
+        if found is None or back_spec.name in matched_names:
+            continue
+        back_obj, parents = found
+        _write_back(back_obj, parents, back_spec)
+        placed_backs.append(back_spec.name)
+
     # After every board exists, so a source created later in this same call
     # is found too.
     for source_id, target in stock_copies:
@@ -723,9 +809,10 @@ def write_container(container: FreeCAD.DocumentObject, unit: Unit) -> WriteResul
     deleted: list[str] = []
     left_alone: list[str] = []
     for name, obj in existing.items():
-        if name in matched_names:
-            # Every matched object was tagged above, adopted or not, so
-            # there is nothing left to classify here.
+        if name in matched_names or name in placed_backs:
+            # Every matched object was tagged above, adopted or not, and a
+            # back is part of the unit though no board, so there is nothing
+            # left to classify here.
             continue
         if properties.has_board_properties(obj):
             doc.removeObject(name)
@@ -738,5 +825,6 @@ def write_container(container: FreeCAD.DocumentObject, unit: Unit) -> WriteResul
         created=tuple(sorted(created)),
         deleted=tuple(sorted(deleted)),
         left_alone=tuple(sorted(left_alone)),
+        backs=tuple(sorted(placed_backs)),
         id_renames=dict(id_renames),
     )

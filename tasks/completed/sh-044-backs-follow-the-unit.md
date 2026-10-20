@@ -17,48 +17,48 @@ the unit's Width, Height and Depth still measure the carcass without its
 back. Milestone M11.
 
 ## Must Have
-- [ ] `pixi run tests` green; `pyrefly check` clean over the changed code.
-- [ ] On `tests/freecad/fixtures/woodworking_magic_start_default.FCStd`,
+- [x] `pixi run tests` green; `pyrefly check` clean over the changed code.
+- [x] On `tests/freecad/fixtures/woodworking_magic_start_default.FCStd`,
       through `unit_ops.resize_unit` and through `Session.resize`: after a
       depth change the back keeps its 3 mm thickness and its front face
       lies on the sides' new rear face; after a width change it spans the
       outer faces of both sides; after a height change its top edge lies
       on the sides' new top and its bottom edge on the floor's underside.
       Each within 1e-6 mm, the back's Placement rotation unchanged.
-- [ ] On the same fixture, a `Session` edit that moves the floor moves the
+- [x] On the same fixture, a `Session` edit that moves the floor moves the
       back's bottom edge by the same distance and leaves its top edge.
-- [ ] A back edge that lines up with no board face keeps its distance to
+- [x] A back edge that lines up with no board face keeps its distance to
       the unit's outer face on that side through a resize; an edit that
       removes the board an edge followed (a `Session.merge` of the divider
       a per-opening back's edge lies on) succeeds, and that edge then keeps
       the distance it had at the read to the unit's outer face.
-- [ ] A back that is not a plain box (a `Part::Cut` of a box, or any shape
+- [x] A back that is not a plain box (a `Part::Cut` of a box, or any shape
       `read_container` reads as irregular) moves with its low corner
       following its low edges and keeps its shape exactly (`Shape.Volume`
       and bounding-box size unchanged within 1e-6).
-- [ ] A panel thin through the depth that is not a back (proud of the
+- [x] A panel thin through the depth that is not a back (proud of the
       front at stock thickness, a door) and every part `read_container`
       skips keep their Placement and size through every resize and session
       edit, and stay in `WriteResult.left_alone`.
-- [ ] With the unit's facing unknown and no panel giving it, no panel
+- [x] With the unit's facing unknown and no panel giving it, no panel
       moves.
-- [ ] A back is never given board properties (`has_board_properties`
+- [x] A back is never given board properties (`has_board_properties`
       stays false), is never deleted by a write, and keeps its material,
       color and Label untouched, and the write changes nothing on it but
       Placement and, for a plain box, Length/Width/Height.
-- [ ] One Undo after a session resize restores the back's Placement and
+- [x] One Undo after a session resize restores the back's Placement and
       size together with the boards'; Redo reapplies both.
-- [ ] `rescan_unit` straight after any write moves no back by more than
+- [x] `rescan_unit` straight after any write moves no back by more than
       1e-6 mm: the written result reads back as the same backs following
       the same faces.
-- [ ] `unit_ops.unit_size_mm` on the Magic Start fixture still returns its
+- [x] `unit_ops.unit_size_mm` on the Magic Start fixture still returns its
       carcass size, the back excluded.
-- [ ] Edit Unit's list of objects the workbench did not create shows each
+- [x] Edit Unit's list of objects the workbench did not create shows each
       back with a reason saying it follows the unit's boards, still with a
       check box for Delete Selected; other entries keep their reasons, and
       the list's explanation no longer says every listed object is left
       alone.
-- [ ] `docs/scope-and-design.md` describes how a back is recognized and
+- [x] `docs/scope-and-design.md` describes how a back is recognized and
       what each of its edges follows.
 
 ## Advice
@@ -150,10 +150,20 @@ asserts, and the editor's live drag writes the real boards, so a back
 follows during a drag through the same write the tests exercise.
 
 ## Plan
-- [ ] **Step 1** (`freecad/Shelving/core/layout.py`, `freecad/Shelving/core/scan.py`): A back type on `Unit`, defaulting to none; `scan` recognizes backs among the panels and records what each edge follows; core tests on `real_magicstart_f1.boxes.json` and hand-built overlay, captured and per-opening backs, with facing unknown, and with a door.
-- [ ] **Step 2** (`freecad/Shelving/core/expand.py` or a new `freecad/Shelving/core/backs.py`): Each back's placement and size from the solved boards, with the outer-face fallback for a missing board and the refusal for a non-positive size; core tests for each edge kind, a renamed board, a removed board.
-- [ ] **Step 3** (`freecad/Shelving/container.py`, `freecad/Shelving/unit_ops.py`, `freecad/Shelving/editor/session.py`): `write_container` writes the backs and reports them apart from `left_alone`; the session renames their board ids and lists them with the following reason; FreeCAD-tier tests on the Magic Start fixture for resizes, the floor move, Undo/Redo, rescan, the irregular back, and the updated `test_write.py` case.
-- [ ] **Step 4** (`freecad/Shelving/editor/panel.py`): The list's explanation and the back's row; a GUI-tier test for the row and Delete Selected on a back.
-- [ ] **Step 5** (`docs/scope-and-design.md`): How a back is recognized and what its edges follow.
+- [x] **Step 1** (`freecad/Shelving/core/layout.py`, `freecad/Shelving/core/scan.py`): A back type on `Unit`, defaulting to none; `scan` recognizes backs among the panels and records what each edge follows; core tests on `real_magicstart_f1.boxes.json` and hand-built overlay, captured and per-opening backs, with facing unknown, and with a door.
+- [x] **Step 2** (`freecad/Shelving/core/expand.py` or a new `freecad/Shelving/core/backs.py`): Each back's placement and size from the solved boards, with the outer-face fallback for a missing board and the refusal for a non-positive size; core tests for each edge kind, a renamed board, a removed board.
+- [x] **Step 3** (`freecad/Shelving/container.py`, `freecad/Shelving/unit_ops.py`, `freecad/Shelving/editor/session.py`): `write_container` writes the backs and reports them apart from `left_alone`; the session renames their board ids and lists them with the following reason; FreeCAD-tier tests on the Magic Start fixture for resizes, the floor move, Undo/Redo, rescan, the irregular back, and the updated `test_write.py` case.
+- [x] **Step 4** (`freecad/Shelving/editor/panel.py`): The list's explanation and the back's row; a GUI-tier test for the row and Delete Selected on a back.
+- [x] **Step 5** (`docs/scope-and-design.md`): How a back is recognized and what its edges follow.
 
 ## Review log
+
+### Round 1: REJECTED
+- **F1: `_write_back`'s rotation, nested-container and non-`Part::Box` paths have no tests** (`freecad/Shelving/container.py:598-646`): every FreeCAD-tier back test uses an identity-rotation `Part::Box` directly in an identity-placed container, so the axis-flip branch and Length/Width/Height permutation, the `parents` composition for a nested placed container, and the move-only branch for a plain non-`Part::Box` back never run. Needed: FreeCAD-tier cases for a rotated `Part::Box` back with a local axis on a negative model axis, a back inside a nested placed `App::Part`, and a plain `Part::Feature` back, each asserting the bounding box after a resize and that `rescan_unit` straight after moves nothing.
+- **F2: the irregular-back test never checks that the low corner follows the low edges** (`tests/freecad/test_backs.py:273`, `freecad/Shelving/core/tests/test_backs.py:277`): both tests change only depth, so the irregular shift along the elevation axes is always zero. Add a case where a low edge moves, such as the floor drag with the notched `Part::Cut` back.
+- **N1: `BackSpec` lists its fields in the class docstring and leaves the Vec3s without a unit suffix** (`freecad/Shelving/core/backs.py:24-33`): comment each field on its declaration; consider `size_mm`/`corner_mm`.
+- **N2: a board-tagged panel that reads as a back is now moved and kept rather than deleted** (`freecad/Shelving/container.py`): it appears in `Session.untagged` after a write, while `_unplaced` hides tagged objects before the first write, so the two lists disagree.
+
+### Round 2: APPROVED
+- **N1: The `Session.__init__` comment no longer matches `_unplaced`** (`freecad/Shelving/editor/session.py:241-244`): it says the list before the first write is every set-aside part carrying no board properties, but `_unplaced` now also keeps a tagged back.
+- **N2: A back that is only moved can still block an edit** (`freecad/Shelving/core/backs.py`, `freecad/Shelving/container.py`): `place_backs` refuses when a non-irregular back would get no width or height, including a plain `Part::Feature` back that `_write_back` only moves and never resizes. Rare; no change needed in this task.

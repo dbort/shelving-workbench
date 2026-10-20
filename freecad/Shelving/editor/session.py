@@ -31,6 +31,7 @@ from freecad.Shelving.container import (
     renamed_board_ids,
     write_container,
 )
+from freecad.Shelving.core.backs import BackFitError, renamed_back_boards
 from freecad.Shelving.core.edit import (
     EditError,
     Measurement,
@@ -103,6 +104,7 @@ _PANEL_REASON = (
     "which the layout does not place"
 )
 _UNPLACED_REASON = "not part of the layout"
+_BACK_REASON = "a back panel, so it follows the unit's boards as they move and resize"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -174,13 +176,14 @@ class UnsolvableUnit(Exception):
 
 
 @dataclasses.dataclass(frozen=True)
-class LeftAlone:
-    """An object in the container that this workbench did not write and
-    will not change or delete unless told to."""
+class Untagged:
+    """An object in the container that this workbench did not create and
+    will not delete unless told to: one it leaves alone, or a back it moves
+    with the boards."""
 
     name: str
     label: str
-    # Why the layout does not use it, in words for the panel.
+    # What the layout does with it, in words for the panel.
     reason: str
 
 
@@ -212,6 +215,7 @@ def _read_unit(container: FreeCAD.DocumentObject) -> tuple[Unit, Mapping[str, st
     watch.lap("stored rules")
     reasons = {entry.name: entry.reason for entry in scan_result.skipped}
     reasons.update((panel.name, _PANEL_REASON) for panel in scan_result.panels)
+    reasons.update((back.name, _BACK_REASON) for back in unit.backs)
     return unit, reasons
 
 
@@ -236,11 +240,12 @@ class Session:
         # region beside anything else. A split or merge clears it, since the
         # id it just edited no longer names anything the caller can act on.
         self._selection: tuple[str, ...] = ()
-        # Untagged objects the layout does not place: what a write leaves
-        # alone. Before the first write that is every set-aside part
-        # carrying no board properties, since write_container deletes a
-        # tagged one; after it, exactly what the write reported.
-        self.left_alone: tuple[LeftAlone, ...] = self._unplaced(self._set_aside_reasons)
+        # Untagged objects the tree does not place: what a write leaves
+        # alone, and the backs. Before the first write that is every
+        # set-aside part that is one of the unit's backs or carries no board
+        # properties, since write_container deletes any other tagged one and
+        # never deletes a back; after it, exactly what the write reported.
+        self.untagged: tuple[Untagged, ...] = self._unplaced(self._set_aside_reasons)
         # The board being dragged and the pointer's offset from its low
         # face along its run's axis, between begin_drag and end_drag.
         self._drag: tuple[str, Axis, float] | None = None
@@ -334,7 +339,7 @@ class Session:
         self.unit = unit
         self.spaces = spaces
         self._set_aside_reasons = reasons
-        self.left_alone = self._unplaced(reasons)
+        self.untagged = self._unplaced(reasons)
         self._selection = tuple(selected)
         if self.on_change is not None:
             self.on_change()
@@ -399,21 +404,26 @@ class Session:
         node = _find_node(self.unit.root, self.selected_id)
         return isinstance(node, Board)
 
-    def _unplaced(self, reasons: Mapping[str, str]) -> tuple[LeftAlone, ...]:
-        """Each part ``reasons`` names that carries no board properties,
-        since write_container deletes a tagged one."""
+    def _unplaced(self, reasons: Mapping[str, str]) -> tuple[Untagged, ...]:
+        """Each part ``reasons`` names that is a back of ``self.unit`` or
+        carries no board properties: what the next write keeps, since
+        write_container deletes any other tagged one."""
         doc = self.container.Document
+        backs = {back.name for back in self.unit.backs}
         return tuple(
-            self._left_alone(name)
+            self._untagged(name)
             for name in sorted(reasons)
-            if not properties.has_board_properties(doc.getObject(name))
+            if name in backs or not properties.has_board_properties(doc.getObject(name))
         )
 
-    def _left_alone(self, name: str) -> LeftAlone:
+    def _label(self, name: str) -> str:
         obj = self.container.Document.getObject(name)
-        return LeftAlone(
+        return obj.Label if obj is not None else name
+
+    def _untagged(self, name: str) -> Untagged:
+        return Untagged(
             name=name,
-            label=obj.Label if obj is not None else name,
+            label=self._label(name),
             reason=self._set_aside_reasons.get(name, _UNPLACED_REASON),
         )
 
@@ -428,6 +438,12 @@ class Session:
             result = write_container(self.container, candidate)
         except LayoutSolveError as err:
             return EditFailure(describe_solve_error(err), err.node_id)
+        except BackFitError as err:
+            return EditFailure(
+                f"{self._label(err.name)} follows the unit's boards, and this "
+                "edit would leave it no width or height.",
+                err.name,
+            )
         if result.id_renames:
             # A board split created carries a fresh new_id(), not yet a
             # document object Name; without adopting the real Name here,
@@ -435,13 +451,17 @@ class Session:
             # this board by Name and delete and recreate it instead
             # (bug-008).
             candidate = dataclasses.replace(
-                candidate, root=renamed_board_ids(candidate.root, result.id_renames)
+                candidate,
+                root=renamed_board_ids(candidate.root, result.id_renames),
+                backs=renamed_back_boards(candidate.backs, result.id_renames),
             )
             spaces = _renamed_spaces(spaces, result.id_renames)
         self.unit = candidate
         self.spaces = spaces
         self._selection = tuple(select)
-        self.left_alone = tuple(self._left_alone(name) for name in result.left_alone)
+        self.untagged = tuple(
+            self._untagged(name) for name in sorted(result.left_alone + result.backs)
+        )
         return None
 
     def _elevation_axes(self) -> tuple[Axis, Axis]:
@@ -769,15 +789,16 @@ class Session:
             self._history.end(keep=True)
 
     def delete_untagged(self, names: Collection[str]) -> EditFailure | None:
-        """Delete the listed :attr:`left_alone` objects as one undo step, so
+        """Delete the listed :attr:`untagged` objects as one undo step, so
         Undo restores them. Refuses, deleting nothing,
         when any name is not currently listed."""
         self.settle()
-        listed = {entry.name for entry in self.left_alone}
+        listed = {entry.name for entry in self.untagged}
         unknown = sorted(set(names) - listed)
         if unknown:
             return EditFailure(
-                f"not an object this unit leaves alone: {', '.join(unknown)}",
+                "not listed among the objects this workbench did not create: "
+                f"{', '.join(unknown)}",
                 unknown[0],
             )
         doc = self.container.Document
@@ -785,7 +806,11 @@ class Session:
         def delete() -> EditFailure | None:
             for name in names:
                 doc.removeObject(name)
-            self.left_alone = tuple(e for e in self.left_alone if e.name not in names)
+            self.untagged = tuple(e for e in self.untagged if e.name not in names)
+            self.unit = dataclasses.replace(
+                self.unit,
+                backs=tuple(b for b in self.unit.backs if b.name not in names),
+            )
             return None
 
         return self._step("Delete Objects", delete)

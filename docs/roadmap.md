@@ -39,20 +39,6 @@ document with an ordinary placement, confirm an over-constrained input
 produces a clear error and no stale geometry, and walk the user guide's
 steps exactly as written.
 
-## M11: Backs follow the unit
-
-**Status:** Tasks sh-044
-
-- [ ] sh-044: a back follows the unit's boards (blocked on sh-042)
-
-A back the unit already has, proud behind the carcass or set within it,
-moves and resizes with the boards around it on every edit: each edge
-follows the board face it meets, or the unit's outer face. Doors stay put,
-and the unit's size still leaves the back out.
-
-*Verify in FreeCAD:* change a Magic Start cabinet's width, height and
-depth, and drag its floor, and see the back stay on the carcass's rear.
-
 ## M12: Framing: `StudWall`
 
 **Status:** Planned
@@ -113,7 +99,8 @@ its depth, and see it stay on the wall.
 
 A command adds a back to a unit that has none, or replaces one, with its
 treatment (overlay, captured, rabbeted) and a back material, and removes
-one. The back it makes follows the unit as M11's backs do.
+one. The back it makes follows the unit's boards on every edit, as a back
+the unit already has does.
 
 *Verify in FreeCAD:* add a back to an existing unit; it appears, tracks
 size changes, and scans back as the same treatment.

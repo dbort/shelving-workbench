@@ -207,9 +207,9 @@ def _assert_unit_ids_match_document(session: Session) -> None:
     relies on to match a board by name rather than delete and recreate it
     (bug-008). ``Session._apply`` maintains this after every accepted
     edit, adopting a freshly-created board's real ``Name`` via
-    ``WriteResult.id_renames``. An object the session lists as left alone
-    is not a board of the unit and is not counted."""
-    left_alone = {entry.name for entry in session.left_alone}
+    ``WriteResult.id_renames``. An object the session lists as untagged,
+    left alone or a back, is not a board of the unit and is not counted."""
+    left_alone = {entry.name for entry in session.untagged}
     document_board_names = {
         obj.Name for obj in _board_objects(session.container)
     } - left_alone
@@ -866,9 +866,14 @@ def test_dimensions_drag_basis_and_untagged() -> None:
     try:
         container = create_unit(doc)
         hand_added = cast("_BoxFeature", doc.addObject("Part::Box", "HandAdded"))
+        # Stock-thick and proud of the front: a door, which the layout
+        # leaves alone, where a thin panel would read as the unit's back.
         hand_added.Length = 400.0
-        hand_added.Width = 5.0
+        hand_added.Width = 18.0
         hand_added.Height = 400.0
+        hand_added.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(0.0, -18.0, 0.0), FreeCAD.Rotation()
+        )
         cast("FreeCAD.DocumentObjectGroup", container).addObject(
             cast("FreeCAD.DocumentObject", hand_added)
         )
@@ -879,8 +884,8 @@ def test_dimensions_drag_basis_and_untagged() -> None:
         session.open()
         closed = False
         try:
-            assert [e.name for e in session.left_alone] == ["HandAdded"]
-            assert "panel" in session.left_alone[0].reason
+            assert [e.name for e in session.untagged] == ["HandAdded"]
+            assert "panel" in session.untagged[0].reason
 
             divider_id = _split_bay(
                 session, _find_bay_id(session.unit.root), "horizontal"
@@ -893,7 +898,7 @@ def test_dimensions_drag_basis_and_untagged() -> None:
                 _find_bay_ids_in_order(session.unit.root)
             )
             assert divider_id not in (left_shelf_id, right_shelf_id)
-            assert [e.name for e in session.left_alone] == ["HandAdded"]
+            assert [e.name for e in session.untagged] == ["HandAdded"]
 
             # A set size fixes the region; its Fill sibling takes the rest.
             session.select(left_lower_id)
@@ -985,13 +990,13 @@ def test_dimensions_drag_basis_and_untagged() -> None:
             assert _board_snapshot_by_name(container)["HandAdded"] == (
                 hand_added_before
             )
-            assert [e.name for e in session.left_alone] == ["HandAdded"]
+            assert [e.name for e in session.untagged] == ["HandAdded"]
             refused = session.delete_untagged(["bottom"])
             assert isinstance(refused, EditFailure), refused
             assert doc.getObject("bottom") is not None
             assert session.delete_untagged(["HandAdded"]) is None
             assert doc.getObject("HandAdded") is None
-            assert session.left_alone == ()
+            assert session.untagged == ()
 
             snapshot_edited = _board_snapshot(container)
             session.close()

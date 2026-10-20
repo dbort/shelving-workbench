@@ -429,17 +429,18 @@ def test_create_unit_builds_at_the_containers_origin() -> None:
 
 
 def test_left_alone_objects_are_never_touched() -> None:
-    """A hand-added box thin along the depth axis (set aside as a panel
-    rather than placed in the tree) and a skewed box (unreadable, so always
-    ``Skipped``) never match anything in the scanned tree, so
-    ``write_container`` leaves both exactly where they are and names them in
-    ``WriteResult.left_alone``."""
+    """A hand-added door, stock-thick and proud of the front (set aside as a
+    panel rather than placed in the tree, and no back), and a skewed box
+    (unreadable, so always ``Skipped``) never match anything in the scanned
+    tree, so ``write_container`` leaves both exactly where they are and
+    names them in ``WriteResult.left_alone``. The back case is in
+    ``tests/freecad/test_backs.py``."""
     doc = _new_document("write_smoke_left_alone")
     try:
         container = create_unit(doc)
         doc.recompute()
-        panel = _add_box(
-            doc, container, "BackPanel", (400.0, 5.0, 400.0), (100.0, 0.0, 200.0)
+        door = _add_box(
+            doc, container, "Door", (400.0, 18.0, 400.0), (100.0, -18.0, 200.0)
         )
         skewed = _add_box(
             doc,
@@ -450,17 +451,18 @@ def test_left_alone_objects_are_never_touched() -> None:
             rotation=FreeCAD.Rotation(FreeCAD.Vector(0.0, 0.0, 1.0), 30.0),
         )
         doc.recompute()
-        panel_placement_before = cast("_Placeable", panel).Placement.Base
+        door_placement_before = cast("_Placeable", door).Placement.Base
         skewed_placement_before = cast("_Placeable", skewed).Placement.Base
 
         result = rescan_unit(container)
         doc.recompute()
 
-        assert set(result.left_alone) == {"BackPanel", "Skewed"}
-        assert not properties.has_board_properties(panel)
+        assert set(result.left_alone) == {"Door", "Skewed"}
+        assert result.backs == ()
+        assert not properties.has_board_properties(door)
         assert not properties.has_board_properties(skewed)
-        assert cast("_Placeable", panel).Placement.Base.isEqual(
-            panel_placement_before, _TOL_MM
+        assert cast("_Placeable", door).Placement.Base.isEqual(
+            door_placement_before, _TOL_MM
         )
         assert cast("_Placeable", skewed).Placement.Base.isEqual(
             skewed_placement_before, _TOL_MM

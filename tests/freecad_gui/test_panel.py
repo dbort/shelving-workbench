@@ -11,8 +11,10 @@ and the task dialog machinery adds nothing these tests assert. What happens
 in the view is ``tests/freecad_view/``'s.
 """
 
+import shutil
 import sys
 from collections.abc import Iterator
+from pathlib import Path
 from types import TracebackType
 from typing import Protocol, cast
 
@@ -265,6 +267,75 @@ def test_untagged_objects_are_kept_unless_deleted() -> None:
         assert doc.getObject("HandAdded") is None
         doc.undo()
         assert doc.getObject("HandAdded") is not None
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+class _LinkGroupObject(Protocol):
+    ElementList: list[FreeCAD.DocumentObject]
+
+
+class _BoxObject(Protocol):
+    Length: float
+    Width: float
+    Height: float
+    Placement: FreeCAD.Placement
+
+
+_MAGIC_START = (
+    Path(__file__).parent.parent
+    / "freecad"
+    / "fixtures"
+    / "woodworking_magic_start_default.FCStd"
+)
+
+
+def test_a_back_is_listed_as_following_the_boards_and_deletes(
+    tmp_path: Path,
+) -> None:
+    """Magic Start's back gets a row saying it follows the boards beside a
+    door's row with its own reason; the explanation does not say every
+    listed object is left alone; Delete Selected deletes the back, and a
+    resize after it still works."""
+    path = tmp_path / _MAGIC_START.name
+    shutil.copyfile(_MAGIC_START, path)
+    doc = FreeCAD.openDocument(str(path))
+    try:
+        container = doc.getObject("LinkGroup")
+        assert container is not None
+        door = cast("_BoxObject", doc.addObject("Part::Box", "Door"))
+        door.Length, door.Width, door.Height = 500.0, 18.0, 660.0
+        door.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(0.0, -18.0, 100.0), FreeCAD.Rotation()
+        )
+        link_group = cast("_LinkGroupObject", container)
+        link_group.ElementList = [
+            *link_group.ElementList,
+            cast("FreeCAD.DocumentObject", door),
+        ]
+        doc.recompute()
+        panel = EditUnitPanel(container)
+        panel.form.show()
+        _process_events()
+
+        assert list(panel.untagged_checks) == ["Back", "Door"]
+        back_name = panel.untagged_checks["Back"].accessibleName()
+        door_name = panel.untagged_checks["Door"].accessibleName()
+        assert back_name.startswith("Furniture - Back board (Back): ")
+        assert "follows the unit's boards" in back_name
+        assert "follows" not in door_name
+        texts = [
+            label.text() for label in panel.untagged_box.findChildren(QtWidgets.QLabel)
+        ]
+        assert not any("leaves them alone" in text for text in texts)
+
+        panel.untagged_checks["Back"].setChecked(True)
+        panel.delete_untagged_button.click()
+        _process_events()
+        assert doc.getObject("Back") is None
+        assert list(panel.untagged_checks) == ["Door"]
+        assert panel.session.resize("width", 600.0) is None
+        panel.reject()
     finally:
         FreeCAD.closeDocument(doc.Name)
 
