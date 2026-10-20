@@ -125,6 +125,14 @@ def labels(root: _Coin) -> list[Label]:
     return found
 
 
+def markers(root: _Coin) -> list[FreeCAD.Vector]:
+    """The document point each image under ``root`` is drawn at."""
+    return [
+        _to_document(path, (0.0, 0.0, 0.0))
+        for path in _paths(root, coin.SoImage.getClassTypeId())
+    ]
+
+
 def draggers(root: _Coin) -> int:
     """How many draggers ``root`` holds, shown or not."""
     return len(_paths(root, coin.SoTranslate1Dragger.getClassTypeId(), hidden=True))
