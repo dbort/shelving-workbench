@@ -4,8 +4,8 @@ in-view editor working on it.
 ``EditUnitPanel`` satisfies the duck-typed protocol
 ``FreeCADGui.Control.showDialog`` expects: a ``form`` attribute (the
 ``QWidget`` shown in the task panel), ``getStandardButtons``, ``accept``,
-``reject``. The unit's own size, its boards' stock and the selected
-opening's basis are edited here; everything else is edited in the 3D view
+``reject``. The unit's own size and fixed point, its boards' stock and
+the selected opening's basis are edited here; everything else is edited in the 3D view
 (:mod:`freecad.Shelving.editor.view_editor`). ``FreeCADGui.Control`` does
 not exist under ``freecadcmd``, so :mod:`tests.freecad_gui.test_panel`
 exercises this module under the offscreen GUI instead.
@@ -39,6 +39,13 @@ _UNIT_DIMENSIONS: tuple[tuple[UnitDimension, str], ...] = (
     ("depth", "Depth"),
     ("height", "Height"),
 )
+
+# Whole sentences per dimension, so each translates on its own.
+_FIXED_TIPS: Mapping[UnitDimension, str] = {
+    "width": "The side that stays put when the width changes",
+    "depth": "The side that stays put when the depth changes",
+    "height": "The side that stays put when the height changes",
+}
 
 # The stock list's columns; a row's board count stands alone in the last, so
 # no text depends on how many boards it counts.
@@ -237,6 +244,8 @@ class EditUnitPanel:
         self.unit_box = QtWidgets.QGroupBox("Unit")
         unit_layout = QtWidgets.QFormLayout(self.unit_box)
         self.unit_fields: dict[UnitDimension, DimensionField] = {}
+        # Each lists session.fixed_choices(dimension) in order.
+        self.fixed_combos: dict[UnitDimension, QtWidgets.QComboBox] = {}
         for dimension, label in _UNIT_DIMENSIONS:
             field = DimensionField(
                 self.session.container,
@@ -246,8 +255,19 @@ class EditUnitPanel:
                 apply_on_step=True,
             )
             self._wheel_filter.watch(field.widget)
-            unit_layout.addRow(label, field.widget)
+            combo = QtWidgets.QComboBox()
+            for choice in self.session.fixed_choices(dimension):
+                combo.addItem(choice.label)
+            combo.setToolTip(_FIXED_TIPS[dimension])
+            combo.setAccessibleName(_FIXED_TIPS[dimension])
+            self._wheel_filter.watch(combo)
+            combo.currentIndexChanged.connect(partial(self._set_fixed_side, dimension))
+            row = QtWidgets.QHBoxLayout()
+            row.addWidget(field.widget, 1)
+            row.addWidget(combo)
+            unit_layout.addRow(label, row)
             self.unit_fields[dimension] = field
+            self.fixed_combos[dimension] = combo
         layout.addWidget(self.unit_box)
         # The step press whose refusal was last reported: holding an arrow
         # past a limit re-solves on every repeat, and one report per press
@@ -328,6 +348,10 @@ class EditUnitPanel:
             report_error(failure.message)
             self._reported_step_burst = (dimension, field.step_burst)
         self._refresh()
+
+    def _set_fixed_side(self, dimension: UnitDimension, index: int) -> None:
+        choices = self.session.fixed_choices(dimension)
+        self._show_result(self.session.set_fixed_side(dimension, choices[index].side))
 
     def _set_basis(self, index: int) -> None:
         self._show_result(self.session.set_basis(_BASIS_CHOICES[index][1]))
@@ -476,6 +500,16 @@ class EditUnitPanel:
         view; called after every edit attempt, successful or not."""
         for dimension, field in self.unit_fields.items():
             field.show_mm(self.session.unit_dimension_mm(dimension))
+        for dimension, combo in self.fixed_combos.items():
+            choices = self.session.fixed_choices(dimension)
+            side = self.session.fixed_side(dimension)
+            combo.blockSignals(True)
+            for index, choice in enumerate(choices):
+                combo.setItemText(index, choice.label)
+            combo.setCurrentIndex(
+                next(i for i, choice in enumerate(choices) if choice.side == side)
+            )
+            combo.blockSignals(False)
         measurement = self.session.selected_measurement()
         self.basis_combo.blockSignals(True)
         if measurement is None:

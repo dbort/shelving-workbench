@@ -25,6 +25,7 @@ import FreeCAD
 
 from freecad.Shelving import properties
 from freecad.Shelving.container import WriteResult, read_container, write_container
+from freecad.Shelving.core.edit import set_unit_size
 from freecad.Shelving.core.geometry import Vec3
 from freecad.Shelving.core.layout import Axis, Bay, Board, Division, Unit
 from freecad.Shelving.core.record import rules_from_json, with_stored_rules
@@ -105,6 +106,7 @@ def _rescanned_unit(container: FreeCAD.DocumentObject) -> Unit:
         unit = with_stored_rules(unit, rules_from_json(record.rules_json))
     if record.unit_id is not None:
         unit = dataclasses.replace(unit, id=record.unit_id)
+    unit = dataclasses.replace(unit, fixed_point=record.fixed_point)
     return unit
 
 
@@ -121,9 +123,11 @@ def unit_size_mm(container: FreeCAD.DocumentObject) -> Vec3:
 
 def resize_unit(container: FreeCAD.DocumentObject, size_mm: Vec3) -> WriteResult:
     """Rescan ``container``, substitute ``size_mm`` for its outer size, and
-    write the result back. The unit's minimum corner stays where its boards
-    put it, so the unit grows or shrinks on its maximum sides."""
-    unit = dataclasses.replace(_rescanned_unit(container), size_mm=size_mm)
+    write the result back. The unit's stored fixed point stays where its
+    boards put it, so a unit fixed at its minimum corner grows or shrinks on
+    its maximum sides. Raises ``EditError`` when any axis of ``size_mm`` is
+    not positive."""
+    unit = set_unit_size(_rescanned_unit(container), size_mm)
     return write_container(container, unit)
 
 

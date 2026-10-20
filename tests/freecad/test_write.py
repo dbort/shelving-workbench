@@ -11,6 +11,7 @@ side effects of every test before it, which is harder to read than one
 document per scenario is to afford.
 """
 
+import dataclasses
 import zipfile
 from collections.abc import Iterator
 from pathlib import Path
@@ -30,8 +31,11 @@ from freecad.Shelving.core.layout import (
     Board,
     Division,
     Fixed,
+    FixedPoint,
+    FixedSide,
     Unit,
 )
+from freecad.Shelving.core.scan import scan
 from freecad.Shelving.unit_ops import (
     create_unit,
     rescan_unit,
@@ -556,6 +560,93 @@ def test_copied_board_is_adopted_as_new_on_rescan() -> None:
 class _StockFeature(Protocol):
     ShapeMaterial: properties.FreeCADMaterial
     Grain: list[str]
+
+
+def test_a_fixed_point_round_trips_through_the_container() -> None:
+    """A new unit stores its minimum corner on every axis; a written fixed
+    point reads back as written and survives a rescan; a container whose
+    properties predate the fixed point reads as its minimum corner."""
+    doc = _new_document("write_fixed_point")
+    try:
+        container = create_unit(doc)
+        doc.recompute()
+        assert properties.read_container_fixed_point(container) == FixedPoint()
+        for name in properties.FIXED_PROPS.values():
+            assert getattr(container, name) == "min", name
+
+        boxes, _skipped, record = read_container(container)
+        assert record.fixed_point == FixedPoint()
+        fixed = FixedPoint("max", "center", "min")
+        unit = dataclasses.replace(scan(boxes).unit, fixed_point=fixed)
+        board_corners_mm = _board_corners_mm(container)
+        result = write_container(container, unit)
+        doc.recompute()
+        assert result.created == () and result.deleted == (), result
+        assert _board_corners_mm(container) == board_corners_mm
+        assert read_container(container)[2].fixed_point == fixed
+        rescan_unit(container)
+        doc.recompute()
+        assert read_container(container)[2].fixed_point == fixed
+
+        for name in properties.FIXED_PROPS.values():
+            container.removeProperty(name)
+        assert read_container(container)[2].fixed_point == FixedPoint()
+        assert not properties.has_container_properties(container)
+        rescan_unit(container)
+        assert properties.has_container_properties(container)
+        assert read_container(container)[2].fixed_point == FixedPoint()
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def _extent_mm(container: FreeCAD.DocumentObject, axis: Axis) -> tuple[float, float]:
+    boxes, _skipped, _record = read_container(container)
+    index = axis.component_index
+    low_mm = min(b.corner_mm.component_mm(index) for b in boxes)
+    high_mm = max(
+        b.corner_mm.component_mm(index) + b.size_mm.component_mm(index) for b in boxes
+    )
+    return low_mm, high_mm
+
+
+def _fixed_mm(extent_mm: tuple[float, float], side: FixedSide) -> float:
+    low_mm, high_mm = extent_mm
+    return {"min": low_mm, "center": (low_mm + high_mm) / 2, "max": high_mm}[side]
+
+
+@pytest.mark.parametrize("side", ["min", "center", "max"])
+def test_a_resize_keeps_the_stored_fixed_side_of_an_offset_unit(
+    side: FixedSide,
+) -> None:
+    """With ``side`` stored on every axis, each resize of a unit offset from
+    its container's origin keeps that axis's side at its container
+    coordinate and moves nothing along the other axes."""
+    doc = _new_document(f"write_fixed_{side}")
+    try:
+        container = cast("FreeCAD.DocumentObject", doc.addObject("App::Part", "Unit"))
+        _add_offset_carcass(doc, container)
+        doc.recompute()
+        properties.write_container_fixed_point(
+            properties.ensure_container_properties(container),
+            FixedPoint(side, side, side),
+        )
+        size_mm = [600.0, 300.0, 900.0]
+        for axis, new_size_mm in ((Axis.X, 750.0), (Axis.Y, 240.0), (Axis.Z, 1100.0)):
+            before = {each: _extent_mm(container, each) for each in Axis}
+            size_mm[axis.component_index] = new_size_mm
+            result = resize_unit(container, Vec3(*size_mm))
+            doc.recompute()
+            assert result.deleted == (), result
+            after = {each: _extent_mm(container, each) for each in Axis}
+            low_mm, high_mm = after[axis]
+            assert high_mm - low_mm == pytest.approx(new_size_mm)
+            moved_mm = _fixed_mm(after[axis], side) - _fixed_mm(before[axis], side)
+            assert abs(moved_mm) <= _TOL_MM, (axis, before, after)
+            for other in set(Axis) - {axis}:
+                assert after[other] == pytest.approx(before[other], abs=_TOL_MM)
+        assert read_container(container)[2].fixed_point == FixedPoint(side, side, side)
+    finally:
+        FreeCAD.closeDocument(doc.Name)
 
 
 def test_a_resize_never_changes_a_boards_material_or_grain() -> None:

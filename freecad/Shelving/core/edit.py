@@ -36,6 +36,7 @@ from freecad.Shelving.core.layout import (
     Division,
     Fill,
     Fixed,
+    FixedSide,
     Item,
     Region,
     SizeRule,
@@ -585,10 +586,36 @@ def _with_rule(region: Region, region_id: str, rule: SizeRule) -> Region:
     return dataclasses.replace(region, items=new_items) if changed else region
 
 
+# How far along an axis, as a fraction of the unit's size there, each fixed
+# side lies from the unit's minimum corner.
+_FIXED_FRACTION: Mapping[FixedSide, float] = {"min": 0.0, "center": 0.5, "max": 1.0}
+
+
+def _fixed_offset_mm(unit: Unit, axis: Axis, size_mm: Vec3) -> float:
+    """How far past ``unit``'s minimum corner along ``axis`` its fixed side
+    lies on a box of size ``size_mm``."""
+    index = axis.component_index
+    return _FIXED_FRACTION[unit.fixed_point.side(axis)] * size_mm.component_mm(index)
+
+
+def fixed_point_mm(unit: Unit) -> Vec3:
+    """``unit``'s fixed point in the frame its boards are written in: on
+    each axis the low face, the midpoint or the high face of the box
+    ``unit.size_mm`` measures, as ``unit.fixed_point`` names."""
+    position_mm = unit.position_mm
+    return Vec3(
+        position_mm.x_mm + _fixed_offset_mm(unit, Axis.X, unit.size_mm),
+        position_mm.y_mm + _fixed_offset_mm(unit, Axis.Y, unit.size_mm),
+        position_mm.z_mm + _fixed_offset_mm(unit, Axis.Z, unit.size_mm),
+    )
+
+
 def set_unit_size(unit: Unit, size_mm: Vec3) -> Unit:
-    """``unit`` with outer size ``size_mm`` and its tree unchanged; the solve
-    decides where the change goes. Raises :class:`EditError` naming
-    ``unit.id`` when any axis of ``size_mm`` is not positive."""
+    """``unit`` with outer size ``size_mm``, its tree unchanged, and its
+    position moved so :func:`fixed_point_mm` is the same before and after;
+    the solve decides where the change goes inside. Raises
+    :class:`EditError` naming ``unit.id`` when any axis of ``size_mm`` is
+    not positive."""
     for axis, value_mm in zip(
         Axis, (size_mm.x_mm, size_mm.y_mm, size_mm.z_mm), strict=True
     ):
@@ -598,7 +625,13 @@ def set_unit_size(unit: Unit, size_mm: Vec3) -> Unit:
                 f"A unit's size along {axis.value} must be more than zero; "
                 f"got {value_mm:.1f} mm.",
             )
-    return dataclasses.replace(unit, size_mm=size_mm)
+    fixed_mm = fixed_point_mm(unit)
+    position_mm = Vec3(
+        fixed_mm.x_mm - _fixed_offset_mm(unit, Axis.X, size_mm),
+        fixed_mm.y_mm - _fixed_offset_mm(unit, Axis.Y, size_mm),
+        fixed_mm.z_mm - _fixed_offset_mm(unit, Axis.Z, size_mm),
+    )
+    return dataclasses.replace(unit, size_mm=size_mm, position_mm=position_mm)
 
 
 def set_size(unit: Unit, region_id: str, size_mm: float, basis: Basis) -> Unit:

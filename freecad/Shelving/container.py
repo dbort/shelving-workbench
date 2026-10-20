@@ -40,7 +40,15 @@ from freecad.Shelving import properties
 from freecad.Shelving.core.backs import BackSpec, place_backs
 from freecad.Shelving.core.expand import BoardSpec, expand
 from freecad.Shelving.core.geometry import Vec3
-from freecad.Shelving.core.layout import Axis, Board, Division, Item, Region, Unit
+from freecad.Shelving.core.layout import (
+    Axis,
+    Board,
+    Division,
+    FixedPoint,
+    Item,
+    Region,
+    Unit,
+)
 from freecad.Shelving.core.record import rules_to_json
 from freecad.Shelving.core.scan import Box, Skipped, elevation_axes
 
@@ -163,7 +171,7 @@ def _walk(
 class ContainerRecord:
     """``obj``'s own stored properties, read back by :func:`read_container`.
 
-    Each field is ``None`` when its property was never written (an
+    Each optional field is ``None`` when its property was never written (an
     untouched container, or one from before this workbench wrote it). A
     determined-but-unknown ``front_at_min`` reads back as ``None`` too:
     ``Unit.front_at_min`` itself does not distinguish "never determined"
@@ -175,6 +183,9 @@ class ContainerRecord:
     depth_axis: Axis | None
     front_at_min: bool | None
     rules_json: str | None
+    # Never ``None``: a container without the stored sides fixes its
+    # minimum corner, as its unit always has.
+    fixed_point: FixedPoint
 
 
 def read_container(
@@ -224,6 +235,7 @@ def read_container(
         depth_axis=properties.read_container_depth_axis(obj),
         front_at_min=properties.read_container_facing(obj),
         rules_json=properties.read_container_rules_json(obj),
+        fixed_point=properties.read_container_fixed_point(obj),
     )
     return boxes, skipped, record
 
@@ -805,6 +817,7 @@ def write_container(container: FreeCAD.DocumentObject, unit: Unit) -> WriteResul
     properties.write_container_depth_axis(container_props, unit.depth_axis)
     properties.write_container_facing(container_props, unit.front_at_min)
     properties.write_container_rules_json(container_props, rules_to_json(rules_unit))
+    properties.write_container_fixed_point(container_props, unit.fixed_point)
 
     deleted: list[str] = []
     left_alone: list[str] = []

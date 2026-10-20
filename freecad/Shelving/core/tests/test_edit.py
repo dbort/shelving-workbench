@@ -11,6 +11,7 @@ from freecad.Shelving.core.edit import (
     MIN_DRAG_GAP_MM,
     EditError,
     Measurement,
+    fixed_point_mm,
     held_by,
     lock,
     measure,
@@ -35,6 +36,8 @@ from freecad.Shelving.core.layout import (
     Division,
     Fill,
     Fixed,
+    FixedPoint,
+    FixedSide,
     Item,
     Region,
     SizeRule,
@@ -1045,6 +1048,71 @@ def test_set_unit_size_refuses_a_nonpositive_axis(size_mm: Vec3) -> None:
     with pytest.raises(EditError) as err:
         set_unit_size(unit, size_mm)
     assert err.value.node_id == unit.id
+
+
+_FIXED_SIDES: tuple[FixedSide, ...] = ("min", "center", "max")
+
+
+def _solved_extent_mm(unit: Unit, axis: Axis) -> tuple[float, float]:
+    """The low and high faces of every board ``unit`` solves to, along
+    ``axis``."""
+    spaces = solve(unit)
+    index = axis.component_index
+    boards = [spaces[board_id] for board_id in ("bottom", "shelf", "shelf2", "top")]
+    low_mm = min(space.origin_mm(index) for space in boards)
+    high_mm = max(space.max_corner().component_mm(index) for space in boards)
+    return low_mm, high_mm
+
+
+@pytest.mark.parametrize("side", _FIXED_SIDES)
+@pytest.mark.parametrize("axis", list(Axis))
+def test_set_unit_size_keeps_the_fixed_side_where_it_was(
+    axis: Axis, side: FixedSide
+) -> None:
+    """Growing and shrinking a unit offset from its frame's origin along
+    ``axis`` leaves the low face, the midpoint or the high face there where
+    it was, and leaves the other two axes' faces alone."""
+    unit = dataclasses.replace(
+        _column_unit(Fill()),
+        position_mm=Vec3(100.0, -300.0, 50.0),
+        fixed_point=FixedPoint().with_side(axis, side),
+    )
+    before = {other: _solved_extent_mm(unit, other) for other in Axis}
+    low_mm, high_mm = before[axis]
+    fixed_before_mm = {"min": low_mm, "center": (low_mm + high_mm) / 2, "max": high_mm}
+    index = axis.component_index
+    for change_mm in (150.0, -100.0):
+        components = [unit.size_mm.x_mm, unit.size_mm.y_mm, unit.size_mm.z_mm]
+        components[index] += change_mm
+        resized = set_unit_size(unit, Vec3(*components))
+        new_low_mm, new_high_mm = _solved_extent_mm(resized, axis)
+        assert new_high_mm - new_low_mm == pytest.approx(components[index])
+        fixed_after_mm = {
+            "min": new_low_mm,
+            "center": (new_low_mm + new_high_mm) / 2,
+            "max": new_high_mm,
+        }
+        assert abs(fixed_after_mm[side] - fixed_before_mm[side]) <= 1e-6
+        assert fixed_point_mm(resized) == fixed_point_mm(unit)
+        for other in set(Axis) - {axis}:
+            assert _solved_extent_mm(resized, other) == pytest.approx(
+                before[other], abs=1e-6
+            )
+
+
+def test_a_unit_fixes_its_minimum_corner_unless_told_otherwise() -> None:
+    unit = _column_unit(Fill())
+    assert unit.fixed_point == FixedPoint("min", "min", "min")
+    assert fixed_point_mm(unit) == unit.position_mm
+
+
+def test_fixed_point_mm_measures_each_side_on_the_units_box() -> None:
+    unit = dataclasses.replace(
+        _column_unit(Fill()),
+        position_mm=Vec3(100.0, -300.0, 50.0),
+        fixed_point=FixedPoint("max", "center", "min"),
+    )
+    assert fixed_point_mm(unit) == Vec3(700.0, -150.0, 50.0)
 
 
 def test_set_size_fixes_the_region_and_leaves_every_sibling_rule() -> None:

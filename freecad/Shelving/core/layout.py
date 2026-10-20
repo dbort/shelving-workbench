@@ -12,7 +12,8 @@ from __future__ import annotations
 
 import enum
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from typing import Literal
 
 from freecad.Shelving.core.geometry import AxisIndex, Vec3
 
@@ -247,6 +248,39 @@ class Back:
     size_mm: Vec3
 
 
+# Which end of a model axis a unit's size change leaves where it is.
+FixedSide = Literal["min", "center", "max"]
+
+
+@dataclass(frozen=True)
+class FixedPoint:
+    """The spot on a unit's bounding box that stays put when its size
+    changes, one side per model axis."""
+
+    x: FixedSide = "min"
+    y: FixedSide = "min"
+    z: FixedSide = "min"
+
+    def side(self, axis: Axis) -> FixedSide:
+        match axis:
+            case Axis.X:
+                return self.x
+            case Axis.Y:
+                return self.y
+            case Axis.Z:
+                return self.z
+
+    def with_side(self, axis: Axis, side: FixedSide) -> FixedPoint:
+        """This fixed point with ``axis``'s side replaced by ``side``."""
+        match axis:
+            case Axis.X:
+                return replace(self, x=side)
+            case Axis.Y:
+                return replace(self, y=side)
+            case Axis.Z:
+                return replace(self, z=side)
+
+
 @dataclass
 class Unit:
     """A shelving unit: an outer size, a position, and a root region.
@@ -276,6 +310,9 @@ class Unit:
     # stored nowhere, so a back moved by hand is followed from where it now
     # is.
     backs: tuple[Back, ...] = ()
+    # Per model axis rather than per elevation side, so a facing found or
+    # corrected later renames the choice but keeps the physical side.
+    fixed_point: FixedPoint = FixedPoint()
     id: str = field(default_factory=new_id)
 
     def __post_init__(self) -> None:

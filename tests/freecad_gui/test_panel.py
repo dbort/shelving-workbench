@@ -157,7 +157,10 @@ def test_the_panel_holds_only_the_units_size_the_basis_and_its_lists(
     assert sorted(spins, key=id) == sorted(
         (f.widget for f in unit_panel.panel.unit_fields.values()), key=id
     )
-    assert form.findChildren(QtWidgets.QComboBox) == [unit_panel.panel.basis_combo]
+    assert sorted(form.findChildren(QtWidgets.QComboBox), key=id) == sorted(
+        [unit_panel.panel.basis_combo, *unit_panel.panel.fixed_combos.values()],
+        key=id,
+    )
     buttons = [button.text() for button in form.findChildren(QtWidgets.QAbstractButton)]
     assert sorted(buttons) == ["Change stock…", "Delete Selected", "Hide other objects"]
     assert not unit_panel.panel.hide_others_check.isChecked()
@@ -710,6 +713,66 @@ def test_the_unit_fields_follow_every_edit(unit_panel: _Fixture) -> None:
     assert _board_ids(unit_panel.session.unit.root) == before
     for dimension, size_mm in sizes_mm.items():
         assert _unit_field_mm(unit_panel, dimension) == pytest.approx(size_mm)
+
+
+def _combo_texts(combo: QtWidgets.QComboBox) -> list[str]:
+    return [combo.itemText(index) for index in range(combo.count())]
+
+
+def test_each_size_field_offers_its_fixed_sides(unit_panel: _Fixture) -> None:
+    combos = unit_panel.panel.fixed_combos
+    assert _combo_texts(combos["width"]) == ["Left", "Center", "Right"]
+    assert _combo_texts(combos["height"]) == ["Bottom", "Center", "Top"]
+    assert _combo_texts(combos["depth"]) == ["Front", "Center", "Back"]
+    for combo in combos.values():
+        assert combo.currentIndex() == 0
+
+
+def test_a_fixed_side_choice_is_an_undo_step_the_panel_follows(
+    unit_panel: _Fixture,
+) -> None:
+    """Choosing "Top" adds one "Set Fixed Point" step and moves no board; a
+    taller unit then grows downward. Undo and Redo inside the edit move the
+    choice shown, and it survives Close and a new panel."""
+    doc = unit_panel.doc
+    combo = unit_panel.panel.fixed_combos["height"]
+    placements = {
+        obj.Name: str(cast("_Placed", obj).Placement)
+        for obj in doc.Objects
+        if obj.TypeId == "Part::Box"
+    }
+    names = list(doc.UndoNames)
+    combo.setCurrentIndex(2)
+    _process_events()
+    assert list(doc.UndoNames) == ["Set Fixed Point", *names]
+    assert {
+        name: str(cast("_Placed", doc.getObject(name)).Placement) for name in placements
+    } == placements
+    assert unit_panel.session.fixed_side("height") == "max"
+
+    top_z_mm = float(cast("_Placed", doc.getObject("top")).Placement.Base.z)
+    _type_unit_size(unit_panel, "height", "1000")
+    doc.recompute()
+    assert float(
+        cast("_Placed", doc.getObject("top")).Placement.Base.z
+    ) == pytest.approx(top_z_mm, abs=_TOL_MM)
+    assert float(
+        cast("_Placed", doc.getObject("bottom")).Placement.Base.z
+    ) == pytest.approx(-100.0, abs=_TOL_MM)
+
+    doc.undo()
+    doc.undo()
+    _process_events()
+    assert combo.currentIndex() == 0
+    doc.redo()
+    _process_events()
+    assert combo.currentIndex() == 2
+
+    unit_panel.panel.reject()
+    # The fixture closes this one.
+    unit_panel.panel = EditUnitPanel(unit_panel.container)
+    assert unit_panel.panel.fixed_combos["height"].currentIndex() == 2
+    assert unit_panel.panel.fixed_combos["width"].currentIndex() == 0
 
 
 def test_a_held_arrow_past_a_limit_reports_once(

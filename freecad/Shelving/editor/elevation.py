@@ -32,6 +32,7 @@ from freecad.Shelving.core.layout import (
     Board,
     Division,
     Fixed,
+    FixedSide,
     Insets,
     Region,
     Unit,
@@ -208,6 +209,42 @@ def elevation_frame(unit: Unit, side: Side = "front") -> ElevationFrame:
         v_dir=v_dir,
         z_dir=z_dir,
         origin_mm=Vec3(*origin),
+    )
+
+
+class FixedChoice(NamedTuple):
+    """One of the sides a unit's size field offers to keep put."""
+
+    label: str
+    side: FixedSide
+
+
+def fixed_choices(
+    unit: Unit, axis: Axis
+) -> tuple[FixedChoice, FixedChoice, FixedChoice]:
+    """The choices for ``axis``, in the order a size field lists them, each
+    label naming its side as the front :func:`elevation_frame` shows it:
+    "Left", "Center", "Right" along its horizontal, "Bottom", "Center",
+    "Top" along its vertical, and "Front", "Center", "Back" along the depth
+    axis, the front being the end the frame faces. Raises ``ValueError``
+    when the unit has no depth axis."""
+    frame = elevation_frame(unit)
+    index = axis.component_index
+    if axis == frame.horizontal:
+        first, last = "Left", "Right"
+        first_at_min = frame.h_dir.component_mm(index) > 0
+    elif axis == frame.vertical:
+        first, last = "Bottom", "Top"
+        first_at_min = frame.v_dir.component_mm(index) > 0
+    else:
+        first, last = "Front", "Back"
+        first_at_min = frame.z_dir.component_mm(index) < 0
+    low: FixedSide = "min" if first_at_min else "max"
+    high: FixedSide = "max" if first_at_min else "min"
+    return (
+        FixedChoice(first, low),
+        FixedChoice("Center", "center"),
+        FixedChoice(last, high),
     )
 
 

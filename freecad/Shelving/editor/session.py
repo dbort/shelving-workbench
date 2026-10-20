@@ -57,6 +57,7 @@ from freecad.Shelving.core.layout import (
     Bay,
     Board,
     Division,
+    FixedSide,
     Region,
     Unit,
 )
@@ -69,6 +70,7 @@ from freecad.Shelving.core.scan import elevation_axes, scan
 from freecad.Shelving.core.solver import LayoutSolveError, describe_solve_error, solve
 from freecad.Shelving.core.stock import BoardStock, Color, StockGroup, group_stocks
 from freecad.Shelving.debug_log import Stopwatch
+from freecad.Shelving.editor.elevation import FixedChoice, fixed_choices
 from freecad.Shelving.editor.history import EditHistory, Schedule
 
 SplitDirection = Literal["horizontal", "vertical"]
@@ -212,6 +214,7 @@ def _read_unit(container: FreeCAD.DocumentObject) -> tuple[Unit, Mapping[str, st
         unit = with_stored_rules(unit, rules_from_json(record.rules_json))
     if record.unit_id is not None:
         unit = dataclasses.replace(unit, id=record.unit_id)
+    unit = dataclasses.replace(unit, fixed_point=record.fixed_point)
     watch.lap("stored rules")
     reasons = {entry.name: entry.reason for entry in scan_result.skipped}
     reasons.update((panel.name, _PANEL_REASON) for panel in scan_result.panels)
@@ -497,8 +500,8 @@ class Session:
         ]
 
     def resize(self, dimension: UnitDimension, size_mm: float) -> EditFailure | None:
-        """Set the unit's outer size along ``dimension``, keeping its minimum
-        corner where it is and the selection as it was. Returns ``None`` on
+        """Set the unit's outer size along ``dimension``, keeping its fixed
+        point where it is and the selection as it was. Returns ``None`` on
         success or an :class:`EditFailure` on refusal, which changes
         nothing."""
         self.settle()
@@ -514,6 +517,36 @@ class Session:
             return EditFailure(str(err), err.node_id)
         return self._step(
             "Resize Unit", lambda: self._apply(candidate, select=self._selection)
+        )
+
+    def fixed_choices(
+        self, dimension: UnitDimension
+    ) -> tuple[FixedChoice, FixedChoice, FixedChoice]:
+        """:func:`~freecad.Shelving.editor.elevation.fixed_choices` for the
+        model axis ``dimension`` names."""
+        return fixed_choices(self.unit, self._unit_axis(dimension))
+
+    def fixed_side(self, dimension: UnitDimension) -> FixedSide:
+        """The side of the unit that stays put when its size along
+        ``dimension`` changes."""
+        return self.unit.fixed_point.side(self._unit_axis(dimension))
+
+    def set_fixed_side(
+        self, dimension: UnitDimension, side: FixedSide
+    ) -> EditFailure | None:
+        """Keep ``side`` put when the unit's size along ``dimension``
+        changes, as one undo step that moves no board and keeps the
+        selection. Adds no step when ``side`` is already the fixed one."""
+        self.settle()
+        axis = self._unit_axis(dimension)
+        fixed = self.unit.fixed_point
+        if fixed.side(axis) == side:
+            return None
+        candidate = dataclasses.replace(
+            self.unit, fixed_point=fixed.with_side(axis, side)
+        )
+        return self._step(
+            "Set Fixed Point", lambda: self._apply(candidate, select=self._selection)
         )
 
     def split(self, direction: SplitDirection) -> EditFailure | None:
