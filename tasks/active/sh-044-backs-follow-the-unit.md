@@ -157,3 +157,9 @@ follows during a drag through the same write the tests exercise.
 - [x] **Step 5** (`docs/scope-and-design.md`): How a back is recognized and what its edges follow.
 
 ## Review log
+
+### Round 1: REJECTED
+- **F1: `_write_back`'s rotation, nested-container and non-`Part::Box` paths have no tests** (`freecad/Shelving/container.py:598-646`): every FreeCAD-tier back test uses an identity-rotation `Part::Box` directly in an identity-placed container, so the axis-flip branch and Length/Width/Height permutation, the `parents` composition for a nested placed container, and the move-only branch for a plain non-`Part::Box` back never run. Needed: FreeCAD-tier cases for a rotated `Part::Box` back with a local axis on a negative model axis, a back inside a nested placed `App::Part`, and a plain `Part::Feature` back, each asserting the bounding box after a resize and that `rescan_unit` straight after moves nothing.
+- **F2: the irregular-back test never checks that the low corner follows the low edges** (`tests/freecad/test_backs.py:273`, `freecad/Shelving/core/tests/test_backs.py:277`): both tests change only depth, so the irregular shift along the elevation axes is always zero. Add a case where a low edge moves, such as the floor drag with the notched `Part::Cut` back.
+- **N1: `BackSpec` lists its fields in the class docstring and leaves the Vec3s without a unit suffix** (`freecad/Shelving/core/backs.py:24-33`): comment each field on its declaration; consider `size_mm`/`corner_mm`.
+- **N2: a board-tagged panel that reads as a back is now moved and kept rather than deleted** (`freecad/Shelving/container.py`): it appears in `Session.untagged` after a write, while `_unplaced` hides tagged objects before the first write, so the two lists disagree.
