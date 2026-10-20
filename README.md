@@ -97,6 +97,13 @@ The vocabulary the documentation and the code share.
   shallowest. Scanning never divides along it.
 - **Facing**: which end of the depth axis is the front. Often unknown, in
   which case left and right are arbitrary but the layout is still correct.
+- **Fixed point**: the spot on the unit's outline that stays put when its
+  size changes. Beside each of Edit Unit's Width, Height and Depth fields
+  you choose one side, the center, or the other side: a wall-mounted shelf
+  keeps its back when it gets deeper, a free-standing piece its front. A
+  unit starts fixed at the origin of its local frame. Edit Unit's 3D view
+  marks the point with a small cross. The choice belongs to the side, not
+  its name, so a facing found later renames it but keeps the same side.
 - **The cut rule**: a scan divides a region along any line no board
   crosses, so two boards meeting face to face cut as cleanly as one.
 - **Snap tolerance**: edges within this distance (default 0.5 mm) count as

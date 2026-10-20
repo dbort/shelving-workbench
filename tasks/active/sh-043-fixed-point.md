@@ -112,10 +112,10 @@ STANDING OBLIGATIONS (`CLAUDE.md`):
   here refuses.
 
 ## Plan
-- [ ] **Step 1** (`freecad/Shelving/core/layout.py`, `freecad/Shelving/core/edit.py`): The per-axis fixed side on `Unit`, and `set_unit_size` keeping it; core tests for each side on each axis.
-- [ ] **Step 2** (`freecad/Shelving/properties.py`, `freecad/Shelving/container.py`, `freecad/Shelving/unit_ops.py`): Store and read the fixed point on the container, defaulting to "min"; FreeCAD-tier tests for the round trip and `resize_unit`.
-- [ ] **Step 3** (`freecad/Shelving/editor/session.py`, `freecad/Shelving/editor/panel.py`): The "Set Fixed Point" session edit and the three choices beside the size fields, labeled through the elevation frame; tests for the labels under each facing, the undo step and the placements it leaves alone.
-- [ ] **Step 4** (`freecad/Shelving/editor/overlay.py`, `freecad/Shelving/editor/view_editor.py`): The marker drawn at the fixed point, unpickable, redrawn at a new device pixel ratio; view-tier tests for its position, its updates and a click through it.
-- [ ] **Step 5** (`README.md`, `docs/scope-and-design.md`, `freecad/Shelving/qa/cases/30-editor.toml`): The glossary entry, the design prose and the marker's QA case.
+- [x] **Step 1** (`freecad/Shelving/core/layout.py`, `freecad/Shelving/core/edit.py`): The per-axis fixed side on `Unit`, and `set_unit_size` keeping it; core tests for each side on each axis.
+- [x] **Step 2** (`freecad/Shelving/properties.py`, `freecad/Shelving/container.py`, `freecad/Shelving/unit_ops.py`): Store and read the fixed point on the container, defaulting to "min"; FreeCAD-tier tests for the round trip and `resize_unit`.
+- [x] **Step 3** (`freecad/Shelving/editor/session.py`, `freecad/Shelving/editor/panel.py`): The "Set Fixed Point" session edit and the three choices beside the size fields, labeled through the elevation frame; tests for the labels under each facing, the undo step and the placements it leaves alone.
+- [x] **Step 4** (`freecad/Shelving/editor/overlay.py`, `freecad/Shelving/editor/view_editor.py`): The marker drawn at the fixed point, unpickable, redrawn at a new device pixel ratio; view-tier tests for its position, its updates and a click through it.
+- [x] **Step 5** (`README.md`, `docs/scope-and-design.md`, `freecad/Shelving/qa/cases/30-editor.toml`): The glossary entry, the design prose and the marker's QA case.
 
 ## Review log

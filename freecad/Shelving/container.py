@@ -184,7 +184,7 @@ class ContainerRecord:
     front_at_min: bool | None
     rules_json: str | None
     # Never ``None``: a container without the stored sides fixes its
-    # minimum corner, as its unit always has.
+    # unit's minimum corner.
     fixed_point: FixedPoint
 
 

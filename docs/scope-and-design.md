@@ -105,10 +105,18 @@ bounding box is a void; enclosed space is a bay.
 A unit's position comes from its boards, as its size does: the two are the
 bounding box, in the container's coordinates, of the boards the tree
 places. A back or front panel set aside, an unreadable part, or an object
-left alone counts toward neither. A resize keeps that box's minimum corner
-where it is and grows the unit on its far sides, the way a `Part::Box`
-grows from its `Placement`, so a unit built anywhere in its container
-stays there through every edit.
+left alone counts toward neither. A resize keeps the unit's fixed point
+where it is, so a unit built anywhere in its container stays there through
+every edit.
+
+The fixed point is one choice per model axis: the box's low face, its
+midpoint, or its high face, the one-sided, symmetric and reversed
+directions a PartDesign Pad offers. A wall cabinet hung by its top keeps
+its top, and a unit centered on a wall keeps its center. Every unit starts
+at its minimum corner on every axis, growing on its far sides the way a
+`Part::Box` grows from its `Placement`. The choice is kept per model axis
+rather than per label, so a facing found or corrected later renames it and
+keeps the physical side.
 
 It never guesses. Every arrangement it cannot express is refused with the
 objects named, and every object it cannot read is reported, because a
@@ -128,6 +136,8 @@ Geometry cannot say two things, so both are stored once set:
   is called left. Two hints exist (a back or front panel, an inset front
   with a flush rear) and both fire rarely. Unknown is the normal state,
   and a guess is labeled as one.
+- **Fixed point**: which side of each axis stays put on a resize. The
+  boards show where the unit is but not which side of it is anchored.
 
 A part that is not a simple box is read by its bounding box and pinned: it
 takes part in the layout, its size drives the space around it, and it is
@@ -178,6 +188,16 @@ no place on the drawing: the unit's size, what a selected opening's size
 measures, and the objects the workbench did not create, each saying
 whether it follows the boards as a back or is left alone.
 
+Beside each of the unit's Width, Height and Depth fields a choice names the
+fixed side as the editor's view shows it: Left, Center or Right; Bottom,
+Center or Top; Front, Center or Back, the front being the face the camera
+turns to. Changing it is its own undo step, Set Fixed Point, and moves
+nothing. The 3D view marks the fixed point with Inkscape's rotation-center
+cross, a plus with a hollow hub, drawn the way the Sketcher draws its
+constraint icons: an image at a point in the scene, facing the camera from
+any side, drawn over the boards in the Sketcher's constraint icon color,
+redrawn for the screen's pixel ratio, and never in the way of a click.
+
 Each opening's dimension carries a padlock just past its text, closed for a
 locked opening and open for an unlocked one, in the dimension's own color.
 Clicking it locks or unlocks the opening, and typing a size locks it. An
@@ -213,8 +233,9 @@ one a copied object can carry wrongly.
   tagging (the `Name` and the document `Uid`) classifies a mismatch: a
   changed `Name` is a copy and is adopted as new geometry; a kept `Name` in
   another document is a relocation.
-- **On the container:** the unit's id, depth axis, facing, and a record of
-  region rules keyed by their bounding boards. Positions always come from
+- **On the container:** the unit's id, depth axis, facing, fixed side on
+  each model axis (`min`, `center` or `max`; a container without it reads
+  as `min`), and a record of region rules keyed by their bounding boards. Positions always come from
   the solids, the unit's own size and position included; a missing or
   stale record falls back to inference.
 - **Named values** shared between units will live in an ordinary
