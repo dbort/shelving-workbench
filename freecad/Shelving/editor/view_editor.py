@@ -19,6 +19,7 @@ viewport, which sees every press and release before navigation does.
 
 from __future__ import annotations
 
+import functools
 import math
 import time
 from collections.abc import Callable, Mapping, Sequence
@@ -73,9 +74,11 @@ from freecad.Shelving.refusals import report_error
 
 # The add buttons' icon side, in logical pixels.
 _ICON_PX = 24
-# A padlock's icon side, and its gap from its dimension's text, in logical
-# pixels.
+# A padlock's icon side, its body's inset from the icon's left and right
+# edges, and the gap between its ink and its dimension's text, in logical
+# pixels. The shackle reaches the icon's top edge.
 _PADLOCK_PX = 14
+_PADLOCK_INSET_PX = 2
 _PADLOCK_GAP_PX = 4
 # The fixed point marker's side, in logical pixels.
 _MARKER_PX = 16
@@ -102,9 +105,10 @@ _MARKER_OUTLINE_MM = (
 )
 _MARKER_HOLE_CENTER_MM = (4.40645, 4.40645)
 _MARKER_HOLE_RADIUS_MM = 1.47218
-# SoDatumLabel's text width per character, in ems of its font size: an
-# estimate, since Coin lays the text out where Qt cannot measure it.
-_CHAR_EM = 0.6
+# SoDatumLabel's font when its name field is left at its default, as the
+# Sketcher leaves it; Qt substitutes the same face for both.
+_LABEL_FONT = "Helvetica"
+_UNITS_PARAMS = "User parameter:BaseApp/Preferences/Units"
 # How long the turn toward the unit may animate before the fit goes ahead.
 _TURN_TIMEOUT_S = 3.0
 _POLL_MS = 20
@@ -221,7 +225,12 @@ def _padlock_icon(locked: bool, ratio: float, rgb: RGB) -> QtGui.QIcon:
     pen = QtGui.QPen(color)
     pen.setWidthF(1.6)
     painter.setPen(pen)
-    body = QtCore.QRectF(2, side_px * 0.45, side_px - 4, side_px * 0.5)
+    body = QtCore.QRectF(
+        _PADLOCK_INSET_PX,
+        side_px * 0.45,
+        side_px - 2 * _PADLOCK_INSET_PX,
+        side_px * 0.5,
+    )
     shackle = QtCore.QRectF(4, 1.5, side_px - 8, side_px * 0.6)
     if not locked:
         shackle.translate(side_px * 0.18, -1)
@@ -406,6 +415,69 @@ class _DeleteKeys(QtCore.QObject):
         if kind == QtCore.QEvent.Type.KeyPress:
             self._on_delete()
         return True
+
+
+class _UnitsObserver:
+    """Reports a change to the unit system lengths are shown in: the
+    document's ``UnitSystem``, which the status bar's unit menu sets, or
+    Preferences' Units group. Either changes before FreeCAD applies the new
+    schema, so ``on_change`` must run later."""
+
+    def __init__(self, doc: FreeCAD.Document, on_change: Callable[[], None]) -> None:
+        self._doc = doc
+        self._on_change = on_change
+
+    def slotChangedDocument(self, doc: FreeCAD.Document, prop: str) -> None:
+        if doc is self._doc and prop == "UnitSystem":
+            self._on_change()
+
+    def onChange(self, _group: object, _reason: str) -> None:
+        self._on_change()
+
+
+@functools.cache
+def text_reach_px(text: str, size_pt: int, horizontal: bool) -> int:
+    """How far ``text``'s ink reaches, in device pixels, from the line an
+    ``SoDatumLabel`` of ``size_pt`` centers it on, toward the side a padlock
+    sits: below for a horizontal dimension, and toward the glyphs' tops,
+    left, for a vertical one, whose text reads upward."""
+    # Drawn as SoDatumLabel::drawImage draws it (FreeCAD 1.1), since where
+    # its baseline lands depends on Qt's bounding rect, not only on the
+    # font's ascent.
+    font = QtGui.QFont(_LABEL_FONT, size_pt)
+    metrics = QtGui.QFontMetrics(font)
+    bounds = metrics.boundingRect(text)
+    height = metrics.height()
+    image = QtGui.QImage(
+        max(1, metrics.horizontalAdvance(text)),
+        height,
+        QtGui.QImage.Format.Format_ARGB32_Premultiplied,
+    )
+    image.fill(0)
+    painter = QtGui.QPainter(image)
+    painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+    painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0), 2))
+    painter.setFont(font)
+    painter.drawText(
+        0,
+        metrics.ascent() + bounds.y(),
+        image.width(),
+        bounds.height(),
+        QtCore.Qt.AlignmentFlag.AlignLeft,
+        text,
+    )
+    painter.end()
+    inked = [
+        y
+        for y in range(height)
+        if any(image.pixelColor(x, y).alpha() for x in range(image.width()))
+    ]
+    if not inked:
+        return 0
+    # The image is centered on the line, so this is from its middle.
+    if horizontal:
+        return math.ceil(inked[-1] + 1 - height / 2)
+    return math.ceil(height / 2 - inked[0])
 
 
 class _ViewportGeometry(QtCore.QObject):
@@ -690,7 +762,9 @@ class ViewEditor:
         self.style: Style = view_style(
             label_size_pt(font_px, ratio, self._viewer.screen().logicalDotsPerInchX())
         )
-        self._font_px = font_px
+        # The ratio the labels were sized for, which their measured text
+        # divides back out.
+        self._label_ratio = ratio
         self._padlock_icons = self._draw_padlock_icons(ratio)
         self.root: Coin = coin.SoSeparator()
         self._frame_transform: Coin = coin.SoTransform()
@@ -735,6 +809,15 @@ class ViewEditor:
         app.installEventFilter(keys)
         self._installed.append((keys.deleteLater, True))
         self._installed.append((lambda: app.removeEventFilter(keys), False))
+
+        units = _UnitsObserver(
+            self._doc, lambda: QtCore.QTimer.singleShot(0, self._units_changed)
+        )
+        FreeCAD.addDocumentObserver(units)
+        self._installed.append((lambda: FreeCAD.removeDocumentObserver(units), False))
+        units_params = FreeCAD.ParamGet(_UNITS_PARAMS)
+        units_params.Attach(units)
+        self._installed.append((lambda: units_params.Detach(units), False))
 
         FreeCADGui.Selection.clearSelection()
         gate = _BoardGate(self)
@@ -1068,18 +1151,24 @@ class ViewEditor:
         if self._field_host is not None and self._field_anchor is not None:
             if Shiboken.isValid(self._field_host):
                 self._move_to(self._field_host, self._field_anchor)
-        text_char_px = _CHAR_EM * self._font_px
         for button, label in zip(self.padlocks, self._padlock_labels, strict=False):
-            reach_px = (
-                len(length_text(label.size_mm)) * text_char_px / 2
-                + _PADLOCK_GAP_PX
-                + button.width() / 2
+            # Beside the text rather than past it along the line, which
+            # SoDatumLabel draws on through the rest of the dimension.
+            text = length_text(label.size_mm)
+            # Below the text the shackle faces it; beside it, the body's side.
+            ink_half_px = _PADLOCK_PX / 2 - (
+                0 if label.horizontal else _PADLOCK_INSET_PX
             )
-            # A vertical dimension's text runs along its line, read upward.
+            reach_px = (
+                text_reach_px(text, self.style.label_size_pt, label.horizontal)
+                / self._label_ratio
+                + _PADLOCK_GAP_PX
+                + ink_half_px
+            )
             shift_px = (
-                QtCore.QPointF(reach_px, 0.0)
+                QtCore.QPointF(0.0, reach_px)
                 if label.horizontal
-                else QtCore.QPointF(0.0, -reach_px)
+                else QtCore.QPointF(-reach_px, 0.0)
             )
             # A padlock off the viewport hides rather than float over the
             # panels around the view.
@@ -1458,6 +1547,11 @@ class ViewEditor:
             pixels[start : start + stride] for start in range(0, len(pixels), stride)
         ]
         self.marker.set_image(image.width(), image.height(), b"".join(reversed(rows)))
+
+    def _units_changed(self) -> None:
+        if self._closed or self._stood_down():
+            return
+        self.rebuild()
 
     def _refit(self) -> None:
         """Place the widgets over the view again, after its viewport resized

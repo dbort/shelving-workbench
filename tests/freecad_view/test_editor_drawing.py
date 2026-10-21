@@ -40,6 +40,7 @@ from tests.freecad_view.view import ViewDriver
 _TOL_MM = 0.01
 _VIEW_PARAMS = "User parameter:BaseApp/Preferences/View"
 _SKETCHER_PARAMS = "User parameter:BaseApp/Preferences/Mod/Sketcher/General"
+_UNITS_PARAMS = "User parameter:BaseApp/Preferences/Units"
 
 
 class _Placed(Protocol):
@@ -474,6 +475,39 @@ def test_dimensions_follow_the_users_unit_system(
         assert drawn
         assert all(label.text.endswith(" in") for label in drawn), drawn
         click_task_button("Close", driver)
+
+
+@pytest.mark.parametrize("route", ["status bar", "preferences"])
+def test_dimensions_follow_a_unit_change_while_the_editor_is_open(
+    placed_unit: FreeCAD.DocumentObject, driver: ViewDriver, route: str
+) -> None:
+    """Each route sets what FreeCAD's own code sets, in its order: the status
+    bar's unit menu sets the document's unit system and then the schema;
+    Preferences saves the Units group and then sets the schema."""
+    params = FreeCAD.ParamGet(_UNITS_PARAMS)
+    panel = edit_unit(placed_unit, driver)
+    add_board(panel, "vertical", driver)
+    assert all(
+        label.text.endswith(" mm")
+        for label in overlay_nodes.labels(editor_of(panel).root)
+    )
+    imperial = FreeCAD.Units.listSchemas().index("ImperialDecimal")
+    with _unit_system("Internal"):
+        try:
+            if route == "status bar":
+                placed_unit.Document.UnitSystem = "Imperial decimal (in, lb)"
+            else:
+                params.SetBool("IgnoreProjectSchema", True)
+                params.SetInt("UserSchema", imperial)
+            FreeCAD.Units.setSchema(imperial)
+            driver.pump()
+            drawn = overlay_nodes.labels(editor_of(panel).root)
+            assert drawn
+            assert all(label.text.endswith(" in") for label in drawn), drawn
+        finally:
+            params.RemBool("IgnoreProjectSchema")
+            params.RemInt("UserSchema")
+    click_task_button("Close", driver)
 
 
 def test_the_scene_bounds_reach_every_dimension(
