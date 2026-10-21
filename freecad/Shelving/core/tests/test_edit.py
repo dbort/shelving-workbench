@@ -1070,7 +1070,7 @@ def test_set_unit_size_keeps_the_fixed_side_where_it_was(
     axis: Axis, side: FixedSide
 ) -> None:
     """Growing and shrinking a unit offset from its frame's origin along
-    ``axis`` leaves the low face, the midpoint or the high face there where
+    ``axis`` leaves its low face, midpoint or high face on that axis where
     it was, and leaves the other two axes' faces alone."""
     unit = dataclasses.replace(
         _column_unit(Fill()),

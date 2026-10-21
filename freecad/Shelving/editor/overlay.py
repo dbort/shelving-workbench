@@ -254,13 +254,12 @@ def _label_bounds_node(labels: Sequence[DimensionLabel], z_mm: float) -> Coin:
 class PointMarker:
     """An image drawn at a point, facing the camera at any orientation as
     the Sketcher's constraint icons are, over every shape in the scene and
-    unpickable, so a click lands on whatever is beneath it.
-
-    ``root`` goes under the elevation frame's transform; the image keeps
+    unpickable, so a click lands on whatever is beneath it. The image keeps
     its device-pixel size at every zoom.
     """
 
     def __init__(self) -> None:
+        # Goes under the elevation frame's transform.
         self.root: Coin = coin.SoSeparator()
         pick_style = coin.SoPickStyle()
         pick_style.style = coin.SoPickStyle.UNPICKABLE

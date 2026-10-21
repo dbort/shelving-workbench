@@ -78,9 +78,8 @@ _PADLOCK_PX = 14
 _PADLOCK_GAP_PX = 4
 # The fixed point marker's side, in logical pixels.
 _MARKER_PX = 16
-# Inkscape's rotation-center marker on its 8.81 mm square, as the user's
-# reference SVG draws it: a plus whose arms meet in a chamfered hub, with a
-# round hole at the center.
+# Inkscape's rotation-center marker on its 8.81 mm square: a plus whose arms
+# meet in a chamfered hub, with a round hole at the center.
 _MARKER_SIDE_MM = 8.8134
 _MARKER_OUTLINE_MM = (
     (3.3507, 0.0),

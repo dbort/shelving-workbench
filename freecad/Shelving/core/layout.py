@@ -248,7 +248,8 @@ class Back:
     size_mm: Vec3
 
 
-# Which end of a model axis a unit's size change leaves where it is.
+# Which end of a model axis, or its midpoint, a unit's size change leaves
+# where it is.
 FixedSide = Literal["min", "center", "max"]
 
 

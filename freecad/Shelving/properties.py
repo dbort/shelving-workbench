@@ -3,7 +3,7 @@
 No other module spells one of these property names directly: a board's
 ``ShelvingBornAs``, ``ShelvingBornIn``, and ``ShelvingIrregular``, a
 container's ``ShelvingUnitId``, ``ShelvingDepthAxis``, ``ShelvingFacing``,
-``ShelvingRules``, and ``ShelvingFixedX``, ``ShelvingFixedY`` and
+``ShelvingRules``, ``ShelvingFixedX``, ``ShelvingFixedY``, and
 ``ShelvingFixedZ``, and the board stock the workbench copies but never
 owns: FreeCAD's ``ShapeMaterial``, the view's ``ShapeAppearance``, and the
 Woodworking workbench's per-face ``Grain`` list. The workbench's own
@@ -27,7 +27,7 @@ string values plus "property absent" would conflate "never written" with
 "determined to be undetermined".
 
 The fixed point is three string enumerations of the same kind, one per
-model axis (``"min"`` / ``"center"`` / ``"max"``), so a container without
+model axis (``"min"`` / ``"center"`` / ``"max"``). A container without
 them reads as ``"min"`` on every axis: the minimum corner, which a
 ``Part::Box`` grows from too.
 """
