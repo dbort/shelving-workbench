@@ -149,3 +149,9 @@ DECISIONS (user, 2026-10-20, QA of round 1):
 - **N1: New overlong line in the design doc** (`docs/scope-and-design.md:195`): 67ed91d left a 106-character line in the fixed point's panel paragraph; reflow it to 79 columns. Round 1's N4 line is also still unwrapped.
 - **N2: The grid test does not pin the field's stretch** (`tests/freecad_gui/test_panel.py:731`): dropping `setColumnStretch(1, 1)` (`freecad/Shelving/editor/panel.py:255`) would pass the test; assert `layout.columnStretch(1) == 1` and `layout.columnStretch(2) == 0`.
 - **N3: The combos' tooltip and accessible name are untested** (`freecad/Shelving/editor/panel.py:270`): no test asserts the per-dimension `_FIXED_TIPS` text; the gap predates 67ed91d.
+
+### Round 3: REJECTED
+- **F1: The marker sits above the baseline at device pixel ratios above 1** (`freecad/Shelving/editor/panel.py:155`): `marker_rect` takes the baseline from integer `QFontMetrics` and floor division, while `QPainter.drawText` centers the line with real-valued metrics. At ratio 2 the marker lands 1 to 4 device px above the "F" depending on point size. Use `QFontMetricsF` and real division, fix the comment, and add a test rendering the header into a ratio-2 `QImage` that compares rows in device pixels.
+- **N1: Right-to-left text would leave the marker on the wrong side** (`freecad/Shelving/editor/panel.py:162`): fine for today's untranslated text; mirror the margin and paint origin when `text().isRightToLeft()` if translations arrive.
+- **N2: New overlong line in the QA case** (`freecad/Shelving/qa/cases/30-editor.toml:322`): a 92-character line in the "choose" step; reflow it.
+- **N3: Round 2's N3 is still open** (`freecad/Shelving/editor/panel.py:270`): no test asserts the `_FIXED_TIPS` tooltip or accessible name.
