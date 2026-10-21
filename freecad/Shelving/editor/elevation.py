@@ -322,7 +322,9 @@ class DimensionLabel:
     region_id: str
     start_mm: tuple[float, float]
     end_mm: tuple[float, float]
-    text: str
+    # Left as a number: its text follows the user's unit system, which this
+    # module, free of FreeCAD, cannot read.
+    size_mm: float
     color: LabelColor
     # Where the text's center sits along the line, as a fraction from start.
     text_fraction: float
@@ -364,10 +366,6 @@ class Overlay:
     faces: Sequence[Face] = ()
     outlines: Sequence[Outline] = ()
     labels: Sequence[DimensionLabel] = ()
-
-
-def format_mm(value_mm: float) -> str:
-    return f"{value_mm:.2f}".rstrip("0").rstrip(".")
 
 
 # The spans already taken outside the unit, per edge (the elevation axis
@@ -503,12 +501,11 @@ class _Planner:
             # constraints keep theirs when their geometry is selected.
             locked = is_locked(item)
             color: LabelColor = "locked" if locked else "unlocked"
-            size_mm = measure(self.unit, item.id, self.spaces).size_mm
             yield DimensionLabel(
                 region_id=item.id,
                 start_mm=start_mm,
                 end_mm=end_mm,
-                text=format_mm(size_mm),
+                size_mm=measure(self.unit, item.id, self.spaces).size_mm,
                 color=color,
                 text_fraction=text_fraction,
                 lockable=locked or not alone,

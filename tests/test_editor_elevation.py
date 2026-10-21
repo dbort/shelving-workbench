@@ -258,10 +258,10 @@ def test_a_dimension_per_region_in_each_run() -> None:
 
 def test_a_dimension_reads_its_size_and_color() -> None:
     by_id = {label.region_id: label for label in _labels()}
-    assert by_id["lower"].text == "200"
+    assert by_id["lower"].size_mm == pytest.approx(200.0)
     assert by_id["lower"].color == "locked"
     assert by_id["upper"].color == "unlocked"
-    assert by_id["upper"].text == "346"
+    assert by_id["upper"].size_mm == pytest.approx(346.0)
     selected = {label.region_id: label for label in _labels("upper")}
     assert selected["upper"].color == "unlocked"
 
@@ -281,7 +281,7 @@ def test_a_spacing_spans_through_the_next_board() -> None:
         depth_axis=Axis.Y,
     )
     (label,) = [x for x in _labels(unit=spacing) if x.region_id == "lower"]
-    assert label.text == "218"
+    assert label.size_mm == pytest.approx(218.0)
     assert label.length_mm == pytest.approx(218.0)
 
 
@@ -335,7 +335,7 @@ def test_region_at_finds_the_opening_under_a_point(
 
 
 def _label(region_id: str, at_mm: tuple[float, float]) -> DimensionLabel:
-    return DimensionLabel(region_id, at_mm, at_mm, "1", "unlocked", 0.5, lockable=True)
+    return DimensionLabel(region_id, at_mm, at_mm, 1.0, "unlocked", 0.5, lockable=True)
 
 
 def test_label_at_takes_the_nearest_within_reach_and_the_later_on_a_tie() -> None:

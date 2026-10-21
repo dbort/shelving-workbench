@@ -61,6 +61,7 @@ from freecad.Shelving.editor.overlay import (
     arrow_geometry,
     coin_destroys_draggers_safely,
     drawing_node,
+    length_text,
     view_style,
 )
 from freecad.Shelving.editor.session import (
@@ -1070,7 +1071,7 @@ class ViewEditor:
         text_char_px = _CHAR_EM * self._font_px
         for button, label in zip(self.padlocks, self._padlock_labels, strict=False):
             reach_px = (
-                len(label.text) * text_char_px / 2
+                len(length_text(label.size_mm)) * text_char_px / 2
                 + _PADLOCK_GAP_PX
                 + button.width() / 2
             )

@@ -15,6 +15,7 @@ from freecad.Shelving.core.edit import is_locked
 from freecad.Shelving.core.geometry import Space
 from freecad.Shelving.core.layout import Board, Division, Region
 from freecad.Shelving.editor.elevation import LIFT_MM, DimensionLabel
+from freecad.Shelving.editor.overlay import length_text
 from freecad.Shelving.editor.panel import EditUnitPanel
 from freecad.Shelving.editor.view_editor import ViewEditor
 from tests.freecad_view import overlay_nodes
@@ -87,7 +88,9 @@ def _misplaced(
         return f"{label.region_id}: no padlock shown"
     rect = _geometry(editor, button)
     anchor = _anchor(driver, editor, label.text_at_mm)
-    reach_px = len(label.text) * 0.6 * _FONT_PX / 2 + 4 + button.width() / 2
+    reach_px = (
+        len(length_text(label.size_mm)) * 0.6 * _FONT_PX / 2 + 4 + button.width() / 2
+    )
     expected = anchor + (
         QtCore.QPointF(reach_px, 0.0)
         if label.horizontal

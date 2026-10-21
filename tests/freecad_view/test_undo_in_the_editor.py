@@ -83,7 +83,7 @@ def _shown_size_mm(panel: EditUnitPanel) -> float:
         for label in editor.overlay.labels
         if label.region_id == panel.session.selected_id
     ]
-    assert float(label.text) == pytest.approx(measurement.size_mm)
+    assert label.size_mm == pytest.approx(measurement.size_mm)
     return measurement.size_mm
 
 

@@ -3,6 +3,8 @@ every way out puts back, the camera's turn, and the openings and
 dimensions drawn over the boards."""
 
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from types import TracebackType
 from typing import Protocol, cast
 
@@ -19,6 +21,7 @@ from freecad.Shelving.editor.elevation import (
     elevation_frame,
     label_size_pt,
 )
+from freecad.Shelving.editor.overlay import length_text
 from freecad.Shelving.editor.panel import EditUnitPanel
 from freecad.Shelving.qa import actions as qa_actions
 from tests.freecad_view import overlay_nodes
@@ -400,7 +403,7 @@ def test_each_region_in_a_run_has_a_sketcher_dimension(
                 else:
                     rgb = _rgb("NonDrivingConstrDimColor", 0)
                 size_mm = measure(session.unit, item.id, session.spaces).size_mm
-                found.append((f"{size_mm:.2f}".rstrip("0").rstrip("."), rgb))
+                found.append((length_text(size_mm), rgb))
                 walk(item)
 
         walk(session.unit.root)
@@ -427,6 +430,50 @@ def test_each_region_in_a_run_has_a_sketcher_dimension(
     assert editor_of(panel).frame.side == "back"
     check()
     click_task_button("Close", driver)
+
+
+@contextmanager
+def _unit_system(schema: str) -> Iterator[None]:
+    """FreeCAD's unit system set to ``schema``, a name from
+    ``Units.listSchemas()``, and restored on exit."""
+    before = FreeCAD.Units.getSchema()
+    FreeCAD.Units.setSchema(FreeCAD.Units.listSchemas().index(schema))
+    try:
+        yield
+    finally:
+        FreeCAD.Units.setSchema(before)
+
+
+@pytest.mark.parametrize(
+    ("schema", "length_mm", "text"),
+    [
+        ("Internal", 346.0, "346 mm"),
+        ("Internal", 218.5, "218.5 mm"),
+        ("ImperialDecimal", 25.4, "1 in"),
+        ("Centimeter", 205.0, "20.5 cm"),
+        ("ImperialBuilding", 218.5, '8" + 5/8"'),
+    ],
+)
+def test_a_length_reads_in_the_users_unit_system(
+    schema: str, length_mm: float, text: str
+) -> None:
+    with _unit_system(schema):
+        assert length_text(length_mm) == text
+
+
+def test_dimensions_follow_the_users_unit_system(
+    placed_unit: FreeCAD.DocumentObject, driver: ViewDriver
+) -> None:
+    # The active document's own unit system decides the schema, so setting
+    # only the global one would be undone when the document activates.
+    with _unit_system("ImperialDecimal"):
+        placed_unit.Document.UnitSystem = "Imperial decimal (in, lb)"
+        panel = edit_unit(placed_unit, driver)
+        add_board(panel, "vertical", driver)
+        drawn = overlay_nodes.labels(editor_of(panel).root)
+        assert drawn
+        assert all(label.text.endswith(" in") for label in drawn), drawn
+        click_task_button("Close", driver)
 
 
 def test_the_scene_bounds_reach_every_dimension(

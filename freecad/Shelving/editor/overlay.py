@@ -143,6 +143,19 @@ def outline_node(rect: Rect, z_mm: float, rgb: RGB, width_px: float) -> Coin:
     return group
 
 
+# A decimal fraction's trailing zeros, and its point when nothing else is
+# left. FreeCAD pads every length to the Decimals preference, but a
+# fraction such as 5/8 must keep its digits.
+_TRAILING_ZEROS = re.compile(r"\.(\d*?)0+(?!\d)")
+
+
+def length_text(length_mm: float) -> str:
+    """``length_mm`` in the user's unit system with its unit, as FreeCAD
+    shows a length, less the trailing zeros of a decimal fraction."""
+    text = FreeCAD.Units.Quantity(length_mm, FreeCAD.Units.Length).UserString
+    return _TRAILING_ZEROS.sub(lambda match: f".{match[1]}" if match[1] else "", text)
+
+
 def datum_label_node(
     label: DimensionLabel, z_mm: float, style: Style, normal: FreeCAD.Vector
 ) -> Coin:
@@ -155,7 +168,7 @@ def datum_label_node(
     (h0_mm, v0_mm), (h1_mm, v1_mm) = label.start_mm, label.end_mm
     node.getField("pnts").setValues(0, 2, [[h0_mm, v0_mm, z_mm], [h1_mm, v1_mm, z_mm]])
     node.getField("norm").setValue(normal.x, normal.y, normal.z)
-    node.getField("string").setValue(label.text)
+    node.getField("string").setValue(length_text(label.size_mm))
     node.getField("textColor").setValue(*rgb)
     node.getField("size").setValue(style.label_size_pt)
     node.getField("param2").setValue(label.text_shift_mm)
