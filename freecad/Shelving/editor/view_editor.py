@@ -19,7 +19,6 @@ viewport, which sees every press and release before navigation does.
 
 from __future__ import annotations
 
-import functools
 import math
 import time
 from collections.abc import Callable, Mapping, Sequence
@@ -34,6 +33,7 @@ from shiboken6 import Shiboken
 
 from freecad.Shelving.compat import override
 from freecad.Shelving.core.edit import fixed_point_mm
+from freecad.Shelving.core.layout import Unit
 from freecad.Shelving.editor.elevation import (
     LIFT_MM,
     Arrow,
@@ -62,7 +62,7 @@ from freecad.Shelving.editor.overlay import (
     arrow_geometry,
     coin_destroys_draggers_safely,
     drawing_node,
-    length_text,
+    label_string,
     view_style,
 )
 from freecad.Shelving.editor.session import (
@@ -76,10 +76,15 @@ from freecad.Shelving.refusals import report_error
 _ICON_PX = 24
 # A padlock's icon side, its body's inset from the icon's left and right
 # edges, and the gap between its ink and its dimension's text, in logical
-# pixels. The shackle reaches the icon's top edge.
+# pixels. The shackle reaches the icon's top edge, and the right edge too
+# when open.
 _PADLOCK_PX = 14
 _PADLOCK_INSET_PX = 2
 _PADLOCK_GAP_PX = 4
+# The clear gap between the text of neighboring rows of dimensions outside
+# the unit, and between the first row's text and the unit, in logical
+# pixels at the fitted view.
+_ROW_GAP_PX = 8
 # The fixed point marker's side, in logical pixels.
 _MARKER_PX = 16
 # Inkscape's rotation-center marker on its 8.81 mm square: a plus whose arms
@@ -435,49 +440,17 @@ class _UnitsObserver:
         self._on_change()
 
 
-@functools.cache
-def text_reach_px(text: str, size_pt: int, horizontal: bool) -> int:
-    """How far ``text``'s ink reaches, in device pixels, from the line an
-    ``SoDatumLabel`` of ``size_pt`` centers it on, toward the side a padlock
-    sits: below for a horizontal dimension, and toward the glyphs' tops,
-    left, for a vertical one, whose text reads upward."""
-    # Drawn as SoDatumLabel::drawImage draws it (FreeCAD 1.1), since where
-    # its baseline lands depends on Qt's bounding rect, not only on the
-    # font's ascent.
-    font = QtGui.QFont(_LABEL_FONT, size_pt)
-    metrics = QtGui.QFontMetrics(font)
-    bounds = metrics.boundingRect(text)
-    height = metrics.height()
-    image = QtGui.QImage(
-        max(1, metrics.horizontalAdvance(text)),
-        height,
-        QtGui.QImage.Format.Format_ARGB32_Premultiplied,
-    )
-    image.fill(0)
-    painter = QtGui.QPainter(image)
-    painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
-    painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0), 2))
-    painter.setFont(font)
-    painter.drawText(
-        0,
-        metrics.ascent() + bounds.y(),
-        image.width(),
-        bounds.height(),
-        QtCore.Qt.AlignmentFlag.AlignLeft,
-        text,
-    )
-    painter.end()
-    inked = [
-        y
-        for y in range(height)
-        if any(image.pixelColor(x, y).alpha() for x in range(image.width()))
-    ]
-    if not inked:
-        return 0
-    # The image is centered on the line, so this is from its middle.
-    if horizontal:
-        return math.ceil(inked[-1] + 1 - height / 2)
-    return math.ceil(height / 2 - inked[0])
+def label_metrics(size_pt: int) -> QtGui.QFontMetrics:
+    """The metrics SoDatumLabel lays out a ``size_pt`` label with, in
+    device pixels (FreeCAD 1.1's ``SoDatumLabel::drawImage``)."""
+    return QtGui.QFontMetrics(QtGui.QFont(_LABEL_FONT, size_pt))
+
+
+def padlock_spaces(size_pt: int, ratio: float) -> int:
+    """How many spaces leave room in a ``size_pt`` label, drawn at device
+    pixel ratio ``ratio``, for a padlock with a gap on each side."""
+    space_px = max(1, label_metrics(size_pt).horizontalAdvance(" "))
+    return math.ceil((_PADLOCK_PX + 2 * _PADLOCK_GAP_PX) * ratio / space_px)
 
 
 class _ViewportGeometry(QtCore.QObject):
@@ -759,12 +732,15 @@ class ViewEditor:
             "EditSketcherFontSize",
             QtGui.QFontInfo(QtWidgets.QApplication.font()).pixelSize(),
         )
-        self.style: Style = view_style(
-            label_size_pt(font_px, ratio, self._viewer.screen().logicalDotsPerInchX())
+        size_pt = label_size_pt(
+            font_px, ratio, self._viewer.screen().logicalDotsPerInchX()
         )
+        self.style: Style = view_style(size_pt, padlock_spaces(size_pt, ratio))
+        self._label_metrics = label_metrics(size_pt)
         # The ratio the labels were sized for, which their measured text
         # divides back out.
         self._label_ratio = ratio
+        self._outer_row_mm = self._outer_row_spacing_mm()
         self._padlock_icons = self._draw_padlock_icons(ratio)
         self.root: Coin = coin.SoSeparator()
         self._frame_transform: Coin = coin.SoTransform()
@@ -965,7 +941,6 @@ class ViewEditor:
         frame = self._front
         width_mm = unit.size_mm.component_mm(frame.horizontal.component_index)
         height_mm = unit.size_mm.component_mm(frame.vertical.component_index)
-        margin_mm = _FIT_MARGIN_FRACTION * max(width_mm, height_mm)
         placement = self._placement(frame)
         center_mm = placement.multVec(FreeCAD.Vector(width_mm / 2, height_mm / 2, 0))
         toward = placement.Rotation.multVec(FreeCAD.Vector(0, 0, 1))
@@ -980,11 +955,35 @@ class ViewEditor:
         camera.orientation.setValue(_sbrotation(orientation))
         camera.position.setValue(position_mm.x, position_mm.y, position_mm.z)
         camera.focalDistance.setValue(distance_mm)
+        camera.height.setValue(self._fit_height_mm(unit, frame))
+        # Only now does the view have the size the panel opening left it.
+        spacing_mm = self._outer_row_spacing_mm()
+        if spacing_mm != self._outer_row_mm:
+            self._outer_row_mm = spacing_mm
+            self.rebuild()
+
+    def _outer_row_spacing_mm(self) -> float:
+        """How far apart the rows of dimensions outside the unit sit: at the
+        fitted view's scale, a row of text clears the next. Held from the fit
+        on, so resizing the unit moves its outer dimensions only with the
+        faces they stand off from."""
+        row_px = self._label_metrics.height() / self._label_ratio + _ROW_GAP_PX
+        unit = self.session.unit
+        return (
+            row_px
+            * self._fit_height_mm(unit, elevation_frame(unit))
+            / max(1, self.viewport.height())
+        )
+
+    def _fit_height_mm(self, unit: Unit, frame: ElevationFrame) -> float:
+        """The camera height that shows ``unit``'s face in ``frame`` with
+        room around it for the dimensions outside it."""
+        width_mm = unit.size_mm.component_mm(frame.horizontal.component_index)
+        height_mm = unit.size_mm.component_mm(frame.vertical.component_index)
+        margin_mm = _FIT_MARGIN_FRACTION * max(width_mm, height_mm)
         width_px, height_px = self.view.getSize()
         aspect = width_px / height_px if height_px else 1.0
-        camera.height.setValue(
-            max(height_mm + 2 * margin_mm, (width_mm + 2 * margin_mm) / aspect)
-        )
+        return max(height_mm + 2 * margin_mm, (width_mm + 2 * margin_mm) / aspect)
 
     def _watch_camera(self) -> None:
         if self._camera_sensor is not None:
@@ -1073,7 +1072,9 @@ class ViewEditor:
         self._frame_transform.translation.setValue(base_mm.x, base_mm.y, base_mm.z)
         self._frame_transform.rotation.setValue(_sbrotation(placement.Rotation))
         selected = session.selected_id
-        self.overlay = plan_overlay(unit, session.spaces, self.frame, selected)
+        self.overlay = plan_overlay(
+            unit, session.spaces, self.frame, selected, self._outer_row_mm
+        )
         self._update_preview()
         self._drawing.removeAllChildren()
         self._drawing.addChild(
@@ -1151,24 +1152,25 @@ class ViewEditor:
         if self._field_host is not None and self._field_anchor is not None:
             if Shiboken.isValid(self._field_host):
                 self._move_to(self._field_host, self._field_anchor)
+        metrics = self._label_metrics
+        lead_px = metrics.horizontalAdvance(" " * self.style.padlock_spaces)
         for button, label in zip(self.padlocks, self._padlock_labels, strict=False):
-            # Beside the text rather than past it along the line, which
-            # SoDatumLabel draws on through the rest of the dimension.
-            text = length_text(label.size_mm)
-            # Below the text the shackle faces it; beside it, the body's side.
-            ink_half_px = _PADLOCK_PX / 2 - (
-                0 if label.horizontal else _PADLOCK_INSET_PX
-            )
-            reach_px = (
-                text_reach_px(text, self.style.label_size_pt, label.horizontal)
-                / self._label_ratio
+            text = label_string(label, self.style)
+            width_px = metrics.horizontalAdvance(text)
+            # From the first digit's ink rather than its origin: a "1" stands
+            # well clear of its own.
+            bearing_px = metrics.leftBearing(text.lstrip()[:1] or " ")
+            # The text reads left to right, or upward along a vertical line,
+            # so its first digit faces the padlock's right edge or its top.
+            before_px = (
+                (width_px / 2 - lead_px - bearing_px) / self._label_ratio
                 + _PADLOCK_GAP_PX
-                + ink_half_px
+                + _PADLOCK_PX / 2
             )
             shift_px = (
-                QtCore.QPointF(0.0, reach_px)
+                QtCore.QPointF(-before_px, 0.0)
                 if label.horizontal
-                else QtCore.QPointF(-reach_px, 0.0)
+                else QtCore.QPointF(0.0, before_px)
             )
             # A padlock off the viewport hides rather than float over the
             # panels around the view.

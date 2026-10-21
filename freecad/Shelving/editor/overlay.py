@@ -66,6 +66,10 @@ class Style:
     unlocked_rgb: RGB
     marker_rgb: RGB
     label_size_pt: int
+    # The spaces leading a lockable dimension's text: SoDatumLabel breaks
+    # its line around the whole text, so they leave its padlock a blank
+    # stretch of line before the first digit.
+    padlock_spaces: int = 0
 
     def label_rgb(self, color: LabelColor) -> RGB:
         return self.locked_rgb if color == "locked" else self.unlocked_rgb
@@ -87,7 +91,7 @@ def marker_rgb() -> RGB:
     return _view_color("ConstrainedIcoColor", 0xFF2600FF)
 
 
-def view_style(label_size_pt: int) -> Style:
+def view_style(label_size_pt: int, padlock_spaces: int) -> Style:
     """FreeCAD's selection color and the Sketcher's dimension and
     constraint icon colors, read from the View preferences now: red for a
     size that drives (a locked opening), blue for one that only reports,
@@ -99,6 +103,7 @@ def view_style(label_size_pt: int) -> Style:
         unlocked_rgb=_view_color("NonDrivingConstrDimColor", 0x0026FFFF),
         marker_rgb=marker_rgb(),
         label_size_pt=label_size_pt,
+        padlock_spaces=padlock_spaces,
     )
 
 
@@ -156,6 +161,13 @@ def length_text(length_mm: float) -> str:
     return _TRAILING_ZEROS.sub(lambda match: f".{match[1]}" if match[1] else "", text)
 
 
+def label_string(label: DimensionLabel, style: Style) -> str:
+    """``label``'s text as drawn, led by the room for its padlock when it
+    has one."""
+    lead = " " * style.padlock_spaces if label.lockable else ""
+    return lead + length_text(label.size_mm)
+
+
 def datum_label_node(
     label: DimensionLabel, z_mm: float, style: Style, normal: FreeCAD.Vector
 ) -> Coin:
@@ -168,7 +180,7 @@ def datum_label_node(
     (h0_mm, v0_mm), (h1_mm, v1_mm) = label.start_mm, label.end_mm
     node.getField("pnts").setValues(0, 2, [[h0_mm, v0_mm, z_mm], [h1_mm, v1_mm, z_mm]])
     node.getField("norm").setValue(normal.x, normal.y, normal.z)
-    node.getField("string").setValue(length_text(label.size_mm))
+    node.getField("string").setValue(label_string(label, style))
     node.getField("textColor").setValue(*rgb)
     node.getField("size").setValue(style.label_size_pt)
     node.getField("param2").setValue(label.text_shift_mm)
