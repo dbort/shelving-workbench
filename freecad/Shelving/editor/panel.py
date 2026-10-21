@@ -242,11 +242,20 @@ class EditUnitPanel:
         self._wheel_filter = WheelFilter(self.form)
 
         self.unit_box = QtWidgets.QGroupBox("Unit")
-        unit_layout = QtWidgets.QFormLayout(self.unit_box)
+        unit_layout = QtWidgets.QGridLayout(self.unit_box)
+        # A side name such as "Top" alone does not say what it picks, so the
+        # choices sit under a column header naming them.
+        self.unit_headers: tuple[QtWidgets.QLabel, QtWidgets.QLabel] = (
+            QtWidgets.QLabel("Size"),
+            QtWidgets.QLabel("Fixed point"),
+        )
+        for column, header in enumerate(self.unit_headers, start=1):
+            unit_layout.addWidget(header, 0, column)
+        unit_layout.setColumnStretch(1, 1)
         self.unit_fields: dict[UnitDimension, DimensionField] = {}
         # Each lists session.fixed_choices(dimension) in order.
         self.fixed_combos: dict[UnitDimension, QtWidgets.QComboBox] = {}
-        for dimension, label in _UNIT_DIMENSIONS:
+        for row, (dimension, label) in enumerate(_UNIT_DIMENSIONS, start=1):
             field = DimensionField(
                 self.session.container,
                 FIELD_PROPERTIES[dimension],
@@ -262,10 +271,11 @@ class EditUnitPanel:
             combo.setAccessibleName(_FIXED_TIPS[dimension])
             self._wheel_filter.watch(combo)
             combo.currentIndexChanged.connect(partial(self._set_fixed_side, dimension))
-            row = QtWidgets.QHBoxLayout()
-            row.addWidget(field.widget, 1)
-            row.addWidget(combo)
-            unit_layout.addRow(label, row)
+            row_label = QtWidgets.QLabel(label)
+            row_label.setBuddy(field.widget)
+            unit_layout.addWidget(row_label, row, 0)
+            unit_layout.addWidget(field.widget, row, 1)
+            unit_layout.addWidget(combo, row, 2)
             self.unit_fields[dimension] = field
             self.fixed_combos[dimension] = combo
         layout.addWidget(self.unit_box)

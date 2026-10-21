@@ -188,10 +188,11 @@ no place on the drawing: the unit's size, what a selected opening's size
 measures, and the objects the workbench did not create, each saying
 whether it follows the boards as a back or is left alone.
 
-Beside each of the unit's Width, Height and Depth fields a choice names the
-fixed side as the editor's view shows it: Left, Center or Right; Bottom,
-Center or Top; Front, Center or Back, the front being the face the camera
-turns to. Changing it is its own undo step, Set Fixed Point, and moves
+Beside each of the unit's Width, Height and Depth fields, under a Fixed
+point column header, a choice names the fixed side as the editor's view
+shows it: Left, Center or Right; Bottom, Center or Top; Front, Center or
+Back, the front being the face the camera turns to. A side's name alone
+does not say what it picks, hence the header. Changing it is its own undo step, Set Fixed Point, and moves
 nothing. The 3D view marks the fixed point with Inkscape's rotation-center
 cross, a plus with a hollow hub, drawn the way the Sketcher draws its
 constraint icons: an image at a point in the scene, facing the camera from

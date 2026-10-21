@@ -728,6 +728,37 @@ def test_each_size_field_offers_its_fixed_sides(unit_panel: _Fixture) -> None:
         assert combo.currentIndex() == 0
 
 
+def test_the_fixed_side_choices_sit_under_a_fixed_point_header(
+    unit_panel: _Fixture,
+) -> None:
+    """The first row heads the size fields' column "Size" and their choices'
+    column "Fixed point"; each later row is one dimension's label, field and
+    choice, the label naming its field."""
+    panel = unit_panel.panel
+    layout = panel.unit_box.layout()
+    assert isinstance(layout, QtWidgets.QGridLayout)
+
+    def at(row: int, column: int) -> QtWidgets.QWidget | None:
+        item = layout.itemAtPosition(row, column)
+        return None if item is None else item.widget()
+
+    assert at(0, 0) is None
+    assert at(0, 1) is panel.unit_headers[0]
+    assert at(0, 2) is panel.unit_headers[1]
+    assert [header.text() for header in panel.unit_headers] == [
+        "Size",
+        "Fixed point",
+    ]
+    for row, dimension in enumerate(("width", "depth", "height"), start=1):
+        field = panel.unit_fields[dimension].widget
+        label = at(row, 0)
+        assert isinstance(label, QtWidgets.QLabel)
+        assert label.text() == dimension.capitalize()
+        assert label.buddy() is field
+        assert at(row, 1) is field
+        assert at(row, 2) is panel.fixed_combos[dimension]
+
+
 def test_a_fixed_side_choice_is_an_undo_step_the_panel_follows(
     unit_panel: _Fixture,
 ) -> None:

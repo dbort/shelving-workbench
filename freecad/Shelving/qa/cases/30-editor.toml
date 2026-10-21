@@ -312,11 +312,12 @@ corner rather than part of a board."""
   [[case.step]]
   id = "choose"
   instruction = [
-    "Choose Center beside Width.",
-    "Choose Top beside Height.",
+    "Under Fixed point, choose Center for Width.",
+    "Under Fixed point, choose Top for Height.",
   ]
   expected = """
-The cross moves to the middle of the unit's top front edge, drawn over the
+The Fixed point column header plainly names what the choices pick. The
+cross moves to the middle of the unit's top front edge, drawn over the
 top board and still sharp."""
 
   [[case.step]]
