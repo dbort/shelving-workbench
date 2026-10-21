@@ -13,6 +13,7 @@ exercises this module under the offscreen GUI instead.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable, Mapping, Sequence
 from functools import partial
 
@@ -24,6 +25,7 @@ from freecad.Shelving.core.layout import Basis
 from freecad.Shelving.core.stock import Color, StockGroup
 from freecad.Shelving.debug_log import Stopwatch
 from freecad.Shelving.editor.fields import DimensionField, WheelFilter
+from freecad.Shelving.editor.overlay import RGB, marker_rgb
 from freecad.Shelving.editor.session import (
     FIELD_PROPERTIES,
     EditFailure,
@@ -31,7 +33,12 @@ from freecad.Shelving.editor.session import (
     UnitDimension,
 )
 from freecad.Shelving.editor.stock_dialog import StockDialog
-from freecad.Shelving.editor.view_editor import View3D, ViewEditor, select_in_freecad
+from freecad.Shelving.editor.view_editor import (
+    View3D,
+    ViewEditor,
+    marker_path,
+    select_in_freecad,
+)
 from freecad.Shelving.refusals import report_error
 
 _UNIT_DIMENSIONS: tuple[tuple[UnitDimension, str], ...] = (
@@ -126,6 +133,59 @@ def _describe(widget: QtWidgets.QWidget, child: QtWidgets.QWidget | None) -> str
     if isinstance(widget, QtWidgets.QDockWidget):
         parts.append("floating" if widget.isFloating() else "docked")
     return ", ".join(parts)
+
+
+class MarkedLabel(QtWidgets.QLabel):
+    """A one-line label with the fixed point marker before its text, in
+    ``rgb``, as tall as the font's capital letters and standing on the
+    text's baseline. The marker is painted as a path, so it stays sharp at
+    any font size and device pixel ratio."""
+
+    def __init__(self, text: str, rgb: RGB) -> None:
+        super().__init__(text)
+        self._rgb = rgb
+        self.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter
+        )
+        self._fit_margin()
+
+    def marker_rect(self) -> QtCore.QRectF:
+        """Where the marker is painted, in the label's own coordinates."""
+        side_px = QtGui.QFontMetricsF(self.font()).capHeight()
+        # Where QStyle.drawItemText puts the baseline of a line centered in
+        # the contents, so the marker stands on the same line as the text.
+        metrics = self.fontMetrics()
+        contents = self.contentsRect()
+        baseline_px = (
+            contents.top()
+            + (contents.height() - metrics.height()) // 2
+            + metrics.ascent()
+        )
+        return QtCore.QRectF(0.0, baseline_px - side_px, side_px, side_px)
+
+    def _fit_margin(self) -> None:
+        metrics = QtGui.QFontMetricsF(self.font())
+        # A space's width apart, as a glyph would sit before a word.
+        left_px = math.ceil(metrics.capHeight() + metrics.horizontalAdvance(" "))
+        self.setContentsMargins(left_px, 0, 0, 0)
+
+    # The parameters keep the names PySide's stubs give them, which an
+    # override must match.
+    @override
+    def changeEvent(self, arg__1: QtCore.QEvent) -> None:
+        super().changeEvent(arg__1)
+        if arg__1.type() == QtCore.QEvent.Type.FontChange:
+            self._fit_margin()
+
+    @override
+    def paintEvent(self, arg__1: QtGui.QPaintEvent) -> None:
+        super().paintEvent(arg__1)
+        rect = self.marker_rect()
+        painter = QtGui.QPainter(self)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+        painter.translate(rect.topLeft())
+        painter.fillPath(marker_path(rect.width()), QtGui.QColor.fromRgbF(*self._rgb))
+        painter.end()
 
 
 class AncestorWatch(QtCore.QObject):
@@ -245,9 +305,10 @@ class EditUnitPanel:
         unit_layout = QtWidgets.QGridLayout(self.unit_box)
         # A side name such as "Top" alone does not say what it picks, so the
         # choices sit under a column header naming them.
-        self.unit_headers: tuple[QtWidgets.QLabel, QtWidgets.QLabel] = (
+        # The header carries the marker the 3D view draws at the point.
+        self.unit_headers: tuple[QtWidgets.QLabel, MarkedLabel] = (
             QtWidgets.QLabel("Size"),
-            QtWidgets.QLabel("Fixed point"),
+            MarkedLabel("Fixed point", marker_rgb()),
         )
         for column, header in enumerate(self.unit_headers, start=1):
             unit_layout.addWidget(header, 0, column)

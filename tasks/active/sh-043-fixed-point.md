@@ -34,7 +34,10 @@ corner, which is how units behave today. Milestone M15.
       is the maximum end of Y and "Left" is the maximum end of X; with the
       facing unknown, "Front" is the end `elevation_frame` faces. The
       Unit box is a grid whose first row heads the fields' column "Size"
-      and the choices' column "Fixed point".
+      and the choices' column "Fixed point". The "Fixed point" header
+      draws the marker before its text, in the marker's View preference
+      color, as tall as the font's capital letters and on the text's
+      baseline.
 - [ ] Changing a choice is one undo step, "Set Fixed Point", inside the
       edit and after Close, and leaves every board's placement unchanged.
       The choice survives Close, reopening Edit Unit, and a rescan.
@@ -118,6 +121,10 @@ DECISIONS (user, 2026-10-20, QA of round 1):
   alone ("Top") does not say what it picks. A header row ("Size", "Fixed
   point") over a grid names the column once, where a label on every row
   would repeat it; tooltips alone are invisible until hovered.
+- **The header carries the marker** (user, 2026-10-20): the same cross
+  and color as the 3D view, before the text, scaled to the height of a
+  capital X, tying the column to the mark in the view. Paint it as a path
+  in the label so it stays sharp at any font size and pixel ratio.
 
 ## Plan
 - [x] **Step 1** (`freecad/Shelving/core/layout.py`, `freecad/Shelving/core/edit.py`): The per-axis fixed side on `Unit`, and `set_unit_size` keeping it; core tests for each side on each axis.
@@ -126,6 +133,7 @@ DECISIONS (user, 2026-10-20, QA of round 1):
 - [x] **Step 4** (`freecad/Shelving/editor/overlay.py`, `freecad/Shelving/editor/view_editor.py`): The marker drawn at the fixed point, unpickable, redrawn at a new device pixel ratio; view-tier tests for its position, its updates and a click through it.
 - [x] **Step 5** (`README.md`, `docs/scope-and-design.md`, `freecad/Shelving/qa/cases/30-editor.toml`): The glossary entry, the design prose and the marker's QA case.
 - [x] **Step 6** (`freecad/Shelving/editor/panel.py`, `README.md`, `docs/scope-and-design.md`, `freecad/Shelving/qa/cases/30-editor.toml`): The Unit box as a grid under "Size" and "Fixed point" column headers, from QA feedback; a GUI test for the grid, and the docs and QA case naming the column.
+- [x] **Step 7** (`freecad/Shelving/editor/panel.py`, `freecad/Shelving/editor/view_editor.py`, `freecad/Shelving/editor/overlay.py`, docs, QA case): The marker before the "Fixed point" header's text, from the user's request; a GUI test rendering it against the "F" in the preference color.
 
 ## Review log
 

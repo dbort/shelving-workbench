@@ -240,13 +240,10 @@ def _padlock_icon(locked: bool, ratio: float, rgb: RGB) -> QtGui.QIcon:
     return QtGui.QIcon(pixmap)
 
 
-def marker_image(ratio: float, rgb: RGB) -> QtGui.QImage:
-    """The fixed point marker in ``rgb``, :data:`_MARKER_PX` logical pixels
-    square at the device pixel ratio ``ratio``, transparent around it and
-    in its hole."""
-    side_px = round(_MARKER_PX * ratio)
-    image = QtGui.QImage(side_px, side_px, QtGui.QImage.Format.Format_RGBA8888)
-    image.fill(QtCore.Qt.GlobalColor.transparent)
+def marker_path(side_px: float) -> QtGui.QPainterPath:
+    """The fixed point marker's outline and hole, filling the square from
+    the origin to ``side_px`` on each axis; its odd-even fill leaves the
+    hole open."""
     path = QtGui.QPainterPath()
     path.setFillRule(QtCore.Qt.FillRule.OddEvenFill)
     path.addPolygon(
@@ -258,10 +255,20 @@ def marker_image(ratio: float, rgb: RGB) -> QtGui.QImage:
         _MARKER_HOLE_RADIUS_MM,
         _MARKER_HOLE_RADIUS_MM,
     )
+    scale = side_px / _MARKER_SIDE_MM
+    return QtGui.QTransform.fromScale(scale, scale).map(path)
+
+
+def marker_image(ratio: float, rgb: RGB) -> QtGui.QImage:
+    """The fixed point marker in ``rgb``, :data:`_MARKER_PX` logical pixels
+    square at the device pixel ratio ``ratio``, transparent around it and
+    in its hole."""
+    side_px = round(_MARKER_PX * ratio)
+    image = QtGui.QImage(side_px, side_px, QtGui.QImage.Format.Format_RGBA8888)
+    image.fill(QtCore.Qt.GlobalColor.transparent)
     painter = QtGui.QPainter(image)
     painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
-    painter.scale(side_px / _MARKER_SIDE_MM, side_px / _MARKER_SIDE_MM)
-    painter.fillPath(path, QtGui.QColor.fromRgbF(*rgb))
+    painter.fillPath(marker_path(side_px), QtGui.QColor.fromRgbF(*rgb))
     painter.end()
     return image
 

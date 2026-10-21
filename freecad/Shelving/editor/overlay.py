@@ -81,6 +81,12 @@ class Style:
         return _OUTLINE_RGB
 
 
+def marker_rgb() -> RGB:
+    """The fixed point marker's color, read from the View preferences now:
+    the Sketcher's own billboard icon color, by default FreeCAD 1.1's red."""
+    return _view_color("ConstrainedIcoColor", 0xFF2600FF)
+
+
 def view_style(label_size_pt: int) -> Style:
     """FreeCAD's selection color and the Sketcher's dimension and
     constraint icon colors, read from the View preferences now: red for a
@@ -91,7 +97,7 @@ def view_style(label_size_pt: int) -> Style:
         selected_rgb=_view_color("SelectionColor", 0x1CAD1CFF),
         locked_rgb=_view_color("ConstrainedDimColor", 0xFF2600FF),
         unlocked_rgb=_view_color("NonDrivingConstrDimColor", 0x0026FFFF),
-        marker_rgb=_view_color("ConstrainedIcoColor", 0xFF2600FF),
+        marker_rgb=marker_rgb(),
         label_size_pt=label_size_pt,
     )
 

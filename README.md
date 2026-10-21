@@ -102,9 +102,10 @@ The vocabulary the documentation and the code share.
   Width, Height and Depth fields, you choose one side, the center, or the
   other side: a wall-mounted shelf keeps its back when it gets deeper, a
   free-standing piece its front. A unit starts fixed at the origin of its
-  local frame. Edit Unit's 3D view marks the point with a small cross. The
-  choice belongs to the side, not its name, so a facing found later renames
-  it but keeps the same side.
+  local frame. Edit Unit's 3D view marks the point with a small cross, and
+  the same cross heads the Fixed point column. The choice belongs to the
+  side, not its name, so a facing found later renames it but keeps the same
+  side.
 - **The cut rule**: a scan divides a region along any line no board
   crosses, so two boards meeting face to face cut as cleanly as one.
 - **Snap tolerance**: edges within this distance (default 0.5 mm) count as

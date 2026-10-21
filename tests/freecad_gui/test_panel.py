@@ -13,7 +13,7 @@ in the view is ``tests/freecad_view/``'s.
 
 import shutil
 import sys
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from types import TracebackType
 from typing import Protocol, cast
@@ -742,6 +742,8 @@ def test_the_fixed_side_choices_sit_under_a_fixed_point_header(
         item = layout.itemAtPosition(row, column)
         return None if item is None else item.widget()
 
+    # The fields take the width the choices leave.
+    assert [layout.columnStretch(column) for column in range(3)] == [0, 1, 0]
     assert at(0, 0) is None
     assert at(0, 1) is panel.unit_headers[0]
     assert at(0, 2) is panel.unit_headers[1]
@@ -757,6 +759,74 @@ def test_the_fixed_side_choices_sit_under_a_fixed_point_header(
         assert label.buddy() is field
         assert at(row, 1) is field
         assert at(row, 2) is panel.fixed_combos[dimension]
+
+
+_VIEW_PREFERENCES = "User parameter:BaseApp/Preferences/View"
+
+
+def _rows_and_columns(
+    image: QtGui.QImage, keep: Callable[[QtGui.QColor], bool], x_range: range
+) -> tuple[range, range]:
+    """The rows and columns of ``image`` that hold a pixel ``keep`` accepts,
+    looking only at the columns in ``x_range``."""
+    hits = [
+        (x, y)
+        for x in x_range
+        for y in range(image.height())
+        if keep(image.pixelColor(x, y))
+    ]
+    assert hits
+    xs = [x for x, _y in hits]
+    ys = [y for _x, y in hits]
+    return range(min(ys), max(ys) + 1), range(min(xs), max(xs) + 1)
+
+
+def test_the_fixed_point_header_carries_the_marker_beside_its_capitals(
+    unit_panel: _Fixture,
+) -> None:
+    """The "Fixed point" header draws the 3D view's marker, in the View
+    preference color the view uses, before its text, as tall as the "F"
+    and on the same line; a larger font grows it."""
+    params = FreeCAD.ParamGet(_VIEW_PREFERENCES)
+    params.SetUnsigned("ConstrainedIcoColor", 0x00C000FF)
+    try:
+        unit_panel.panel.reject()
+        # The fixture closes this one.
+        unit_panel.panel = EditUnitPanel(unit_panel.container)
+    finally:
+        params.RemUnsigned("ConstrainedIcoColor")
+    header = unit_panel.panel.unit_headers[1]
+    header.resize(header.sizeHint())
+    image = header.grab().toImage()
+    text_left_px = header.contentsRect().left()
+
+    def is_marker(color: QtGui.QColor) -> bool:
+        return color.greenF() - max(color.redF(), color.blueF()) > 0.3
+
+    def is_ink(color: QtGui.QColor) -> bool:
+        return color.lightnessF() < 0.5 and not is_marker(color)
+
+    marker_rows, marker_columns = _rows_and_columns(
+        image, is_marker, range(image.width())
+    )
+    f_width_px = header.fontMetrics().horizontalAdvance("F")
+    f_rows, _f_columns = _rows_and_columns(
+        image, is_ink, range(text_left_px, text_left_px + f_width_px)
+    )
+    assert marker_columns.stop <= text_left_px
+    assert abs(marker_rows.start - f_rows.start) <= 1
+    assert abs(marker_rows.stop - f_rows.stop) <= 1
+    assert abs(len(marker_columns) - len(marker_rows)) <= 1
+
+    font = header.font()
+    side_px = header.marker_rect().height()
+    font.setPointSizeF(font.pointSizeF() * 2)
+    header.setFont(font)
+    assert header.marker_rect().height() == pytest.approx(
+        QtGui.QFontMetricsF(font).capHeight()
+    )
+    assert header.marker_rect().height() > side_px
+    assert header.contentsRect().left() > text_left_px
 
 
 def test_a_fixed_side_choice_is_an_undo_step_the_panel_follows(

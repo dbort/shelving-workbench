@@ -307,7 +307,9 @@ title = "The fixed point's marker on a HiDPI screen"
   expected = """
 A small cross with a hollow center sits on the unit's lower left front
 corner. It is as sharp as the dimension text, and reads as a mark on that
-corner rather than part of a board."""
+corner rather than part of a board. The same cross, in the same color,
+sits before the panel's Fixed point column header, as tall as the F, as
+sharp as the text, and on the same line."""
 
   [[case.step]]
   id = "choose"
@@ -316,8 +318,8 @@ corner rather than part of a board."""
     "Under Fixed point, choose Top for Height.",
   ]
   expected = """
-The Fixed point column header plainly names what the choices pick. The
-cross moves to the middle of the unit's top front edge, drawn over the
+The Fixed point column header and its cross plainly name what the choices
+pick. The cross in the view moves to the middle of the unit's top front edge, drawn over the
 top board and still sharp."""
 
   [[case.step]]

@@ -192,12 +192,15 @@ Beside each of the unit's Width, Height and Depth fields, under a Fixed
 point column header, a choice names the fixed side as the editor's view
 shows it: Left, Center or Right; Bottom, Center or Top; Front, Center or
 Back, the front being the face the camera turns to. A side's name alone
-does not say what it picks, hence the header. Changing it is its own undo step, Set Fixed Point, and moves
-nothing. The 3D view marks the fixed point with Inkscape's rotation-center
-cross, a plus with a hollow hub, drawn the way the Sketcher draws its
-constraint icons: an image at a point in the scene, facing the camera from
-any side, drawn over the boards in the Sketcher's constraint icon color,
-redrawn for the screen's pixel ratio, and never in the way of a click.
+does not say what it picks, hence the header. Changing it is its own undo
+step, Set Fixed Point, and moves nothing. The 3D view marks the fixed point
+with Inkscape's rotation-center cross, a plus with a hollow hub, drawn the
+way the Sketcher draws its constraint icons: an image at a point in the
+scene, facing the camera from any side, drawn over the boards in the
+Sketcher's constraint icon color, redrawn for the screen's pixel ratio, and
+never in the way of a click. The header carries the same cross in the same
+color before its text, as tall as a capital letter, tying the column to
+the mark in the view.
 
 Each opening's dimension carries a padlock just past its text, closed for a
 locked opening and open for an unlocked one, in the dimension's own color.
@@ -236,9 +239,9 @@ one a copied object can carry wrongly.
   another document is a relocation.
 - **On the container:** the unit's id, depth axis, facing, fixed side on
   each model axis (`min`, `center` or `max`; a container without it reads
-  as `min`), and a record of region rules keyed by their bounding boards. Positions always come from
-  the solids, the unit's own size and position included; a missing or
-  stale record falls back to inference.
+  as `min`), and a record of region rules keyed by their bounding boards.
+  Positions always come from the solids, the unit's own size and position
+  included; a missing or stale record falls back to inference.
 - **Named values** shared between units will live in an ordinary
   `VarSet`.
 
