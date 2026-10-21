@@ -119,3 +119,11 @@ STANDING OBLIGATIONS (`CLAUDE.md`):
 - [x] **Step 5** (`README.md`, `docs/scope-and-design.md`, `freecad/Shelving/qa/cases/30-editor.toml`): The glossary entry, the design prose and the marker's QA case.
 
 ## Review log
+
+### Round 1: APPROVED
+- **N1: The pixel-ratio test checks the QImage, not the Coin node** (`tests/freecad_view/test_fixed_point.py:211`): the test asserts `editor.marker_image.size()` after the `DevicePixelRatioChange`, which `_draw_marker` sets before `PointMarker.set_image` runs, so an SoImage that stopped updating would still pass. Also assert the size of the SoImage's own image.
+- **N2: The after-Close undo check does not look at the step's name** (`tests/freecad/test_editor_session.py:1334`): after `session.close()` the test undoes and checks the fixed point, but never asserts `doc.UndoNames[0] == "Set Fixed Point"` first; the Must Have names the step after Close too.
+- **N3: Session.resize is tested at 1e-6 mm for only one fixed side** (`tests/freecad/test_editor_session.py:1314`): only "max" on X goes through `Session.resize` at 1e-6 mm; a center case on the offset unit would cover the Must Have's Session path directly. Not blocking, since every path goes through `set_unit_size`.
+- **N4: One overlong line in the design doc** (`docs/scope-and-design.md:238`): the edited "On the container" bullet has a 100-character line; reflow to 79.
+- **N5: "Origin of its local frame" carries over an existing ambiguity** (`README.md:104`): the glossary's "Local frame" entry puts the origin at the front-bottom-left corner, which is not the minimum corner for a unit whose front is at +Y, and does not describe a unit offset in its container. Not new here; consider tightening it in a later task.
+- **N6: The marker may be tinted by transparent boards** (`freecad/Shelving/editor/overlay.py:469`): with depth test and write off, transparent board faces drawn in Coin's delayed pass could blend over the marker. Untested; if it matters, add a step with a transparent board to the `editor.fixed_point` QA case.
