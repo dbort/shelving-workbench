@@ -758,7 +758,11 @@ def test_the_fixed_side_choices_sit_under_a_fixed_point_header(
         assert label.text() == dimension.capitalize()
         assert label.buddy() is field
         assert at(row, 1) is field
-        assert at(row, 2) is panel.fixed_combos[dimension]
+        combo = panel.fixed_combos[dimension]
+        assert at(row, 2) is combo
+        tip = f"The side that stays put when the {dimension} changes"
+        assert combo.toolTip() == tip
+        assert combo.accessibleName() == tip
 
 
 _VIEW_PREFERENCES = "User parameter:BaseApp/Preferences/View"
@@ -781,12 +785,29 @@ def _rows_and_columns(
     return range(min(ys), max(ys) + 1), range(min(xs), max(xs) + 1)
 
 
+def _render(widget: QtWidgets.QWidget, ratio: float) -> QtGui.QImage:
+    """``widget`` painted on white at the device pixel ratio ``ratio``, as a
+    screen at that ratio paints it."""
+    size = widget.size()
+    image = QtGui.QImage(
+        round(size.width() * ratio),
+        round(size.height() * ratio),
+        QtGui.QImage.Format.Format_ARGB32_Premultiplied,
+    )
+    image.setDevicePixelRatio(ratio)
+    image.fill(QtCore.Qt.GlobalColor.white)
+    widget.render(image)
+    return image
+
+
+@pytest.mark.parametrize("ratio", [1.0, 1.5, 2.0])
 def test_the_fixed_point_header_carries_the_marker_beside_its_capitals(
-    unit_panel: _Fixture,
+    unit_panel: _Fixture, ratio: float
 ) -> None:
     """The "Fixed point" header draws the 3D view's marker, in the View
     preference color the view uses, before its text, as tall as the "F"
-    and on the same line; a larger font grows it."""
+    and on the same line, within a device pixel at each pixel ratio and
+    font size; a larger font grows it."""
     params = FreeCAD.ParamGet(_VIEW_PREFERENCES)
     params.SetUnsigned("ConstrainedIcoColor", 0x00C000FF)
     try:
@@ -796,9 +817,6 @@ def test_the_fixed_point_header_carries_the_marker_beside_its_capitals(
     finally:
         params.RemUnsigned("ConstrainedIcoColor")
     header = unit_panel.panel.unit_headers[1]
-    header.resize(header.sizeHint())
-    image = header.grab().toImage()
-    text_left_px = header.contentsRect().left()
 
     def is_marker(color: QtGui.QColor) -> bool:
         return color.greenF() - max(color.redF(), color.blueF()) > 0.3
@@ -806,27 +824,33 @@ def test_the_fixed_point_header_carries_the_marker_beside_its_capitals(
     def is_ink(color: QtGui.QColor) -> bool:
         return color.lightnessF() < 0.5 and not is_marker(color)
 
-    marker_rows, marker_columns = _rows_and_columns(
-        image, is_marker, range(image.width())
-    )
-    f_width_px = header.fontMetrics().horizontalAdvance("F")
-    f_rows, _f_columns = _rows_and_columns(
-        image, is_ink, range(text_left_px, text_left_px + f_width_px)
-    )
-    assert marker_columns.stop <= text_left_px
-    assert abs(marker_rows.start - f_rows.start) <= 1
-    assert abs(marker_rows.stop - f_rows.stop) <= 1
-    assert abs(len(marker_columns) - len(marker_rows)) <= 1
+    base_pt = header.font().pointSizeF()
+    side_px = 0.0
+    for scale in (1.0, 1.5, 2.0):
+        font = header.font()
+        font.setPointSizeF(base_pt * scale)
+        header.setFont(font)
+        header.resize(header.sizeHint())
+        # Grown by a font change, the cap height and margin go with it.
+        assert header.marker_rect().height() == pytest.approx(
+            QtGui.QFontMetricsF(font).capHeight()
+        )
+        assert header.marker_rect().height() > side_px
+        side_px = header.marker_rect().height()
 
-    font = header.font()
-    side_px = header.marker_rect().height()
-    font.setPointSizeF(font.pointSizeF() * 2)
-    header.setFont(font)
-    assert header.marker_rect().height() == pytest.approx(
-        QtGui.QFontMetricsF(font).capHeight()
-    )
-    assert header.marker_rect().height() > side_px
-    assert header.contentsRect().left() > text_left_px
+        image = _render(header, ratio)
+        text_left_px = round(header.contentsRect().left() * ratio)
+        f_width_px = round(header.fontMetrics().horizontalAdvance("F") * ratio)
+        marker_rows, marker_columns = _rows_and_columns(
+            image, is_marker, range(image.width())
+        )
+        f_rows, _f_columns = _rows_and_columns(
+            image, is_ink, range(text_left_px, text_left_px + f_width_px)
+        )
+        assert marker_columns.stop <= text_left_px
+        assert abs(marker_rows.start - f_rows.start) <= 1, scale
+        assert abs(marker_rows.stop - f_rows.stop) <= 1, scale
+        assert abs(len(marker_columns) - len(marker_rows)) <= 1
 
 
 def test_a_fixed_side_choice_is_an_undo_step_the_panel_follows(

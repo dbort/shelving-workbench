@@ -151,14 +151,14 @@ class MarkedLabel(QtWidgets.QLabel):
 
     def marker_rect(self) -> QtCore.QRectF:
         """Where the marker is painted, in the label's own coordinates."""
-        side_px = QtGui.QFontMetricsF(self.font()).capHeight()
-        # Where QStyle.drawItemText puts the baseline of a line centered in
-        # the contents, so the marker stands on the same line as the text.
-        metrics = self.fontMetrics()
-        contents = self.contentsRect()
+        metrics = QtGui.QFontMetricsF(self.font())
+        side_px = metrics.capHeight()
+        # QPainter.drawText centers the line in real-valued metrics; the
+        # integer ones round it off a device pixel or more on a HiDPI screen.
+        contents = QtCore.QRectF(self.contentsRect())
         baseline_px = (
             contents.top()
-            + (contents.height() - metrics.height()) // 2
+            + (contents.height() - metrics.height()) / 2
             + metrics.ascent()
         )
         return QtCore.QRectF(0.0, baseline_px - side_px, side_px, side_px)
