@@ -13,7 +13,7 @@ in the view is ``tests/freecad_view/``'s.
 
 import shutil
 import sys
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from types import TracebackType
 from typing import Protocol, cast
@@ -157,7 +157,10 @@ def test_the_panel_holds_only_the_units_size_the_basis_and_its_lists(
     assert sorted(spins, key=id) == sorted(
         (f.widget for f in unit_panel.panel.unit_fields.values()), key=id
     )
-    assert form.findChildren(QtWidgets.QComboBox) == [unit_panel.panel.basis_combo]
+    assert sorted(form.findChildren(QtWidgets.QComboBox), key=id) == sorted(
+        [unit_panel.panel.basis_combo, *unit_panel.panel.fixed_combos.values()],
+        key=id,
+    )
     buttons = [button.text() for button in form.findChildren(QtWidgets.QAbstractButton)]
     assert sorted(buttons) == ["Change stock…", "Delete Selected", "Hide other objects"]
     assert not unit_panel.panel.hide_others_check.isChecked()
@@ -710,6 +713,191 @@ def test_the_unit_fields_follow_every_edit(unit_panel: _Fixture) -> None:
     assert _board_ids(unit_panel.session.unit.root) == before
     for dimension, size_mm in sizes_mm.items():
         assert _unit_field_mm(unit_panel, dimension) == pytest.approx(size_mm)
+
+
+def _combo_texts(combo: QtWidgets.QComboBox) -> list[str]:
+    return [combo.itemText(index) for index in range(combo.count())]
+
+
+def test_each_size_field_offers_its_fixed_sides(unit_panel: _Fixture) -> None:
+    combos = unit_panel.panel.fixed_combos
+    assert _combo_texts(combos["width"]) == ["Left", "Center", "Right"]
+    assert _combo_texts(combos["height"]) == ["Bottom", "Center", "Top"]
+    assert _combo_texts(combos["depth"]) == ["Front", "Center", "Back"]
+    for combo in combos.values():
+        assert combo.currentIndex() == 0
+
+
+def test_the_fixed_side_choices_sit_under_a_fixed_point_header(
+    unit_panel: _Fixture,
+) -> None:
+    """The first row heads the size fields' column "Size" and their choices'
+    column "Fixed point"; each later row is one dimension's label, field and
+    choice, the label naming its field."""
+    panel = unit_panel.panel
+    layout = panel.unit_box.layout()
+    assert isinstance(layout, QtWidgets.QGridLayout)
+
+    def at(row: int, column: int) -> QtWidgets.QWidget | None:
+        item = layout.itemAtPosition(row, column)
+        return None if item is None else item.widget()
+
+    # The fields take the width the choices leave.
+    assert [layout.columnStretch(column) for column in range(3)] == [0, 1, 0]
+    assert at(0, 0) is None
+    assert at(0, 1) is panel.unit_headers[0]
+    assert at(0, 2) is panel.unit_headers[1]
+    assert [header.text() for header in panel.unit_headers] == [
+        "Size",
+        "Fixed point",
+    ]
+    for row, dimension in enumerate(("width", "depth", "height"), start=1):
+        field = panel.unit_fields[dimension].widget
+        label = at(row, 0)
+        assert isinstance(label, QtWidgets.QLabel)
+        assert label.text() == dimension.capitalize()
+        assert label.buddy() is field
+        assert at(row, 1) is field
+        combo = panel.fixed_combos[dimension]
+        assert at(row, 2) is combo
+        tip = f"The side that stays put when the {dimension} changes"
+        assert combo.toolTip() == tip
+        assert combo.accessibleName() == tip
+
+
+_VIEW_PREFERENCES = "User parameter:BaseApp/Preferences/View"
+
+
+def _rows_and_columns(
+    image: QtGui.QImage, keep: Callable[[QtGui.QColor], bool], x_range: range
+) -> tuple[range, range]:
+    """The rows and columns of ``image`` that hold a pixel ``keep`` accepts,
+    looking only at the columns in ``x_range``."""
+    hits = [
+        (x, y)
+        for x in x_range
+        for y in range(image.height())
+        if keep(image.pixelColor(x, y))
+    ]
+    assert hits
+    xs = [x for x, _y in hits]
+    ys = [y for _x, y in hits]
+    return range(min(ys), max(ys) + 1), range(min(xs), max(xs) + 1)
+
+
+def _render(widget: QtWidgets.QWidget, ratio: float) -> QtGui.QImage:
+    """``widget`` painted on white at the device pixel ratio ``ratio``, as a
+    screen at that ratio paints it."""
+    size = widget.size()
+    image = QtGui.QImage(
+        round(size.width() * ratio),
+        round(size.height() * ratio),
+        QtGui.QImage.Format.Format_ARGB32_Premultiplied,
+    )
+    image.setDevicePixelRatio(ratio)
+    image.fill(QtCore.Qt.GlobalColor.white)
+    widget.render(image)
+    return image
+
+
+@pytest.mark.parametrize("ratio", [1.0, 1.5, 2.0])
+def test_the_fixed_point_header_carries_the_marker_beside_its_capitals(
+    unit_panel: _Fixture, ratio: float
+) -> None:
+    """The "Fixed point" header draws the 3D view's marker, in the View
+    preference color the view uses, before its text, as tall as the "F"
+    and on the same line, within a device pixel at each pixel ratio and
+    font size; a larger font grows it."""
+    params = FreeCAD.ParamGet(_VIEW_PREFERENCES)
+    params.SetUnsigned("ConstrainedIcoColor", 0x00C000FF)
+    try:
+        unit_panel.panel.reject()
+        # The fixture closes this one.
+        unit_panel.panel = EditUnitPanel(unit_panel.container)
+    finally:
+        params.RemUnsigned("ConstrainedIcoColor")
+    header = unit_panel.panel.unit_headers[1]
+
+    def is_marker(color: QtGui.QColor) -> bool:
+        return color.greenF() - max(color.redF(), color.blueF()) > 0.3
+
+    def is_ink(color: QtGui.QColor) -> bool:
+        return color.lightnessF() < 0.5 and not is_marker(color)
+
+    base_pt = header.font().pointSizeF()
+    side_px = 0.0
+    for scale in (1.0, 1.5, 2.0):
+        font = header.font()
+        font.setPointSizeF(base_pt * scale)
+        header.setFont(font)
+        header.resize(header.sizeHint())
+        # Grown by a font change, the cap height and margin go with it.
+        assert header.marker_rect().height() == pytest.approx(
+            QtGui.QFontMetricsF(font).capHeight()
+        )
+        assert header.marker_rect().height() > side_px
+        side_px = header.marker_rect().height()
+
+        image = _render(header, ratio)
+        text_left_px = round(header.contentsRect().left() * ratio)
+        f_width_px = round(header.fontMetrics().horizontalAdvance("F") * ratio)
+        marker_rows, marker_columns = _rows_and_columns(
+            image, is_marker, range(image.width())
+        )
+        f_rows, _f_columns = _rows_and_columns(
+            image, is_ink, range(text_left_px, text_left_px + f_width_px)
+        )
+        assert marker_columns.stop <= text_left_px
+        assert abs(marker_rows.start - f_rows.start) <= 1, scale
+        assert abs(marker_rows.stop - f_rows.stop) <= 1, scale
+        assert abs(len(marker_columns) - len(marker_rows)) <= 1
+
+
+def test_a_fixed_side_choice_is_an_undo_step_the_panel_follows(
+    unit_panel: _Fixture,
+) -> None:
+    """Choosing "Top" adds one "Set Fixed Point" step and moves no board; a
+    taller unit then grows downward. Undo and Redo inside the edit move the
+    choice shown, and it survives Close and a new panel."""
+    doc = unit_panel.doc
+    combo = unit_panel.panel.fixed_combos["height"]
+    placements = {
+        obj.Name: str(cast("_Placed", obj).Placement)
+        for obj in doc.Objects
+        if obj.TypeId == "Part::Box"
+    }
+    names = list(doc.UndoNames)
+    combo.setCurrentIndex(2)
+    _process_events()
+    assert list(doc.UndoNames) == ["Set Fixed Point", *names]
+    assert {
+        name: str(cast("_Placed", doc.getObject(name)).Placement) for name in placements
+    } == placements
+    assert unit_panel.session.fixed_side("height") == "max"
+
+    top_z_mm = float(cast("_Placed", doc.getObject("top")).Placement.Base.z)
+    _type_unit_size(unit_panel, "height", "1000")
+    doc.recompute()
+    assert float(
+        cast("_Placed", doc.getObject("top")).Placement.Base.z
+    ) == pytest.approx(top_z_mm, abs=_TOL_MM)
+    assert float(
+        cast("_Placed", doc.getObject("bottom")).Placement.Base.z
+    ) == pytest.approx(-100.0, abs=_TOL_MM)
+
+    doc.undo()
+    doc.undo()
+    _process_events()
+    assert combo.currentIndex() == 0
+    doc.redo()
+    _process_events()
+    assert combo.currentIndex() == 2
+
+    unit_panel.panel.reject()
+    # The fixture closes this one.
+    unit_panel.panel = EditUnitPanel(unit_panel.container)
+    assert unit_panel.panel.fixed_combos["height"].currentIndex() == 2
+    assert unit_panel.panel.fixed_combos["width"].currentIndex() == 0
 
 
 def test_a_held_arrow_past_a_limit_reports_once(

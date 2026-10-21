@@ -32,6 +32,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from shiboken6 import Shiboken
 
 from freecad.Shelving.compat import override
+from freecad.Shelving.core.edit import fixed_point_mm
 from freecad.Shelving.editor.elevation import (
     LIFT_MM,
     Arrow,
@@ -55,6 +56,7 @@ from freecad.Shelving.editor.fields import DimensionField
 from freecad.Shelving.editor.overlay import (
     RGB,
     Coin,
+    PointMarker,
     Style,
     arrow_geometry,
     coin_destroys_draggers_safely,
@@ -74,6 +76,31 @@ _ICON_PX = 24
 # pixels.
 _PADLOCK_PX = 14
 _PADLOCK_GAP_PX = 4
+# The fixed point marker's side, in logical pixels.
+_MARKER_PX = 16
+# Inkscape's rotation-center marker on its 8.81 mm square: a plus whose arms
+# meet in a chamfered hub, with a round hole at the center.
+_MARKER_SIDE_MM = 8.8134
+_MARKER_OUTLINE_MM = (
+    (3.3507, 0.0),
+    (3.3507, 1.7601),
+    (1.7601, 3.3507),
+    (0.0, 3.3507),
+    (0.0, 5.4622),
+    (1.7601, 5.4622),
+    (3.3507, 7.0528),
+    (3.3507, 8.8129),
+    (5.4622, 8.8129),
+    (5.4622, 7.0528),
+    (7.0528, 5.4622),
+    (8.8134, 5.4622),
+    (8.8134, 3.3507),
+    (7.0528, 3.3507),
+    (5.4622, 1.7601),
+    (5.4622, 0.0),
+)
+_MARKER_HOLE_CENTER_MM = (4.40645, 4.40645)
+_MARKER_HOLE_RADIUS_MM = 1.47218
 # SoDatumLabel's text width per character, in ems of its font size: an
 # estimate, since Coin lays the text out where Qt cannot measure it.
 _CHAR_EM = 0.6
@@ -210,6 +237,39 @@ def _padlock_icon(locked: bool, ratio: float, rgb: RGB) -> QtGui.QIcon:
     painter.fillRect(body, color)
     painter.end()
     return QtGui.QIcon(pixmap)
+
+
+def marker_path(side_px: float) -> QtGui.QPainterPath:
+    """The fixed point marker's outline and hole, filling the square from
+    the origin to ``side_px`` on each axis; its odd-even fill leaves the
+    hole open."""
+    path = QtGui.QPainterPath()
+    path.setFillRule(QtCore.Qt.FillRule.OddEvenFill)
+    path.addPolygon(
+        QtGui.QPolygonF([QtCore.QPointF(x, y) for x, y in _MARKER_OUTLINE_MM])
+    )
+    path.closeSubpath()
+    path.addEllipse(
+        QtCore.QPointF(*_MARKER_HOLE_CENTER_MM),
+        _MARKER_HOLE_RADIUS_MM,
+        _MARKER_HOLE_RADIUS_MM,
+    )
+    scale = side_px / _MARKER_SIDE_MM
+    return QtGui.QTransform.fromScale(scale, scale).map(path)
+
+
+def marker_image(ratio: float, rgb: RGB) -> QtGui.QImage:
+    """The fixed point marker in ``rgb``, :data:`_MARKER_PX` logical pixels
+    square at the device pixel ratio ``ratio``, transparent around it and
+    in its hole."""
+    side_px = round(_MARKER_PX * ratio)
+    image = QtGui.QImage(side_px, side_px, QtGui.QImage.Format.Format_RGBA8888)
+    image.fill(QtCore.Qt.GlobalColor.transparent)
+    painter = QtGui.QPainter(image)
+    painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+    painter.fillPath(marker_path(side_px), QtGui.QColor.fromRgbF(*rgb))
+    painter.end()
+    return image
 
 
 def _padlock_button(
@@ -637,6 +697,9 @@ class ViewEditor:
         self.root.addChild(self._frame_transform)
         self.root.addChild(self._drawing)
         self._build_dragger()
+        self.marker = PointMarker()
+        self.root.addChild(self.marker.root)
+        self._draw_marker(ratio)
         scene_graph = self.view.getSceneGraph()
         scene_graph.addChild(self.root)
         self._installed.append((lambda: scene_graph.removeChild(self.root), True))
@@ -934,6 +997,7 @@ class ViewEditor:
                 self.overlay, self.frame, self.style, self._front_normal(), self.preview
             )
         )
+        self.marker.place(self.frame.from_unit(fixed_point_mm(unit)))
         if not self._dragging:
             self._place_arrow()
             self._place_add_bar()
@@ -1381,6 +1445,19 @@ class ViewEditor:
             for locked in (True, False)
         }
 
+    def _draw_marker(self, ratio: float) -> None:
+        """Give the fixed point marker its image drawn at the device pixel
+        ratio ``ratio``: Coin draws an image's pixels one to one."""
+        image = marker_image(ratio, self.style.marker_rgb)
+        self.marker_image = image
+        pixels = bytes(image.constBits())
+        stride = image.bytesPerLine()
+        # Coin's rows run bottom to top, Qt's top to bottom.
+        rows = [
+            pixels[start : start + stride] for start in range(0, len(pixels), stride)
+        ]
+        self.marker.set_image(image.width(), image.height(), b"".join(reversed(rows)))
+
     def _refit(self) -> None:
         """Place the widgets over the view again, after its viewport resized
         or moved to another screen, redrawing their icons when the device
@@ -1393,6 +1470,7 @@ class ViewEditor:
             self.board_padlock.setIcon(self._padlock_icons[True])
             self.add_bar.draw_icons(ratio)
             self._update_padlocks()
+            self._draw_marker(ratio)
         self._place_widgets()
 
     def _update_padlocks(self) -> None:

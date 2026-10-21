@@ -64,6 +64,7 @@ class Style:
     selected_rgb: RGB
     locked_rgb: RGB
     unlocked_rgb: RGB
+    marker_rgb: RGB
     label_size_pt: int
 
     def label_rgb(self, color: LabelColor) -> RGB:
@@ -80,14 +81,23 @@ class Style:
         return _OUTLINE_RGB
 
 
+def marker_rgb() -> RGB:
+    """The fixed point marker's color, read from the View preferences now:
+    the Sketcher's own billboard icon color, by default FreeCAD 1.1's red."""
+    return _view_color("ConstrainedIcoColor", 0xFF2600FF)
+
+
 def view_style(label_size_pt: int) -> Style:
-    """FreeCAD's selection color and the Sketcher's dimension colors, read
-    from the View preferences now: red for a size that drives (a locked
-    opening), blue for one that only reports. Defaults from FreeCAD 1.1."""
+    """FreeCAD's selection color and the Sketcher's dimension and
+    constraint icon colors, read from the View preferences now: red for a
+    size that drives (a locked opening), blue for one that only reports,
+    and the fixed point's marker in the color of the Sketcher's own
+    billboard icons. Defaults from FreeCAD 1.1."""
     return Style(
         selected_rgb=_view_color("SelectionColor", 0x1CAD1CFF),
         locked_rgb=_view_color("ConstrainedDimColor", 0xFF2600FF),
         unlocked_rgb=_view_color("NonDrivingConstrDimColor", 0x0026FFFF),
+        marker_rgb=marker_rgb(),
         label_size_pt=label_size_pt,
     )
 
@@ -239,6 +249,41 @@ def _label_bounds_node(labels: Sequence[DimensionLabel], z_mm: float) -> Coin:
     for node in (style, coordinates, points):
         group.addChild(node)
     return group
+
+
+class PointMarker:
+    """An image drawn at a point, facing the camera at any orientation as
+    the Sketcher's constraint icons are, over every shape in the scene and
+    unpickable, so a click lands on whatever is beneath it. The image keeps
+    its device-pixel size at every zoom.
+    """
+
+    def __init__(self) -> None:
+        # Goes under the elevation frame's transform.
+        self.root: Coin = coin.SoSeparator()
+        pick_style = coin.SoPickStyle()
+        pick_style.style = coin.SoPickStyle.UNPICKABLE
+        self.root.addChild(pick_style)
+        depth = coin.SoDepthBuffer()
+        depth.getField("test").setValue(False)
+        depth.getField("write").setValue(False)
+        self.root.addChild(depth)
+        self.translation: Coin = coin.SoTranslation()
+        self.root.addChild(self.translation)
+        self.image: Coin = coin.SoImage()
+        self.image.horAlignment = coin.SoImage.CENTER
+        self.image.vertAlignment = coin.SoImage.HALF
+        self.root.addChild(self.image)
+
+    def place(self, at_mm: tuple[float, float, float]) -> None:
+        """Center the image on the elevation point ``at_mm``."""
+        self.translation.translation.setValue(*at_mm)
+
+    def set_image(self, width_px: int, height_px: int, rgba: bytes) -> None:
+        """Show ``rgba``, four bytes a pixel in rows from the bottom up, as
+        Coin lays an image out, at ``width_px`` by ``height_px`` device
+        pixels."""
+        self.image.image.setValue(coin.SbVec2s(width_px, height_px), 4, rgba)
 
 
 def arrow_geometry(rgb: RGB) -> Coin:

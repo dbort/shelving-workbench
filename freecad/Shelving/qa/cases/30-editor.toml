@@ -293,6 +293,65 @@ the fitted zoom: each padlock is plainly its own dimension's, and the
 openings and their sizes can be read without zooming in."""
 
 [[case]]
+id = "editor.fixed_point"
+title = "The fixed point's marker on a HiDPI screen"
+
+  [[case.step]]
+  id = "start"
+  action = "shelf_unit_with_varset"
+  instruction = [
+    "Move FreeCAD to a HiDPI screen, such as a Mac's built-in display.",
+    "Select the container (ShelvingUnit).",
+    "Run Edit Unit.",
+  ]
+  expected = """
+A small cross with a hollow center sits on the unit's lower left front
+corner. It is as sharp as the dimension text, and reads as a mark on that
+corner rather than part of a board. The same cross, in the same color,
+sits before the panel's Fixed point column header, as tall as the F, as
+sharp as the text, and on the same line."""
+
+  [[case.step]]
+  id = "choose"
+  instruction = [
+    "Under Fixed point, choose Center for Width.",
+    "Under Fixed point, choose Top for Height.",
+  ]
+  expected = """
+The Fixed point column header and its cross plainly name what the choices
+pick. The cross in the view moves to the middle of the unit's top front
+edge, drawn over the top board and still sharp."""
+
+  [[case.step]]
+  id = "resize"
+  instruction = ["Type 1200 in Height and press Return."]
+  expected = """
+The unit grows downward: its top and the cross stay where they were, and
+the cross reads as the point that held still."""
+
+  [[case.step]]
+  id = "views"
+  instruction = [
+    "Zoom in until the top board fills the view.",
+    "Zoom out until the whole unit is a few centimeters tall.",
+    "Orbit to look at the unit from above and to one side, then from behind.",
+  ]
+  expected = """
+At every zoom and from every side the cross stays on the same point, faces
+you square on, keeps its size on screen, and stays legible over the boards
+behind it."""
+
+  [[case.step]]
+  id = "display"
+  instruction = [
+    "Move the FreeCAD window to a display with a different scaling.",
+    "Move it back.",
+  ]
+  expected = """
+On each display, without a click, the cross keeps its size beside the
+dimension text and is as sharp as that text."""
+
+[[case]]
 id = "editor.stock_selection"
 title = "Selecting several boards by stock, in the view and in the tree"
 

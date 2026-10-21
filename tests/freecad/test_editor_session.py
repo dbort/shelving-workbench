@@ -27,6 +27,7 @@ from freecad.Shelving.core.layout import (
     Board,
     Division,
     Fixed,
+    FixedPoint,
     Region,
     SizeRule,
     Unit,
@@ -1259,6 +1260,86 @@ def test_session_edits_keep_an_offset_unit_where_its_boards_are() -> None:
         _assert_near_mm(fresh.unit.position_mm, _OFFSET_MM)
         assert _tree_shape(fresh.unit.root) == shape
         _assert_session_matches_document(fresh)
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def test_set_fixed_point_is_an_undo_step_that_moves_no_board() -> None:
+    """On a unit offset from its container's origin with its front at +Y,
+    choosing the "Right" side of the width fixes the unit's -X end, as one
+    "Set Fixed Point" step that moves no board; a resize then keeps that
+    end put. Undo and Redo inside the edit and after Close move the choice,
+    and it survives a rescan and a fresh session."""
+    doc = FreeCAD.newDocument("editor_fixed_point")
+    try:
+        container = cast("FreeCAD.DocumentObject", doc.addObject("App::Part", "Unit"))
+        offset_unit = dataclasses.replace(
+            _tiny_unit(),
+            size_mm=Vec3(600.0, 300.0, 900.0),
+            position_mm=_OFFSET_MM,
+            front_at_min=False,
+        )
+        write_container(container, offset_unit)
+        doc.recompute()
+        snapshot = _board_snapshot(container)
+
+        session = Session(container)
+        session.open()
+        try:
+            labels = [choice.label for choice in session.fixed_choices("width")]
+            assert labels == ["Left", "Center", "Right"]
+            right = session.fixed_choices("width")[2]
+            # Seen from +Y, the right is the unit's -X end.
+            assert right.side == "min"
+            left = session.fixed_choices("width")[0]
+            assert session.set_fixed_side("width", left.side) is None
+            doc.recompute()
+            assert list(doc.UndoNames)[0] == "Set Fixed Point"
+            assert _board_snapshot(container) == snapshot
+            assert session.fixed_side("width") == "max"
+            assert properties.read_container_fixed_point(container) == FixedPoint(
+                x="max"
+            )
+            undo_count = doc.UndoCount
+            assert session.set_fixed_side("width", "max") is None
+            assert doc.UndoCount == undo_count
+
+            doc.undo()
+            session.settle()
+            assert session.fixed_side("width") == "min"
+            doc.redo()
+            session.settle()
+            assert session.fixed_side("width") == "max"
+
+            assert session.resize("width", 750.0) is None
+            doc.recompute()
+            high_x_mm = _OFFSET_MM.x_mm + 600.0
+            boxes, _skipped, _record = read_container(container)
+            assert (
+                abs(max(b.corner_mm.x_mm + b.size_mm.x_mm for b in boxes) - high_x_mm)
+                <= 1e-6
+            )
+            assert (
+                abs(min(b.corner_mm.x_mm for b in boxes) - (high_x_mm - 750.0)) <= 1e-6
+            )
+            doc.undo()
+            session.settle()
+            doc.recompute()
+            assert _board_snapshot(container) == snapshot
+        finally:
+            session.close()
+        doc.recompute()
+        assert properties.read_container_fixed_point(container) == FixedPoint(x="max")
+        doc.undo()
+        assert properties.read_container_fixed_point(container) == FixedPoint()
+        doc.redo()
+
+        rescan_unit(container)
+        doc.recompute()
+        fresh = Session(container)
+        assert fresh.fixed_side("width") == "max"
+        assert fresh.fixed_side("height") == "min"
+        assert fresh.fixed_side("depth") == "min"
     finally:
         FreeCAD.closeDocument(doc.Name)
 

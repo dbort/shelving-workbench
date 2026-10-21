@@ -14,18 +14,21 @@ from freecad.Shelving.core.layout import (
     Board,
     Division,
     Fixed,
+    FixedSide,
     Unit,
     Void,
 )
 from freecad.Shelving.core.solver import solve
 from freecad.Shelving.editor.elevation import (
     DimensionLabel,
+    FixedChoice,
     Rect,
     Side,
     arrow_for,
     board_space,
     dragged_to_mm,
     elevation_frame,
+    fixed_choices,
     held_padlock,
     label_at,
     label_size_pt,
@@ -160,6 +163,59 @@ def test_an_offset_unit_draws_the_same_elevation_from_its_position(
     assert origin_arrow is not None and offset_arrow is not None
     assert offset_arrow.at_mm == origin_arrow.at_mm
     assert _close(offset_arrow.grab_mm, shifted(origin_arrow.grab_mm))
+
+
+@pytest.mark.parametrize(
+    ("depth_axis", "front_at_min", "width", "height", "depth"),
+    [
+        # Unknown facing: the frame faces -Y, so Left is -X and Front -Y.
+        (Axis.Y, None, ("min", "max"), ("min", "max"), ("min", "max")),
+        (Axis.Y, True, ("min", "max"), ("min", "max"), ("min", "max")),
+        # Seen from +Y, the unit's +X end is on the left.
+        (Axis.Y, False, ("max", "min"), ("min", "max"), ("max", "min")),
+        # Depth along X, front at -X: the elevation runs along -Y.
+        (Axis.X, True, ("max", "min"), ("min", "max"), ("min", "max")),
+        (Axis.X, False, ("min", "max"), ("min", "max"), ("max", "min")),
+    ],
+)
+def test_fixed_choices_name_the_sides_as_the_editor_shows_them(
+    depth_axis: Axis,
+    front_at_min: bool | None,
+    width: tuple[FixedSide, FixedSide],
+    height: tuple[FixedSide, FixedSide],
+    depth: tuple[FixedSide, FixedSide],
+) -> None:
+    unit = dataclasses.replace(
+        _bookcase(front_at_min),
+        depth_axis=depth_axis,
+        size_mm=Vec3(300.0, 900.0, 600.0)
+        if depth_axis == Axis.X
+        else Vec3(900.0, 300.0, 600.0),
+    )
+    frame = elevation_frame(unit)
+    for axis, names, (first, last) in (
+        (frame.horizontal, ("Left", "Right"), width),
+        (frame.vertical, ("Bottom", "Top"), height),
+        (depth_axis, ("Front", "Back"), depth),
+    ):
+        assert fixed_choices(unit, axis) == (
+            FixedChoice(names[0], first),
+            FixedChoice("Center", "center"),
+            FixedChoice(names[1], last),
+        ), axis
+
+
+def test_the_front_choice_is_the_end_the_frame_faces() -> None:
+    for front_at_min in (None, True, False):
+        unit = _bookcase(front_at_min)
+        frame = elevation_frame(unit)
+        front = fixed_choices(unit, Axis.Y)[0]
+        assert front.label == "Front"
+        facing_max = frame.z_dir.y_mm > 0
+        assert front.side == ("max" if facing_max else "min"), front_at_min
+        left = fixed_choices(unit, Axis.X)[0]
+        left_at_max = frame.h_dir.x_mm < 0
+        assert left.side == ("max" if left_at_max else "min"), front_at_min
 
 
 def test_unit_and_elevation_points_round_trip() -> None:

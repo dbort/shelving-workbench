@@ -3,7 +3,8 @@
 No other module spells one of these property names directly: a board's
 ``ShelvingBornAs``, ``ShelvingBornIn``, and ``ShelvingIrregular``, a
 container's ``ShelvingUnitId``, ``ShelvingDepthAxis``, ``ShelvingFacing``,
-and ``ShelvingRules``, and the board stock the workbench copies but never
+``ShelvingRules``, ``ShelvingFixedX``, ``ShelvingFixedY``, and
+``ShelvingFixedZ``, and the board stock the workbench copies but never
 owns: FreeCAD's ``ShapeMaterial``, the view's ``ShapeAppearance``, and the
 Woodworking workbench's per-face ``Grain`` list. The workbench's own
 properties sit in a ``Shelving`` property group so they stand out from a
@@ -24,16 +25,22 @@ and ``Unit.front_at_min`` has three states (front at the depth
 axis's minimum end, its maximum end, or undetermined), so collapsing to two
 string values plus "property absent" would conflate "never written" with
 "determined to be undetermined".
+
+The fixed point is three string enumerations of the same kind, one per
+model axis (``"min"`` / ``"center"`` / ``"max"``). A container without
+them reads as ``"min"`` on every axis: the minimum corner, which a
+``Part::Box`` grows from too.
 """
 
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Mapping
 from typing import Protocol, cast
 
 import FreeCAD
 
-from freecad.Shelving.core.layout import Axis
+from freecad.Shelving.core.layout import Axis, FixedPoint, FixedSide
 from freecad.Shelving.core.stock import Color
 
 GROUP_NAME = "Shelving"
@@ -46,17 +53,29 @@ UNIT_ID_PROP = "ShelvingUnitId"
 DEPTH_AXIS_PROP = "ShelvingDepthAxis"
 FACING_PROP = "ShelvingFacing"
 RULES_PROP = "ShelvingRules"
+FIXED_PROPS: Mapping[Axis, str] = {
+    Axis.X: "ShelvingFixedX",
+    Axis.Y: "ShelvingFixedY",
+    Axis.Z: "ShelvingFixedZ",
+}
 
 # The Woodworking workbench's grain list: one entry per face, in its own
 # property group. Copied with the type and group the source carries.
 GRAIN_PROP = "Grain"
 
 _BOARD_PROP_NAMES = (BORN_AS_PROP, BORN_IN_PROP, IRREGULAR_PROP)
-_CONTAINER_PROP_NAMES = (UNIT_ID_PROP, DEPTH_AXIS_PROP, FACING_PROP, RULES_PROP)
+_CONTAINER_PROP_NAMES = (
+    UNIT_ID_PROP,
+    DEPTH_AXIS_PROP,
+    FACING_PROP,
+    RULES_PROP,
+    *FIXED_PROPS.values(),
+)
 _FACING_MIN = "min"
 _FACING_MAX = "max"
 _FACING_UNKNOWN = "unknown"
 _FACING_ENUM_VALS = [_FACING_MIN, _FACING_MAX, _FACING_UNKNOWN]
+_FIXED_SIDES: tuple[FixedSide, ...] = ("min", "center", "max")
 
 _AXIS_BY_VALUE: dict[str, Axis] = {axis.value: axis for axis in Axis}
 
@@ -79,6 +98,9 @@ class ContainerObject(Protocol):
     ShelvingDepthAxis: str
     ShelvingFacing: str
     ShelvingRules: str
+    ShelvingFixedX: str
+    ShelvingFixedY: str
+    ShelvingFixedZ: str
 
 
 class FreeCADMaterial(Protocol):
@@ -163,8 +185,9 @@ def ensure_board_properties(obj: FreeCAD.DocumentObject) -> BoardObject:
 
 
 def ensure_container_properties(obj: FreeCAD.DocumentObject) -> ContainerObject:
-    """Add any of the four container properties ``obj`` is missing, and
-    return it narrowed to :class:`ContainerObject`."""
+    """Add any of the container properties ``obj`` is missing, and return
+    it narrowed to :class:`ContainerObject`. A fixed side added here starts
+    at ``"min"``."""
     if not hasattr(obj, UNIT_ID_PROP):
         obj.addProperty(
             "App::PropertyString",
@@ -196,6 +219,17 @@ def ensure_container_properties(obj: FreeCAD.DocumentObject) -> ContainerObject:
             "The per-region size rule record, as freecad.Shelving.core."
             "record.rules_to_json emits it.",
         )
+    for axis, name in FIXED_PROPS.items():
+        if not hasattr(obj, name):
+            obj.addProperty(
+                "App::PropertyEnumeration",
+                name,
+                GROUP_NAME,
+                f"Which side of the unit stays put along {axis.value} when its "
+                "size changes: 'min', 'center', or 'max'.",
+                enum_vals=list(_FIXED_SIDES),
+            )
+            setattr(obj, name, "min")
     return cast("ContainerObject", obj)
 
 
@@ -293,6 +327,24 @@ def write_container_facing(obj: ContainerObject, front_at_min: bool | None) -> N
         obj.ShelvingFacing = _FACING_MAX
     else:
         obj.ShelvingFacing = _FACING_UNKNOWN
+
+
+def read_container_fixed_point(obj: FreeCAD.DocumentObject) -> FixedPoint:
+    """The fixed side ``obj`` stores on each axis, ``"min"`` on any axis
+    whose property is absent or holds no side."""
+    fixed = FixedPoint()
+    for axis, name in FIXED_PROPS.items():
+        value = getattr(obj, name, "min")
+        for side in _FIXED_SIDES:
+            if value == side:
+                fixed = fixed.with_side(axis, side)
+    return fixed
+
+
+def write_container_fixed_point(obj: ContainerObject, fixed: FixedPoint) -> None:
+    obj.ShelvingFixedX = fixed.x
+    obj.ShelvingFixedY = fixed.y
+    obj.ShelvingFixedZ = fixed.z
 
 
 def read_container_rules_json(obj: FreeCAD.DocumentObject) -> str | None:
