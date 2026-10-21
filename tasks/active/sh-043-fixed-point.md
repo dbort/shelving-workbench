@@ -155,3 +155,8 @@ DECISIONS (user, 2026-10-20, QA of round 1):
 - **N1: Right-to-left text would leave the marker on the wrong side** (`freecad/Shelving/editor/panel.py:162`): fine for today's untranslated text; mirror the margin and paint origin when `text().isRightToLeft()` if translations arrive.
 - **N2: New overlong line in the QA case** (`freecad/Shelving/qa/cases/30-editor.toml:322`): a 92-character line in the "choose" step; reflow it.
 - **N3: Round 2's N3 is still open** (`freecad/Shelving/editor/panel.py:270`): no test asserts the `_FIXED_TIPS` tooltip or accessible name.
+
+### Round 4: APPROVED
+- **N1: The marker's top can still overshoot the "F" by 2 to 4 device px at some font sizes** (`freecad/Shelving/editor/panel.py:155`): the bottom holds within 1 device px from 7 to 18 pt at ratios 1 to 3, but `QFontMetricsF.capHeight()` is the 1x-hinted cap height while the glyph rasterizes at device resolution, so at 11 and 16 pt at ratio 2 the marker stands about one logical pixel taller. Judge it in the `editor.fixed_point` QA case, or take the side from the glyph's outline (`QPainterPath.addText`).
+- **N2: The header test's docstring claims more than it checks** (`tests/freecad_gui/test_panel.py:806`): "within a device pixel at each pixel ratio and font size" covers only 9, 13.5 and 18 pt; narrow it or add an 11 pt case once N1 is settled.
+- **N3: Right-to-left text is still unhandled** (`freecad/Shelving/editor/panel.py:162`): round 3's N1 stands as a note.
