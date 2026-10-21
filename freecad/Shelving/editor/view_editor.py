@@ -76,8 +76,8 @@ from freecad.Shelving.refusals import report_error
 _ICON_PX = 24
 # A padlock's icon side, its body's inset from the icon's left and right
 # edges, and the gap between the icon's edge and its dimension's text, in
-# logical pixels. The shackle reaches the icon's top edge, and the right edge too
-# when open.
+# logical pixels. The shackle reaches the icon's top edge, and the right
+# edge too when open.
 _PADLOCK_PX = 14
 _PADLOCK_INSET_PX = 2
 _PADLOCK_GAP_PX = 4
