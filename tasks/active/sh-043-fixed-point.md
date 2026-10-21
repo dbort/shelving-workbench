@@ -136,3 +136,8 @@ DECISIONS (user, 2026-10-20, QA of round 1):
 - **N4: One overlong line in the design doc** (`docs/scope-and-design.md:238`): the edited "On the container" bullet has a 100-character line; reflow to 79.
 - **N5: "Origin of its local frame" carries over an existing ambiguity** (`README.md:104`): the glossary's "Local frame" entry puts the origin at the front-bottom-left corner, which is not the minimum corner for a unit whose front is at +Y, and does not describe a unit offset in its container. Not new here; consider tightening it in a later task.
 - **N6: The marker may be tinted by transparent boards** (`freecad/Shelving/editor/overlay.py:469`): with depth test and write off, transparent board faces drawn in Coin's delayed pass could blend over the marker. Untested; if it matters, add a step with a transparent board to the `editor.fixed_point` QA case.
+
+### Round 2: APPROVED
+- **N1: New overlong line in the design doc** (`docs/scope-and-design.md:195`): 67ed91d left a 106-character line in the fixed point's panel paragraph; reflow it to 79 columns. Round 1's N4 line is also still unwrapped.
+- **N2: The grid test does not pin the field's stretch** (`tests/freecad_gui/test_panel.py:731`): dropping `setColumnStretch(1, 1)` (`freecad/Shelving/editor/panel.py:255`) would pass the test; assert `layout.columnStretch(1) == 1` and `layout.columnStretch(2) == 0`.
+- **N3: The combos' tooltip and accessible name are untested** (`freecad/Shelving/editor/panel.py:270`): no test asserts the per-dimension `_FIXED_TIPS` text; the gap predates 67ed91d.
