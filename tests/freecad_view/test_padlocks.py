@@ -32,7 +32,7 @@ from tests.freecad_view.view import ViewDriver
 
 _VIEW_PARAMS = "User parameter:BaseApp/Preferences/View"
 _PLACE_TOL_PX = 2.0
-# The gap between a padlock's ink and its dimension's text.
+# The gap between a padlock's icon edge and its dimension's text.
 _GAP_PX = 4
 _TOL_MM = 1e-6
 _LOCK = "Lock this opening"
@@ -186,8 +186,26 @@ def _three_bays(panel: EditUnitPanel, driver: ViewDriver) -> tuple[str, str]:
     return low, high
 
 
+@pytest.mark.parametrize(
+    "unit_system", ["Standard (mm, kg, s, °)", "Building US (ft-in, sqft, cft)"]
+)
 def test_each_lockable_dimension_shows_its_padlock_beside_its_text(
-    unit: FreeCAD.DocumentObject, driver: ViewDriver, dimension_style: None
+    unit: FreeCAD.DocumentObject,
+    driver: ViewDriver,
+    dimension_style: None,
+    unit_system: str,
+) -> None:
+    """Building US writes the longest labels, such as ``8" + 5/8"``."""
+    schema = FreeCAD.Units.getSchema()
+    unit.Document.UnitSystem = unit_system
+    try:
+        _check_padlocks_beside_their_text(unit, driver)
+    finally:
+        FreeCAD.Units.setSchema(schema)
+
+
+def _check_padlocks_beside_their_text(
+    unit: FreeCAD.DocumentObject, driver: ViewDriver
 ) -> None:
     panel = edit_unit(unit, driver)
     editor = editor_of(panel)

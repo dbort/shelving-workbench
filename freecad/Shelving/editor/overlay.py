@@ -19,6 +19,7 @@ from typing import Any, TypeAlias
 
 import FreeCAD
 from pivy import coin
+from PySide6 import QtCore
 
 from freecad.Shelving.editor.elevation import (
     LIFT_MM,
@@ -148,17 +149,19 @@ def outline_node(rect: Rect, z_mm: float, rgb: RGB, width_px: float) -> Coin:
     return group
 
 
-# A decimal fraction's trailing zeros, and its point when nothing else is
-# left. FreeCAD pads every length to the Decimals preference, but a
-# fraction such as 5/8 must keep its digits.
-_TRAILING_ZEROS = re.compile(r"\.(\d*?)0+(?!\d)")
-
-
 def length_text(length_mm: float) -> str:
     """``length_mm`` in the user's unit system with its unit, as FreeCAD
     shows a length, less the trailing zeros of a decimal fraction."""
     text = FreeCAD.Units.Quantity(length_mm, FreeCAD.Units.Length).UserString
-    return _TRAILING_ZEROS.sub(lambda match: f".{match[1]}" if match[1] else "", text)
+    # UserString writes the number in the default QLocale, so the point may
+    # be a comma, and the other of the two a group separator. FreeCAD pads
+    # every length to the Decimals preference, but a fraction such as 5/8
+    # must keep its digits.
+    point = re.escape(QtCore.QLocale().decimalPoint())
+    trailing_zeros = re.compile(rf"{point}(\d*?)0+(?!\d)")
+    return trailing_zeros.sub(
+        lambda match: match[0][0] + match[1] if match[1] else "", text
+    )
 
 
 def label_string(label: DimensionLabel, style: Style) -> str:

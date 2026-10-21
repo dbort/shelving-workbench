@@ -465,6 +465,23 @@ def test_a_length_reads_in_the_users_unit_system(
         assert length_text(length_mm) == text
 
 
+@pytest.mark.parametrize(
+    ("length_mm", "text"), [(218.5, "218,5 mm"), (1500.0, "1500 mm")]
+)
+def test_a_length_trims_its_zeros_after_a_decimal_comma(
+    length_mm: float, text: str
+) -> None:
+    """FreeCAD's default number format follows the operating system's
+    locale, so the decimal point can be a comma."""
+    before = QtCore.QLocale()
+    QtCore.QLocale.setDefault(QtCore.QLocale(QtCore.QLocale.Language.German))
+    try:
+        with _unit_system("Internal"):
+            assert length_text(length_mm) == text
+    finally:
+        QtCore.QLocale.setDefault(before)
+
+
 def test_dimensions_follow_the_users_unit_system(
     placed_unit: FreeCAD.DocumentObject, driver: ViewDriver
 ) -> None:

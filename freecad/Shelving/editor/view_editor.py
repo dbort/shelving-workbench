@@ -75,8 +75,8 @@ from freecad.Shelving.refusals import report_error
 # The add buttons' icon side, in logical pixels.
 _ICON_PX = 24
 # A padlock's icon side, its body's inset from the icon's left and right
-# edges, and the gap between its ink and its dimension's text, in logical
-# pixels. The shackle reaches the icon's top edge, and the right edge too
+# edges, and the gap between the icon's edge and its dimension's text, in
+# logical pixels. The shackle reaches the icon's top edge, and the right edge too
 # when open.
 _PADLOCK_PX = 14
 _PADLOCK_INSET_PX = 2
@@ -111,7 +111,8 @@ _MARKER_OUTLINE_MM = (
 _MARKER_HOLE_CENTER_MM = (4.40645, 4.40645)
 _MARKER_HOLE_RADIUS_MM = 1.47218
 # SoDatumLabel's font when its name field is left at its default, as the
-# Sketcher leaves it; Qt substitutes the same face for both.
+# Sketcher leaves it. Qt substitutes the same face for SoDatumLabel's
+# drawing and for the measurement here, so the two agree.
 _LABEL_FONT = "Helvetica"
 _UNITS_PARAMS = "User parameter:BaseApp/Preferences/Units"
 # How long the turn toward the unit may animate before the fit goes ahead.
