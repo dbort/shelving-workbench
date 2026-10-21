@@ -64,23 +64,6 @@ clearances.
 *Verify in FreeCAD:* place a window and a door opening in a wall, move one
 and change its size, and confirm the cripples and jacks follow.
 
-## M15: The fixed point
-
-**Status:** Tasks sh-042, sh-043
-
-- [x] sh-042: a unit keeps its place in its container
-- [ ] sh-043: choose the unit's fixed point (blocked on sh-042)
-
-A unit stays where its boards are through every edit, and its fixed point
-decides which side stays put when its size changes: on each of width,
-height and depth, one side or the center. A wall-mounted shelf keeps its
-back when it gets deeper; a free-standing piece keeps its front. The 3D
-view marks the fixed point while Edit Unit is open.
-
-*Verify in FreeCAD:* move a unit's boards away from its container's
-origin, set Depth to keep the back, change the depth, and see the back,
-and every board's distance from it, stay where they were.
-
 ## M16: Starting from a silhouette or a volume
 
 **Status:** Planned
@@ -88,7 +71,7 @@ and every board's distance from it, stay where they were.
 New ways to begin a unit besides Create Unit's starter box: from a
 silhouette, such as a sketch of its outline on a wall's plane, or from a
 volume it has to fill. A unit started from a silhouette keeps that plane
-as its fixed side in depth (M15).
+as its fixed side in depth.
 
 *Verify in FreeCAD:* start a unit from a sketched outline on a wall, change
 its depth, and see it stay on the wall.

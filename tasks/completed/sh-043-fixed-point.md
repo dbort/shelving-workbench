@@ -15,18 +15,18 @@ with a small camera-facing marker. Every unit starts at its minimum
 corner, which is how units behave today. Milestone M15.
 
 ## Must Have
-- [ ] `pixi run tests` green; `pyrefly check` clean over the changed code.
-- [ ] Each model axis of a unit has a fixed side, one of the minimum end,
+- [x] `pixi run tests` green; `pyrefly check` clean over the changed code.
+- [x] Each model axis of a unit has a fixed side, one of the minimum end,
       the center, or the maximum end, stored on the container with the
       unit's other properties. A container without the stored value reads
       as the minimum end on every axis.
-- [ ] Resizing a unit along an axis keeps that axis's fixed side at its
+- [x] Resizing a unit along an axis keeps that axis's fixed side at its
       container coordinate within 1e-6 mm: the low face for the minimum
       end, the midpoint for the center, the high face for the maximum
       end. This holds through `Session.resize` and through
       `unit_ops.resize_unit`, on a unit offset from the container's origin
       as sh-042's tests build one.
-- [ ] Edit Unit's task panel shows a choice beside each of the Width,
+- [x] Edit Unit's task panel shows a choice beside each of the Width,
       Height and Depth fields, offering "Left", "Center", "Right" for
       Width, "Bottom", "Center", "Top" for Height, and "Front", "Center",
       "Back" for Depth. Each label names the side as the editor's
@@ -38,24 +38,24 @@ corner, which is how units behave today. Milestone M15.
       draws the marker before its text, in the marker's View preference
       color, as tall as the font's capital letters and on the text's
       baseline.
-- [ ] Changing a choice is one undo step, "Set Fixed Point", inside the
+- [x] Changing a choice is one undo step, "Set Fixed Point", inside the
       edit and after Close, and leaves every board's placement unchanged.
       The choice survives Close, reopening Edit Unit, and a rescan.
-- [ ] While Edit Unit is open, the 3D view shows the marker described in
+- [x] While Edit Unit is open, the 3D view shows the marker described in
       `## Advice` at the fixed point's document position on the unit's
       bounding box, facing the camera at every orientation, drawn over the
       boards, and moving to the new spot when a choice changes, when the
       unit resizes, and on Undo and Redo. A click on the marker does what
       the same click would do with no marker there.
-- [ ] The marker's image is redrawn at the view's device pixel ratio when
+- [x] The marker's image is redrawn at the view's device pixel ratio when
       it changes, as sh-041's padlocks are.
-- [ ] `README.md`'s glossary defines "Fixed point" in user terms, and
+- [x] `README.md`'s glossary defines "Fixed point" in user terms, and
       `tests/test_readme_glossary.py` passes.
-- [ ] `freecad/Shelving/qa/cases/30-editor.toml` gains a case for what no
+- [x] `freecad/Shelving/qa/cases/30-editor.toml` gains a case for what no
       test asserts: whether the marker is legible and sharp on a HiDPI
       screen at several zoom levels and orientations, and whether it reads
       as the point that stays put.
-- [ ] `docs/scope-and-design.md` describes the fixed point: its choices,
+- [x] `docs/scope-and-design.md` describes the fixed point: its choices,
       the default, where it is stored, and the marker.
 
 ## Advice
