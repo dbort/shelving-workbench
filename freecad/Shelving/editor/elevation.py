@@ -57,9 +57,6 @@ _ARROW_FRACTION = 0.08
 # How far past the dimension line of the opening it resizes the arrow sits,
 # as a fraction of the unit's longer elevation side.
 _ARROW_BESIDE_FRACTION = 0.04
-# How far outside the unit each row of outer dimensions sits, as a fraction
-# of the unit's longer elevation side.
-_OUTER_ROW_FRACTION = 0.06
 _EPSILON_MM = 1e-6
 
 
@@ -322,7 +319,9 @@ class DimensionLabel:
     region_id: str
     start_mm: tuple[float, float]
     end_mm: tuple[float, float]
-    text: str
+    # Left as a number: its text follows the user's unit system, which this
+    # module, free of FreeCAD, cannot read.
+    size_mm: float
     color: LabelColor
     # Where the text's center sits along the line, as a fraction from start.
     text_fraction: float
@@ -366,10 +365,6 @@ class Overlay:
     labels: Sequence[DimensionLabel] = ()
 
 
-def format_mm(value_mm: float) -> str:
-    return f"{value_mm:.2f}".rstrip("0").rstrip(".")
-
-
 # The spans already taken outside the unit, per edge (the elevation axis
 # across it, and whether it is the low edge) and per row counted outward
 # from 1.
@@ -392,20 +387,24 @@ def _outer_row(
     return row
 
 
+def _longest_mm(unit: Unit, frame: ElevationFrame) -> float:
+    """The unit's longer side in ``frame``'s elevation plane."""
+    size = unit.size_mm
+    return max(
+        size.component_mm(frame.horizontal.component_index),
+        size.component_mm(frame.vertical.component_index),
+    )
+
+
 @dataclass
 class _Planner:
     unit: Unit
     spaces: Mapping[str, Space]
     frame: ElevationFrame
+    # How far apart the rows of outer dimensions sit, the first from the
+    # unit's outer face.
+    outer_row_mm: float
     outer_rows: _OuterRows = field(default_factory=dict)
-
-    @property
-    def longest_mm(self) -> float:
-        size = self.unit.size_mm
-        return max(
-            size.component_mm(self.frame.horizontal.component_index),
-            size.component_mm(self.frame.vertical.component_index),
-        )
 
     def rects(self) -> Iterator[tuple[Region, Rect]]:
         for node, _depth, _parent in _walk(self.unit.root):
@@ -453,7 +452,10 @@ class _Planner:
         if division.axis not in (frame.horizontal, frame.vertical):
             return
         run_is_horizontal = division.axis == frame.horizontal
-        outside_mm = _OUTER_ROW_FRACTION * self.longest_mm
+        outside_mm = self.outer_row_mm
+        # From the outer face rather than the region's edge, so a thick
+        # board cannot carry its own dimension onto it.
+        outer = frame.rect(self.spaces[self.unit.root.id])
         alone = sum(not isinstance(item, Board) for item in division.items) == 1
         for index, item in enumerate(division.items):
             if isinstance(item, Board):
@@ -476,20 +478,22 @@ class _Planner:
             if run_is_horizontal:
                 low_mm, high_mm = span.h0_mm, span.h1_mm
                 across_low_mm, across_high_mm = rect.v0_mm, rect.v1_mm
+                outer_low_mm, outer_high_mm = outer.v0_mm, outer.v1_mm
                 edge = "v"
             else:
                 low_mm, high_mm = span.v0_mm, span.v1_mm
                 across_low_mm, across_high_mm = rect.h0_mm, rect.h1_mm
+                outer_low_mm, outer_high_mm = outer.h0_mm, outer.h1_mm
                 edge = "h"
             across_mm = across_high_mm - across_low_mm
             if isinstance(item, Division):
                 text_fraction = 0.5
                 if self.only_boards_beyond(rect, run_is_horizontal, low=True):
                     row = _outer_row(self.outer_rows, (edge, True), low_mm, high_mm)
-                    cross_mm = across_low_mm - outside_mm * row
+                    cross_mm = outer_low_mm - outside_mm * row
                 elif self.only_boards_beyond(rect, run_is_horizontal, low=False):
                     row = _outer_row(self.outer_rows, (edge, False), low_mm, high_mm)
-                    cross_mm = across_high_mm + outside_mm * row
+                    cross_mm = outer_high_mm + outside_mm * row
                 else:
                     cross_mm = across_low_mm + across_mm / 6
             else:
@@ -503,12 +507,11 @@ class _Planner:
             # constraints keep theirs when their geometry is selected.
             locked = is_locked(item)
             color: LabelColor = "locked" if locked else "unlocked"
-            size_mm = measure(self.unit, item.id, self.spaces).size_mm
             yield DimensionLabel(
                 region_id=item.id,
                 start_mm=start_mm,
                 end_mm=end_mm,
-                text=format_mm(size_mm),
+                size_mm=measure(self.unit, item.id, self.spaces).size_mm,
                 color=color,
                 text_fraction=text_fraction,
                 lockable=locked or not alone,
@@ -520,14 +523,17 @@ def plan_overlay(
     spaces: Mapping[str, Space],
     frame: ElevationFrame,
     selected_id: str | None,
+    outer_row_mm: float,
 ) -> Overlay:
     """What to draw for ``unit`` solved as ``spaces`` on ``frame``'s face:
     a face per bay and void, an outline per opening and for the selected
     node, a "holding" outline for each locked region holding a selected
     board that :func:`held_padlock` gives a padlock, and a dimension for
     every region in a run along an elevation axis. ``spaces`` must hold
-    every node of ``unit``."""
-    planner = _Planner(unit, spaces, frame)
+    every node of ``unit``. A dimension outside the unit sits a whole
+    number of ``outer_row_mm`` rows out from its outer face, so resizing the
+    unit moves only the rows past the faces that move."""
+    planner = _Planner(unit, spaces, frame, outer_row_mm)
     padlock = (
         None if selected_id is None else held_padlock(unit, spaces, frame, selected_id)
     )
@@ -667,7 +673,7 @@ def _arrow_place(
         return None
     rect = frame.rect(space)
     before = frame.rect(spaces[before_id])
-    longest_mm = _Planner(unit, spaces, frame).longest_mm
+    longest_mm = _longest_mm(unit, frame)
     beside_mm = _ARROW_BESIDE_FRACTION * longest_mm
     vertical = axis == frame.vertical
     center_h_mm, center_v_mm = rect.center_mm

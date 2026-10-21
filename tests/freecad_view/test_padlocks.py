@@ -9,14 +9,15 @@ from typing import cast
 import FreeCAD
 import FreeCADGui
 import pytest
-from PySide6 import QtCore, QtTest, QtWidgets
+from PySide6 import QtCore, QtGui, QtTest, QtWidgets
 
 from freecad.Shelving.core.edit import is_locked
 from freecad.Shelving.core.geometry import Space
 from freecad.Shelving.core.layout import Board, Division, Region
 from freecad.Shelving.editor.elevation import LIFT_MM, DimensionLabel
+from freecad.Shelving.editor.overlay import RGB, label_string
 from freecad.Shelving.editor.panel import EditUnitPanel
-from freecad.Shelving.editor.view_editor import ViewEditor
+from freecad.Shelving.editor.view_editor import ViewEditor, label_metrics
 from tests.freecad_view import overlay_nodes
 from tests.freecad_view.editor import (
     add_board,
@@ -30,9 +31,9 @@ from tests.freecad_view.editor import (
 from tests.freecad_view.view import ViewDriver
 
 _VIEW_PARAMS = "User parameter:BaseApp/Preferences/View"
-# The font size dimension_style sets, in logical pixels.
-_FONT_PX = 21
 _PLACE_TOL_PX = 2.0
+# The gap between a padlock's icon edge and its dimension's text.
+_GAP_PX = 4
 _TOL_MM = 1e-6
 _LOCK = "Lock this opening"
 _UNLOCK = "Unlock this opening"
@@ -77,26 +78,39 @@ def _anchor(
     return driver.qt_point(editor.to_document(*at_mm))
 
 
+def _lead_px(editor: ViewEditor, label: DimensionLabel) -> tuple[float, float]:
+    """``label``'s drawn text's width, and how far into it the first
+    digit's ink starts, in logical pixels."""
+    metrics = label_metrics(editor.style.label_size_pt)
+    ratio = editor._label_ratio
+    text = label_string(label, editor.style)
+    width_px = metrics.horizontalAdvance(text)
+    lead_px = metrics.horizontalAdvance(" " * editor.style.padlock_spaces)
+    lead_px += metrics.leftBearing(text.lstrip()[0])
+    return width_px / ratio, lead_px / ratio
+
+
 def _misplaced(
     driver: ViewDriver, editor: ViewEditor, label: DimensionLabel
 ) -> str | None:
-    """Why ``label``'s padlock is not where it belongs, just past its text
-    along its line and clear of its anchor, or ``None`` when it is."""
+    """Why ``label``'s padlock is not where it belongs, on its line a gap
+    before the first digit, in the blank its leading spaces leave, or
+    ``None`` when it is. The text reads left to right, or upward along a
+    vertical line."""
     button = editor.padlock_for(label.region_id)
     if button is None or not button.isVisible():
         return f"{label.region_id}: no padlock shown"
     rect = _geometry(editor, button)
     anchor = _anchor(driver, editor, label.text_at_mm)
-    reach_px = len(label.text) * 0.6 * _FONT_PX / 2 + 4 + button.width() / 2
+    width_px, lead_px = _lead_px(editor, label)
+    before_px = width_px / 2 - lead_px + _GAP_PX + 7.0
     expected = anchor + (
-        QtCore.QPointF(reach_px, 0.0)
+        QtCore.QPointF(-before_px, 0.0)
         if label.horizontal
-        else QtCore.QPointF(0.0, -reach_px)
+        else QtCore.QPointF(0.0, before_px)
     )
     if (rect.center() - expected).manhattanLength() > _PLACE_TOL_PX:
         return f"{label.region_id}: at {rect.center()}, expected {expected}"
-    if rect.contains(anchor):
-        return f"{label.region_id}: covers its anchor {anchor}"
     return None
 
 
@@ -172,8 +186,26 @@ def _three_bays(panel: EditUnitPanel, driver: ViewDriver) -> tuple[str, str]:
     return low, high
 
 
-def test_each_lockable_dimension_shows_its_padlock_past_its_text(
-    unit: FreeCAD.DocumentObject, driver: ViewDriver, dimension_style: None
+@pytest.mark.parametrize(
+    "unit_system", ["Standard (mm, kg, s, °)", "Building US (ft-in, sqft, cft)"]
+)
+def test_each_lockable_dimension_shows_its_padlock_beside_its_text(
+    unit: FreeCAD.DocumentObject,
+    driver: ViewDriver,
+    dimension_style: None,
+    unit_system: str,
+) -> None:
+    """Building US writes the longest labels, such as ``8" + 5/8"``."""
+    schema = FreeCAD.Units.getSchema()
+    unit.Document.UnitSystem = unit_system
+    try:
+        _check_padlocks_beside_their_text(unit, driver)
+    finally:
+        FreeCAD.Units.setSchema(schema)
+
+
+def _check_padlocks_beside_their_text(
+    unit: FreeCAD.DocumentObject, driver: ViewDriver
 ) -> None:
     panel = edit_unit(unit, driver)
     editor = editor_of(panel)
@@ -203,6 +235,83 @@ def test_each_lockable_dimension_shows_its_padlock_past_its_text(
     for label in editor.overlay.labels:
         if label.lockable:
             assert _misplaced(driver, editor, label) is None
+    click_task_button("Close", driver)
+
+
+def _inked(image: QtGui.QImage, point: QtCore.QPointF, rgb: RGB) -> bool:
+    ratio = image.devicePixelRatio()
+    color = image.pixelColor(round(point.x() * ratio), round(point.y() * ratio))
+    drawn = (color.redF(), color.greenF(), color.blueF())
+    return all(abs(a - b) < 0.35 for a, b in zip(drawn, rgb, strict=True))
+
+
+def test_a_padlock_sits_in_a_blank_of_its_line_just_before_the_first_digit(
+    unit: FreeCAD.DocumentObject, driver: ViewDriver, dimension_style: None
+) -> None:
+    """Under each padlock the view draws nothing, neither line nor text,
+    and the first digit's ink starts a small gap past the padlock's. The
+    text lands on whole pixels from wherever the camera puts its center, so
+    the gap varies by a pixel or so. A dimension too short to hold its text
+    clear of its arrowheads draws them under the text as the Sketcher does,
+    so only dimensions with room are read."""
+    # Wide enough that the width dimensions have room too, and reopened so
+    # the view fits the wider unit.
+    panel = edit_unit(unit, driver)
+    assert panel.session.resize("width", 1500.0) is None
+    click_task_button("Close", driver)
+    panel = edit_unit(unit, driver)
+    editor = editor_of(panel)
+    for direction in ("horizontal", "vertical", "horizontal", "vertical"):
+        add_board(panel, direction, driver)
+    editor.select(None)
+    panel._refresh()
+    driver.pump()
+    image = driver.grab()
+    read = []
+    for label in editor.overlay.labels:
+        if not label.lockable:
+            continue
+        anchor = _anchor(driver, editor, label.text_at_mm)
+        start = _anchor(driver, editor, label.start_mm)
+        width_px, _lead = _lead_px(editor, label)
+        # Half the text, then SoDatumLabel's margin and arrowhead, each a
+        # fraction of the text's height.
+        if (anchor - start).manhattanLength() < width_px / 2 + 24:
+            continue
+        read.append(label.horizontal)
+        rgb = editor.style.label_rgb(label.color)
+        icon = _geometry(editor, _padlock(editor, label.region_id)).adjusted(
+            2, 2, -2, -2
+        )
+        for x in range(round(icon.left()), round(icon.right())):
+            for y in range(round(icon.top()), round(icon.bottom())):
+                assert not _inked(image, QtCore.QPointF(x, y), rgb), (
+                    label.region_id,
+                    x,
+                    y,
+                )
+        # Toward the digits along the line, across the text's height.
+        toward = (
+            QtCore.QPointF(1.0, 0.0) if label.horizontal else QtCore.QPointF(0.0, -1.0)
+        )
+        across = (
+            QtCore.QPointF(0.0, 1.0) if label.horizontal else QtCore.QPointF(1.0, 0.0)
+        )
+        edge = (
+            QtCore.QPointF(icon.right(), anchor.y())
+            if label.horizontal
+            else QtCore.QPointF(anchor.x(), icon.top())
+        )
+        gap_px = next(
+            step
+            for step in range(1, 20)
+            if any(
+                _inked(image, edge + toward * step + across * d, rgb)
+                for d in range(-6, 7)
+            )
+        )
+        assert _GAP_PX - 2 <= gap_px <= _GAP_PX + 2, (label.region_id, gap_px)
+    assert set(read) == {True, False}
     click_task_button("Close", driver)
 
 

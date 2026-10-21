@@ -3,12 +3,15 @@ every way out puts back, the camera's turn, and the openings and
 dimensions drawn over the boards."""
 
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from types import TracebackType
 from typing import Protocol, cast
 
 import FreeCAD
 import FreeCADGui
 import pytest
+from PySide6 import QtCore
 
 from freecad.Shelving.core.edit import is_locked, measure
 from freecad.Shelving.core.layout import Board, Division, Region
@@ -19,7 +22,9 @@ from freecad.Shelving.editor.elevation import (
     elevation_frame,
     label_size_pt,
 )
+from freecad.Shelving.editor.overlay import label_string, length_text
 from freecad.Shelving.editor.panel import EditUnitPanel
+from freecad.Shelving.editor.view_editor import label_metrics
 from freecad.Shelving.qa import actions as qa_actions
 from tests.freecad_view import overlay_nodes
 from tests.freecad_view.editor import (
@@ -37,6 +42,7 @@ from tests.freecad_view.view import ViewDriver
 _TOL_MM = 0.01
 _VIEW_PARAMS = "User parameter:BaseApp/Preferences/View"
 _SKETCHER_PARAMS = "User parameter:BaseApp/Preferences/Mod/Sketcher/General"
+_UNITS_PARAMS = "User parameter:BaseApp/Preferences/Units"
 
 
 class _Placed(Protocol):
@@ -400,7 +406,7 @@ def test_each_region_in_a_run_has_a_sketcher_dimension(
                 else:
                     rgb = _rgb("NonDrivingConstrDimColor", 0)
                 size_mm = measure(session.unit, item.id, session.spaces).size_mm
-                found.append((f"{size_mm:.2f}".rstrip("0").rstrip("."), rgb))
+                found.append((length_text(size_mm), rgb))
                 walk(item)
 
         walk(session.unit.root)
@@ -412,7 +418,8 @@ def test_each_region_in_a_run_has_a_sketcher_dimension(
         assert len(drawn) == len(wanted)
         for text, rgb in wanted:
             assert any(
-                label.text == text and _close_rgb(label.rgb, rgb) for label in drawn
+                label.text.strip() == text and _close_rgb(label.rgb, rgb)
+                for label in drawn
             ), (text, rgb, drawn)
         for label in drawn:
             assert label.size == size_pt
@@ -426,6 +433,184 @@ def test_each_region_in_a_run_has_a_sketcher_dimension(
     )
     assert editor_of(panel).frame.side == "back"
     check()
+    click_task_button("Close", driver)
+
+
+@contextmanager
+def _unit_system(schema: str) -> Iterator[None]:
+    """FreeCAD's unit system set to ``schema``, a name from
+    ``Units.listSchemas()``, and restored on exit."""
+    before = FreeCAD.Units.getSchema()
+    FreeCAD.Units.setSchema(FreeCAD.Units.listSchemas().index(schema))
+    try:
+        yield
+    finally:
+        FreeCAD.Units.setSchema(before)
+
+
+@pytest.mark.parametrize(
+    ("schema", "length_mm", "text"),
+    [
+        ("Internal", 346.0, "346 mm"),
+        ("Internal", 218.5, "218.5 mm"),
+        ("ImperialDecimal", 25.4, "1 in"),
+        ("Centimeter", 205.0, "20.5 cm"),
+        ("ImperialBuilding", 218.5, '8" + 5/8"'),
+    ],
+)
+def test_a_length_reads_in_the_users_unit_system(
+    schema: str, length_mm: float, text: str
+) -> None:
+    with _unit_system(schema):
+        assert length_text(length_mm) == text
+
+
+@pytest.mark.parametrize(
+    ("length_mm", "text"), [(218.5, "218,5 mm"), (1500.0, "1500 mm")]
+)
+def test_a_length_trims_its_zeros_after_a_decimal_comma(
+    length_mm: float, text: str
+) -> None:
+    """FreeCAD's default number format follows the operating system's
+    locale, so the decimal point can be a comma."""
+    before = QtCore.QLocale()
+    QtCore.QLocale.setDefault(QtCore.QLocale(QtCore.QLocale.Language.German))
+    try:
+        with _unit_system("Internal"):
+            assert length_text(length_mm) == text
+    finally:
+        QtCore.QLocale.setDefault(before)
+
+
+def test_dimensions_follow_the_users_unit_system(
+    placed_unit: FreeCAD.DocumentObject, driver: ViewDriver
+) -> None:
+    # The active document's own unit system decides the schema, so setting
+    # only the global one would be undone when the document activates.
+    with _unit_system("ImperialDecimal"):
+        placed_unit.Document.UnitSystem = "Imperial decimal (in, lb)"
+        panel = edit_unit(placed_unit, driver)
+        add_board(panel, "vertical", driver)
+        drawn = overlay_nodes.labels(editor_of(panel).root)
+        assert drawn
+        assert all(label.text.endswith(" in") for label in drawn), drawn
+        click_task_button("Close", driver)
+
+
+@pytest.mark.parametrize("route", ["status bar", "preferences"])
+def test_dimensions_follow_a_unit_change_while_the_editor_is_open(
+    placed_unit: FreeCAD.DocumentObject, driver: ViewDriver, route: str
+) -> None:
+    """Each route sets what FreeCAD's own code sets, in its order: the status
+    bar's unit menu sets the document's unit system and then the schema;
+    Preferences saves the Units group and then sets the schema."""
+    params = FreeCAD.ParamGet(_UNITS_PARAMS)
+    panel = edit_unit(placed_unit, driver)
+    add_board(panel, "vertical", driver)
+    assert all(
+        label.text.endswith(" mm")
+        for label in overlay_nodes.labels(editor_of(panel).root)
+    )
+    imperial = FreeCAD.Units.listSchemas().index("ImperialDecimal")
+    with _unit_system("Internal"):
+        try:
+            if route == "status bar":
+                placed_unit.Document.UnitSystem = "Imperial decimal (in, lb)"
+            else:
+                params.SetBool("IgnoreProjectSchema", True)
+                params.SetInt("UserSchema", imperial)
+            FreeCAD.Units.setSchema(imperial)
+            driver.pump()
+            drawn = overlay_nodes.labels(editor_of(panel).root)
+            assert drawn
+            assert all(label.text.endswith(" in") for label in drawn), drawn
+        finally:
+            params.RemBool("IgnoreProjectSchema")
+            params.RemInt("UserSchema")
+    click_task_button("Close", driver)
+
+
+def _layered(placed_unit: FreeCAD.DocumentObject, driver: ViewDriver) -> EditUnitPanel:
+    """Edit Unit open on the unit split four times, which stacks two rows
+    of dimensions left of it and two below it."""
+    panel = edit_unit(placed_unit, driver)
+    for direction in ("horizontal", "vertical", "horizontal", "vertical"):
+        add_board(panel, direction, driver)
+    editor_of(panel).select(None)
+    panel._refresh()
+    driver.pump()
+    return panel
+
+
+def test_rows_of_dimensions_outside_the_unit_clear_it_and_each_other(
+    placed_unit: FreeCAD.DocumentObject, driver: ViewDriver, dimension_style: None
+) -> None:
+    """Each outer dimension's text, its padlock's room included, measured as
+    SoDatumLabel lays it out, at the view the editor opens to."""
+    panel = _layered(placed_unit, driver)
+    editor = editor_of(panel)
+    session = panel.session
+    metrics = label_metrics(editor.style.label_size_pt)
+    ratio = editor._label_ratio
+
+    def screen_rect(
+        h0_mm: float, v0_mm: float, h1_mm: float, v1_mm: float
+    ) -> QtCore.QRectF:
+        a = driver.qt_point(editor.to_document(h0_mm, v0_mm))
+        b = driver.qt_point(editor.to_document(h1_mm, v1_mm))
+        return QtCore.QRectF(a, b).normalized()
+
+    outer = screen_rect(*editor.frame.rect(session.spaces[session.unit.root.id]))
+    texts: list[tuple[str, QtCore.QRectF]] = []
+    for label in editor.overlay.labels:
+        center = driver.qt_point(editor.to_document(*label.text_at_mm))
+        if outer.contains(center):
+            continue
+        long_px = metrics.horizontalAdvance(label_string(label, editor.style)) / ratio
+        short_px = metrics.height() / ratio
+        w_px, h_px = (long_px, short_px) if label.horizontal else (short_px, long_px)
+        texts.append(
+            (
+                label.region_id,
+                QtCore.QRectF(center.x() - w_px / 2, center.y() - h_px / 2, w_px, h_px),
+            )
+        )
+    left = [rect for _id, rect in texts if rect.right() < outer.left()]
+    below = [rect for _id, rect in texts if rect.top() > outer.bottom()]
+    assert len(left) >= 2 and len(below) >= 2, texts
+    for region_id, rect in texts:
+        assert not rect.intersects(outer), (region_id, rect, outer)
+    for i, (first_id, first) in enumerate(texts):
+        for second_id, second in texts[i + 1 :]:
+            assert not first.intersects(second), (first_id, second_id)
+    click_task_button("Close", driver)
+
+
+def test_resizing_the_unit_moves_only_the_rows_past_a_moving_face(
+    placed_unit: FreeCAD.DocumentObject, driver: ViewDriver
+) -> None:
+    """The fixed point stays at the unit's low corner, so a taller or wider
+    unit keeps the rows left of it and below it where they were and only
+    lengthens their lines."""
+    panel = _layered(placed_unit, driver)
+    editor = editor_of(panel)
+
+    def lines() -> dict[str, tuple[tuple[float, float], tuple[float, float]]]:
+        return {x.region_id: (x.start_mm, x.end_mm) for x in editor.overlay.labels}
+
+    before = lines()
+    for dimension, size_mm in (("height", 1400.0), ("width", 1600.0)):
+        assert panel.session.resize(dimension, size_mm) is None
+        panel._refresh()
+        driver.pump()
+    after = lines()
+    for region_id, ((h0_mm, v0_mm), (h1_mm, v1_mm)) in before.items():
+        if h0_mm < 0 and h0_mm == h1_mm:
+            assert after[region_id][0][0] == pytest.approx(h0_mm), region_id
+        if v0_mm < 0 and v0_mm == v1_mm:
+            assert after[region_id][0][1] == pytest.approx(v0_mm), region_id
+    assert any(h0_mm < 0 for (h0_mm, _v), _end in before.values())
+    assert any(v0_mm < 0 for (_h, v0_mm), _end in before.values())
     click_task_button("Close", driver)
 
 

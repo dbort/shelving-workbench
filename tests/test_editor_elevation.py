@@ -38,6 +38,8 @@ from freecad.Shelving.editor.elevation import (
 )
 
 _T_MM = 18.0
+# The spacing of the rows of dimensions outside the unit.
+_ROW_MM = 40.0
 
 
 def _bookcase(front_at_min: bool | None = None) -> Unit:
@@ -155,9 +157,9 @@ def test_an_offset_unit_draws_the_same_elevation_from_its_position(
     origin_frame = elevation_frame(at_origin, side)
     offset_frame = elevation_frame(offset, side)
     assert _close(offset_frame.origin_mm, shifted(origin_frame.origin_mm))
-    assert plan_overlay(offset, solve(offset), offset_frame, "shelf") == plan_overlay(
-        at_origin, solve(at_origin), origin_frame, "shelf"
-    )
+    assert plan_overlay(
+        offset, solve(offset), offset_frame, "shelf", _ROW_MM
+    ) == plan_overlay(at_origin, solve(at_origin), origin_frame, "shelf", _ROW_MM)
     origin_arrow = arrow_for(at_origin, solve(at_origin), origin_frame, "divider")
     offset_arrow = arrow_for(offset, solve(offset), offset_frame, "divider")
     assert origin_arrow is not None and offset_arrow is not None
@@ -228,7 +230,7 @@ def test_unit_and_elevation_points_round_trip() -> None:
 
 
 def test_a_face_per_opening_on_the_face_itself() -> None:
-    overlay = plan_overlay(_UNIT, _SPACES, elevation_frame(_UNIT), None)
+    overlay = plan_overlay(_UNIT, _SPACES, elevation_frame(_UNIT), None, _ROW_MM)
     kinds = {face.region_id: face.kind for face in overlay.faces}
     assert kinds == {"lower": "bay", "upper": "bay", "void": "void"}
     lower = next(face for face in overlay.faces if face.region_id == "lower")
@@ -238,17 +240,19 @@ def test_a_face_per_opening_on_the_face_itself() -> None:
 def test_selection_shows_as_an_outline() -> None:
     frame = elevation_frame(_UNIT)
     for node_id in ("lower", "shelf"):
-        overlay = plan_overlay(_UNIT, _SPACES, frame, node_id)
+        overlay = plan_overlay(_UNIT, _SPACES, frame, node_id, _ROW_MM)
         selected = [o for o in overlay.outlines if o.role == "selected"]
         assert len(selected) == 1
-    overlay = plan_overlay(_UNIT, _SPACES, frame, "shelf")
+    overlay = plan_overlay(_UNIT, _SPACES, frame, "shelf", _ROW_MM)
     (outline,) = [o for o in overlay.outlines if o.role == "selected"]
     assert outline.rect == frame.rect(_SPACES["shelf"])
 
 
 def _labels(selected: str | None = None, unit: Unit = _UNIT) -> list[DimensionLabel]:
     spaces = solve(unit)
-    return list(plan_overlay(unit, spaces, elevation_frame(unit), selected).labels)
+    return list(
+        plan_overlay(unit, spaces, elevation_frame(unit), selected, _ROW_MM).labels
+    )
 
 
 def test_a_dimension_per_region_in_each_run() -> None:
@@ -258,10 +262,10 @@ def test_a_dimension_per_region_in_each_run() -> None:
 
 def test_a_dimension_reads_its_size_and_color() -> None:
     by_id = {label.region_id: label for label in _labels()}
-    assert by_id["lower"].text == "200"
+    assert by_id["lower"].size_mm == pytest.approx(200.0)
     assert by_id["lower"].color == "locked"
     assert by_id["upper"].color == "unlocked"
-    assert by_id["upper"].text == "346"
+    assert by_id["upper"].size_mm == pytest.approx(346.0)
     selected = {label.region_id: label for label in _labels("upper")}
     assert selected["upper"].color == "unlocked"
 
@@ -281,7 +285,7 @@ def test_a_spacing_spans_through_the_next_board() -> None:
         depth_axis=Axis.Y,
     )
     (label,) = [x for x in _labels(unit=spacing) if x.region_id == "lower"]
-    assert label.text == "218"
+    assert label.size_mm == pytest.approx(218.0)
     assert label.length_mm == pytest.approx(218.0)
 
 
@@ -296,12 +300,25 @@ def test_a_bay_dimension_runs_two_thirds_across_with_its_text_a_third_along() ->
 
 def test_a_region_holding_others_dimensions_outside_the_unit() -> None:
     """The row and the column reach the unit's edges past boards only, so
-    their dimensions go one row out past their own edge: the row's left of
-    the unit, the column's below it, past the bottom board."""
+    their dimensions go one row out from the unit's outer face on their own
+    side: the row's left of the unit, the column's below it, the bottom
+    board's thickness no nearer than the row's."""
     by_id = {label.region_id: label for label in _labels()}
-    outside_mm = 0.06 * 900.0
-    assert by_id["row"].start_mm[0] == pytest.approx(-outside_mm)
-    assert by_id["column"].start_mm[1] == pytest.approx(_T_MM - outside_mm)
+    assert by_id["row"].start_mm[0] == pytest.approx(-_ROW_MM)
+    assert by_id["column"].start_mm[1] == pytest.approx(-_ROW_MM)
+
+
+def test_resizing_the_unit_leaves_its_outer_dimensions_rows_in_place() -> None:
+    """Only a dimension's length follows the unit's size: the rows keep
+    their spacing whatever the unit's longer side."""
+    taller = dataclasses.replace(
+        _UNIT, size_mm=Vec3(_UNIT.size_mm.x_mm, _UNIT.size_mm.y_mm, 1800.0)
+    )
+    before = {label.region_id: label for label in _labels()}
+    after = {label.region_id: label for label in _labels(unit=taller)}
+    assert after["row"].start_mm[0] == pytest.approx(before["row"].start_mm[0])
+    assert after["column"].start_mm[1] == pytest.approx(before["column"].start_mm[1])
+    assert after["row"].length_mm > before["row"].length_mm
 
 
 def test_a_run_through_the_depth_draws_no_dimension() -> None:
@@ -335,7 +352,7 @@ def test_region_at_finds_the_opening_under_a_point(
 
 
 def _label(region_id: str, at_mm: tuple[float, float]) -> DimensionLabel:
-    return DimensionLabel(region_id, at_mm, at_mm, "1", "unlocked", 0.5, lockable=True)
+    return DimensionLabel(region_id, at_mm, at_mm, 1.0, "unlocked", 0.5, lockable=True)
 
 
 def test_label_at_takes_the_nearest_within_reach_and_the_later_on_a_tie() -> None:
@@ -429,11 +446,11 @@ def test_a_held_board_gets_a_padlock_where_its_arrow_would_be() -> None:
 
 def test_a_selected_held_board_outlines_the_openings_holding_it() -> None:
     frame = elevation_frame(_UNIT)
-    overlay = plan_overlay(_UNIT, _SPACES, frame, "shelf")
+    overlay = plan_overlay(_UNIT, _SPACES, frame, "shelf", _ROW_MM)
     holding = [o.rect for o in overlay.outlines if o.role == "holding"]
     assert holding == [frame.rect(_SPACES["lower"])]
     for other in ("divider", "lower", None):
-        overlay = plan_overlay(_UNIT, _SPACES, frame, other)
+        overlay = plan_overlay(_UNIT, _SPACES, frame, other, _ROW_MM)
         assert all(o.role != "holding" for o in overlay.outlines)
 
 
