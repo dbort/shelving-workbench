@@ -118,6 +118,17 @@ Seen on FreeCAD 1.1.3 under Xvfb; `editor/view_editor.py` relies on each.
   `"(0.8984, 0.7305, 0.3906, 1.0)"`, which the Material workbench's own
   editor parses the same way.
 
+## Picking a box's edges face on
+
+Seen on 1.1.3 under Xvfb in Edit Unit's front view, for an 18 mm
+`Part::Box` drawn from 4 px to 45 px thick. `getObjectInfo` names the
+front face at every pixel inside it and an edge only outside it: the
+face's top edge for about 4 px above it, its bottom edge for about 5 px
+below, at every zoom. Drawn 4 px thick, the face's top boundary row came
+back as the bottom edge, so only the bands outside the face tell the two
+edges apart reliably. The editor's drawing over the boards never takes
+the pick.
+
 ## A `DocumentObject`'s `ViewObject` is `None`
 
 Without the GUI every object's `ViewObject` is `None`, so color and other

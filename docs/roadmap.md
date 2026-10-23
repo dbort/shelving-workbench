@@ -88,6 +88,116 @@ the unit already has does.
 *Verify in FreeCAD:* add a back to an existing unit; it appears, tracks
 size changes, and scans back as the same treatment.
 
+## M18: Constraints
+
+**Status:** Planned
+
+Relations between the openings and boards of one unit, in the Sketcher's
+manner: openings kept the same size, a run of openings kept evenly spaced
+whatever the spacing becomes, and board faces in different subtrees kept
+coplanar. Alignment across units belongs to named values (Later).
+
+Tasks, in order:
+
+1. The solver, with locks as its only constraint. It ships alone, so the
+   change to resize behavior can be tried before any new constraint.
+2. Equal and Even spacing, with the commands, the icons, selecting
+   several openings, and the handling of constraints across sessions.
+3. The constraint list in the task panel.
+4. Aligned faces, with picking a board's edges.
+
+**The solver.** A lock becomes one kind of constraint, a dimension in the
+Sketcher's terms; Equal, Even spacing and Aligned faces are geometric
+ones. Every constraint is linear along one model axis, so each axis is one
+small system: every run fills its span, every opening stays at least 5 mm,
+and the constraints hold. Within what they allow, boards move as little
+as possible from where they are, as the Sketcher's solver moves geometry.
+A drag is a target its board approaches until an opening reaches its
+minimum. A unit resize goes to the openings beside the outer boards that
+move, and pushes into the next opening once one reaches its minimum. That
+replaces proportional shares, and the hidden weights behind unlocked
+openings retire.
+
+The minimum opening is one named value, the one a drag stops at today
+(`MIN_DRAG_GAP_MM`). The solver takes it as an input rather than holding
+its own, and every check against it reads that one value, so it can become
+a preference later. A preference is global and has no document for an
+expression to refer to, so it is a plain number. It has to stay above the
+joint clearance plus the snap tolerance, or a minimum opening vanishes on
+the next read, so the preference reader checks it against both as it
+checks the snap against the clearance.
+
+The solver is a self-contained module in `core/` behind an opaque
+interface. A caller passes named positions on one axis with their current
+values, the relations among them, lower bounds and drag targets. It gets
+back the solved positions and the freedom left, or the constraints in
+conflict and, separately, the redundant ones. An edit, a typed size or a
+new constraint that over-constrains the layout is refused through the
+editor's existing refusal, naming the constraints in conflict, since an
+unsolvable layout has no boxes to write. A fully constrained axis is
+allowed: its size field turns read-only, like a Sketcher reference
+dimension, and changing it is refused with the constraints that fix it
+named. That retires the editor's rule of keeping one unlocked opening in
+every run.
+
+**The constraints.**
+
+- **Equal**: two or more openings, in any runs along the same axis, keep
+  one size. Typing a size into one locks it and the rest follow, as a
+  Sketcher dimension on one of several equal lines sizes them all; locking
+  a second is redundant and refused.
+- **Even spacing**: every opening between two boards of one run keeps one
+  size, so a shelf added or removed inside the span joins or leaves the
+  group.
+- **Aligned faces**: two boards' low faces, high faces or center planes on
+  one model axis stay coplanar, in any combination.
+
+Equal and Even spacing carry a basis, as a lock does: the clear opening,
+or the spacing through the next board.
+
+**Making and removing them.** Constrain Equal, Constrain Even Spacing and
+Constrain Aligned are commands on a toolbar active only during an edit,
+as the Sketcher's constraint toolbar is, each acting on the selection.
+The add-to-selection click that adds a board adds an opening too. For
+Aligned faces, a click just outside a board's long face picks that face's
+edge, as the Sketcher constrains edges, and Center is an option of the
+command. Each constraint is an icon beside its geometry, drawn the way the
+fixed-point cross is, selected by a click and removed with Delete.
+Wherever the Sketcher has the same thing, the editor uses the Sketcher's
+own: its constraint icons, which load as Qt resources such as
+`:/icons/constraints/Constraint_EqualLength.svg` once `SketcherGui` is
+imported, and its color preferences, as the editor already reads
+`ConstrainedIcoColor`. Even spacing has no Sketcher counterpart, so its
+icon is drawn in the same style.
+Deleting a board removes its constraints in the same undo step without a
+message, and a split drops an Equal on the opening it cuts the same way:
+the Sketcher's Split and Trim drop an Equal on the line they cut. The
+constraint list, a later task, gives each constraint a row with an active
+checkbox and a delete button, and one button removes every deactivated
+constraint.
+
+**Across sessions.** Geometry still wins. The container's rule record
+becomes the constraint record, version 2: each lock with its basis, and
+each constraint with an active flag. A version 1 record reads with its
+locks kept and its weights dropped. When Edit Unit opens, a lock takes the
+size its boards now have, as today. A relation the boards no longer
+satisfy within the joint clearance, because something moved by hand,
+comes in deactivated: drawn in the Sketcher's `DeactivatedConstrDimColor`,
+enforced only once the user reactivates it, which moves the boards as its
+own undo step, and removable with Delete without reactivating it, as the
+Sketcher allows. A constraint naming a board that is gone, deleted or
+replaced by a copy with a new `Name`, is dropped. An Even spacing group is
+dropped only when an end board goes, and an Equal whose opening a
+hand-added shelf split is dropped too. One Notification Area message at
+open says what was deactivated or dropped. A copied unit loses its
+constraints as it loses its locks today (bug-021).
+
+*Verify in FreeCAD:* in a two-column bookcase, space three shelves of the
+left column evenly and align the right column's middle shelf top to top
+with one of them. Grow the unit and drag a shelf, and see both relations
+hold. Close, move one shelf by hand, open Edit Unit again, and see that
+relation greyed and removable with nothing moved.
+
 ## Later
 
 **Status:** Planned
@@ -126,13 +236,6 @@ Each of these is its own task when it comes up.
 - **A support check.** A board floating clear of its neighbors is a valid
   arrangement of straight cuts and is accepted today; whether a design is
   buildable is a separate question that nothing asks yet.
-- **Spacing constraints** beyond a lock per opening: a group of shelves
-  kept evenly spaced, so moving one moves them all, and shelves on either
-  side of a divider kept level, by their centers or by their top or bottom
-  faces when their thicknesses differ. These tie together openings the
-  solver sizes branch by branch, so design them with named values shared
-  between units. Evenly spaced groups also give a way to even out a row's
-  unlocked openings after drags, which nothing offers yet.
 - **Typed moves and a drag step** in the 3D view: type how far to move the
   selected board, and set the drag increment, in the style of FreeCAD's
   own transform arrows. FreeCAD's `SoLinearDragger` has the fields for it

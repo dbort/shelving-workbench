@@ -1,5 +1,5 @@
 ---
-next_id: bug-021
+next_id: bug-022
 ---
 
 # Bug log
@@ -97,3 +97,14 @@ log happens only when the user asks.
   Found while making a drag stop at `MIN_DRAG_GAP_MM` instead of refusing,
   and reproduced headless. Fix: `ad hoc`: refuse a typed size below that
   minimum, through the size field's existing refusal.
+- `bug-021` - **a copied unit loses its locks**: copy a unit with its
+  boards, grow both 200 mm taller, and the original's opening locked at
+  200 mm keeps its size while the copy's takes a share (247 mm). The rule
+  record keys each opening by its bounding boards' `Name`s, a copy's
+  boards get new `Name`s, and nothing translates the copied record
+  through the `ShelvingBornAs` each copied board carries. Found while
+  planning M18, and reproduced headless on FreeCAD 1.1.3 with
+  `doc.copyObject(container, True)`. Fix: `sh-XXX task`. Which copies
+  qualify (Copy and Paste, a clone, a Link) and how a record maps onto
+  them are design questions, and M18's constraint record keys the same
+  way.
