@@ -90,11 +90,12 @@ size changes, and scans back as the same treatment.
 
 ## M18: Constraints
 
-**Status:** Tasks sh-045, sh-046, sh-047
+**Status:** Tasks sh-045, sh-046, sh-047, sh-048
 
 - [ ] sh-045: the constraint engine for one axis
 - [ ] sh-046: lay units out with the engine (blocked on sh-045)
 - [ ] sh-047: any opening locks, with reference sizes and constraint feedback (blocked on sh-046)
+- [ ] sh-048: Equal and Even spacing constraints (blocked on sh-047)
 
 Relations between the openings and boards of one unit, in the Sketcher's
 manner: openings kept the same size, a run of openings kept evenly spaced
@@ -152,7 +153,7 @@ editor's rule of keeping one unlocked opening in every run.
 - **Equal**: two or more openings, in any runs along the same axis, keep
   one size. Typing a size into one locks it and the rest follow, as a
   Sketcher dimension on one of several equal lines sizes them all; locking
-  a second is redundant and refused.
+  a second is redundant, accepted and flagged.
 - **Even spacing**: every opening between two boards of one run keeps one
   size, so a shelf added or removed inside the span joins or leaves the
   group.
@@ -184,7 +185,7 @@ checkbox and a delete button, and one button removes every deactivated
 constraint.
 
 **Across sessions.** Geometry still wins. The container's rule record
-becomes the constraint record, still version 1: each lock with its basis,
+becomes the constraint record, version 2: each lock with its basis,
 and each constraint with an active flag. When Edit Unit opens, a lock
 takes the size its boards now have, as today. A relation the boards no
 longer satisfy within the joint clearance, because something moved by
