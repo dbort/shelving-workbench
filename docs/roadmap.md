@@ -90,7 +90,9 @@ size changes, and scans back as the same treatment.
 
 ## M18: Constraints
 
-**Status:** Planned
+**Status:** Tasks sh-045
+
+- [ ] sh-045: the solver, with locks as its only constraint
 
 Relations between the openings and boards of one unit, in the Sketcher's
 manner: openings kept the same size, a run of openings kept evenly spaced
@@ -112,20 +114,22 @@ ones. Every constraint is linear along one model axis, so each axis is one
 small system: every run fills its span, every opening stays at least 5 mm,
 and the constraints hold. Within what they allow, boards move as little
 as possible from where they are, as the Sketcher's solver moves geometry.
-A drag is a target its board approaches until an opening reaches its
-minimum. A unit resize goes to the openings beside the outer boards that
-move, and pushes into the next opening once one reaches its minimum. That
-replaces proportional shares, and the hidden weights behind unlocked
-openings retire.
+A drag is a weighted target its board follows, pushing the boards ahead
+of it once an opening reaches its minimum, as the Sketcher's dragged
+geometry reaches the pointer whenever a solution allows. A unit resize
+goes to the openings beside the outer boards that move, and pushes into
+the next opening once one reaches its minimum. That replaces
+proportional shares, and the hidden weights behind unlocked openings
+retire.
 
-The minimum opening is one named value, the one a drag stops at today
-(`MIN_DRAG_GAP_MM`). The solver takes it as an input rather than holding
-its own, and every check against it reads that one value, so it can become
-a preference later. A preference is global and has no document for an
-expression to refer to, so it is a plain number. It has to stay above the
-joint clearance plus the snap tolerance, or a minimum opening vanishes on
-the next read, so the preference reader checks it against both as it
-checks the snap against the clearance.
+The minimum opening is one named value, the narrowest a drag leaves an
+opening (`MIN_DRAG_GAP_MM`). The solver takes it as an input rather than
+holding its own, and every check against it reads that one value, so it
+can become a preference later. A preference is global and has no document
+for an expression to refer to, so it is a plain number. It has to stay
+above the joint clearance plus the snap tolerance, or a minimum opening
+vanishes on the next read, so the preference reader checks it against both
+as it checks the snap against the clearance.
 
 The solver is a self-contained module in `core/` behind an opaque
 interface. A caller passes named positions on one axis with their current
@@ -136,9 +140,10 @@ new constraint that over-constrains the layout is refused through the
 editor's existing refusal, naming the constraints in conflict, since an
 unsolvable layout has no boxes to write. A fully constrained axis is
 allowed: its size field turns read-only, like a Sketcher reference
-dimension, and changing it is refused with the constraints that fix it
-named. That retires the editor's rule of keeping one unlocked opening in
-every run.
+dimension that follows the edits that change it, and changing it directly
+is refused with the constraints that fix it named. A redundant constraint
+is accepted and flagged, as the Sketcher flags one. That retires the
+editor's rule of keeping one unlocked opening in every run.
 
 **The constraints.**
 
@@ -177,20 +182,19 @@ checkbox and a delete button, and one button removes every deactivated
 constraint.
 
 **Across sessions.** Geometry still wins. The container's rule record
-becomes the constraint record, version 2: each lock with its basis, and
-each constraint with an active flag. A version 1 record reads with its
-locks kept and its weights dropped. When Edit Unit opens, a lock takes the
-size its boards now have, as today. A relation the boards no longer
-satisfy within the joint clearance, because something moved by hand,
-comes in deactivated: drawn in the Sketcher's `DeactivatedConstrDimColor`,
-enforced only once the user reactivates it, which moves the boards as its
-own undo step, and removable with Delete without reactivating it, as the
-Sketcher allows. A constraint naming a board that is gone, deleted or
-replaced by a copy with a new `Name`, is dropped. An Even spacing group is
-dropped only when an end board goes, and an Equal whose opening a
-hand-added shelf split is dropped too. One Notification Area message at
-open says what was deactivated or dropped. A copied unit loses its
-constraints as it loses its locks today (bug-021).
+becomes the constraint record, still version 1: each lock with its basis,
+and each constraint with an active flag. When Edit Unit opens, a lock
+takes the size its boards now have, as today. A relation the boards no
+longer satisfy within the joint clearance, because something moved by
+hand, comes in deactivated: drawn in the Sketcher's
+`DeactivatedConstrDimColor`, enforced only once the user reactivates it,
+which moves the boards as its own undo step, and removable with Delete
+without reactivating it, as the Sketcher allows. A constraint naming a
+board that is gone, deleted or replaced by a copy with a new `Name`, is
+dropped. An Even spacing group is dropped only when an end board goes, and
+an Equal whose opening a hand-added shelf split is dropped too. One
+Notification Area message at open says what was deactivated or dropped. A
+copied unit loses its constraints as it loses its locks today (bug-021).
 
 *Verify in FreeCAD:* in a two-column bookcase, space three shelves of the
 left column evenly and align the right column's middle shelf top to top
