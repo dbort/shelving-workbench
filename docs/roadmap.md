@@ -90,9 +90,11 @@ size changes, and scans back as the same treatment.
 
 ## M18: Constraints
 
-**Status:** Tasks sh-045
+**Status:** Tasks sh-045, sh-046, sh-047
 
-- [ ] sh-045: the solver, with locks as its only constraint
+- [ ] sh-045: the constraint engine for one axis
+- [ ] sh-046: lay units out with the engine (blocked on sh-045)
+- [ ] sh-047: any opening locks, with reference sizes and constraint feedback (blocked on sh-046)
 
 Relations between the openings and boards of one unit, in the Sketcher's
 manner: openings kept the same size, a run of openings kept evenly spaced
