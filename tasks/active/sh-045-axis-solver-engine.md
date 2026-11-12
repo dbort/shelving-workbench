@@ -91,3 +91,8 @@ it. It ships on its own so the numerical core gets a review of its own.
       `core/` entry.
 
 ## Review log
+
+### Round 1: APPROVED
+- **N1: A field is documented in the type's docstring** (`freecad/Shelving/core/axis_solver.py:236`): the `Conflict` docstring explains `conflicting`; CLAUDE.md wants each field documented on its own declaration, as `redundant` is. Non-blocking: the Advice asked only for the statement to be in the docstring.
+- **N2: Unclear wording in the `Conflict` docstring** (`freecad/Shelving/core/axis_solver.py:238`): "a proper subset of them may not either" reads better as "a proper subset of them may also admit no solution".
+- **N3: `Solved` cannot be built without its private basis** (`freecad/Shelving/core/axis_solver.py:197`): sh-046 tests cannot construct a `Solved` by hand as a fake. Worth knowing when planning sh-046; no change needed now.
