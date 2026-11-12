@@ -14,11 +14,11 @@ which are redundant. Nothing calls it yet: sh-046 swaps the layout over to
 it. It ships on its own so the numerical core gets a review of its own.
 
 ## Must Have
-- [ ] `pixi run tests` green; `pyrefly check` clean over the changed code.
-- [ ] `freecad/Shelving/core/axis_solver.py` exists, imports only the
+- [x] `pixi run tests` green; `pyrefly check` clean over the changed code.
+- [x] `freecad/Shelving/core/axis_solver.py` exists, imports only the
       standard library (nothing from `freecad.Shelving`), and defines no
       `Protocol`, ABC, or backend choice.
-- [ ] Its suite, `freecad/Shelving/core/tests/test_axis_solver.py`, asserts:
+- [x] Its suite, `freecad/Shelving/core/tests/test_axis_solver.py`, asserts:
       - consistent relations, no targets: every position comes back within
         1e-9 mm of its current value;
       - `x1 - x0 = 10` and `x1 - x0 = 12` together: a conflict naming both;
@@ -35,7 +35,7 @@ it. It ships on its own so the numerical core gets a review of its own.
         relations are not limited to differences;
       - a system of 40 positions, each tied to its neighbor by a relation
         or a lower bound, with one target, solves.
-- [ ] `grep -rn "axis_solver" freecad --include=*.py` names only
+- [x] `grep -rn "axis_solver" freecad --include=*.py` names only
       `core/axis_solver.py` and its test.
 
 ## Advice
@@ -83,11 +83,11 @@ it. It ships on its own so the numerical core gets a review of its own.
   change in sh-046.
 
 ## Plan
-- [ ] **Step 1** (`core/axis_solver.py`): the types, the solve, the
+- [x] **Step 1** (`core/axis_solver.py`): the types, the solve, the
       freedom query, and conflict and redundancy reporting, per Advice.
-- [ ] **Step 2** (`core/tests/test_axis_solver.py`): the suite named in
+- [x] **Step 2** (`core/tests/test_axis_solver.py`): the suite named in
       the Must Have.
-- [ ] **Step 3** (`.claude/docs/code-map.md`): name the engine in the
+- [x] **Step 3** (`.claude/docs/code-map.md`): name the engine in the
       `core/` entry.
 
 ## Review log

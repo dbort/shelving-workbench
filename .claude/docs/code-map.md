@@ -8,8 +8,9 @@ the file stays under its word cap.
 
 Each layer imports only the layers listed above it.
 
-- `freecad/Shelving/core/`: the layout model, scanner, solver and edits, in
-  pure Python, with its suite in `freecad/Shelving/core/tests/`. It never
+- `freecad/Shelving/core/`: layout model, scanner, solver, edits and
+  constraint engine (`freecad/Shelving/core/axis_solver.py`), in pure
+  Python, with its suite in `freecad/Shelving/core/tests/`. It never
   imports FreeCAD (`freecad/Shelving/core/tests/test_no_freecad.py`).
 - `freecad/Shelving/properties.py`, `freecad/Shelving/container.py`,
   `freecad/Shelving/unit_ops.py`: reading and writing a FreeCAD document
