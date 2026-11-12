@@ -224,14 +224,12 @@ class Solved:
 
 @dataclass(frozen=True)
 class Conflict:
-    """The result of :func:`solve` when no positions meet every constraint.
+    """The result of :func:`solve` when no positions meet every constraint."""
 
-    ``conflicting`` is the set the method found: those constraints alone
-    admit no solution, but a proper subset of them may not either, so it is
-    small without being guaranteed minimal. It is the first conflict found;
-    the system may hold others.
-    """
-
+    # The set the method found: those constraints alone admit no solution,
+    # but a proper subset of them may also admit no solution, so it is small
+    # without being guaranteed minimal. It is the first conflict found; the
+    # system may hold others.
     conflicting: frozenset[ConstraintId]
     # As Solved.redundant, over the relations examined before the conflict.
     redundant: Mapping[ConstraintId, frozenset[ConstraintId]]
