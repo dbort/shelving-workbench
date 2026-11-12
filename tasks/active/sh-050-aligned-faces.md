@@ -152,7 +152,7 @@ ordinary board selection. Center planes cannot be aligned.
   the Notification Area.
 - **Manual QA:** one case, `editor.aligned_faces`, for what no test
   judges: the band is easy to hit and the hover line easy to see at
-  default zoom and on a HiDPI screen, and the roadmap's Verify scenario.
+  default zoom and on a HiDPI screen, and M18's whole scenario.
   Start from the `large_unit` action, space three shelves of the left
   column evenly, align the right column's middle shelf top to top with
   one of them, grow the unit and drag a shelf to see both relations hold;

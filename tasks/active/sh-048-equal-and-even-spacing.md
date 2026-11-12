@@ -129,7 +129,7 @@ boards are gone is dropped, with one notification saying so.
   undo step. A conflicting new constraint is refused through the existing
   conflict path. A redundant one, or a lock made redundant by a
   constraint, is accepted with sh-047's warning and outline (user decision,
-  consistent with sh-047; this supersedes the roadmap's "refused").
+  consistent with sh-047).
 - **Toolbar** (user decision, Sketcher precedent): the editor shows it when
   the edit opens and removes or hides it at close, whatever the active
   workbench, as Sketcher's edit-mode toolbars are. The commands also go in
@@ -210,8 +210,8 @@ boards are gone is dropped, with one notification saying so.
   outlines.
 - **Manual QA:** one case, `editor.constraints`, for what no test judges:
   the icons read as Sketcher's at a glance and stay sharp on a HiDPI
-  screen, the Even spacing icon sits in the same family, and the
-  roadmap's Verify scenario without Aligned faces. Start from the
+  screen, the Even spacing icon sits in the same family, and M18's
+  scenario without Aligned faces. Start from the
   `large_unit` action, space one column's openings evenly, and make an
   Equal across to another column. Grow the unit, drag a shelf, and see
   both relations hold. Close, move one shelf by hand, reopen, and see

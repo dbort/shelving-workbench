@@ -108,7 +108,7 @@ measure spacing through the next board.
   as sh-048 loads it, and the Even spacing SVG sh-048 adds. A deactivated
   row's icon is the normal icon rendered in `QIcon.Mode.Disabled`, as
   Sketcher's list greys a deactivated constraint's icon.
-- **Controls** (user decision, the roadmap as written): an active checkbox
+- **Controls** (user decision): an active checkbox
   on each constraint row, a delete button on every row, and one "Delete
   Deactivated" button. No right-click menu and no Delete-key handling in
   the list; the view's Delete still removes selected constraints (sh-048).
@@ -117,8 +117,8 @@ measure spacing through the next board.
   uses FreeCAD's own delete icon with tooltip "Delete".
 - **Activation:** deactivating keeps the constraint, stops passing it to
   the solver, writes `"active": false`, and moves no board. Activating
-  re-solves with it as its own undo step, moving boards as the roadmap
-  says. A conflict is refused through the existing conflict path: message
+  re-solves with it as its own undo step, moving boards to
+  satisfy it. A conflict is refused through the existing conflict path: message
   plus sh-047's outline, the constraint stays deactivated. A redundant
   activation is accepted with sh-047's warning. Delete Deactivated is one
   undo step that moves no board. Undo step names: "Activate Constraint",

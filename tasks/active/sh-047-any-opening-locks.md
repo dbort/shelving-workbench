@@ -91,8 +91,8 @@ M18's first task: the solver, with locks as its only constraint.
 - **No new manual QA case:** a test asserts every outcome here. The
   existing `editor.padlocks` case names no lone-opening exception and
   stays true; keep it true.
-- **Out of scope:** the roadmap's "locking a second Equal is redundant
-  and refused" belongs to M18 task 2.
+- **Out of scope:** Equal, and a lock made redundant by one, belong to
+  sh-048.
 
 ## Plan
 - [ ] **Step 1** (`core/solver.py`, `core/edit.py`, their tests): the
