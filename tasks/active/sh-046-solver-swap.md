@@ -89,6 +89,29 @@ tried before any new constraint exists.
   cannot import it, because `edit` imports `solver`, and the roadmap keeps
   one named value that a preference can replace later. The preference
   itself is sh-023's.
+- **Engine interface** (added 2026-11-12, after sh-045 shipped): call
+  `axis_solver.solve(current_mm, relations, bounds, targets)`, which
+  returns `Solved` (`positions_mm`, `active_bounds`, `redundant`,
+  `freedom(expression)`) or `Conflict` (`conflicting`, `redundant`).
+  - **Ids:** constraint ids must be unique across relations and bounds
+    (`ValueError` otherwise), so give a region's lock and its minimum
+    bound distinct ids that map back to the region, such as
+    `<region>:lock` and `<region>:min`.
+  - **Size relation:** list structural relations first (thicknesses,
+    fixed point), then locks, then the unit's size last. The engine flags
+    the later member of a dependent group as redundant, so a consistent
+    size implied by a fully locked run drops out and an inconsistent one
+    conflicts. That gives the "counts only when free" rule above with no
+    separate freedom query.
+  - **`held_by`:** `freedom` counts tight bounds as fixing. A drag pushes
+    through an opening held at its minimum, so query a solve passed no
+    bounds: relations with the outer faces held. Keep only lock ids from
+    `fixed_by`; it also names thickness and outer-face relations.
+  - **Tests:** `Solved` carries a private basis and cannot be built by
+    hand, so drive tests through real engine calls rather than fakes.
+  - **Drags:** the default `TARGET_WEIGHT` lands a drag within about
+    1e-4 mm for 40 positions moved 3 m. A 40-position solve takes about
+    3 ms.
 - **Resize:** the openings beside the moving outer faces take up the
   change and push inward once one reaches its minimum. That falls out of
   minimal motion.
@@ -161,7 +184,8 @@ tried before any new constraint exists.
       and an apply-back turn a unit, plus an edit's change (outer size,
       lock, thickness, drag target) and the minimum opening, into engine
       calls and a solved unit. It also exposes a board's freedom with its
-      fixing locks, for `held_by`. Delete `distribute`, `_place` and
+      fixing locks, for `held_by`, from a solve without bounds (Advice:
+      Engine interface). Delete `distribute`, `_place` and
       `_driven_weight`. Reduce `SolveErrorReason` to the reasons that can
       still occur, add the conflict error carrying region ids, and update
       `describe_solve_error`.
