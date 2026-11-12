@@ -90,13 +90,14 @@ size changes, and scans back as the same treatment.
 
 ## M18: Constraints
 
-**Status:** Tasks sh-045, sh-046, sh-047, sh-048, sh-049
+**Status:** Tasks sh-045, sh-046, sh-047, sh-048, sh-049, sh-050
 
 - [ ] sh-045: the constraint engine for one axis
 - [ ] sh-046: lay units out with the engine (blocked on sh-045)
 - [ ] sh-047: any opening locks, with reference sizes and constraint feedback (blocked on sh-046)
 - [ ] sh-048: Equal and Even spacing constraints (blocked on sh-047)
 - [ ] sh-049: the constraint list in the task panel (blocked on sh-048)
+- [ ] sh-050: Aligned faces, picked by a board's face edges (blocked on sh-049)
 
 Relations between the openings and boards of one unit, in the Sketcher's
 manner: openings kept the same size, a run of openings kept evenly spaced
@@ -158,8 +159,8 @@ editor's rule of keeping one unlocked opening in every run.
 - **Even spacing**: every opening between two boards of one run keeps one
   size, so a shelf added or removed inside the span joins or leaves the
   group.
-- **Aligned faces**: two boards' low faces, high faces or center planes on
-  one model axis stay coplanar, in any combination.
+- **Aligned faces**: two boards' low or high faces on one model axis stay
+  coplanar, in any combination. Center planes are left out.
 
 Equal and Even spacing carry a basis, as a lock does: the clear opening,
 or the spacing through the next board.
@@ -169,9 +170,9 @@ Constrain Aligned are commands on a toolbar active only during an edit,
 as the Sketcher's constraint toolbar is, each acting on the selection.
 The add-to-selection click that adds a board adds an opening too. For
 Aligned faces, a click just outside a board's long face picks that face's
-edge, as the Sketcher constrains edges, and Center is an option of the
-command. Each constraint is an icon beside its geometry, drawn the way the
-fixed-point cross is, selected by a click and removed with Delete.
+edge, as the Sketcher constrains edges. Each constraint is an icon beside
+its geometry, drawn the way the fixed-point cross is, selected by a click
+and removed with Delete.
 Wherever the Sketcher has the same thing, the editor uses the Sketcher's
 own: its constraint icons, which load as Qt resources such as
 `:/icons/constraints/Constraint_EqualLength.svg` once `SketcherGui` is
