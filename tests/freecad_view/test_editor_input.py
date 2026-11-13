@@ -256,6 +256,32 @@ def test_a_refused_size_is_reported_once_and_changes_nothing(
     click_task_button("Close", driver)
 
 
+def test_a_size_under_the_minimum_is_reported_once_and_changes_nothing(
+    unit: FreeCAD.DocumentObject, driver: ViewDriver, reported: list[str]
+) -> None:
+    panel = edit_unit(unit, driver)
+    editor = editor_of(panel)
+    add_board(panel, "vertical", driver)
+    lower = bay_ids(panel.session.unit.root)[0]
+    driver.click(editor.to_document(*_label_of(editor, lower).text_at_mm))
+    driver.pump()
+    field = editor.field
+    assert field is not None
+    names = list(unit.Document.UndoNames)
+    spaces = dict(panel.session.spaces)
+    _type(field.line_edit, "3")
+    driver.pump()
+    (message,) = reported
+    assert "under the 5.0 mm minimum" in message, message
+    assert editor.field is None
+    assert list(unit.Document.UndoNames) == names
+    assert panel.session.spaces == spaces
+    found = _lock(panel.session.unit.root, lower)
+    assert found is not None
+    assert found[0] is None
+    click_task_button("Close", driver)
+
+
 def test_escape_closes_the_field_and_not_the_edit(
     unit: FreeCAD.DocumentObject, driver: ViewDriver
 ) -> None:

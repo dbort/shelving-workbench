@@ -1204,7 +1204,8 @@ def _void_locks(region: Region) -> list[Basis | None]:
 
 def test_an_unlocked_plinth_gap_stays_unlocked_when_reopened(tmp_path: Path) -> None:
     """The scan locks Magic Start's plinth gap; once unlocked with its
-    padlock, the stored record keeps it unlocked through a fresh read."""
+    padlock, the stored record keeps it unlocked through a save and a fresh
+    open of the file."""
     path = tmp_path / _MAGIC_START.name
     shutil.copyfile(_MAGIC_START, path)
     doc = FreeCAD.openDocument(str(path))
@@ -1221,12 +1222,62 @@ def test_an_unlocked_plinth_gap_stays_unlocked_when_reopened(tmp_path: Path) -> 
         finally:
             session.close()
         doc.recompute()
+        doc.save()
+    finally:
+        FreeCAD.closeDocument(doc.Name)
 
+    doc = FreeCAD.openDocument(str(path))
+    try:
+        container = doc.getObject("LinkGroup")
+        assert container is not None
         reopened = Session(container)
         try:
             assert _void_locks(reopened.unit.root) == [None]
         finally:
             reopened.close()
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def test_an_unlocked_plinth_gap_follows_undo_and_redo(tmp_path: Path) -> None:
+    """Undo and Redo re-read the unit from the document, so the plinth gap's
+    lock follows the steps: an edit after the unlock undoes and redoes with
+    the gap still unlocked, and only undoing the unlock itself locks it."""
+    path = tmp_path / _MAGIC_START.name
+    shutil.copyfile(_MAGIC_START, path)
+    doc = FreeCAD.openDocument(str(path))
+    doc.UndoMode = 1
+    try:
+        container = doc.getObject("LinkGroup")
+        assert container is not None
+        session = Session(container)
+        session.open()
+        try:
+            plinth_id = _plinth_id(session.unit.root)
+            assert plinth_id is not None
+            assert session.set_lock(plinth_id, locked=False) is None
+            assert session.resize("height", 800.0) is None
+            assert doc.UndoNames[:2] == ["Resize Unit", "Unlock Opening"]
+
+            def undo() -> None:
+                doc.undo()
+                session.settle()
+
+            def redo() -> None:
+                doc.redo()
+                session.settle()
+
+            undo()
+            assert _void_locks(session.unit.root) == [None]
+            undo()
+            assert _void_locks(session.unit.root) == [Basis.CLEAR]
+            redo()
+            assert _void_locks(session.unit.root) == [None]
+            redo()
+            assert _void_locks(session.unit.root) == [None]
+            assert abs(session.unit_dimension_mm("height") - 800.0) < 1e-6
+        finally:
+            session.close()
     finally:
         FreeCAD.closeDocument(doc.Name)
 
