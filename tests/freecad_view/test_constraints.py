@@ -15,12 +15,7 @@ from freecad.Shelving.container import write_container
 from freecad.Shelving.core.layout import ConstraintId
 from freecad.Shelving.editor import overlay
 from freecad.Shelving.editor.elevation import ConstraintIcon, DimensionLabel
-from freecad.Shelving.editor.overlay import (
-    ICON_SOURCES,
-    IconNode,
-    label_string,
-    load_sketcher_resources,
-)
+from freecad.Shelving.editor.overlay import ICON_SOURCES, IconNode, label_string
 from freecad.Shelving.editor.panel import EditUnitPanel
 from freecad.Shelving.editor.view_editor import ViewEditor, label_metrics
 from tests.freecad_view import overlay_nodes
@@ -132,23 +127,17 @@ def _packed_rgb(packed: int) -> tuple[int, int, int]:
     return ((packed >> 24) & 0xFF, (packed >> 16) & 0xFF, (packed >> 8) & 0xFF)
 
 
-def test_the_sketcher_icons_load_once_its_gui_module_is_imported() -> None:
-    """What the editor relies on: on FreeCAD 1.1 the Sketcher's constraint
-    icons are a resource only after ``SketcherGui`` is imported."""
-    load_sketcher_resources()
-    assert QtCore.QFile.exists(ICON_SOURCES["equal"])
-    assert os.path.isfile(ICON_SOURCES["even_spacing"])
-
-
-def test_icon_sources_are_the_sketchers_equal_and_the_workbenchs_even_spacing() -> None:
-    assert ICON_SOURCES["equal"] == ":/icons/constraints/Constraint_EqualLength.svg"
+def test_both_icons_are_the_workbenchs_own_svgs() -> None:
     resources = os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
         "freecad",
         "Shelving",
         "resources",
     )
-    assert os.path.dirname(ICON_SOURCES["even_spacing"]) == os.path.normpath(resources)
+    for kind in ("equal", "even_spacing"):
+        source = ICON_SOURCES[kind]
+        assert os.path.dirname(source) == os.path.normpath(resources), kind
+        assert QtSvg.QSvgRenderer(source).isValid(), kind
 
 
 def _open_point(editor: ViewEditor, region_id: str) -> FreeCAD.Vector:

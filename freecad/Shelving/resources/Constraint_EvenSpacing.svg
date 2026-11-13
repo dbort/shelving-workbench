@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!-- Even spacing, drawn on the 64 px grid, fills and strokes of the
-     Sketcher's Constraint_EqualLength icon: three uprights the same
-     distance apart. -->
+<!-- Even spacing, drawn on the 64 px grid in the fills and strokes of the
+     Sketcher's constraint icons, as Constraint_Equal.svg is: three
+     uprights the same distance apart. -->
 <svg
    xmlns="http://www.w3.org/2000/svg"
    width="64"

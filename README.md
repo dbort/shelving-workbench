@@ -104,8 +104,8 @@ The vocabulary the documentation and the code share.
 - **Equal**: a constraint that keeps two openings the same size. Select two
   or more widths, or two or more heights, in any rows or columns, and run
   Constrain Equal: each opening is made equal to the next in the order you
-  selected them, as the Sketcher chains its Equal. Each shows the
-  Sketcher's Equal icon beside its dimension. Deleting a board beside an
+  selected them, as the Sketcher chains its Equal. Each shows an equals
+  sign icon beside its dimension. Deleting a board beside an
   opening, or adding a board along its row that splits it, removes its
   Equal; a board added across it keeps the Equal.
 - **Even spacing**: a constraint that keeps every opening between two ends

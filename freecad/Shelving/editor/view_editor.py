@@ -69,7 +69,6 @@ from freecad.Shelving.editor.overlay import (
     drawing_node,
     icon_side_px,
     label_string,
-    load_sketcher_resources,
     padded_icon_image,
     view_style,
 )
@@ -769,7 +768,6 @@ class ViewEditor:
         self.marker = PointMarker()
         self.root.addChild(self.marker.root)
         self._draw_marker(ratio)
-        load_sketcher_resources()
         self._icons: Coin = coin.SoSeparator()
         self.root.addChild(self._icons)
         scene_graph = self.view.getSceneGraph()

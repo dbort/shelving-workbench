@@ -79,10 +79,8 @@ boards are gone is dropped, with one notification saying so.
       - an Equal draws one icon at each of its two openings, and an Even
         spacing draws one at every opening of its group. No icon overlaps
         another icon, a dimension's text, or a padlock in device pixels;
-      - the Equal icon is rendered from
-        `:/icons/constraints/Constraint_EqualLength.svg`, and the Even
-        spacing icon from the workbench's own SVG under
-        `freecad/Shelving/resources/`;
+      - the Equal and Even spacing icons are rendered from the
+        workbench's own SVGs under `freecad/Shelving/resources/`;
       - a click on an icon selects its constraint alone, Ctrl-click on
         another icon adds it, and a click on a board or opening drops the
         constraint selection;
@@ -98,7 +96,8 @@ boards are gone is dropped, with one notification saying so.
       `editor.constraints`.
 - [ ] `.claude/docs/freecad-notes.md` says whether
       `:/icons/constraints/Constraint_EqualLength.svg` exists before
-      `SketcherGui` is imported, on FreeCAD 1.1.
+      `SketcherGui` is imported, on FreeCAD 1.1. No workbench code imports
+      `SketcherGui`.
 
 ## Advice
 - **Blocked on sh-047:** this needs the engine's general linear relations
@@ -151,16 +150,18 @@ boards are gone is dropped, with one notification saying so.
   them as the fixed-point cross is drawn (`PointMarker`, an image at device
   pixel size), and hit-test them in the press filter ahead of the
   dimension text. Plan their positions in `editor/elevation.py` so the
-  layout tests need no view. Equal uses Sketcher's
-  `Constraint_EqualLength` SVG, recolored as Sketcher's own constraint
-  icon drawing recolors it (read its source). Even spacing gets its own
-  SVG in the same style, in `freecad/Shelving/resources/`. Colors from
+  layout tests need no view. Equal and Even spacing each get the
+  workbench's own SVG in Sketcher's constraint icon style, in
+  `freecad/Shelving/resources/`, recolored as Sketcher's own constraint
+  icon drawing recolors it (read its source). Colors from
   the View preferences: `ConstrainedIcoColor` active,
   `DeactivatedConstrDimColor` deactivated, `SelectionColor` selected.
 - **Sketcher resources:** unverified whether they load before `SketcherGui`
-  is imported. Check first (Plan step 1). If they do not, the editor
-  imports `SketcherGui` before drawing or building the toolbar. Every
-  FreeCAD 1.1 build ships Sketcher, so do not write a fallback icon.
+  is imported. Check first (Plan step 1) and record the answer.
+- **The workbench draws its own Equal icon** (user decision, 2026-11-13):
+  the Even spacing icon already copies Sketcher's style and must be kept
+  in step with it, so Equal is drawn the same way rather than borrowed.
+  That removes the `SketcherGui` import Sketcher's own icon needed.
 - **Deletes and splits drop silently**, in the same undo step: deleting a
   board drops every Equal on an opening beside it, since that opening
   merges away, and every Even spacing with it as an end. A split along an

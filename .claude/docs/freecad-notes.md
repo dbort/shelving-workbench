@@ -237,10 +237,9 @@ widget editable again: the abort alone leaves it read-only.
 the start workbench). The Sketcher registers its icon resources when its
 GUI module loads, which PartDesign, FreeCAD 1.1's default start workbench,
 does at startup, so a check made after a PartDesign start passes by
-accident. `freecad/Shelving/editor/overlay.py`'s `load_sketcher_resources`
-imports it before the editor draws a constraint icon or a command asks for
-the icon; `tests/freecad_view/test_constraints.py` keeps the check. Every
-FreeCAD build ships the Sketcher, so there is no fallback icon.
+accident. The workbench draws its own constraint icons in the Sketcher's
+style, under `freecad/Shelving/resources/`, so it never imports
+`SketcherGui`.
 
 The Sketcher draws a constraint's in-view icon from its SVG at the
 `ConstraintSymbolSize` View preference (the application font's pixel size

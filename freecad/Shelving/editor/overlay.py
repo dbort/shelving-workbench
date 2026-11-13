@@ -127,24 +127,15 @@ def view_style(label_size_pt: int, padlock_spaces: int) -> Style:
     )
 
 
-# The Sketcher's own Equal icon, and this workbench's even spacing icon in
-# its style. The Sketcher's resource exists only once SketcherGui is
-# imported (.claude/docs/freecad-notes.md).
+# The workbench's own icons in the Sketcher's constraint style. Drawing
+# Equal as well as Even spacing keeps the pair matched and spares
+# importing SketcherGui, whose import alone registers the Sketcher's icons
+# (.claude/docs/freecad-notes.md).
+_RESOURCES = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources")
 ICON_SOURCES: Mapping[ConstraintKind, str] = {
-    "equal": ":/icons/constraints/Constraint_EqualLength.svg",
-    "even_spacing": os.path.join(
-        os.path.dirname(os.path.dirname(__file__)),
-        "resources",
-        "Constraint_EvenSpacing.svg",
-    ),
+    "equal": os.path.join(_RESOURCES, "Constraint_Equal.svg"),
+    "even_spacing": os.path.join(_RESOURCES, "Constraint_EvenSpacing.svg"),
 }
-
-
-def load_sketcher_resources() -> None:
-    """Make the Sketcher's icon resources loadable, ``ICON_SOURCES``'s
-    Equal icon among them: FreeCAD 1.1 registers them when ``SketcherGui``
-    is imported, and every FreeCAD build ships the Sketcher."""
-    import SketcherGui  # noqa: F401
 
 
 def icon_side_px() -> int:

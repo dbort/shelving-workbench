@@ -21,12 +21,8 @@ class ConstrainEqualCommand:
     def GetResources(self) -> _CommandResources:
         # Imported here: the editor needs Qt and Coin, which a headless
         # import of this module must not reach.
-        from freecad.Shelving.editor.overlay import (
-            ICON_SOURCES,
-            load_sketcher_resources,
-        )
+        from freecad.Shelving.editor.overlay import ICON_SOURCES
 
-        load_sketcher_resources()
         return {
             "MenuText": "Constrain Equal",
             "ToolTip": (

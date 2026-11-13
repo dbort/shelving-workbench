@@ -477,8 +477,8 @@ title = "Equal and even spacing, from icons to a hand-moved shelf"
   ]
   expected = """
 A toolbar with Constrain Equal and Constrain Even Spacing appears. The
-Equal button shows the Sketcher's Equal icon, and the Even spacing button
-an icon of the same family: three evenly spaced uprights."""
+Equal button shows an equals sign and the Even spacing button three evenly
+spaced uprights, both in the style of the Sketcher's constraint icons."""
 
   [[case.step]]
   id = "even"
@@ -502,9 +502,9 @@ padlock."""
   ]
   expected = """
 The second column's bottom opening takes the leftmost column's spacing.
-Both openings show the Equal icon, which reads at a glance as the
-Sketcher's Equal in a sketch; on the leftmost opening it sits in a row with
-the even spacing icon, neither covering the other."""
+Both openings show the Equal icon, which reads at a glance as an equals
+sign; on the leftmost opening it sits in a row with the even spacing icon,
+neither covering the other."""
 
   [[case.step]]
   id = "display"
