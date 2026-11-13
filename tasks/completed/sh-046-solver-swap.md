@@ -19,13 +19,13 @@ sh-047 retires it. This task ships alone so the new resize behavior can be
 tried before any new constraint exists.
 
 ## Must Have
-- [ ] `pixi run tests` green; `pyrefly check` clean over the changed code.
-- [ ] `grep -rnwE "Weighted|Fill|distribute|_place|_driven_weight|_other_driven_anchor|_recover_rules|no_slack_absorber" freecad tests`
+- [x] `pixi run tests` green; `pyrefly check` clean over the changed code.
+- [x] `grep -rnwE "Weighted|Fill|distribute|_place|_driven_weight|_other_driven_anchor|_recover_rules|no_slack_absorber" freecad tests`
       prints nothing.
-- [ ] `grep -rn "MIN_DRAG_GAP_MM =" freecad` prints exactly one line, in
+- [x] `grep -rn "MIN_DRAG_GAP_MM =" freecad` prints exactly one line, in
       `core/edit.py`. `core/axis_solver.py` and `core/solver.py` never name
       it and take the minimum opening as a parameter.
-- [ ] Core suite, on a column of 18 mm boards with fixed point `min`:
+- [x] Core suite, on a column of 18 mm boards with fixed point `min`:
       bottom, bay A 300, shelf, bay B 300, top (654 mm tall):
       - growing it to 754 mm gives A 300, B 400, and the shelf unmoved;
       - shrinking it to 254 mm gives B 5 and A 195;
@@ -37,7 +37,7 @@ tried before any new constraint exists.
         A 300 and B 400, and the shelf moves 50 mm down with the bottom;
       - `held_by` of the shelf is `(A,)` with A locked and `()` with
         neither locked; for the top or bottom board it is `None`.
-- [ ] Core suite, on a column of 18 mm boards with fixed point `min`:
+- [x] Core suite, on a column of 18 mm boards with fixed point `min`:
       bottom, A 300, shelf s1, B 300, shelf s2, C 300, top (972 mm tall):
       - typing 340 into B gives A 280, B 340, C 280;
       - dragging s1's low face to 718 gives A 700, B 5, C 195, with s1's
@@ -45,22 +45,22 @@ tried before any new constraint exists.
       - dragging s1's low face to 2000 stops it at 908: A 890, B 5, C 5;
       - with B locked, dragging s1 50 mm up gives A 350, B 300, C 250, and
         s2 moves 50 mm too.
-- [ ] Core suite: a scan gives every region its measured size and locks
+- [x] Core suite: a scan gives every region its measured size and locks
       only what it locks today: a void beside a bay or division, and an
       axis-wrap division. A unit read and solved with no edit keeps every
       board within 1e-6 mm.
-- [ ] `rules_to_json` emits exactly
+- [x] `rules_to_json` emits exactly
       `{"schema_version": 1, "locks": {<key>: {"basis": "clear" | "with_next"}}}`,
       with one entry per locked region and none for an unlocked one.
       `rules_from_json` on a record in any other shape, including the old
       `"rules"` shape, gives no locks and raises nothing. Headless
       (`tests/freecad/`): a container carrying an old-shape record opens
       in `Session`, with every opening unlocked.
-- [ ] Headless: a refused conflict through `Session` returns an
+- [x] Headless: a refused conflict through `Session` returns an
       `EditFailure` and leaves the document untouched.
-- [ ] `README.md`'s glossary entries **Size rule** and **The drag rule**
+- [x] `README.md`'s glossary entries **Size rule** and **The drag rule**
       do not contain "weighted share".
-- [ ] `bug-019` is deleted from `.claude/docs/bug-log.md`.
+- [x] `bug-019` is deleted from `.claude/docs/bug-log.md`.
 
 ## Advice
 - **Tree carries current geometry.** Every non-root region stores its
