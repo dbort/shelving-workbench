@@ -32,9 +32,8 @@ title = "Navigating and dragging on a real trackpad"
   action = "shelf_unit_with_varset"
   instruction = ["Select the container (ShelvingUnit).", "Run Edit Unit."]
   expected = """
-The panel holds only the unit's size, a menu for what an opening's size
-measures, and Hide other objects. The view shows one shelf between two bays,
-each bay with its dimensions."""
+The Edit Unit panel opens. The view shows one shelf between two bays, each
+bay with its dimensions."""
 
   [[case.step]]
   id = "navigate"
