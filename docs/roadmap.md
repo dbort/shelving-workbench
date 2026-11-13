@@ -93,7 +93,7 @@ size changes, and scans back as the same treatment.
 **Status:** Tasks sh-045, sh-046, sh-047, sh-048, sh-049, sh-050
 
 - [x] sh-045: the constraint engine for one axis
-- [ ] sh-046: lay units out with the engine (blocked on sh-045)
+- [x] sh-046: lay units out with the engine (blocked on sh-045)
 - [ ] sh-047: any opening locks, with reference sizes and constraint feedback (blocked on sh-046)
 - [ ] sh-048: Equal and Even spacing constraints (blocked on sh-047)
 - [ ] sh-049: the constraint list in the task panel (blocked on sh-048)

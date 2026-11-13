@@ -6,10 +6,10 @@ from freecad.Shelving.core.expand import BoardSpec, expand, total_volume_mm3
 from freecad.Shelving.core.geometry import Vec3
 from freecad.Shelving.core.layout import (
     Axis,
+    Basis,
     Bay,
     Board,
     Division,
-    Fixed,
     Insets,
     Item,
     Unit,
@@ -43,9 +43,10 @@ def _closed_box(width_mm: float, depth_mm: float, height_mm: float) -> Unit:
                     axis=Axis.X,
                     items=[
                         Board(thickness_mm=18.0, role="left_side"),
-                        Bay(),
+                        Bay(size_mm=width_mm - 36.0),
                         Board(thickness_mm=18.0, role="right_side"),
                     ],
+                    size_mm=height_mm - 36.0,
                 ),
                 Board(thickness_mm=18.0, role="top"),
             ],
@@ -74,12 +75,12 @@ def _column(void_mm: float, prefix: str) -> Division:
     """A stack of a bay, its own top, and (if positive) the void above it: the
     step is a ``Void`` taking the leftover height."""
     items: list[Item] = [
-        Bay(id=f"{prefix}_bay"),
+        Bay(size_mm=1182.0 - 18.0 - void_mm, id=f"{prefix}_bay"),
         Board(thickness_mm=18.0, role="top", id=f"{prefix}_top"),
     ]
     if void_mm > 0:
-        items.append(Void(rule=Fixed(void_mm), id=f"{prefix}_void"))
-    return Division(axis=Axis.Z, items=items, id=f"{prefix}_division")
+        items.append(Void(size_mm=void_mm, lock=Basis.CLEAR, id=f"{prefix}_void"))
+    return Division(axis=Axis.Z, items=items, size_mm=376.0, id=f"{prefix}_division")
 
 
 def _stepped_unit() -> Unit:
@@ -102,6 +103,7 @@ def _stepped_unit() -> Unit:
                         _column(600.0, "col2"),
                         Board(thickness_mm=18.0, role="right_side"),
                     ],
+                    size_mm=1182.0,
                     id="middle",
                 ),
             ],
@@ -134,7 +136,7 @@ def test_two_adjacent_boards_touch() -> None:
     root = Division(
         axis=Axis.Z,
         items=[
-            Bay(),
+            Bay(size_mm=964.0),
             Board(thickness_mm=18.0, role="lower", id="lower"),
             Board(thickness_mm=18.0, role="upper", id="upper"),
         ],
@@ -151,7 +153,10 @@ def test_board_insets_apply_to_cross_section_axes_only() -> None:
     insets = Insets(y_min_mm=10.0, y_max_mm=20.0, z_min_mm=5.0, z_max_mm=7.0)
     root = Division(
         axis=Axis.X,
-        items=[Board(thickness_mm=18.0, insets=insets, id="inset_board"), Bay()],
+        items=[
+            Board(thickness_mm=18.0, insets=insets, id="inset_board"),
+            Bay(size_mm=582.0),
+        ],
         id="root",
     )
     unit = Unit(size_mm=Vec3(600.0, 300.0, 900.0), root=root)

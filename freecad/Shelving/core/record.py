@@ -1,4 +1,4 @@
-"""The stored rule record: per-region size rules keyed to survive a rescan.
+"""The stored rule record: the locked regions, keyed to survive a rescan.
 
 A rescan assigns every region a fresh :func:`~freecad.Shelving.core.layout.new_id`,
 so a record keyed by region id would match nothing on the next scan and the
@@ -18,34 +18,35 @@ bounds at most one region on each side within one run.
 
 GEOMETRY WINS. A rescan takes every region's size from the boards, so a
 board moved by hand stays where it was moved. The record contributes only
-what geometry cannot say: whether a region is locked (``Fixed``) or
-unlocked (``Weighted`` or ``Fill``), and a locked region's basis. A stored
-locked region takes its scanned size restated in its stored basis; a
-stored unlocked region keeps an unlocked scanned rule, or, where the scan
-fixed it, takes the weight that holds its scanned size beside the run's
-other unlocked regions.
+what geometry cannot say: which regions are locked, and in which basis. A
+stored lock takes its region's scanned size. A valid record is the whole
+lock state: a region it does not name is unlocked, even where the scan
+would have locked it, so an opening the user unlocked stays unlocked. The
+scan's own locks stand only when the container holds no valid record.
 
 CONSEQUENCES of keying this way, because they are not obvious. Renaming or
 deleting a bounding board invalidates its neighbors' keys; the correct
-response, and what :func:`with_stored_rules` does, is to fall back to the
-region's scanned rule rather than raise. The geometry scanned is still
-correct, only the stored intent for that one region is lost, and the
-scan's own rule recovery (:mod:`freecad.Shelving.core.scan`) is the
-documented fallback for it.
+response, and what :func:`with_stored_rules` does, is to leave that region
+unlocked rather than raise. The geometry scanned is still correct, only the
+stored lock for that one region is lost.
 
-A ``Fixed`` rule's :class:`~freecad.Shelving.core.layout.Basis` rides along
-in the record, because it cannot be recovered from geometry: a clear opening
-and a shelf spacing quoted face to face (``Basis.WITH_NEXT``) place their
-boards identically, and a scan always recovers ``Basis.CLEAR``. A stored
+A lock's :class:`~freecad.Shelving.core.layout.Basis` rides along in the
+record, because it cannot be recovered from geometry: a clear opening and a
+shelf spacing quoted face to face (``Basis.WITH_NEXT``) place their boards
+identically, and a scan always locks in ``Basis.CLEAR``. A stored
 ``Basis.WITH_NEXT`` surviving a rescan is the only way that intent survives
 at all.
 
-WHAT IS NOT IN THE RECORD. Only the per-region rules. A unit's id, its depth
+A record in any other shape than :func:`rules_to_json` writes reads as no
+record (:func:`parse_locks` gives ``None``): the unit opens with the locks
+the scan gives it, where raising would leave it unopenable.
+
+WHAT IS NOT IN THE RECORD. Anything but the locks. A unit's id, its depth
 axis, and its facing are single values with an obvious home as ordinary
 container properties (``sh-018``'s job, not this module's); a board's
 material, provenance, and pinned size live on the board's own object. This
 record exists because a bay or a void is not a board and so has nowhere else
-to keep its rule.
+to keep its lock.
 """
 
 from __future__ import annotations
@@ -55,23 +56,7 @@ import json
 from collections.abc import Iterator, Mapping, Sequence
 from typing import Literal, TypedDict
 
-from freecad.Shelving.core.edit import EditError, size_in_basis_mm
-from freecad.Shelving.core.geometry import Space
-from freecad.Shelving.core.layout import (
-    Basis,
-    Bay,
-    Board,
-    Division,
-    Fill,
-    Fixed,
-    Item,
-    Region,
-    SizeRule,
-    Unit,
-    Void,
-    Weighted,
-)
-from freecad.Shelving.core.solver import LayoutSolveError, solve
+from freecad.Shelving.core.layout import Basis, Board, Division, Item, Region, Unit
 
 RULE_RECORD_VERSION: int = 1
 
@@ -118,11 +103,6 @@ def _iter_keyed_regions(region: Region) -> Iterator[tuple[str, Region]]:
         yield from _iter_keyed_regions(item)
 
 
-def _iter_region_rules(region: Region) -> Iterator[tuple[str, SizeRule]]:
-    for key, item in _iter_keyed_regions(region):
-        yield key, item.rule
-
-
 def region_keys(unit: Unit) -> Mapping[str, str]:
     """Each region's id in ``unit`` except the root's, keyed by its
     :func:`rule_key`: the key a rescan, which mints fresh region ids,
@@ -130,225 +110,110 @@ def region_keys(unit: Unit) -> Mapping[str, str]:
     return {key: item.id for key, item in _iter_keyed_regions(unit.root)}
 
 
-class _FixedRuleDoc(TypedDict):
-    type: Literal["fixed"]
-    size_mm: float
+class _LockDoc(TypedDict):
     basis: Literal["clear", "with_next"]
-
-
-class _WeightedRuleDoc(TypedDict):
-    type: Literal["weighted"]
-    weight: float
-
-
-class _FillRuleDoc(TypedDict):
-    type: Literal["fill"]
-
-
-_RuleDoc = _FixedRuleDoc | _WeightedRuleDoc | _FillRuleDoc
 
 
 class _RuleRecordDoc(TypedDict):
     schema_version: int
-    rules: dict[str, _RuleDoc]
-
-
-def _rule_to_doc(rule: SizeRule) -> _RuleDoc:
-    match rule:
-        case Fixed(size_mm=size_mm, basis=basis):
-            basis_name: Literal["clear", "with_next"] = (
-                "clear" if basis is Basis.CLEAR else "with_next"
-            )
-            fixed_doc: _FixedRuleDoc = {
-                "type": "fixed",
-                "size_mm": size_mm,
-                "basis": basis_name,
-            }
-            return fixed_doc
-        case Weighted(weight=weight):
-            weighted_doc: _WeightedRuleDoc = {"type": "weighted", "weight": weight}
-            return weighted_doc
-        case Fill():
-            fill_doc: _FillRuleDoc = {"type": "fill"}
-            return fill_doc
+    locks: dict[str, _LockDoc]
 
 
 def rules_to_json(unit: Unit) -> str:
-    """Every region's rule in ``unit``, keyed by :func:`rule_key`, as JSON.
+    """Every locked region in ``unit``, keyed by :func:`rule_key`, as JSON.
 
-    ``{"schema_version": ..., "rules": {key: rule_doc}}``, one entry per
-    non-root region. A ``Fixed`` rule's ``basis`` is carried along; see the
-    module docstring for why.
+    ``{"schema_version": 1, "locks": {key: {"basis": "clear" | "with_next"}}}``,
+    one entry per locked non-root region and none for an unlocked one.
     """
-    rules = {key: _rule_to_doc(rule) for key, rule in _iter_region_rules(unit.root)}
-    doc: _RuleRecordDoc = {"schema_version": RULE_RECORD_VERSION, "rules": rules}
+    locks: dict[str, _LockDoc] = {}
+    for key, item in _iter_keyed_regions(unit.root):
+        if item.lock is not None:
+            locks[key] = {"basis": "clear" if item.lock is Basis.CLEAR else "with_next"}
+    doc: _RuleRecordDoc = {"schema_version": RULE_RECORD_VERSION, "locks": locks}
     return json.dumps(doc)
 
 
-def _as_mapping(value: object, what: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise ValueError(f"{what} must be a JSON object, got {value!r}")
-    narrowed: Mapping[str, object] = value
-    return narrowed
+def parse_locks(text: str) -> Mapping[str, Basis] | None:
+    """Each stored lock's basis, keyed by :func:`rule_key`, from the record
+    :func:`rules_to_json` emitted; ``None`` for a record in any other shape,
+    or text that is not JSON, which an empty record never gives. Never
+    raises."""
+    try:
+        parsed: object = json.loads(text)
+    except ValueError:
+        return None
+    if not isinstance(parsed, dict) or set(parsed) != {"schema_version", "locks"}:
+        return None
+    version: object = parsed["schema_version"]
+    if isinstance(version, bool) or version != RULE_RECORD_VERSION:
+        return None
+    raw_locks: object = parsed["locks"]
+    if not isinstance(raw_locks, dict):
+        return None
+    locks: dict[str, Basis] = {}
+    for key, raw_lock in raw_locks.items():
+        if not isinstance(key, str) or not isinstance(raw_lock, dict):
+            return None
+        if set(raw_lock) != {"basis"}:
+            return None
+        basis: object = raw_lock["basis"]
+        if basis == Basis.CLEAR.value:
+            locks[key] = Basis.CLEAR
+        elif basis == Basis.WITH_NEXT.value:
+            locks[key] = Basis.WITH_NEXT
+        else:
+            return None
+    return locks
 
 
-def _req_number(obj: Mapping[str, object], key: str) -> float:
-    if key not in obj:
-        raise ValueError(f"missing required key {key!r}")
-    value = obj[key]
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise ValueError(f"key {key!r} must be a number, got {value!r}")
-    return float(value)
+def rules_from_json(text: str) -> Mapping[str, Basis]:
+    """Each stored lock's basis, keyed by :func:`rule_key`, from the record
+    :func:`rules_to_json` emitted. A record in any other shape, or text that
+    is not JSON, gives no locks; this never raises."""
+    locks = parse_locks(text)
+    return {} if locks is None else locks
 
 
-def _rule_from_doc(raw: object) -> SizeRule:
-    obj = _as_mapping(raw, "rule")
-    rule_type = obj.get("type")
-    if rule_type == "fixed":
-        size_mm = _req_number(obj, "size_mm")
-        basis_raw = obj.get("basis")
-        if basis_raw == Basis.CLEAR.value:
-            return Fixed(size_mm=size_mm, basis=Basis.CLEAR)
-        if basis_raw == Basis.WITH_NEXT.value:
-            return Fixed(size_mm=size_mm, basis=Basis.WITH_NEXT)
-        raise ValueError(f"'basis' must be 'clear' or 'with_next', got {basis_raw!r}")
-    if rule_type == "weighted":
-        return Weighted(weight=_req_number(obj, "weight"))
-    if rule_type == "fill":
-        return Fill()
-    raise ValueError(
-        f"'type' must be 'fixed', 'weighted', or 'fill', got {rule_type!r}"
-    )
-
-
-def rules_from_json(text: str) -> Mapping[str, SizeRule]:
-    """The record :func:`rules_to_json` emitted, or ``ValueError`` naming the
-    problem: a version other than :data:`RULE_RECORD_VERSION`, or a
-    malformed rule doc.
-    """
-    parsed = json.loads(text)
-    if not isinstance(parsed, dict):
-        raise ValueError("top-level JSON value must be an object")
-    version = parsed.get("schema_version")
-    if (
-        not isinstance(version, int)
-        or isinstance(version, bool)
-        or version != RULE_RECORD_VERSION
-    ):
-        raise ValueError(
-            f"schema_version must be {RULE_RECORD_VERSION}, got {version!r}"
-        )
-    raw_rules = parsed.get("rules")
-    if not isinstance(raw_rules, dict):
-        raise ValueError("'rules' must be a JSON object")
-    rules: dict[str, SizeRule] = {}
-    for key, raw_rule in raw_rules.items():
-        if not isinstance(key, str):
-            raise ValueError(f"rule key must be a string, got {key!r}")
-        rules[key] = _rule_from_doc(raw_rule)
-    return rules
-
-
-def _set_rule(region: Region, rule: SizeRule) -> Region:
-    match region:
-        case Bay():
-            return dataclasses.replace(region, rule=rule)
-        case Void():
-            return dataclasses.replace(region, rule=rule)
-        case Division():
-            return dataclasses.replace(region, rule=rule)
-
-
-def _merged_rules(
-    run: Division, rules: Mapping[str, SizeRule], spaces: Mapping[str, Space]
-) -> list[SizeRule | None]:
-    """The rule each item of ``run`` takes, ``None`` for a board: the
-    record's lock state and basis at the size ``spaces`` gives it, or the
-    scanned rule where the record has no entry."""
+def _locked_items(run: Division, locks: Mapping[str, Basis]) -> list[Item]:
+    """``run``'s items, each region whose key ``locks`` names locked in its
+    stored basis, and in ``Basis.CLEAR`` when that is ``Basis.WITH_NEXT``
+    and no board follows it any more; every other region unlocked."""
     items = run.items
-    axis_index = run.axis.component_index
-    keyed: list[SizeRule | None] = []
+    new_items: list[Item] = []
     for index, item in enumerate(items):
         if isinstance(item, Board):
-            keyed.append(None)
+            new_items.append(item)
             continue
+        new_item = _with_stored_locks(item, locks)
         key = rule_key(
             _neighbor_board_id(items, index - 1), _neighbor_board_id(items, index + 1)
         )
-        keyed.append(rules.get(key))
-    merged: list[SizeRule | None] = []
-    # The unlocked regions whose scanned rule stands share one size per unit
-    # of weight; a region the record unlocks joins them at that rate, or at
-    # the scan's own 1 mm per unit of weight when none stands.
-    anchor_mm: float | None = None
-    for item, stored in zip(items, keyed, strict=True):
-        if isinstance(item, Board):
-            merged.append(None)
-            continue
-        merged.append(item.rule)
-        if isinstance(stored, Fixed):
-            continue
-        if anchor_mm is None and not isinstance(item.rule, Fixed):
-            weight = item.rule.weight if isinstance(item.rule, Weighted) else 1.0
-            anchor_mm = spaces[item.id].extent_mm(axis_index) / weight
-    for index, (item, stored) in enumerate(zip(items, keyed, strict=True)):
-        if isinstance(item, Board) or stored is None:
-            continue
-        clear_mm = spaces[item.id].extent_mm(axis_index)
-        if isinstance(stored, Fixed):
-            try:
-                size_mm = size_in_basis_mm(run, index, clear_mm, stored.basis)
-                merged[index] = Fixed(size_mm=size_mm, basis=stored.basis)
-            except EditError:
-                # A spacing whose next board is gone measures nothing; the
-                # region stays locked at its clear size.
-                merged[index] = Fixed(size_mm=clear_mm, basis=Basis.CLEAR)
-        elif isinstance(item.rule, Fixed):
-            merged[index] = Weighted(weight=clear_mm / (anchor_mm or 1.0))
-    return merged
+        basis = locks.get(key)
+        if basis is Basis.WITH_NEXT and _neighbor_board_id(items, index + 1) is None:
+            basis = Basis.CLEAR
+        if new_item.lock is not basis:
+            new_item = dataclasses.replace(new_item, lock=basis)
+        new_items.append(new_item)
+    return new_items
 
 
-def _rebuild_with_stored_rules(
-    region: Region, rules: Mapping[str, SizeRule], spaces: Mapping[str, Space]
-) -> Region:
-    """A copy of ``region`` with every descendant region's rule merged with
-    its matching entry in ``rules`` (:func:`_merged_rules`), and left as
-    scanned where no entry matches. ``region``'s own rule is untouched; the
-    caller, which holds the parent run ``region`` sits in, is the one that
-    knows ``region``'s key."""
+def _with_stored_locks(region: Region, locks: Mapping[str, Basis]) -> Region:
     if not isinstance(region, Division):
         return region
-    new_items: list[Item] = []
-    for item, rule in zip(
-        region.items, _merged_rules(region, rules, spaces), strict=True
-    ):
-        if isinstance(item, Board) or rule is None:
-            new_items.append(item)
-            continue
-        new_items.append(
-            _set_rule(_rebuild_with_stored_rules(item, rules, spaces), rule)
-        )
-    return dataclasses.replace(region, items=new_items)
+    return dataclasses.replace(region, items=_locked_items(region, locks))
 
 
-def with_stored_rules(unit: Unit, rules: Mapping[str, SizeRule]) -> Unit:
+def with_stored_rules(unit: Unit, locks: Mapping[str, Basis] | None) -> Unit:
     """``unit``, as scanned, with each region whose :func:`rule_key` matches
-    an entry in ``rules`` taking that entry's lock state and basis at its
-    scanned size, so ``solve`` gives every node the space it had in
-    ``unit``. Returns ``unit`` itself when it does not solve.
+    an entry in ``locks`` locked in that entry's basis and every other
+    region unlocked, each at its scanned size, so every node keeps the space
+    it had in ``unit``. Returns ``unit`` itself, with the scan's locks, when
+    ``locks`` is ``None``: no valid record.
 
-    A key with no match, most often because a bounding board was renamed or
-    deleted since the record was written, is not an error: that region keeps
-    whatever rule the scan it was rebuilt from assigned it.
+    A region no entry matches, most often because a bounding board was
+    renamed or deleted since the record was written, is unlocked, not an
+    error.
     """
-    if not rules:
+    if locks is None:
         return unit
-    try:
-        spaces = solve(unit)
-    except LayoutSolveError:
-        # The record cannot make solvable what the boards are not; the
-        # caller's own solve reports the scanned unit's error.
-        return unit
-    return dataclasses.replace(
-        unit, root=_rebuild_with_stored_rules(unit.root, rules, spaces)
-    )
+    return dataclasses.replace(unit, root=_with_stored_locks(unit.root, locks))

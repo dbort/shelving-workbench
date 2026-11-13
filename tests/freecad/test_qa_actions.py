@@ -9,7 +9,7 @@ import FreeCAD
 import pytest
 
 from freecad.Shelving import init_gui, qa
-from freecad.Shelving.core.layout import Basis, Bay, Board, Division, Fixed, Region
+from freecad.Shelving.core.layout import Basis, Bay, Board, Division, Region
 from freecad.Shelving.editor.session import Session
 from freecad.Shelving.qa import actions
 from freecad.Shelving.qa.model import Case, load_cases
@@ -61,11 +61,8 @@ def test_the_two_shelf_unit_holds_one_shelf_by_spacing_and_one_by_clear() -> Non
     container = doc.getObject("ShelvingUnit")
     assert container is not None
     session = Session(container)
-    rules = [node.rule for node in _bays(session.unit.root)]
-    assert len(rules) == 3
-    assert isinstance(rules[0], Fixed) and rules[0].basis is Basis.WITH_NEXT
-    assert isinstance(rules[1], Fixed) and rules[1].basis is Basis.CLEAR
-    assert not isinstance(rules[2], Fixed)
+    locks = [node.lock for node in _bays(session.unit.root)]
+    assert locks == [Basis.WITH_NEXT, Basis.CLEAR, None]
 
 
 def _bays(region: Region) -> list[Bay]:

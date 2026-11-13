@@ -31,7 +31,6 @@ from freecad.Shelving.core.layout import (
     Bay,
     Board,
     Division,
-    Fixed,
     FixedSide,
     Insets,
     Region,
@@ -462,9 +461,7 @@ class _Planner:
                 continue
             rect = frame.rect(self.spaces[item.id])
             span = rect
-            spacing = (
-                isinstance(item.rule, Fixed) and item.rule.basis is Basis.WITH_NEXT
-            )
+            spacing = item.lock is Basis.WITH_NEXT
             if spacing and index + 1 < len(division.items):
                 after = division.items[index + 1]
                 if isinstance(after, Board):

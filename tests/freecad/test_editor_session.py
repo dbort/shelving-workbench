@@ -7,6 +7,7 @@ GUI up.
 """
 
 import dataclasses
+import json
 import shutil
 from pathlib import Path
 from typing import Protocol, cast
@@ -26,12 +27,12 @@ from freecad.Shelving.core.layout import (
     Bay,
     Board,
     Division,
-    Fixed,
     FixedPoint,
     Region,
-    SizeRule,
     Unit,
+    Void,
 )
+from freecad.Shelving.core.record import region_keys
 from freecad.Shelving.core.scan import elevation_axes
 from freecad.Shelving.editor.session import (
     EditFailure,
@@ -428,9 +429,15 @@ def test_split_created_board_keeps_its_name_across_edits() -> None:
 def _tiny_unit() -> Unit:
     """A closed single-bay unit 40mm wide: its interior bay (40 - 2*18 = 4mm)
     is far too narrow to hold a divider board, so splitting it always fails
-    to solve rather than write anything."""
+    rather than write anything."""
+    return _closed_box_unit(40.0)
+
+
+def _closed_box_unit(width_mm: float) -> Unit:
+    """A closed single-bay unit of 18 mm boards, ``width_mm`` wide and 900 mm
+    tall."""
     return Unit(
-        size_mm=Vec3(40.0, 300.0, 900.0),
+        size_mm=Vec3(width_mm, 300.0, 900.0),
         root=Division(
             axis=Axis.Z,
             items=[
@@ -439,9 +446,10 @@ def _tiny_unit() -> Unit:
                     axis=Axis.X,
                     items=[
                         Board(thickness_mm=18.0, role="left_side"),
-                        Bay(),
+                        Bay(size_mm=width_mm - 36.0),
                         Board(thickness_mm=18.0, role="right_side"),
                     ],
+                    size_mm=864.0,
                 ),
                 Board(thickness_mm=18.0, role="top"),
             ],
@@ -467,9 +475,10 @@ def _rotated_default_unit() -> Unit:
                     axis=Axis.Y,
                     items=[
                         Board(thickness_mm=18.0, role="left_side"),
-                        Bay(),
+                        Bay(size_mm=564.0),
                         Board(thickness_mm=18.0, role="right_side"),
                     ],
+                    size_mm=864.0,
                 ),
                 Board(thickness_mm=18.0, role="top"),
             ],
@@ -722,7 +731,7 @@ def test_an_over_constrained_edit_leaves_the_last_solved_state() -> None:
             session.select(_find_bay_ids_in_order(session.unit.root)[0])
             too_tall = session.set_size(5000.0)
             assert isinstance(too_tall, EditFailure), too_tall
-            assert "more than" in too_tall.message, too_tall.message
+            assert "no room" in too_tall.message, too_tall.message
             doc.recompute()
             assert _board_snapshot(container) == snapshot_after_split
 
@@ -731,6 +740,78 @@ def test_an_over_constrained_edit_leaves_the_last_solved_state() -> None:
             doc.recompute()
             assert _board_snapshot(container) == snapshot_after_split
             assert session.unit is unit_after_split
+        finally:
+            session.close()
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def test_a_unit_with_an_old_rule_record_opens_with_every_opening_unlocked() -> None:
+    """A record in the per-region rule shape an older workbench stored reads
+    as no record: the unit opens as its boards stand, with no opening
+    locked, rather than failing to open."""
+    doc = FreeCAD.newDocument("editor_old_rule_record")
+    try:
+        container = create_unit(doc)
+        doc.recompute()
+        session = Session(container)
+        session.open()
+        try:
+            session.select(_find_bay_id(session.unit.root))
+            assert session.split("vertical") is None
+            lower_id = _find_bay_ids_in_order(session.unit.root)[0]
+            assert session.set_lock(lower_id, locked=True) is None
+            keys = list(region_keys(session.unit))
+        finally:
+            session.close()
+        doc.recompute()
+        snapshot = _board_snapshot(container)
+        old_record = json.dumps(
+            {
+                "schema_version": 1,
+                "rules": {
+                    key: {"type": "fixed", "size_mm": 100.0, "basis": "clear"}
+                    for key in keys
+                },
+            }
+        )
+        properties.write_container_rules_json(
+            properties.ensure_container_properties(container), old_record
+        )
+
+        reopened = Session(container)
+        try:
+            bay_ids = _find_bay_ids_in_order(reopened.unit.root)
+            assert len(bay_ids) == 2
+            for bay_id in bay_ids:
+                assert _lock_of(reopened.unit.root, bay_id) is None, bay_id
+            assert _board_snapshot(container) == snapshot
+        finally:
+            reopened.close()
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def test_a_conflicting_resize_refuses_and_leaves_the_document_untouched() -> None:
+    """Shrinking a unit below its boards plus the minimum opening is a
+    conflict: the session returns it as an EditFailure and writes nothing."""
+    doc = FreeCAD.newDocument("editor_conflicting_resize")
+    try:
+        container = create_unit(doc)
+        doc.recompute()
+        session = Session(container)
+        session.open()
+        try:
+            snapshot = _board_snapshot(container)
+            unit_before = session.unit
+            undo_count = doc.UndoCount
+            refused = session.resize("height", 40.0)
+            assert isinstance(refused, EditFailure), refused
+            assert "no room" in refused.message, refused.message
+            doc.recompute()
+            assert _board_snapshot(container) == snapshot
+            assert session.unit is unit_before
+            assert doc.UndoCount == undo_count
         finally:
             session.close()
     finally:
@@ -824,16 +905,16 @@ def test_selection_maps_to_its_unit() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
-def _rule_of(region: Region, region_id: str) -> SizeRule:
-    """The rule of the region named ``region_id`` in ``region``'s subtree."""
+def _lock_of(region: Region, region_id: str) -> Basis | None:
+    """The lock of the region named ``region_id`` in ``region``'s subtree."""
     if region.id == region_id:
-        return region.rule
+        return region.lock
     if isinstance(region, Division):
         for item in region.items:
             if isinstance(item, Board):
                 continue
             try:
-                return _rule_of(item, region_id)
+                return _lock_of(item, region_id)
             except KeyError:
                 pass
     raise KeyError(region_id)
@@ -856,7 +937,7 @@ def _split_bay(session: Session, bay_id: str, direction: SplitDirection) -> str:
 
 def test_dimensions_drag_basis_and_untagged() -> None:
     """The dimension operations end to end on one document, all inside one
-    session: a set size fixes its region and the sibling redistributes;
+    session: a typed size locks its region and moves the shelf above it;
     toggling the basis moves no board; a locked region holds a drag until
     unlocked, unlocking moves nothing, and locking a column's last unlocked
     bay is refused; a drag resizes the bays beside the board and leaves them
@@ -901,12 +982,12 @@ def test_dimensions_drag_basis_and_untagged() -> None:
             assert divider_id not in (left_shelf_id, right_shelf_id)
             assert [e.name for e in session.untagged] == ["HandAdded"]
 
-            # A set size fixes the region; its Fill sibling takes the rest.
+            # A typed size locks the region; the shelf above it moves.
             session.select(left_lower_id)
             assert session.set_size(282.0) is None
             doc.recompute()
             assert session.selected_id == left_lower_id
-            assert _rule_of(session.unit.root, left_lower_id) == Fixed(282.0)
+            assert _lock_of(session.unit.root, left_lower_id) is Basis.CLEAR
             lower_mm = session.spaces[left_lower_id].size.z_mm
             upper_mm = session.spaces[left_upper_id].size.z_mm
             assert abs(lower_mm - 282.0) < 1e-6, lower_mm
@@ -918,9 +999,10 @@ def test_dimensions_drag_basis_and_untagged() -> None:
             boards_before_toggle = _board_snapshot(container)
             assert session.set_basis(Basis.WITH_NEXT) is None
             doc.recompute()
-            assert _rule_of(session.unit.root, left_lower_id) == Fixed(
-                300.0, Basis.WITH_NEXT
-            )
+            assert _lock_of(session.unit.root, left_lower_id) is Basis.WITH_NEXT
+            measured = session.selected_measurement()
+            assert measured is not None
+            assert abs(measured.size_mm - 300.0) < 1e-6
             assert _board_snapshot(container) == boards_before_toggle
             assert session.set_basis(Basis.CLEAR) is None
             doc.recompute()
@@ -940,7 +1022,7 @@ def test_dimensions_drag_basis_and_untagged() -> None:
             assert session.unlock_holders(left_shelf_id) is None
             doc.recompute()
             assert _board_snapshot(container) == boards_before_toggle
-            assert not isinstance(_rule_of(session.unit.root, left_lower_id), Fixed)
+            assert _lock_of(session.unit.root, left_lower_id) is None
             assert session.held_by(left_shelf_id) == ()
             assert isinstance(session.unlock_holders(left_shelf_id), EditFailure)
 
@@ -952,9 +1034,9 @@ def test_dimensions_drag_basis_and_untagged() -> None:
             assert refused.node_id == left_upper_id
             doc.recompute()
             assert _board_snapshot(container) == boards_before_toggle
-            assert not isinstance(_rule_of(session.unit.root, left_upper_id), Fixed)
+            assert _lock_of(session.unit.root, left_upper_id) is None
             assert session.set_lock(left_lower_id, locked=False) is None
-            assert not isinstance(_rule_of(session.unit.root, left_lower_id), Fixed)
+            assert _lock_of(session.unit.root, left_lower_id) is None
 
             # A drag resizes the bays on either side, locks neither, and
             # keeps the board selected.
@@ -965,8 +1047,7 @@ def test_dimensions_drag_basis_and_untagged() -> None:
             doc.recompute()
             assert session.selected_id == left_shelf_id
             for bay_id in (left_lower_id, left_upper_id):
-                rule = _rule_of(session.unit.root, bay_id)
-                assert not isinstance(rule, Fixed), (bay_id, rule)
+                assert _lock_of(session.unit.root, bay_id) is None, bay_id
             assert abs(_z_mm(container, left_shelf_id) - (shelf_z_mm + 50.0)) < 1e-6
             _assert_session_matches_document(session)
 
@@ -985,7 +1066,7 @@ def test_dimensions_drag_basis_and_untagged() -> None:
             assert isinstance(too_big, EditFailure), too_big
             doc.recompute()
             assert _board_snapshot(container) == snapshot_solved
-            assert _rule_of(session.unit.root, right_lower_id) == Fixed(282.0)
+            assert _lock_of(session.unit.root, right_lower_id) is Basis.CLEAR
 
             # The untagged box survived every write untouched.
             assert _board_snapshot_by_name(container)["HandAdded"] == (
@@ -1070,9 +1151,9 @@ def test_a_woodworking_magic_start_unit_takes_and_gives_up_a_divider(
 
 
 def test_a_magic_start_unit_takes_a_typed_size(tmp_path: Path) -> None:
-    """Its openings all differ in size, and each shares leftover space, so
-    sizing the lower bay moves the shelf and the upper bay takes up the
-    rest."""
+    """None of its openings is locked, so sizing the lower bay moves the
+    shelf above it and the upper bay takes up the rest, while the plinth
+    gap under the floor holds."""
     path = tmp_path / _MAGIC_START.name
     shutil.copyfile(_MAGIC_START, path)
     doc = FreeCAD.openDocument(str(path))
@@ -1089,6 +1170,112 @@ def test_a_magic_start_unit_takes_a_typed_size(tmp_path: Path) -> None:
             doc.recompute()
             assert abs(_z_mm(container, "Shelf") - (shelf_z_mm + 47.0)) < 1e-6
             assert abs(_z_mm(container, "Floor") - floor_z_mm) < 1e-6
+        finally:
+            session.close()
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def _plinth_id(region: Region) -> str | None:
+    """The id of the first locked void in ``region``'s subtree, or ``None``."""
+    if not isinstance(region, Division):
+        return None
+    for item in region.items:
+        if isinstance(item, Void) and item.lock is not None:
+            return item.id
+        if isinstance(item, Division):
+            found = _plinth_id(item)
+            if found is not None:
+                return found
+    return None
+
+
+def _void_locks(region: Region) -> list[Basis | None]:
+    if not isinstance(region, Division):
+        return []
+    locks: list[Basis | None] = []
+    for item in region.items:
+        if isinstance(item, Void):
+            locks.append(item.lock)
+        elif isinstance(item, Division):
+            locks += _void_locks(item)
+    return locks
+
+
+def test_an_unlocked_plinth_gap_stays_unlocked_when_reopened(tmp_path: Path) -> None:
+    """The scan locks Magic Start's plinth gap; once unlocked with its
+    padlock, the stored record keeps it unlocked through a save and a fresh
+    open of the file."""
+    path = tmp_path / _MAGIC_START.name
+    shutil.copyfile(_MAGIC_START, path)
+    doc = FreeCAD.openDocument(str(path))
+    try:
+        container = doc.getObject("LinkGroup")
+        assert container is not None
+        session = Session(container)
+        session.open()
+        try:
+            plinth_id = _plinth_id(session.unit.root)
+            assert plinth_id is not None
+            assert session.set_lock(plinth_id, locked=False) is None
+            assert _void_locks(session.unit.root) == [None]
+        finally:
+            session.close()
+        doc.recompute()
+        doc.save()
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+    doc = FreeCAD.openDocument(str(path))
+    try:
+        container = doc.getObject("LinkGroup")
+        assert container is not None
+        reopened = Session(container)
+        try:
+            assert _void_locks(reopened.unit.root) == [None]
+        finally:
+            reopened.close()
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def test_an_unlocked_plinth_gap_follows_undo_and_redo(tmp_path: Path) -> None:
+    """Undo and Redo re-read the unit from the document, so the plinth gap's
+    lock follows the steps: an edit after the unlock undoes and redoes with
+    the gap still unlocked, and only undoing the unlock itself locks it."""
+    path = tmp_path / _MAGIC_START.name
+    shutil.copyfile(_MAGIC_START, path)
+    doc = FreeCAD.openDocument(str(path))
+    doc.UndoMode = 1
+    try:
+        container = doc.getObject("LinkGroup")
+        assert container is not None
+        session = Session(container)
+        session.open()
+        try:
+            plinth_id = _plinth_id(session.unit.root)
+            assert plinth_id is not None
+            assert session.set_lock(plinth_id, locked=False) is None
+            assert session.resize("height", 800.0) is None
+            assert doc.UndoNames[:2] == ["Resize Unit", "Unlock Opening"]
+
+            def undo() -> None:
+                doc.undo()
+                session.settle()
+
+            def redo() -> None:
+                doc.redo()
+                session.settle()
+
+            undo()
+            assert _void_locks(session.unit.root) == [None]
+            undo()
+            assert _void_locks(session.unit.root) == [Basis.CLEAR]
+            redo()
+            assert _void_locks(session.unit.root) == [None]
+            redo()
+            assert _void_locks(session.unit.root) == [None]
+            assert abs(session.unit_dimension_mm("height") - 800.0) < 1e-6
         finally:
             session.close()
     finally:
@@ -1208,7 +1395,7 @@ def test_session_edits_keep_an_offset_unit_where_its_boards_are() -> None:
     try:
         container = cast("FreeCAD.DocumentObject", doc.addObject("App::Part", "Unit"))
         offset_unit = dataclasses.replace(
-            _tiny_unit(), size_mm=Vec3(600.0, 300.0, 900.0), position_mm=_OFFSET_MM
+            _closed_box_unit(600.0), position_mm=_OFFSET_MM
         )
         write_container(container, offset_unit)
         doc.recompute()
@@ -1274,8 +1461,7 @@ def test_set_fixed_point_is_an_undo_step_that_moves_no_board() -> None:
     try:
         container = cast("FreeCAD.DocumentObject", doc.addObject("App::Part", "Unit"))
         offset_unit = dataclasses.replace(
-            _tiny_unit(),
-            size_mm=Vec3(600.0, 300.0, 900.0),
+            _closed_box_unit(600.0),
             position_mm=_OFFSET_MM,
             front_at_min=False,
         )

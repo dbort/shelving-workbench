@@ -1,4 +1,7 @@
-"""Spacing solver: distribution rules, region-tree geometry, and failure reasons."""
+"""Solver: laying out stored geometry, the per-axis engine system an edit
+solves with, and failure reasons."""
+
+from collections.abc import Mapping, Sequence
 
 import pytest
 
@@ -9,19 +12,20 @@ from freecad.Shelving.core.layout import (
     Bay,
     Board,
     Division,
-    Fill,
-    Fixed,
+    FixedPoint,
+    FixedSide,
+    Item,
     Unit,
     Void,
-    Weighted,
 )
 from freecad.Shelving.core.solver import (
     EPS_MM,
     LayoutSolveError,
     SolveErrorReason,
     describe_solve_error,
-    distribute,
+    fixing_locks,
     solve,
+    solve_axis,
 )
 
 
@@ -39,62 +43,36 @@ def _assert_space(
     assert space.size.z_mm == pytest.approx(size[2], abs=1e-6)
 
 
-# --- distribute(): the pure slack-sharing function, no region tree involved ---
+def _column(
+    sizes_mm: Sequence[float],
+    locked: Sequence[str] = (),
+    side: FixedSide = "min",
+) -> Unit:
+    """A column of 18 mm boards: ``bottom``, bays ``A``, ``B``, ... at
+    ``sizes_mm`` between shelves ``s1``, ``s2``, ..., then ``top``."""
+    items: list[Item] = [Board(thickness_mm=18.0, id="bottom")]
+    for index, size_mm in enumerate(sizes_mm):
+        name = "ABCDEF"[index]
+        lock = Basis.CLEAR if name in locked else None
+        items.append(Bay(size_mm=size_mm, lock=lock, id=name))
+        last = index == len(sizes_mm) - 1
+        items.append(Board(thickness_mm=18.0, id="top" if last else f"s{index + 1}"))
+    height_mm = 18.0 * (len(sizes_mm) + 1) + sum(sizes_mm)
+    return Unit(
+        size_mm=Vec3(500.0, 300.0, height_mm),
+        root=Division(axis=Axis.Z, items=items, id="root"),
+        fixed_point=FixedPoint(z=side),
+    )
 
 
-def test_distribute_fixed_and_fill() -> None:
-    assert distribute(
-        1000.0, [Fixed(400.0), Fill()], [18.0], node_id="x"
-    ) == pytest.approx([400.0, 582.0], abs=1e-6)
+def _sizes(unit: Unit) -> Mapping[str, float]:
+    assert isinstance(unit.root, Division)
+    return {
+        item.id: item.size_mm for item in unit.root.items if not isinstance(item, Board)
+    }
 
 
-def test_distribute_three_fills() -> None:
-    assert distribute(
-        300.0, [Fill(), Fill(), Fill()], [18.0, 18.0], node_id="x"
-    ) == pytest.approx([88.0, 88.0, 88.0], abs=1e-6)
-
-
-def test_distribute_weighted_ratio() -> None:
-    assert distribute(
-        900.0, [Weighted(2.0), Weighted(1.0)], [0.0], node_id="x"
-    ) == pytest.approx([600.0, 300.0], abs=1e-6)
-
-
-def test_distribute_all_fixed_exact_is_ok() -> None:
-    assert distribute(
-        100.0, [Fixed(30.0), Fixed(50.0)], [20.0], node_id="x"
-    ) == pytest.approx([30.0, 50.0], abs=1e-6)
-
-
-def test_distribute_all_fixed_overflow_reports_overflow() -> None:
-    with pytest.raises(LayoutSolveError) as excinfo:
-        distribute(100.0, [Fixed(80.0), Fixed(60.0)], [0.0], node_id="x")
-    assert excinfo.value.reason == "overflow"
-    assert excinfo.value.node_id == "x"
-
-
-def test_distribute_all_fixed_underfill_reports_no_slack_absorber() -> None:
-    with pytest.raises(LayoutSolveError) as excinfo:
-        distribute(100.0, [Fixed(20.0), Fixed(30.0)], [0.0], node_id="x")
-    assert excinfo.value.reason == "no_slack_absorber"
-    assert excinfo.value.node_id == "x"
-
-
-def test_distribute_overflow_raises() -> None:
-    with pytest.raises(LayoutSolveError) as excinfo:
-        distribute(100.0, [Fixed(200.0), Fill()], [0.0], node_id="x")
-    assert excinfo.value.reason == "overflow"
-    assert excinfo.value.node_id == "x"
-
-
-def test_distribute_no_slack_absorber_raises() -> None:
-    with pytest.raises(LayoutSolveError) as excinfo:
-        distribute(100.0, [Fixed(30.0), Fixed(40.0)], [0.0], node_id="x")
-    assert excinfo.value.reason == "no_slack_absorber"
-    assert excinfo.value.node_id == "x"
-
-
-# --- solve() over the region tree. ---
+# --- solve(): laying out the stored geometry. ---
 
 
 def test_closed_box_places_its_four_shell_boards_and_interior() -> None:
@@ -106,9 +84,10 @@ def test_closed_box_places_its_four_shell_boards_and_interior() -> None:
                 axis=Axis.X,
                 items=[
                     Board(thickness_mm=18.0, role="left_side", id="left"),
-                    Bay(id="interior"),
+                    Bay(size_mm=864.0, id="interior"),
                     Board(thickness_mm=18.0, role="right_side", id="right"),
                 ],
+                size_mm=1764.0,
                 id="middle",
             ),
             Board(thickness_mm=18.0, role="top", id="top"),
@@ -130,7 +109,7 @@ def test_root_is_placed_at_the_units_position() -> None:
         axis=Axis.X,
         items=[
             Board(thickness_mm=18.0, id="left"),
-            Bay(id="interior"),
+            Bay(size_mm=564.0, id="interior"),
             Board(thickness_mm=18.0, id="right"),
         ],
         id="root",
@@ -147,27 +126,24 @@ def test_root_is_placed_at_the_units_position() -> None:
     _assert_space(spaces["right"], origin=(682, -300, 50), size=(18, 300, 900))
 
 
-def test_division_mixing_fixed_fill_and_boards() -> None:
+def test_a_board_extent_overrides_its_thickness_along_its_run() -> None:
     root = Division(
         axis=Axis.X,
         items=[
-            Board(thickness_mm=18.0, id="left_board"),
-            Bay(rule=Fixed(200.0), id="fixed_bay"),
-            Bay(rule=Fill(), id="fill_bay"),
+            Board(thickness_mm=18.0, extent_mm=40.0, id="post"),
+            Bay(size_mm=560.0, id="bay"),
         ],
         id="root",
     )
-    unit = Unit(size_mm=Vec3(600.0, 300.0, 900.0), root=root)
-    spaces = solve(unit)
-    _assert_space(spaces["left_board"], origin=(0, 0, 0), size=(18, 300, 900))
-    _assert_space(spaces["fixed_bay"], origin=(18, 0, 0), size=(200, 300, 900))
-    _assert_space(spaces["fill_bay"], origin=(218, 0, 0), size=(382, 300, 900))
+    spaces = solve(Unit(size_mm=Vec3(600.0, 300.0, 900.0), root=root))
+    _assert_space(spaces["post"], origin=(0, 0, 0), size=(40, 300, 900))
+    _assert_space(spaces["bay"], origin=(40, 0, 0), size=(560, 300, 900))
 
 
 def test_void_receives_a_space_like_any_region() -> None:
     root = Division(
         axis=Axis.Z,
-        items=[Bay(id="bay"), Void(rule=Fixed(100.0), id="void")],
+        items=[Bay(size_mm=400.0, id="bay"), Void(size_mm=100.0, id="void")],
         id="root",
     )
     unit = Unit(size_mm=Vec3(600.0, 300.0, 500.0), root=root)
@@ -175,14 +151,12 @@ def test_void_receives_a_space_like_any_region() -> None:
     _assert_space(spaces["void"], origin=(0, 0, 400), size=(600, 300, 100))
 
 
-def test_division_along_axis_y_is_solved_the_same_way() -> None:
-    """The solver is axis-agnostic: swapping the division's axis to Y produces
-    the same distribution, just along a different component."""
+def test_division_along_axis_y_is_laid_out_the_same_way() -> None:
     root = Division(
         axis=Axis.Y,
         items=[
             Board(thickness_mm=18.0, id="front"),
-            Bay(rule=Fill(), id="bay"),
+            Bay(size_mm=264.0, id="bay"),
             Board(thickness_mm=18.0, id="back"),
         ],
         id="root",
@@ -194,137 +168,41 @@ def test_division_along_axis_y_is_solved_the_same_way() -> None:
     _assert_space(spaces["back"], origin=(0, 282, 0), size=(600, 18, 900))
 
 
-def test_solve_overflow_reason_and_node_id() -> None:
+@pytest.mark.parametrize("bay_mm", [300.0, 400.0])
+def test_sizes_that_do_not_fill_their_run_are_a_misfit(bay_mm: float) -> None:
     root = Division(
         axis=Axis.X,
-        items=[Bay(rule=Fixed(5000.0)), Bay(rule=Fill())],
+        items=[Bay(size_mm=bay_mm), Board(thickness_mm=18.0), Bay(size_mm=200.0)],
         id="split",
     )
     unit = Unit(size_mm=Vec3(600.0, 300.0, 1000.0), root=root)
     with pytest.raises(LayoutSolveError) as excinfo:
         solve(unit)
-    assert excinfo.value.reason == "overflow"
+    assert excinfo.value.reason == "misfit"
     assert excinfo.value.node_id == "split"
 
 
-def test_solve_no_slack_absorber_reason_and_node_id() -> None:
-    root = Division(
-        axis=Axis.X,
-        items=[Bay(rule=Fixed(100.0)), Bay(rule=Fixed(200.0))],
-        id="split",
-    )
-    unit = Unit(size_mm=Vec3(600.0, 300.0, 1000.0), root=root)
-    with pytest.raises(LayoutSolveError) as excinfo:
-        solve(unit)
-    assert excinfo.value.reason == "no_slack_absorber"
-    assert excinfo.value.node_id == "split"
-
-
-def test_solve_nonpositive_opening_reason_and_node_id() -> None:
+def test_a_region_with_no_size_is_a_misfit_naming_it() -> None:
     root = Division(
         axis=Axis.Z,
-        items=[Bay(rule=Fixed(500.0), id="top"), Bay(rule=Fill(), id="bot")],
+        items=[Bay(size_mm=500.0, id="top"), Bay(id="bot")],
         id="split",
     )
     unit = Unit(size_mm=Vec3(200.0, 300.0, 500.0), root=root)
     with pytest.raises(LayoutSolveError) as excinfo:
         solve(unit)
-    assert excinfo.value.reason == "nonpositive_opening"
+    assert excinfo.value.reason == "misfit"
     assert excinfo.value.node_id == "bot"
 
 
-def test_solve_unresolvable_basis_when_region_is_last_item() -> None:
-    root = Division(
-        axis=Axis.Z,
-        items=[
-            Board(thickness_mm=18.0, id="bottom"),
-            Bay(rule=Fixed(500.0, basis=Basis.WITH_NEXT), id="last"),
-        ],
-        id="root",
-    )
-    unit = Unit(size_mm=Vec3(600.0, 300.0, 1000.0), root=root)
-    with pytest.raises(LayoutSolveError) as excinfo:
-        solve(unit)
-    assert excinfo.value.reason == "unresolvable_basis"
-    assert excinfo.value.node_id == "last"
-
-
-def test_solve_unresolvable_basis_when_next_item_is_not_a_board() -> None:
-    root = Division(
-        axis=Axis.Z,
-        items=[
-            Bay(rule=Fixed(500.0, basis=Basis.WITH_NEXT), id="with_next"),
-            Bay(rule=Fill()),
-        ],
-        id="root",
-    )
-    unit = Unit(size_mm=Vec3(600.0, 300.0, 1000.0), root=root)
-    with pytest.raises(LayoutSolveError) as excinfo:
-        solve(unit)
-    assert excinfo.value.reason == "unresolvable_basis"
-    assert excinfo.value.node_id == "with_next"
-
-
-def test_solve_with_next_thinner_than_next_board_raises_layout_solve_error() -> None:
-    """A ``WITH_NEXT`` spacing quoted narrower than the following board's
-    thickness resolves to a non-positive size; that must surface as
-    ``LayoutSolveError``, not a bare ``ValueError`` from ``Fixed``'s own
-    validation."""
-    root = Division(
-        axis=Axis.Z,
-        items=[
-            Bay(rule=Fixed(5.0, basis=Basis.WITH_NEXT), id="too_thin"),
-            Board(thickness_mm=18.0, id="next_board"),
-        ],
-        id="root",
-    )
-    unit = Unit(size_mm=Vec3(600.0, 300.0, 1000.0), root=root)
-    with pytest.raises(LayoutSolveError) as excinfo:
-        solve(unit)
-    assert excinfo.value.reason == "nonpositive_opening"
-    assert excinfo.value.node_id == "too_thin"
-
-
-def test_basis_with_next_holds_board_position_across_a_thickness_change() -> None:
-    """A shelf spacing quoted top face to top face (``WITH_NEXT``, a bay's
-    fixed size covering the bay plus the shelf immediately above it) keeps the
-    upper shelf's position fixed when the boards' thickness changes; the same
-    layout measured ``CLEAR`` instead moves it."""
-
-    def build(basis: Basis, thickness_mm: float) -> Unit:
-        root = Division(
-            axis=Axis.Z,
-            items=[
-                Board(thickness_mm=thickness_mm, id="lower_shelf"),
-                Bay(rule=Fixed(400.0, basis=basis), id="bay"),
-                Board(thickness_mm=thickness_mm, id="upper_shelf"),
-                Bay(rule=Fill(), id="top_bay"),
-            ],
-            id="root",
-        )
-        return Unit(size_mm=Vec3(600.0, 300.0, 1200.0), root=root)
-
-    with_next_thick = solve(build(Basis.WITH_NEXT, 18.0))
-    with_next_thin = solve(build(Basis.WITH_NEXT, 10.0))
-    assert with_next_thick["upper_shelf"].origin.z_mm == pytest.approx(400.0)
-    assert with_next_thin["upper_shelf"].origin.z_mm == pytest.approx(400.0)
-
-    clear_thick = solve(build(Basis.CLEAR, 18.0))
-    clear_thin = solve(build(Basis.CLEAR, 10.0))
-    assert clear_thick["upper_shelf"].origin.z_mm == pytest.approx(418.0)
-    assert clear_thin["upper_shelf"].origin.z_mm == pytest.approx(410.0)
-
-
-# --- Pinned boards: the solver verifies rather than derives. ---
+# --- Pinned boards: the layout verifies rather than derives. ---
 
 
 def _pinned_shelf_unit(width_mm: float, pinned_size_mm: Vec3) -> Unit:
-    """A shelf pinned at ``pinned_size_mm``, between a fixed lower bay and a
-    fill bay that absorbs the rest of the height."""
     board = Board(thickness_mm=18.0, id="fixed_shelf", pinned_size_mm=pinned_size_mm)
     root = Division(
         axis=Axis.Z,
-        items=[Bay(rule=Fixed(400.0)), board, Bay(rule=Fill())],
+        items=[Bay(size_mm=400.0), board, Bay(size_mm=482.0)],
         id="root",
     )
     return Unit(size_mm=Vec3(width_mm, 300.0, 900.0), root=root)
@@ -337,8 +215,8 @@ def test_pinned_board_matching_layout_solves() -> None:
 
 
 def test_pinned_board_mismatch_raises_naming_the_board() -> None:
-    """Widening the unit in the direction the pinned board spans changes the
-    derived extent; the solver refuses rather than stretching the board."""
+    """Widening the unit in the direction the pinned board spans changes its
+    laid-out extent; the layout refuses rather than stretching the board."""
     unit = _pinned_shelf_unit(250.0, Vec3(200.0, 300.0, 18.0))
     with pytest.raises(LayoutSolveError) as excinfo:
         solve(unit)
@@ -352,27 +230,162 @@ def test_pinned_board_agreeing_within_eps_mm_does_not_raise() -> None:
     _assert_space(spaces["fixed_shelf"], origin=(0, 0, 400), size=(200, 300, 18))
 
 
+# --- solve_axis(): least motion through the engine. ---
+
+
+def test_solve_axis_with_no_change_moves_nothing() -> None:
+    unit = _column([300.0, 300.0, 300.0])
+    solved = solve_axis(unit, solve(unit), Axis.Z, 5.0)
+    assert _sizes(solved) == {"A": 300.0, "B": 300.0, "C": 300.0}
+    assert solved.size_mm == unit.size_mm
+    assert solved.position_mm == unit.position_mm
+
+
+def test_solve_axis_grows_the_opening_beside_the_moving_face() -> None:
+    unit = _column([300.0, 300.0])
+    solved = solve_axis(unit, solve(unit), Axis.Z, 5.0, size_mm=754.0)
+    assert _sizes(solved) == pytest.approx({"A": 300.0, "B": 400.0})
+    assert solved.size_mm.z_mm == 754.0
+
+
+def test_solve_axis_at_a_max_fixed_point_moves_the_low_face() -> None:
+    unit = _column([300.0, 300.0], side="max")
+    solved = solve_axis(unit, solve(unit), Axis.Z, 5.0, size_mm=754.0)
+    assert _sizes(solved) == pytest.approx({"A": 400.0, "B": 300.0})
+    assert solved.position_mm.z_mm == pytest.approx(-100.0)
+    assert solve(solved)["s1"].origin.z_mm == pytest.approx(318.0)
+
+
+def test_solve_axis_does_not_push_open_an_opening_under_the_minimum() -> None:
+    unit = _column([3.0, 300.0])
+    solved = solve_axis(unit, solve(unit), Axis.Z, 5.0, size_mm=unit.size_mm.z_mm + 100)
+    assert _sizes(solved) == pytest.approx({"A": 3.0, "B": 400.0})
+
+
+def test_solve_axis_pushes_through_a_nested_run() -> None:
+    """A column nested in a row nested in the root column takes its height
+    from the slot it sits in, so a drag in the root pushes its shelves once
+    the nested bay above reaches the minimum."""
+    inner = Division(
+        axis=Axis.Z,
+        items=[
+            Bay(size_mm=100.0, id="low"),
+            Board(thickness_mm=18.0, id="inner_shelf"),
+            Bay(size_mm=182.0, id="high"),
+        ],
+        size_mm=500.0,
+        id="inner",
+    )
+    row = Division(
+        axis=Axis.X,
+        items=[
+            inner,
+            Board(thickness_mm=18.0, id="divider"),
+            Bay(size_mm=300.0, id="side"),
+        ],
+        size_mm=300.0,
+        id="row",
+    )
+    root = Division(
+        axis=Axis.Z,
+        items=[
+            Board(thickness_mm=18.0, id="bottom"),
+            Bay(size_mm=300.0, id="A"),
+            Board(thickness_mm=18.0, id="s1"),
+            row,
+            Board(thickness_mm=18.0, id="top"),
+        ],
+        id="root",
+    )
+    unit = Unit(size_mm=Vec3(818.0, 300.0, 654.0), root=root)
+    solved = solve_axis(unit, solve(unit), Axis.Z, 5.0, target=("s1", 418.0))
+    spaces = solve(solved)
+    assert spaces["s1"].origin.z_mm == pytest.approx(418.0, abs=1e-3)
+    assert spaces["inner"].extent_mm(2) == pytest.approx(200.0, abs=1e-3)
+    assert spaces["low"].extent_mm(2) == pytest.approx(5.0, abs=1e-6)
+    assert spaces["inner_shelf"].origin.z_mm == pytest.approx(441.0, abs=1e-3)
+
+
+def test_solve_axis_moves_a_seam_between_two_regions() -> None:
+    root = Division(
+        axis=Axis.Z,
+        items=[
+            Board(thickness_mm=18.0, id="bottom"),
+            Void(size_mm=100.0, lock=Basis.CLEAR, id="plinth"),
+            Bay(size_mm=300.0, id="bay"),
+            Board(thickness_mm=18.0, id="top"),
+        ],
+        id="root",
+    )
+    unit = Unit(size_mm=Vec3(500.0, 300.0, 436.0), root=root)
+    solved = solve_axis(unit, solve(unit), Axis.Z, 5.0, size_mm=536.0)
+    assert _sizes(solved) == pytest.approx({"plinth": 100.0, "bay": 400.0})
+
+
+def test_solve_axis_conflict_names_the_locks_and_openings_at_the_minimum() -> None:
+    unit = _column([300.0, 300.0, 300.0], locked=["A"])
+    with pytest.raises(LayoutSolveError) as excinfo:
+        solve_axis(unit, solve(unit), Axis.Z, 5.0, size_mm=360.0)
+    err = excinfo.value
+    assert err.reason == "conflict"
+    assert set(err.region_ids) <= {"A", "B", "C"}
+    assert "A" in err.region_ids
+    assert err.node_id == err.region_ids[0]
+    assert err.detail["minimum_mm"] == 5.0
+
+
+def test_solve_axis_locks_that_fix_the_size_drop_a_consistent_one() -> None:
+    unit = _column([300.0, 300.0], locked=["A", "B"])
+    solved = solve_axis(unit, solve(unit), Axis.Z, 5.0, size_mm=unit.size_mm.z_mm)
+    assert _sizes(solved) == {"A": 300.0, "B": 300.0}
+
+
+def test_solve_axis_locks_that_fix_the_size_refuse_another_one() -> None:
+    unit = _column([300.0, 300.0], locked=["A", "B"])
+    with pytest.raises(LayoutSolveError) as excinfo:
+        solve_axis(unit, solve(unit), Axis.Z, 5.0, size_mm=700.0)
+    assert excinfo.value.reason == "conflict"
+    assert set(excinfo.value.region_ids) == {"A", "B"}
+
+
+def test_solve_axis_leaves_the_other_axes_alone() -> None:
+    unit = _column([300.0, 300.0])
+    solved = solve_axis(unit, solve(unit), Axis.X, 5.0, size_mm=900.0)
+    assert solved.size_mm == Vec3(900.0, 300.0, unit.size_mm.z_mm)
+    assert _sizes(solved) == {"A": 300.0, "B": 300.0}
+
+
+# --- fixing_locks(): what holds a board, for held_by. ---
+
+
+def test_fixing_locks_is_none_for_a_free_board() -> None:
+    unit = _column([300.0, 300.0])
+    assert fixing_locks(unit, solve(unit), "s1", Axis.Z) is None
+
+
+def test_fixing_locks_is_empty_for_a_carcass_board() -> None:
+    unit = _column([300.0, 300.0])
+    assert fixing_locks(unit, solve(unit), "bottom", Axis.Z) == frozenset()
+    assert fixing_locks(unit, solve(unit), "top", Axis.Z) == frozenset()
+
+
+def test_fixing_locks_names_the_lock_and_honors_without() -> None:
+    unit = _column([300.0, 300.0], locked=["A"])
+    spaces = solve(unit)
+    assert fixing_locks(unit, spaces, "s1", Axis.Z) == frozenset({"A"})
+    assert fixing_locks(unit, spaces, "s1", Axis.Z, without=["A"]) is None
+
+
+# --- describe_solve_error(). ---
+
+
 @pytest.mark.parametrize(
     ("reason", "detail", "expected"),
     [
-        (
-            "overflow",
-            {"axis_span_mm": 30.0, "dividers_total_mm": 36.0},
-            "The boards alone take 36.0 mm, more than the 30.0 mm",
-        ),
-        (
-            "overflow",
-            {"slack_mm": -4136.0, "available_mm": 864.0},
-            "The fixed sizes add up to 4136.0 mm more than the space available.",
-        ),
-        (
-            "no_slack_absorber",
-            {"slack_mm": 316.0, "available_mm": 864.0},
-            "leaving 316.0 mm with nowhere to go",
-        ),
-        ("nonpositive_opening", {"size_mm": -2.5}, "no room in it (-2.5 mm)"),
-        ("unresolvable_basis", {}, "has no board after it"),
+        ("misfit", {"span_mm": 600.0, "sizes_total_mm": 518.0}, "do not add up"),
         ("pinned_mismatch", {"derived_x_mm": 1.0}, "cannot reshape"),
+        ("conflict", {"minimum_mm": 5.0}, "at their 5.0 mm minimum"),
+        ("conflict", {}, "cannot all keep their sizes"),
     ],
 )
 def test_describe_solve_error_reads_as_a_sentence_without_the_node_id(
@@ -383,17 +396,3 @@ def test_describe_solve_error_reads_as_a_sentence_without_the_node_id(
     assert expected in message
     assert node_id not in message
     assert message.endswith(".")
-
-
-def test_describe_solve_error_on_a_real_overflow() -> None:
-    unit = Unit(
-        size_mm=Vec3(600.0, 300.0, 900.0),
-        root=Division(
-            axis=Axis.Z,
-            items=[Bay(rule=Fixed(5000.0)), Board(thickness_mm=18.0), Bay()],
-        ),
-        depth_axis=Axis.Y,
-    )
-    with pytest.raises(LayoutSolveError) as err:
-        solve(unit)
-    assert describe_solve_error(err.value).startswith("The fixed sizes add up to")

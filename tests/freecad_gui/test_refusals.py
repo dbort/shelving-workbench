@@ -24,12 +24,11 @@ from freecad.Shelving.container import write_container
 from freecad.Shelving.core.geometry import Vec3
 from freecad.Shelving.core.layout import (
     Axis,
+    Basis,
     Bay,
     Board,
     Division,
-    Fixed,
     Region,
-    SizeRule,
     Unit,
 )
 from freecad.Shelving.editor import panel as panel_module
@@ -149,8 +148,8 @@ def test_edit_unit_refuses_overlapping_boards_and_selects_them(
 
 def _fixed_shelf_unit() -> Unit:
     """A closed 600 x 300 x 900 mm unit whose one shelf sits between two
-    openings of fixed height, 300 mm below and 546 mm above, which fill the
-    864 mm between bottom and top exactly."""
+    locked openings, 300 mm below and 546 mm above, which fill the 864 mm
+    between bottom and top exactly."""
     return Unit(
         size_mm=Vec3(600.0, 300.0, 900.0),
         root=Division(
@@ -164,13 +163,15 @@ def _fixed_shelf_unit() -> Unit:
                         Division(
                             axis=Axis.Z,
                             items=[
-                                Bay(rule=Fixed(size_mm=300.0)),
+                                Bay(size_mm=300.0, lock=Basis.CLEAR),
                                 Board(thickness_mm=18.0, role="shelf"),
-                                Bay(rule=Fixed(size_mm=546.0)),
+                                Bay(size_mm=546.0, lock=Basis.CLEAR),
                             ],
+                            size_mm=564.0,
                         ),
                         Board(thickness_mm=18.0, role="right_side"),
                     ],
+                    size_mm=864.0,
                 ),
                 Board(thickness_mm=18.0, role="top"),
             ],
@@ -179,15 +180,15 @@ def _fixed_shelf_unit() -> Unit:
     )
 
 
-def _bay_rules(region: Region) -> list[SizeRule]:
+def _bays(region: Region) -> list[Bay]:
     if isinstance(region, Bay):
-        return [region.rule]
+        return [region]
     if not isinstance(region, Division):
         return []
-    found: list[SizeRule] = []
+    found: list[Bay] = []
     for item in region.items:
         if not isinstance(item, Board):
-            found += _bay_rules(item)
+            found += _bays(item)
     return found
 
 
@@ -211,13 +212,12 @@ def test_edit_unit_opens_locked_openings_at_the_size_hand_moves_left_them(
 
     panel = panel_module.EditUnitPanel(container)
     try:
-        rules = _bay_rules(panel.session.unit.root)
+        bays = _bays(panel.session.unit.root)
     finally:
         panel.reject()
 
-    assert all(isinstance(rule, Fixed) for rule in rules), rules
-    sizes_mm = sorted(rule.size_mm for rule in rules if isinstance(rule, Fixed))
-    assert sizes_mm == pytest.approx([300.0, 446.0])
+    assert [bay.lock for bay in bays] == [Basis.CLEAR, Basis.CLEAR]
+    assert sorted(bay.size_mm for bay in bays) == pytest.approx([300.0, 446.0])
     assert _board_snapshot(doc) == before
 
 

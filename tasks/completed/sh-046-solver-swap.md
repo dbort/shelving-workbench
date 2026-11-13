@@ -19,13 +19,13 @@ sh-047 retires it. This task ships alone so the new resize behavior can be
 tried before any new constraint exists.
 
 ## Must Have
-- [ ] `pixi run tests` green; `pyrefly check` clean over the changed code.
-- [ ] `grep -rnwE "Weighted|Fill|distribute|_place|_driven_weight|_other_driven_anchor|_recover_rules|no_slack_absorber" freecad tests`
+- [x] `pixi run tests` green; `pyrefly check` clean over the changed code.
+- [x] `grep -rnwE "Weighted|Fill|distribute|_place|_driven_weight|_other_driven_anchor|_recover_rules|no_slack_absorber" freecad tests`
       prints nothing.
-- [ ] `grep -rn "MIN_DRAG_GAP_MM =" freecad` prints exactly one line, in
+- [x] `grep -rn "MIN_DRAG_GAP_MM =" freecad` prints exactly one line, in
       `core/edit.py`. `core/axis_solver.py` and `core/solver.py` never name
       it and take the minimum opening as a parameter.
-- [ ] Core suite, on a column of 18 mm boards with fixed point `min`:
+- [x] Core suite, on a column of 18 mm boards with fixed point `min`:
       bottom, bay A 300, shelf, bay B 300, top (654 mm tall):
       - growing it to 754 mm gives A 300, B 400, and the shelf unmoved;
       - shrinking it to 254 mm gives B 5 and A 195;
@@ -37,7 +37,7 @@ tried before any new constraint exists.
         A 300 and B 400, and the shelf moves 50 mm down with the bottom;
       - `held_by` of the shelf is `(A,)` with A locked and `()` with
         neither locked; for the top or bottom board it is `None`.
-- [ ] Core suite, on a column of 18 mm boards with fixed point `min`:
+- [x] Core suite, on a column of 18 mm boards with fixed point `min`:
       bottom, A 300, shelf s1, B 300, shelf s2, C 300, top (972 mm tall):
       - typing 340 into B gives A 280, B 340, C 280;
       - dragging s1's low face to 718 gives A 700, B 5, C 195, with s1's
@@ -45,22 +45,22 @@ tried before any new constraint exists.
       - dragging s1's low face to 2000 stops it at 908: A 890, B 5, C 5;
       - with B locked, dragging s1 50 mm up gives A 350, B 300, C 250, and
         s2 moves 50 mm too.
-- [ ] Core suite: a scan gives every region its measured size and locks
+- [x] Core suite: a scan gives every region its measured size and locks
       only what it locks today: a void beside a bay or division, and an
       axis-wrap division. A unit read and solved with no edit keeps every
       board within 1e-6 mm.
-- [ ] `rules_to_json` emits exactly
+- [x] `rules_to_json` emits exactly
       `{"schema_version": 1, "locks": {<key>: {"basis": "clear" | "with_next"}}}`,
       with one entry per locked region and none for an unlocked one.
       `rules_from_json` on a record in any other shape, including the old
       `"rules"` shape, gives no locks and raises nothing. Headless
       (`tests/freecad/`): a container carrying an old-shape record opens
       in `Session`, with every opening unlocked.
-- [ ] Headless: a refused conflict through `Session` returns an
+- [x] Headless: a refused conflict through `Session` returns an
       `EditFailure` and leaves the document untouched.
-- [ ] `README.md`'s glossary entries **Size rule** and **The drag rule**
+- [x] `README.md`'s glossary entries **Size rule** and **The drag rule**
       do not contain "weighted share".
-- [ ] `bug-019` is deleted from `.claude/docs/bug-log.md`.
+- [x] `bug-019` is deleted from `.claude/docs/bug-log.md`.
 
 ## Advice
 - **Tree carries current geometry.** Every non-root region stores its
@@ -157,6 +157,13 @@ tried before any new constraint exists.
   `scope-and-design.md` already says a missing or stale record falls back
   to inference, and raising would make every existing unit unopenable.
   The `ShelvingRules` property keeps its name.
+- **A valid record is the whole lock state** (added 2026-11-12, user
+  decision after review round 1): `with_stored_rules` unlocks every region
+  the record does not name, the scan's own locks included, so a plinth
+  void unlocked with its padlock stays unlocked across Undo, Redo and
+  reopening. The scan's locks stand only when the container holds no valid
+  record (`parse_locks` gives `None`). Accepted cost: a void whose bounding
+  board is renamed, or one a hand edit creates, comes back unlocked.
 - **Typed Python:** signatures use no bare `dict` or `list`; reuse the
   engine's id `NewType`s at the boundary.
 - **Shell stays simple:** no shell in this task.
@@ -176,10 +183,10 @@ tried before any new constraint exists.
   (a copy loses its locks) stays open.
 
 ## Plan
-- [ ] **Step 1** (`core/layout.py`, `core/tests/test_layout.py`): regions
+- [x] **Step 1** (`core/layout.py`, `core/tests/test_layout.py`): regions
       carry their current clear size and an optional lock basis; delete
       `Weighted` and `Fill`.
-- [ ] **Step 2** (`core/solver.py`, `core/tests/test_solver.py`): `solve`
+- [x] **Step 2** (`core/solver.py`, `core/tests/test_solver.py`): `solve`
       lays out stored geometry and checks it. A per-axis system builder
       and an apply-back turn a unit, plus an edit's change (outer size,
       lock, thickness, drag target) and the minimum opening, into engine
@@ -189,30 +196,30 @@ tried before any new constraint exists.
       `_driven_weight`. Reduce `SolveErrorReason` to the reasons that can
       still occur, add the conflict error carrying region ids, and update
       `describe_solve_error`.
-- [ ] **Step 3** (`core/edit.py`, `core/tests/test_edit.py`): every edit
+- [x] **Step 3** (`core/edit.py`, `core/tests/test_edit.py`): every edit
       returns a solved unit. Rework `set_unit_size`, `set_size` (minimum
       refusal), `set_basis`, `lock`, `unlock`, `move_board` (target,
       push), `set_thickness`, `split_region` and `merge_at` (sizes in
       place of weights), `held_by` and `require_movable` (from freedom),
       and `measure`. Delete `_driven_weight` and `_other_driven_anchor`.
       `MIN_DRAG_GAP_MM` stays here as the one definition.
-- [ ] **Step 4** (`core/scan.py`, `core/tests/test_scan.py`,
+- [x] **Step 4** (`core/scan.py`, `core/tests/test_scan.py`,
       `core/tests/test_scanned_units.py`): measured sizes, no
       `_recover_rules`, and the void and axis-wrap locks kept.
-- [ ] **Step 5** (`core/record.py`, `core/tests/test_record.py`): the
+- [x] **Step 5** (`core/record.py`, `core/tests/test_record.py`): the
       rewritten version 1 shape, a malformed record read as none, and
       `with_stored_rules` applying locks at scanned sizes. Update the
       module docstring and `unit_ops.unit_size_mm`'s "ValueError when
       malformed" clause.
-- [ ] **Step 6** (`core/expand.py`, `core/stock.py`, `core/backs.py`,
+- [x] **Step 6** (`core/expand.py`, `core/stock.py`, `core/backs.py`,
       `unit_ops.py`, `container.py`, `core/tests/test_stock.py`,
       `core/tests/test_expand.py`, `core/tests/test_backs.py`): build and
       write units with sizes. `unit_ops._default_unit` gives its bays
       concrete sizes.
-- [ ] **Step 7** (`refusals.py`, `tests/freecad/test_refusals.py`,
+- [x] **Step 7** (`refusals.py`, `tests/freecad/test_refusals.py`,
       `tests/freecad_gui/test_refusals.py`): `SUGGESTIONS` matches the
       reduced reasons, with one for a conflict.
-- [ ] **Step 8** (`tests/freecad/test_editor_session.py`,
+- [x] **Step 8** (`tests/freecad/test_editor_session.py`,
       `tests/freecad/test_edit_history.py`, `tests/freecad/test_write.py`,
       `tests/freecad/test_backs.py`, `tests/test_editor_elevation.py`,
       `tests/freecad_view/test_editor_input.py`,
@@ -220,7 +227,7 @@ tried before any new constraint exists.
       under `editor/` where they build or read rules): update every test
       that asserts proportional sharing to the minimal-motion outcome, and
       add the headless old-record and conflict tests from the Must Have.
-- [ ] **Step 9** (`README.md`, `docs/scope-and-design.md`,
+- [x] **Step 9** (`README.md`, `docs/scope-and-design.md`,
       `.claude/docs/bug-log.md`):
       - rewrite the glossary entries Size rule and The drag rule: minimal
         motion, push at 5 mm;
@@ -230,3 +237,17 @@ tried before any new constraint exists.
       - delete bug-019.
 
 ## Review log
+
+### Round 1: REJECTED
+- **F1: Unlocking a scan-set lock is lost on Undo, Redo or reopen** (`freecad/Shelving/core/record.py:200`, `freecad/Shelving/core/record.py:171`): `with_stored_rules` only adds locks, and the record has no entry for an unlocked region, so a plinth void unlocked with its padlock is locked again by the next rescan. `main` handled this (`test_an_unlocked_region_the_scan_fixed_shares_at_its_scanned_size`); the branch replaces it with `test_with_stored_rules_keeps_a_lock_the_scan_set`, asserting the opposite. Suggested fix: a valid record is the full lock state, the scan's locks apply only with no valid record; add core and headless `Session` round-trip tests. Tradeoff: a void whose bounding board is renamed loses its scan lock.
+- **N1: Unwrapped lines in the design doc** (`docs/scope-and-design.md:9`, `docs/scope-and-design.md:72`): two edited lines run to 107 and 101 characters.
+- **N2: Broken comment rewrap** (`freecad/Shelving/core/layout.py:88`): the `thickness_mm` comment breaks after "A new board".
+- **N3: Glossary word choice** (`README.md:76`): **Size rule** says "panels" where the rest of the glossary says "boards".
+- **N4: `fixing_locks` can raise where callers don't expect it** (`freecad/Shelving/core/solver.py:472`): `held_by`, `Session.held_by` and the padlock planner do not catch its `LayoutSolveError`.
+- **N5: Extra motion terms beyond what Advice specifies** (`freecad/Shelving/core/solver.py:599`): seams and outer faces carry a weight-1 motion term too, so a seam weighs as a board when a typed size is split.
+
+### Round 2: APPROVED
+- **N1: One design-doc line is still unwrapped** (`docs/scope-and-design.md:10`): the round 1 rewrap moved the overflow down a line; that line runs to 108 characters.
+- **N2: Elided possessive reads awkwardly** (`freecad/Shelving/core/solver.py:17`): "the outer faces' never decides anything" would read better as "the outer faces' motion never decides anything".
+- **N3: `fixing_locks` conflict branch is untested** (`freecad/Shelving/core/solver.py:478`): the `return frozenset()` on an engine conflict needs rounding beyond the engine's tolerance to reach; `held_by` maps it to `None`, as intended.
+- **N4: Undo/Redo half of round 1 F1 has no direct headless test** (`tests/freecad/test_editor_session.py:1205`): reopening is tested; Undo and Redo re-read through the same `_read_unit` path.

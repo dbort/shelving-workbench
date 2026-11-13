@@ -97,10 +97,10 @@ def source_board(
     copies its stock from, or ``None`` when ``unit`` has no board at all.
 
     ``spaces`` is ``unit`` solved. A candidate is parallel to the new board
-    when it runs along ``axis`` with no rule of its own, since a board with
-    a rule is not thin along its run. The first non-empty tier wins, and
-    within a tier the board whose center is nearest ``region_id``'s center,
-    the first in pre-order on a tie:
+    when it runs along ``axis`` with no ``extent_mm`` of its own, since a
+    board with one is not thin along its run. The first non-empty tier wins,
+    and within a tier the board whose center is nearest ``region_id``'s
+    center, the first in pre-order on a tie:
 
     1. a parallel interior board in the run the new board joins;
     2. a parallel interior board anywhere in the unit;
@@ -120,7 +120,7 @@ def source_board(
 
     def parallel(placed: _Placed) -> bool:
         assert isinstance(placed.item, Board)
-        return placed.path[-1][0].axis is axis and placed.item.rule is None
+        return placed.path[-1][0].axis is axis and placed.item.extent_mm is None
 
     interior = [p for p in boards if parallel(p) and not _is_carcass_path(p.path)]
     # A split across its parent's axis starts a fresh run holding only the

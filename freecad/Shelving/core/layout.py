@@ -43,7 +43,7 @@ class Axis(enum.StrEnum):
 
 
 class Basis(enum.StrEnum):
-    """What a ``Fixed`` region's ``size_mm`` measures.
+    """What a locked region's size measures.
 
     ``CLEAR`` is the region's own extent along its division's axis.
     ``WITH_NEXT`` is the region plus the item immediately after it in the
@@ -57,47 +57,15 @@ class Basis(enum.StrEnum):
     WITH_NEXT = "with_next"
 
 
-@dataclass
-class Fixed:
-    """Rule: the region takes exactly ``size_mm``, measured per ``basis``."""
-
-    size_mm: float
-    basis: Basis = Basis.CLEAR
-
-    def __post_init__(self) -> None:
-        if self.size_mm <= 0:
-            raise ValueError(f"Fixed.size_mm must be > 0, got {self.size_mm}")
-
-
-@dataclass
-class Weighted:
-    """Rule: the region takes a share of slack proportional to ``weight``."""
-
-    weight: float
-
-    def __post_init__(self) -> None:
-        if self.weight <= 0:
-            raise ValueError(f"Weighted.weight must be > 0, got {self.weight}")
-
-
-@dataclass
-class Fill:
-    """Rule: weight-1 shorthand for ``Weighted(1.0)``."""
-
-
-SizeRule = Fixed | Weighted | Fill
-
-
 @dataclass(frozen=True)
 class Insets:
     """How far a ``Board`` is set back from its region on each of six faces.
 
     The pair on a division's own axis (for example ``x_min_mm`` /
     ``x_max_mm`` on a board in an ``Axis.X`` division) is ignored: a board
-    fills its region's extent along that axis with its own thickness only
-    when the board's ``rule`` is ``None``; when it is set, that rule
-    determines the division-axis extent instead. Only the pair on each of
-    the two cross-section axes applies, in either case.
+    fills its slot along that axis with its thickness, or with its
+    ``extent_mm`` when that is set. Only the pair on each of the two
+    cross-section axes applies.
     """
 
     x_min_mm: float = 0.0
@@ -111,13 +79,14 @@ class Insets:
 @dataclass
 class Board:
     """One physical member, sized along its division's axis by its thickness,
-    or by ``rule`` when that is set.
+    or by ``extent_mm`` when that is set.
     """
 
-    # The board's own thickness. A scanned board without a rule takes its
-    # slot width in the scan's snapped grid, so its run adds up exactly; one
-    # with a rule keeps its measured size across its thin axis. A new board
-    # copies the thickness of the board it takes its stock from.
+    # The board's own thickness. A scanned board without an ``extent_mm``
+    # takes its slot width in the scan's snapped grid, so its run adds up
+    # exactly; one with an ``extent_mm`` keeps its measured size across its
+    # thin axis. A new board copies the thickness of the board it takes its
+    # stock from.
     thickness_mm: float
     # ``None`` means the board is regenerable: the solver derives its extent
     # from the layout, same as any other item. A value means the workbench
@@ -127,13 +96,10 @@ class Board:
     pinned_size_mm: Vec3 | None = None
     insets: Insets = Insets()
     # ``None`` means the division-axis extent is ``thickness_mm``. A value
-    # overrides that, for a board whose measured size along its containing
-    # division's axis is not its thickness, a divider shorter than its
-    # neighbors say. Reuses the same ``SizeRule`` every
-    # ``Bay``/``Void``/``Division`` carries as its own ``rule`` so a caller
-    # never needs to know which axis this board's containing ``Division``
-    # cuts along to set it correctly.
-    rule: SizeRule | None = None
+    # overrides that with a fixed size, for a board whose measured size along
+    # its containing division's axis is not its thickness, a divider shorter
+    # than its neighbors say.
+    extent_mm: float | None = None
     # Free-form, set by the caller: the tree has no closed set of positions,
     # and a stepped outline has several tops, none of them *the* top.
     role: str = ""
@@ -146,13 +112,20 @@ class Board:
     def __post_init__(self) -> None:
         if self.thickness_mm <= 0:
             raise ValueError(f"Board.thickness_mm must be > 0, got {self.thickness_mm}")
+        if self.extent_mm is not None and self.extent_mm <= 0:
+            raise ValueError(f"Board.extent_mm must be > 0, got {self.extent_mm}")
 
 
 @dataclass
 class Bay:
     """An enclosed compartment: open, and part of the unit."""
 
-    rule: SizeRule = field(default_factory=Fill)
+    # The region's current clear size along its parent division's axis. The
+    # root has no parent run and keeps 0.
+    size_mm: float = 0.0
+    # What the region's size measures while it holds still through edits;
+    # ``None`` means unlocked.
+    lock: Basis | None = None
     id: str = field(default_factory=new_id)
 
 
@@ -164,7 +137,12 @@ class Void:
     compartment.
     """
 
-    rule: SizeRule = field(default_factory=Fill)
+    # The region's current clear size along its parent division's axis. The
+    # root has no parent run and keeps 0.
+    size_mm: float = 0.0
+    # What the region's size measures while it holds still through edits;
+    # ``None`` means unlocked.
+    lock: Basis | None = None
     id: str = field(default_factory=new_id)
 
 
@@ -178,7 +156,12 @@ class Division:
 
     axis: Axis
     items: list[Item]
-    rule: SizeRule = field(default_factory=Fill)
+    # The region's current clear size along its parent division's axis. The
+    # root has no parent run and keeps 0.
+    size_mm: float = 0.0
+    # What the region's size measures while it holds still through edits;
+    # ``None`` means unlocked.
+    lock: Basis | None = None
     id: str = field(default_factory=new_id)
 
     def __post_init__(self) -> None:

@@ -1,5 +1,6 @@
-"""The core edits: refusals, round trips, and (bug-006) that every other
-board and region in an edited run keeps its solved geometry."""
+"""The core edits: refusals, round trips, (bug-006) that a split or merge
+keeps every other board and region where it was, and that an edit moving
+boards moves them as little as the locks and the minimum opening allow."""
 
 import copy
 import dataclasses
@@ -34,16 +35,12 @@ from freecad.Shelving.core.layout import (
     Bay,
     Board,
     Division,
-    Fill,
-    Fixed,
     FixedPoint,
     FixedSide,
     Item,
     Region,
-    SizeRule,
     Unit,
     Void,
-    Weighted,
 )
 from freecad.Shelving.core.scan import DEFAULT_CLEARANCE_MM, DEFAULT_SNAP_MM
 from freecad.Shelving.core.solver import LayoutSolveError, solve
@@ -62,9 +59,10 @@ def _closed_box_unit() -> Unit:
                     axis=Axis.X,
                     items=[
                         Board(thickness_mm=18.0, role="left_side"),
-                        Bay(),
+                        Bay(size_mm=564.0),
                         Board(thickness_mm=18.0, role="right_side"),
                     ],
+                    size_mm=864.0,
                 ),
                 Board(thickness_mm=18.0, role="top"),
             ],
@@ -86,10 +84,11 @@ def _nested_division_unit() -> Unit:
                 Division(
                     axis=Axis.Z,
                     items=[
-                        Bay(rule=Fixed(400.0)),
+                        Bay(size_mm=400.0, lock=Basis.CLEAR),
                         Board(thickness_mm=18.0, role="mid_shelf"),
-                        Bay(),
+                        Bay(size_mm=1382.0),
                     ],
+                    size_mm=864.0,
                 ),
                 Board(thickness_mm=18.0, role="right_side"),
             ],
@@ -105,28 +104,33 @@ def _stepped_unit() -> Unit:
         root=Division(
             axis=Axis.X,
             items=[
-                Bay(rule=Weighted(2.0)),
+                Bay(size_mm=600.0),
                 Board(thickness_mm=18.0, role="divider"),
-                Void(),
+                Void(size_mm=282.0),
             ],
         ),
         depth_axis=Axis.Y,
     )
 
 
-def _run_unit(rule_a: SizeRule, rule_b: SizeRule, width_mm: float = 900.0) -> Unit:
-    """A flat ``Axis.X`` run: three boards and two bays, ``rule_a`` and
-    ``rule_b``, so splitting or merging the first bay has a second sibling
-    in the same run whose geometry must not move."""
+def _run_unit(
+    size_a_mm: float,
+    lock_a: Basis | None,
+    size_b_mm: float,
+    lock_b: Basis | None,
+) -> Unit:
+    """A flat ``Axis.X`` run: three boards and two bays, so splitting or
+    merging the first bay has a second sibling in the same run whose
+    geometry must not move."""
     return Unit(
-        size_mm=Vec3(width_mm, 300.0, 900.0),
+        size_mm=Vec3(3 * 18.0 + size_a_mm + size_b_mm, 300.0, 900.0),
         root=Division(
             axis=Axis.X,
             items=[
                 Board(thickness_mm=18.0, role="left"),
-                Bay(rule=rule_a),
+                Bay(size_mm=size_a_mm, lock=lock_a),
                 Board(thickness_mm=18.0, role="mid"),
-                Bay(rule=rule_b),
+                Bay(size_mm=size_b_mm, lock=lock_b),
                 Board(thickness_mm=18.0, role="right"),
             ],
         ),
@@ -134,25 +138,22 @@ def _run_unit(rule_a: SizeRule, rule_b: SizeRule, width_mm: float = 900.0) -> Un
     )
 
 
-def _multi_weighted_run_unit() -> Unit:
-    """A flat ``Axis.X`` run with four bays: ``Weighted(1.0)``,
-    ``Weighted(2.5)``, ``Fill()``, ``Weighted(4.0)``. Editing ``bay2``
-    leaves three OTHER driven siblings of different weights in the
-    same run, exercising ``_other_driven_anchor`` past the trivial
-    single-other-sibling case every other fixture in this module gives it."""
+def _multi_bay_run_unit() -> Unit:
+    """A flat ``Axis.X`` run with four bays of different sizes, so editing
+    ``bay2`` leaves three other siblings that must keep their geometry."""
     return Unit(
         size_mm=Vec3(2400.0, 300.0, 900.0),
         root=Division(
             axis=Axis.X,
             items=[
                 Board(thickness_mm=18.0, role="b0"),
-                Bay(rule=Weighted(1.0), id="bay1"),
+                Bay(size_mm=300.0, id="bay1"),
                 Board(thickness_mm=18.0, role="b1"),
-                Bay(rule=Weighted(2.5), id="bay2"),
+                Bay(size_mm=700.0, id="bay2"),
                 Board(thickness_mm=18.0, role="b2"),
-                Bay(rule=Fill(), id="bay3"),
+                Bay(size_mm=400.0, lock=Basis.CLEAR, id="bay3"),
                 Board(thickness_mm=18.0, role="b3"),
-                Bay(rule=Weighted(4.0), id="bay4"),
+                Bay(size_mm=910.0, id="bay4"),
                 Board(thickness_mm=18.0, role="b4"),
             ],
         ),
@@ -160,26 +161,22 @@ def _multi_weighted_run_unit() -> Unit:
     )
 
 
-def _fixed_and_weighted_merge_unit() -> Unit:
-    """A flat ``Axis.X`` run whose ``merge_board`` sits between a ``Fixed``
-    bay and a ``Weighted`` one, with two more ``Weighted`` bays of
-    different weights further down the same run: the non-trivial
-    ``Weighted`` branch of ``_merged_rule`` (the two merging neighbors are
-    not both ``Fixed``), anchored against an ``_other_driven_anchor`` that
-    has more than one candidate to choose from."""
+def _locked_and_unlocked_merge_unit() -> Unit:
+    """A flat ``Axis.X`` run whose ``merge_board`` sits between a locked bay
+    and an unlocked one, with two more bays further down the same run."""
     return Unit(
         size_mm=Vec3(2400.0, 300.0, 900.0),
         root=Division(
             axis=Axis.X,
             items=[
                 Board(thickness_mm=18.0, role="b0"),
-                Bay(rule=Fixed(300.0), id="fixed_bay"),
+                Bay(size_mm=300.0, lock=Basis.CLEAR, id="locked_bay"),
                 Board(thickness_mm=18.0, role="merge_board", id="merge_board"),
-                Bay(rule=Weighted(2.0), id="weighted_bay"),
+                Bay(size_mm=600.0, id="unlocked_bay"),
                 Board(thickness_mm=18.0, role="b1"),
-                Bay(rule=Weighted(3.5), id="bay_c"),
+                Bay(size_mm=1000.0, id="bay_c"),
                 Board(thickness_mm=18.0, role="b2"),
-                Bay(rule=Weighted(1.5), id="bay_d"),
+                Bay(size_mm=410.0, id="bay_d"),
                 Board(thickness_mm=18.0, role="b3"),
             ],
         ),
@@ -261,31 +258,22 @@ def _find_parent(region: Region, node_id: str) -> Division | None:
     return None
 
 
-def _rule_shape(rule: SizeRule) -> tuple[object, ...]:
-    match rule:
-        case Fixed(size_mm=size_mm, basis=basis):
-            return ("fixed", size_mm, basis)
-        case Weighted(weight=weight):
-            return ("weighted", weight)
-        case Fill():
-            return ("fill",)
-
-
 def _item_shape(item: Item) -> object:
     if isinstance(item, Board):
-        return ("board", item.role, item.thickness_mm, _rule_shape(item.rule or Fill()))
+        return ("board", item.role, item.thickness_mm, item.extent_mm)
     return _region_shape(item)
 
 
 def _region_shape(region: Region) -> object:
     if isinstance(region, Bay):
-        return ("bay", _rule_shape(region.rule))
+        return ("bay", region.size_mm, region.lock)
     if isinstance(region, Void):
-        return ("void", _rule_shape(region.rule))
+        return ("void", region.size_mm, region.lock)
     return (
         "division",
         region.axis,
-        _rule_shape(region.rule),
+        region.size_mm,
+        region.lock,
         tuple(_item_shape(item) for item in region.items),
     )
 
@@ -413,9 +401,8 @@ def test_split_region_refuses_a_bay_too_small_for_the_divider() -> None:
     """A splice-case split (the bay's parent already runs along the split
     axis) whose opening cannot fit the new board and still leave two
     positive-sized halves is refused by the bay's own id, not left to a
-    downstream ``Fixed``/``Weighted`` construction to crash on, in a message
-    that does not show that id."""
-    bay = Bay(rule=Fixed(10.0))
+    layout to refuse, in a message that does not show that id."""
+    bay = Bay(size_mm=10.0, lock=Basis.CLEAR)
     unit = Unit(
         size_mm=Vec3(46.0, 300.0, 900.0),
         root=Division(
@@ -448,7 +435,7 @@ def test_merge_at_refuses_a_board_with_no_neighbor_on_one_side() -> None:
     edge_board = Board(thickness_mm=18.0, role="edge")
     unit = Unit(
         size_mm=Vec3(600.0, 300.0, 900.0),
-        root=Division(axis=Axis.X, items=[edge_board, Bay()]),
+        root=Division(axis=Axis.X, items=[edge_board, Bay(size_mm=582.0)]),
     )
     with pytest.raises(EditError) as exc_info:
         merge_at(unit, edge_board.id)
@@ -462,7 +449,11 @@ def test_merge_at_refuses_a_board_flanked_by_another_board() -> None:
         size_mm=Vec3(600.0, 300.0, 900.0),
         root=Division(
             axis=Axis.X,
-            items=[Board(thickness_mm=18.0, role="left"), middle_board, Bay()],
+            items=[
+                Board(thickness_mm=18.0, role="left"),
+                middle_board,
+                Bay(size_mm=564.0),
+            ],
         ),
     )
     with pytest.raises(EditError) as exc_info:
@@ -513,15 +504,15 @@ def test_merge_at_leaves_the_argument_unit_unchanged() -> None:
 def test_split_region_produces_a_division_of_bay_board_bay() -> None:
     """A cross-axis split (the bay's parent runs on a different axis) nests
     a new ``Division`` on the requested axis, carrying the split ``Bay``'s
-    own rule; its items are ``Bay(Fill)``, ``Board``, ``Bay(Fill)``: a fresh
-    run has no other region to preserve, so both halves are always
-    ``Fill`` regardless of the split bay's own rule. The parent's untouched
-    siblings are the same objects split_region reused, not copies of them."""
+    own size and lock; its items are two unlocked bays of equal size either
+    side of the ``Board``, whatever the split bay's lock. The parent's
+    untouched siblings are the same objects split_region reused, not copies
+    of them."""
     unit = _closed_box_unit()
     bay_id = _find_bay_id(unit.root)
     original_bay = _find_region(unit.root, bay_id)
     assert isinstance(original_bay, Bay)
-    original_bay = dataclasses.replace(original_bay, rule=Weighted(3.0))
+    original_bay = dataclasses.replace(original_bay, lock=Basis.WITH_NEXT)
     unit = dataclasses.replace(
         unit, root=_replace_node(unit.root, bay_id, original_bay)
     )
@@ -537,12 +528,13 @@ def test_split_region_produces_a_division_of_bay_board_bay() -> None:
     division = new_parent.items[index]
     assert isinstance(division, Division)
     assert division.axis == Axis.Z
-    assert division.rule == original_bay.rule
+    assert division.size_mm == original_bay.size_mm
+    assert division.lock is Basis.WITH_NEXT
 
     assert len(division.items) == 3
     left, board, right = division.items
-    assert isinstance(left, Bay) and left.rule == Fill()
-    assert isinstance(right, Bay) and right.rule == Fill()
+    assert isinstance(left, Bay) and left.lock is None and left.size_mm == 423.0
+    assert isinstance(right, Bay) and right.lock is None and right.size_mm == 423.0
     assert isinstance(board, Board)
     assert board.thickness_mm == 18.0
 
@@ -558,9 +550,11 @@ def test_split_region_takes_thickness_and_stock_from_a_parallel_board() -> None:
     near; the first in tree order wins."""
     unit = _closed_box_unit()
     assert isinstance(unit.root, Division)
-    bottom, _middle, top = unit.root.items
+    bottom, middle, top = unit.root.items
     assert isinstance(bottom, Board) and isinstance(top, Board)
+    assert isinstance(middle, Division)
     unit.root.items[0] = dataclasses.replace(bottom, thickness_mm=25.0)
+    unit.root.items[1] = dataclasses.replace(middle, size_mm=850.0)
     unit.root.items[2] = dataclasses.replace(top, thickness_mm=25.0)
     bay_id = _find_bay_id(unit.root)
     split = split_region(unit, bay_id, Axis.Z)
@@ -571,7 +565,7 @@ def test_split_region_takes_thickness_and_stock_from_a_parallel_board() -> None:
 
 
 def test_split_region_refuses_a_unit_with_no_board() -> None:
-    bay = Bay(rule=Fixed(500.0))
+    bay = Bay()
     unit = Unit(size_mm=Vec3(600.0, 300.0, 900.0), root=bay)
     with pytest.raises(EditError) as exc_info:
         split_region(unit, bay.id, Axis.X)
@@ -580,9 +574,8 @@ def test_split_region_refuses_a_unit_with_no_board() -> None:
 
 def _replace_node(region: Region, node_id: str, replacement: Region) -> Region:
     """``region`` with the node named ``node_id`` replaced by ``replacement``,
-    used only to seed a non-default rule onto the bay a test is about to
-    split, the same shape :mod:`freecad.Shelving.core.edit`'s own recursion
-    uses."""
+    used only to seed a lock onto the bay a test is about to split, the same
+    shape :mod:`freecad.Shelving.core.edit`'s own recursion uses."""
     if region.id == node_id:
         return replacement
     if not isinstance(region, Division):
@@ -600,9 +593,9 @@ def _replace_node(region: Region, node_id: str, replacement: Region) -> Region:
 
 
 def _check_split_and_merge_preserve_the_other_bay(
-    rule_a: SizeRule, rule_b: SizeRule, width_mm: float = 900.0
+    lock_a: Basis | None, lock_b: Basis | None
 ) -> None:
-    unit = _run_unit(rule_a, rule_b, width_mm)
+    unit = _run_unit(400.0, lock_a, 446.0, lock_b)
     assert isinstance(unit.root, Division)
     spaces_before = solve(unit)
     bay_a = unit.root.items[1]
@@ -619,14 +612,7 @@ def _check_split_and_merge_preserve_the_other_bay(
     board_id = _new_board_id(unit, split)
     merged = merge_at(split, board_id)
     assert isinstance(merged.root, Division)
-    # Tree shape round-trips by item kind (Board, Bay, Board, Bay, Board);
-    # the merged bay's *rule* need not come back as the literal Fill() or
-    # Weighted() it started as (a Weighted anchor elsewhere in the run can
-    # solve it to a numerically equivalent but differently-typed rule), only
-    # its solved geometry, checked below, must round-trip exactly.
-    assert [type(item).__name__ for item in merged.root.items] == [
-        type(item).__name__ for item in unit.root.items
-    ]
+    assert _region_shape(merged.root) == _region_shape(unit.root)
     _assert_surviving_boards_unchanged(spaces_after_split, merged)
     spaces_after_merge = solve(merged)
     assert _spaces_equal(spaces_after_merge[bay_b.id], spaces_before[bay_b.id])
@@ -635,56 +621,16 @@ def _check_split_and_merge_preserve_the_other_bay(
     assert _spaces_equal(spaces_after_merge[merged_bay_a.id], spaces_before[bay_a.id])
 
 
-def test_split_and_merge_preserve_the_other_bay_in_a_fill_run() -> None:
-    _check_split_and_merge_preserve_the_other_bay(Fill(), Fill())
+def test_split_and_merge_preserve_the_other_bay_in_an_unlocked_run() -> None:
+    _check_split_and_merge_preserve_the_other_bay(None, None)
 
 
-def test_split_and_merge_preserve_the_other_bay_in_a_weighted_run() -> None:
-    _check_split_and_merge_preserve_the_other_bay(Weighted(1.5), Weighted(2.5))
-
-
-def test_split_and_merge_preserve_the_other_bay_in_a_fixed_run() -> None:
-    # left + mid + right boards (18mm each) plus both Fixed bays, with no
-    # slack left over: an all-Fixed run must sum exactly to the span.
-    _check_split_and_merge_preserve_the_other_bay(
-        Fixed(300.0), Fixed(250.0), width_mm=3 * 18.0 + 300.0 + 250.0
-    )
+def test_split_and_merge_preserve_the_other_bay_in_a_locked_run() -> None:
+    _check_split_and_merge_preserve_the_other_bay(Basis.CLEAR, Basis.CLEAR)
 
 
 def test_split_and_merge_preserve_the_other_bay_in_a_mixed_run() -> None:
-    """``rule_b`` is ``Fixed``, not driven, so splitting or merging
-    ``rule_a`` finds no other driven sibling to solve a weight against and
-    falls back to ``Fill`` for the driven side, per
-    :func:`~freecad.Shelving.core.edit._other_driven_anchor`."""
-    _check_split_and_merge_preserve_the_other_bay(Weighted(1.0), Fixed(250.0))
-
-
-def test_split_preserves_a_weighted_sibling_across_an_intervening_fixed_bay() -> None:
-    """The anchor search skips a ``Fixed`` sibling in between and keeps
-    going to find the run's one driven item."""
-    unit = Unit(
-        size_mm=Vec3(1200.0, 300.0, 900.0),
-        root=Division(
-            axis=Axis.X,
-            items=[
-                Board(thickness_mm=18.0, role="left"),
-                Bay(rule=Weighted(1.0), id="bay_a"),
-                Board(thickness_mm=18.0, role="mid1"),
-                Bay(rule=Fixed(200.0)),
-                Board(thickness_mm=18.0, role="mid2"),
-                Bay(rule=Fill(), id="bay_c"),
-                Board(thickness_mm=18.0, role="right"),
-            ],
-        ),
-        depth_axis=Axis.Y,
-    )
-    spaces_before = solve(unit)
-
-    split = split_region(unit, "bay_a", Axis.X)
-    assert not _has_same_axis_nesting(split.root)
-    _assert_surviving_boards_unchanged(spaces_before, split)
-    spaces_after = solve(split)
-    assert _spaces_equal(spaces_after["bay_c"], spaces_before["bay_c"])
+    _check_split_and_merge_preserve_the_other_bay(None, Basis.CLEAR)
 
 
 def test_split_region_bug_006_sequence_preserves_every_prior_boards_geometry() -> None:
@@ -721,15 +667,11 @@ def test_split_region_bug_006_sequence_preserves_every_prior_boards_geometry() -
     assert not _has_same_axis_nesting(unit.root)
 
 
-# --- three or more other driven siblings -------------------------------------
+# --- three or more other siblings ---------------------------------------------
 
 
-def test_split_preserves_three_other_weighted_siblings_of_different_weights() -> None:
-    """Splitting ``bay2`` in a four-bay run leaves ``bay1`` (``Weighted(1.0)``),
-    ``bay3`` (``Fill()``) and ``bay4`` (``Weighted(4.0)``) all at their
-    pre-split ``Space``, not only the single other driven sibling every other
-    split fixture in this module gives ``_other_driven_anchor``."""
-    unit = _multi_weighted_run_unit()
+def test_split_preserves_three_other_siblings_of_different_sizes() -> None:
+    unit = _multi_bay_run_unit()
     spaces_before = solve(unit)
 
     split = split_region(unit, "bay2", Axis.X)
@@ -740,11 +682,11 @@ def test_split_preserves_three_other_weighted_siblings_of_different_weights() ->
         assert _spaces_equal(spaces_after[bay_id], spaces_before[bay_id]), bay_id
 
 
-def test_merge_preserves_three_other_weighted_siblings_of_different_weights() -> None:
-    """The matching merge back, in the same four-bay run: splitting ``bay2``
-    then merging at the board the split just added restores ``bay2``'s own
-    geometry, and still leaves ``bay1``, ``bay3`` and ``bay4`` untouched."""
-    unit = _multi_weighted_run_unit()
+def test_merge_preserves_three_other_siblings_of_different_sizes() -> None:
+    """Splitting ``bay2`` then merging at the board the split just added
+    restores ``bay2``'s own geometry, and leaves ``bay1``, ``bay3`` and
+    ``bay4`` untouched."""
+    unit = _multi_bay_run_unit()
     spaces_before = solve(unit)
 
     split = split_region(unit, "bay2", Axis.X)
@@ -764,13 +706,11 @@ def test_merge_preserves_three_other_weighted_siblings_of_different_weights() ->
     assert _spaces_equal(spaces_after_merge[merged_bay2.id], spaces_before["bay2"])
 
 
-def test_merge_a_fixed_bay_with_a_weighted_one_leaves_other_weighted_siblings() -> None:
-    """Merging away ``merge_board`` combines a ``Fixed`` bay with a
-    ``Weighted`` one, the non-``Fixed``/``Fixed`` branch of
-    ``_merged_rule``, while ``bay_c`` and ``bay_d``, two more ``Weighted``
-    bays of different weights elsewhere in the run, keep their pre-merge
-    ``Space`` exactly."""
-    unit = _fixed_and_weighted_merge_unit()
+def test_merging_a_locked_bay_with_an_unlocked_one_gives_an_unlocked_bay() -> None:
+    """``bay_c`` and ``bay_d`` elsewhere in the run keep their pre-merge
+    ``Space`` exactly, and the merged bay spans both neighbors and the
+    board."""
+    unit = _locked_and_unlocked_merge_unit()
     spaces_before = solve(unit)
 
     merged = merge_at(unit, "merge_board")
@@ -784,11 +724,11 @@ def test_merge_a_fixed_bay_with_a_weighted_one_leaves_other_weighted_siblings() 
     assert isinstance(merged_root, Division)
     merged_bay = merged_root.items[1]
     assert isinstance(merged_bay, Bay)
-    assert isinstance(merged_bay.rule, Weighted)
-    fixed_extent_mm = spaces_before["fixed_bay"].extent_mm(0)
-    weighted_extent_mm = spaces_before["weighted_bay"].extent_mm(0)
+    assert merged_bay.lock is None
+    locked_extent_mm = spaces_before["locked_bay"].extent_mm(0)
+    unlocked_extent_mm = spaces_before["unlocked_bay"].extent_mm(0)
     board_extent_mm = spaces_before["merge_board"].extent_mm(0)
-    expected_extent_mm = fixed_extent_mm + board_extent_mm + weighted_extent_mm
+    expected_extent_mm = locked_extent_mm + board_extent_mm + unlocked_extent_mm
     assert abs(spaces_after[merged_bay.id].extent_mm(0) - expected_extent_mm) <= 1e-6
 
 
@@ -799,7 +739,7 @@ def test_split_region_spliced_items_are_bay_board_bay_in_place() -> None:
     """In the splice case (the bay's parent already runs on the split
     axis), the parent's ``items`` gain exactly
     ``Bay, Board, Bay`` at the split bay's old slot, no more, no fewer."""
-    unit = _run_unit(Weighted(1.5), Weighted(2.5))
+    unit = _run_unit(400.0, None, 446.0, None)
     assert isinstance(unit.root, Division)
     bay_a = unit.root.items[1]
     assert isinstance(bay_a, Bay)
@@ -826,18 +766,16 @@ def _bare_column_unit() -> Unit:
     a splice-then-nest-then-collapse sequence on that bay can reduce the
     ``Axis.X`` division to one item and promote it straight into the
     ``Axis.Z`` run above, the same axis as the promoted item once the
-    intervening split nests a ``Division`` sharing it. A second ``Weighted``
-    bay elsewhere in the ``Axis.Z`` run gives the promoted items' own
-    ``_other_driven_anchor`` something real to solve against."""
+    intervening split nests a ``Division`` sharing it."""
     return Unit(
         size_mm=Vec3(600.0, 300.0, 1800.0),
         root=Division(
             axis=Axis.Z,
             items=[
                 Board(thickness_mm=18.0, role="bottom"),
-                Division(axis=Axis.X, items=[Bay(rule=Weighted(1.0))]),
+                Division(axis=Axis.X, items=[Bay(size_mm=600.0)], size_mm=582.0),
                 Board(thickness_mm=18.0, role="mid"),
-                Bay(rule=Weighted(2.0)),
+                Bay(size_mm=1164.0),
                 Board(thickness_mm=18.0, role="top"),
             ],
         ),
@@ -883,23 +821,20 @@ def test_merge_collapse_never_nests_a_same_axis_division_either() -> None:
     assert all(not isinstance(item, Division) for item in merged_root.items)
 
 
-# --- a collapse with no other driven sibling keeps existing ratios ----------
+# --- a collapse keeps the sizes of the items it splices ---------------------
 
 
 def _two_unequal_fixed_openings_unit() -> Unit:
-    """Two unequal openings, both ``Fixed``, as two typed sizes leave them:
-    no bay in this run is driven, so every edit below exercises
-    ``_splice_collapsed_child``'s ``anchor is None`` branch, the one every
-    other merge-collapse fixture in this module leaves untested."""
+    """Two unequal openings, both locked, as two typed sizes leave them."""
     return Unit(
         size_mm=Vec3(600.0, 300.0, 350.0 + 400.0 + 3 * 18.0),
         root=Division(
             axis=Axis.Z,
             items=[
                 Board(thickness_mm=18.0, role="bottom"),
-                Bay(rule=Fixed(350.0), id="lower"),
+                Bay(size_mm=350.0, lock=Basis.CLEAR, id="lower"),
                 Board(thickness_mm=18.0, role="shelf"),
-                Bay(rule=Fixed(400.0), id="upper"),
+                Bay(size_mm=400.0, lock=Basis.CLEAR, id="upper"),
                 Board(thickness_mm=18.0, role="top"),
             ],
         ),
@@ -907,7 +842,7 @@ def _two_unequal_fixed_openings_unit() -> Unit:
     )
 
 
-def test_merge_collapse_with_no_other_driven_sibling_moves_no_board() -> None:
+def test_merge_collapse_moves_no_board() -> None:
     """A divider in the lower opening (nest, a
     different axis than the Z-axis column), a shelf left of the divider
     (nest again, a different axis than the divider's X-axis division), then
@@ -915,11 +850,9 @@ def test_merge_collapse_with_no_other_driven_sibling_moves_no_board() -> None:
     parent now shares the shelf's own Z axis), then delete the divider. The
     delete collapses the divider's ``Axis.X`` division down to the "shelf
     left" division alone, which shares the column's own ``Axis.Z`` axis and
-    must splice into it rather than nest. With both openings ``Fixed``,
-    nothing else in the column is driven, so the splice has no other driven
-    sibling to solve a fresh weight against and must keep the two shelf
-    boards' own ratio instead of equalizing them to a shared ``Fill()``
-    share, which would move both (the bug this test reproduces)."""
+    must splice into it rather than nest, keeping the two shelf boards where
+    they were rather than equalizing the openings between them, which would
+    move both."""
     unit = _two_unequal_fixed_openings_unit()
     spaces_before_divider = solve(unit)
     boards_before_divider = _all_board_ids(unit.root)
@@ -969,8 +902,7 @@ def test_merge_collapse_with_no_other_driven_sibling_moves_no_board() -> None:
     # inside the promoted "shelf left" division, including shelf_board and
     # board_id_2, and is not what this test checks. What must not move is the
     # column's Axis.Z share those two boards divide up between them: their
-    # z origin and z extent, which _splice_collapsed_child's anchor-is-None
-    # branch (the fix under test) must reproduce exactly.
+    # z origin and z extent, which the splice must reproduce exactly.
     spaces_before_delete = solve(unit)
     merged = merge_at(unit, divider_id)
     assert not _has_same_axis_nesting(merged.root)
@@ -983,24 +915,30 @@ def test_merge_collapse_with_no_other_driven_sibling_moves_no_board() -> None:
         assert abs(before_space.size.z_mm - after_space.size.z_mm) <= 1e-6, board_id
 
 
-# --- set_size / set_basis / move_board ---------------------------------------
+# --- set_unit_size / set_size / set_basis / measure ---------------------------
 
 
-def _column_unit(lower_rule: SizeRule, thickness_mm: float = 18.0) -> Unit:
-    """One vertical run of ``thickness_mm`` boards: bottom, a lower bay ruled
-    by ``lower_rule``, a shelf, a ``Fill`` upper bay, a ``Weighted`` top bay,
-    and a top. Every node carries a fixed id so a test can name it."""
+def _column_unit(
+    lower_mm: float = 207.0,
+    lower_lock: Basis | None = None,
+    thickness_mm: float = 18.0,
+) -> Unit:
+    """One 900 mm vertical run of ``thickness_mm`` boards: bottom, a lower
+    bay of ``lower_mm`` locked by ``lower_lock``, a shelf, an upper bay, a
+    second shelf, a void twice the upper bay's height, and a top. Every node
+    carries a fixed id so a test can name it."""
+    upper_mm = (900.0 - 4 * thickness_mm - lower_mm) / 3
     return Unit(
         size_mm=Vec3(600.0, 300.0, 900.0),
         root=Division(
             axis=Axis.Z,
             items=[
                 Board(thickness_mm=thickness_mm, id="bottom"),
-                Bay(id="lower", rule=lower_rule),
+                Bay(size_mm=lower_mm, lock=lower_lock, id="lower"),
                 Board(thickness_mm=thickness_mm, id="shelf"),
-                Bay(id="upper"),
+                Bay(size_mm=upper_mm, id="upper"),
                 Board(thickness_mm=thickness_mm, id="shelf2"),
-                Void(id="topmost", rule=Weighted(2.0)),
+                Void(size_mm=2 * upper_mm, id="topmost"),
                 Board(thickness_mm=thickness_mm, id="top"),
             ],
             id="column",
@@ -1009,12 +947,12 @@ def _column_unit(lower_rule: SizeRule, thickness_mm: float = 18.0) -> Unit:
     )
 
 
-def _rules_by_id(region: Region) -> dict[str, SizeRule]:
-    out = {region.id: region.rule}
+def _locks_by_id(region: Region) -> dict[str, Basis | None]:
+    out = {region.id: region.lock}
     if isinstance(region, Division):
         for item in region.items:
             if not isinstance(item, Board):
-                out.update(_rules_by_id(item))
+                out.update(_locks_by_id(item))
     return out
 
 
@@ -1026,13 +964,84 @@ def _assert_same_layout(before: Unit, after: Unit) -> None:
         assert _spaces_equal(space, spaces_after[node_id]), (node_id, space)
 
 
-def test_set_unit_size_changes_only_the_outer_size() -> None:
-    unit = _column_unit(Fill())
-    resized = set_unit_size(unit, Vec3(600.0, 300.0, 1000.0))
-    assert resized.size_mm == Vec3(600.0, 300.0, 1000.0)
-    assert resized.root is unit.root
-    assert unit.size_mm == Vec3(600.0, 300.0, 900.0)
-    assert solve(resized)["top"].origin.z_mm == pytest.approx(1000.0 - 18.0)
+def _two_bay_column(locked: Collection[str] = (), side: FixedSide = "min") -> Unit:
+    """A column of 18 mm boards: bottom, bay A 300, shelf ``s1``, bay B 300,
+    top, 654 mm tall."""
+    return _bays_column((300.0, 300.0), locked, side)
+
+
+def _three_bay_column(locked: Collection[str] = ()) -> Unit:
+    """A column of 18 mm boards: bottom, A 300, shelf ``s1``, B 300, shelf
+    ``s2``, C 300, top, 972 mm tall."""
+    return _bays_column((300.0, 300.0, 300.0), locked, "min")
+
+
+def _bays_column(
+    sizes_mm: Collection[float], locked: Collection[str], side: FixedSide
+) -> Unit:
+    items: list[Item] = [Board(thickness_mm=18.0, id="bottom")]
+    for index, size_mm in enumerate(sizes_mm):
+        name = "ABC"[index]
+        lock_basis = Basis.CLEAR if name in locked else None
+        items.append(Bay(size_mm=size_mm, lock=lock_basis, id=name))
+        last = index == len(sizes_mm) - 1
+        items.append(Board(thickness_mm=18.0, id="top" if last else f"s{index + 1}"))
+    return Unit(
+        size_mm=Vec3(600.0, 300.0, 18.0 * (len(sizes_mm) + 1) + sum(sizes_mm)),
+        root=Division(axis=Axis.Z, items=items, id="column"),
+        depth_axis=Axis.Y,
+        fixed_point=FixedPoint(z=side),
+    )
+
+
+def _bay_mm(unit: Unit) -> dict[str, float]:
+    spaces = solve(unit)
+    return {name: spaces[name].size.z_mm for name in "ABC" if name in spaces}
+
+
+def _low_face_mm(unit: Unit, board_id: str) -> float:
+    return solve(unit)[board_id].origin.z_mm
+
+
+def _with_height(unit: Unit, height_mm: float) -> Vec3:
+    return Vec3(unit.size_mm.x_mm, unit.size_mm.y_mm, height_mm)
+
+
+def test_growing_a_unit_grows_the_opening_beside_the_moving_face() -> None:
+    unit = _two_bay_column()
+    grown = set_unit_size(unit, _with_height(unit, 754.0))
+    assert _bay_mm(grown) == pytest.approx({"A": 300.0, "B": 400.0})
+    assert _low_face_mm(grown, "s1") == _low_face_mm(unit, "s1")
+    assert grown.size_mm.z_mm == 754.0
+
+
+def test_shrinking_a_unit_pushes_inward_once_an_opening_reaches_the_minimum() -> None:
+    unit = _two_bay_column()
+    shrunk = set_unit_size(unit, _with_height(unit, 254.0))
+    assert _bay_mm(shrunk) == pytest.approx({"A": 195.0, "B": MIN_DRAG_GAP_MM})
+
+
+def test_shrinking_a_unit_past_every_minimum_is_refused_naming_both_openings() -> None:
+    unit = _two_bay_column()
+    with pytest.raises(LayoutSolveError) as err:
+        set_unit_size(unit, _with_height(unit, 60.0))
+    assert err.value.reason == "conflict"
+    assert set(err.value.region_ids) == {"A", "B"}
+
+
+def test_growing_a_unit_fixed_at_its_center_grows_both_openings() -> None:
+    unit = _two_bay_column(side="center")
+    grown = set_unit_size(unit, _with_height(unit, 754.0))
+    assert _bay_mm(grown) == pytest.approx({"A": 350.0, "B": 350.0})
+    assert _low_face_mm(grown, "s1") == pytest.approx(_low_face_mm(unit, "s1"))
+
+
+def test_a_locked_opening_carries_its_shelf_with_the_moving_face() -> None:
+    unit = _two_bay_column(locked="A", side="center")
+    grown = set_unit_size(unit, _with_height(unit, 754.0))
+    assert _bay_mm(grown) == pytest.approx({"A": 300.0, "B": 400.0})
+    assert _low_face_mm(grown, "s1") == pytest.approx(_low_face_mm(unit, "s1") - 50.0)
+    assert _low_face_mm(grown, "bottom") == pytest.approx(-50.0)
 
 
 @pytest.mark.parametrize(
@@ -1044,10 +1053,17 @@ def test_set_unit_size_changes_only_the_outer_size() -> None:
     ],
 )
 def test_set_unit_size_refuses_a_nonpositive_axis(size_mm: Vec3) -> None:
-    unit = _column_unit(Fill())
+    unit = _column_unit()
     with pytest.raises(EditError) as err:
         set_unit_size(unit, size_mm)
     assert err.value.node_id == unit.id
+
+
+def test_set_unit_size_leaves_the_argument_unit_unchanged() -> None:
+    unit = _column_unit()
+    snapshot = copy.deepcopy(unit)
+    set_unit_size(unit, Vec3(700.0, 300.0, 1000.0))
+    assert unit == snapshot
 
 
 _FIXED_SIDES: tuple[FixedSide, ...] = ("min", "center", "max")
@@ -1073,7 +1089,7 @@ def test_set_unit_size_keeps_the_fixed_side_where_it_was(
     ``axis`` leaves its low face, midpoint or high face on that axis where
     it was, and leaves the other two axes' faces alone."""
     unit = dataclasses.replace(
-        _column_unit(Fill()),
+        _column_unit(),
         position_mm=Vec3(100.0, -300.0, 50.0),
         fixed_point=FixedPoint().with_side(axis, side),
     )
@@ -1093,7 +1109,7 @@ def test_set_unit_size_keeps_the_fixed_side_where_it_was(
             "max": new_high_mm,
         }
         assert abs(fixed_after_mm[side] - fixed_before_mm[side]) <= 1e-6
-        assert fixed_point_mm(resized) == fixed_point_mm(unit)
+        assert fixed_point_mm(resized) == pytest.approx(fixed_point_mm(unit))
         for other in set(Axis) - {axis}:
             assert _solved_extent_mm(resized, other) == pytest.approx(
                 before[other], abs=1e-6
@@ -1101,53 +1117,89 @@ def test_set_unit_size_keeps_the_fixed_side_where_it_was(
 
 
 def test_a_unit_fixes_its_minimum_corner_unless_told_otherwise() -> None:
-    unit = _column_unit(Fill())
+    unit = _column_unit()
     assert unit.fixed_point == FixedPoint("min", "min", "min")
     assert fixed_point_mm(unit) == unit.position_mm
 
 
 def test_fixed_point_mm_measures_each_side_on_the_units_box() -> None:
     unit = dataclasses.replace(
-        _column_unit(Fill()),
+        _column_unit(),
         position_mm=Vec3(100.0, -300.0, 50.0),
         fixed_point=FixedPoint("max", "center", "min"),
     )
     assert fixed_point_mm(unit) == Vec3(700.0, -150.0, 50.0)
 
 
-def test_set_size_fixes_the_region_and_leaves_every_sibling_rule() -> None:
-    unit = _column_unit(Fill())
+def test_typing_a_size_moves_the_boards_either_side_by_half_the_change() -> None:
+    unit = _three_bay_column()
+    typed = set_size(unit, "B", 340.0, Basis.CLEAR)
+    assert _bay_mm(typed) == pytest.approx({"A": 280.0, "B": 340.0, "C": 280.0})
+    assert _locks_by_id(typed.root)["B"] is Basis.CLEAR
+    assert typed.size_mm == unit.size_mm
+
+
+def test_typing_a_size_beside_a_carcass_board_moves_only_the_other_board() -> None:
+    unit = _two_bay_column()
+    typed = set_size(unit, "A", 320.0, Basis.CLEAR)
+    assert _bay_mm(typed) == pytest.approx({"A": 320.0, "B": 280.0})
+
+
+def test_typing_a_size_under_the_minimum_is_refused_whatever_the_opening() -> None:
+    """The scanner drops an opening under the minimum on the next
+    read, so a typed one is refused; the minimum itself is accepted."""
+    unit = _two_bay_column()
+    with pytest.raises(EditError) as err:
+        set_size(unit, "A", 4.0, Basis.CLEAR)
+    assert err.value.node_id == "A"
+    typed = set_size(unit, "A", 5.0, Basis.CLEAR)
+    assert _bay_mm(typed) == pytest.approx({"A": 5.0, "B": 595.0})
+    narrow = _bays_column((3.0, 597.0), (), "min")
+    with pytest.raises(EditError):
+        set_size(narrow, "A", 3.0, Basis.CLEAR)
+
+
+def test_typing_a_spacing_checks_the_minimum_on_the_clear_size() -> None:
+    unit = _two_bay_column()
+    with pytest.raises(EditError):
+        set_size(unit, "A", 22.0, Basis.WITH_NEXT)
+    typed = set_size(unit, "A", 23.0, Basis.WITH_NEXT)
+    assert _bay_mm(typed)["A"] == pytest.approx(5.0)
+
+
+def test_typing_a_size_the_locks_leave_no_room_for_is_a_conflict() -> None:
+    unit = _three_bay_column(locked="C")
+    with pytest.raises(LayoutSolveError) as err:
+        set_size(unit, "B", 900.0, Basis.CLEAR)
+    assert err.value.reason == "conflict"
+    assert {"B", "C"} <= set(err.value.region_ids)
+
+
+def test_set_size_measures_a_spacing_top_face_to_top_face() -> None:
+    unit = _column_unit()
     edited = set_size(unit, "upper", 250.0, Basis.WITH_NEXT)
-    rules_before = _rules_by_id(unit.root)
-    rules_after = _rules_by_id(edited.root)
-    assert rules_after.pop("upper") == Fixed(250.0, Basis.WITH_NEXT)
-    rules_before.pop("upper")
-    assert rules_after == rules_before
+    locks_before = _locks_by_id(unit.root)
+    locks_after = _locks_by_id(edited.root)
+    assert locks_after.pop("upper") is Basis.WITH_NEXT
+    locks_before.pop("upper")
+    assert locks_after == locks_before
     spaces = solve(edited)
-    # 250mm top face to top face: the upper bay plus the 18mm shelf2 above it.
     assert spaces["upper"].size.z_mm + spaces["shelf2"].size.z_mm == pytest.approx(
         250.0
     )
 
 
 def test_set_size_leaves_the_argument_unit_unchanged() -> None:
-    unit = _column_unit(Fill())
+    unit = _column_unit()
     snapshot = copy.deepcopy(unit)
     set_size(unit, "lower", 300.0, Basis.CLEAR)
     assert unit == snapshot
 
 
-@pytest.mark.parametrize("size_mm", [0.0, -12.7])
-def test_set_size_refuses_a_nonpositive_size(size_mm: float) -> None:
-    with pytest.raises(EditError) as err:
-        set_size(_column_unit(Fill()), "lower", size_mm, Basis.CLEAR)
-    assert err.value.node_id == "lower"
-
-
 @pytest.mark.parametrize("node_id", ["no-such-id", "shelf", "column"])
 def test_set_size_refuses_an_unknown_id_a_board_and_the_root(node_id: str) -> None:
     with pytest.raises(EditError) as err:
-        set_size(_column_unit(Fill()), node_id, 300.0, Basis.CLEAR)
+        set_size(_column_unit(), node_id, 300.0, Basis.CLEAR)
     assert err.value.node_id == node_id
 
 
@@ -1157,7 +1209,11 @@ def _region_before_region_unit() -> Unit:
         size_mm=Vec3(600.0, 300.0, 900.0),
         root=Division(
             axis=Axis.X,
-            items=[Bay(id="bay"), Void(id="void"), Board(thickness_mm=18.0, id="side")],
+            items=[
+                Bay(size_mm=300.0, id="bay"),
+                Void(size_mm=282.0, id="void"),
+                Board(thickness_mm=18.0, id="side"),
+            ],
         ),
         depth_axis=Axis.Y,
     )
@@ -1174,104 +1230,46 @@ def test_set_size_and_set_basis_refuse_a_spacing_with_no_board_after_it() -> Non
 
 
 @pytest.mark.parametrize(
-    ("lower_rule", "basis"),
+    ("lower_lock", "basis"),
     [
-        (Fixed(282.0), Basis.WITH_NEXT),
-        (Fixed(300.0, Basis.WITH_NEXT), Basis.CLEAR),
-        (Fixed(300.0, Basis.WITH_NEXT), Basis.WITH_NEXT),
-        (Fill(), Basis.WITH_NEXT),
-        (Weighted(0.5), Basis.CLEAR),
+        (Basis.CLEAR, Basis.WITH_NEXT),
+        (Basis.WITH_NEXT, Basis.CLEAR),
+        (Basis.WITH_NEXT, Basis.WITH_NEXT),
+        (None, Basis.WITH_NEXT),
+        (None, Basis.CLEAR),
     ],
 )
-def test_set_basis_leaves_the_solved_layout_identical(
-    lower_rule: SizeRule, basis: Basis
+def test_set_basis_locks_in_the_basis_and_moves_nothing(
+    lower_lock: Basis | None, basis: Basis
 ) -> None:
-    unit = _column_unit(lower_rule)
+    unit = _column_unit(282.0, lower_lock)
     edited = set_basis(unit, "lower", basis)
     _assert_same_layout(unit, edited)
-    new_rule = _rules_by_id(edited.root)["lower"]
-    assert isinstance(new_rule, Fixed)
-    assert new_rule.basis is basis
-
-
-def test_set_basis_restates_the_number_in_the_new_basis() -> None:
-    unit = _column_unit(Fixed(282.0))
-    spacing = set_basis(unit, "lower", Basis.WITH_NEXT)
-    assert _rules_by_id(spacing.root)["lower"] == Fixed(300.0, Basis.WITH_NEXT)
-    clear = set_basis(spacing, "lower", Basis.CLEAR)
-    assert _rules_by_id(clear.root)["lower"] == Fixed(282.0, Basis.CLEAR)
-
-
-def test_set_basis_uses_the_thickness_of_a_board_with_its_own_rule() -> None:
-    """The solver resolves ``WITH_NEXT`` by the next board's ``thickness_mm``,
-    not its ruled extent, so the restated number must too or the layout would
-    move."""
-    unit = _column_unit(Fixed(282.0))
-    assert isinstance(unit.root, Division)
-    unit.root.items[2] = Board(thickness_mm=18.0, id="shelf", rule=Fixed(30.0))
-    edited = set_basis(unit, "lower", Basis.WITH_NEXT)
-    _assert_same_layout(unit, edited)
-
-
-def test_a_spacing_holds_boards_and_a_clear_size_moves_them_across_thicknesses() -> (
-    None
-):
-    """The reason basis exists: thicker stock keeps a shelf's position under a
-    spacing, and pushes it up under a clear opening."""
-    spacing = Fixed(300.0, Basis.WITH_NEXT)
-    clear = Fixed(282.0, Basis.CLEAR)
-    for rule in (spacing, clear):
-        assert solve(_column_unit(rule))["shelf"].origin.z_mm == pytest.approx(300.0)
-    thick_spacing = solve(_column_unit(spacing, thickness_mm=25.0))
-    thick_clear = solve(_column_unit(clear, thickness_mm=25.0))
-    assert thick_spacing["shelf"].origin.z_mm == pytest.approx(300.0)
-    assert thick_clear["shelf"].origin.z_mm == pytest.approx(307.0)
-
-
-@pytest.mark.parametrize("board_id", ["bottom", "no-such-id", "lower"])
-def test_move_board_refuses_a_carcass_board_and_a_non_board(board_id: str) -> None:
-    with pytest.raises(EditError) as err:
-        move_board(_column_unit(Fill()), board_id, 350.0)
-    assert err.value.node_id == board_id
-
-
-def test_move_board_stops_a_drag_past_the_region_below_at_the_minimum_gap() -> None:
-    moved = move_board(_column_unit(Fill()), "shelf", -100.0)
-    spaces = solve(moved)
-    assert spaces["lower"].size.z_mm == pytest.approx(MIN_DRAG_GAP_MM)
-    assert spaces["shelf"].origin.z_mm == pytest.approx(18.0 + MIN_DRAG_GAP_MM)
-
-
-def test_move_board_stops_a_drag_past_the_region_above_at_the_minimum_gap() -> None:
-    moved = move_board(_three_bays(), "shelf1", 900.0)
-    assert _heights_mm(moved) == pytest.approx([395.0, MIN_DRAG_GAP_MM, 200.0])
-
-
-def test_move_board_never_grows_a_region_already_under_the_minimum_gap() -> None:
-    narrow = unlock(set_size(_column_unit(Fill()), "lower", 2.0, Basis.CLEAR), "lower")
-    assert solve(narrow)["lower"].size.z_mm == pytest.approx(2.0)
-    for low_face_mm in (-100.0, 18.0):
-        moved = move_board(narrow, "shelf", low_face_mm)
-        assert solve(moved)["lower"].size.z_mm == pytest.approx(2.0)
-    raised = move_board(narrow, "shelf", 100.0)
-    assert solve(raised)["lower"].size.z_mm == pytest.approx(82.0)
-
-
-def test_the_minimum_drag_gap_survives_a_rescan() -> None:
-    assert MIN_DRAG_GAP_MM > DEFAULT_CLEARANCE_MM + DEFAULT_SNAP_MM
+    assert _locks_by_id(edited.root)["lower"] is basis
 
 
 def test_measure_reports_both_numbers_and_the_basis_a_size_would_use() -> None:
-    fill = _column_unit(Fill())
-    measured = measure(fill, "lower", solve(fill))
+    unlocked = _column_unit()
+    measured = measure(unlocked, "lower", solve(unlocked))
     assert measured.basis is Basis.CLEAR
     assert measured.fixed is False
     assert measured.spacing_mm == pytest.approx(measured.clear_mm + 18.0)
-    spacing = _column_unit(Fixed(300.0, Basis.WITH_NEXT))
+    spacing = _column_unit(282.0, Basis.WITH_NEXT)
     assert measure(spacing, "lower", solve(spacing)) == Measurement(
         basis=Basis.WITH_NEXT, fixed=True, clear_mm=282.0, spacing_mm=300.0
     )
     assert measure(spacing, "lower", solve(spacing)).size_mm == pytest.approx(300.0)
+
+
+def test_measure_adds_the_thickness_of_a_board_with_an_extent() -> None:
+    """A spacing adds the next board's thickness, the same amount set_size
+    subtracts, so a typed spacing reads back as typed."""
+    unit = _column_unit(282.0, Basis.WITH_NEXT)
+    assert isinstance(unit.root, Division)
+    unit.root.items[2] = Board(thickness_mm=18.0, extent_mm=30.0, id="shelf")
+    unit.root.items[3] = Bay(size_mm=170.0, id="upper")
+    measured = measure(unit, "lower", solve(unit))
+    assert measured.spacing_mm == pytest.approx(300.0)
 
 
 def test_measure_has_no_spacing_without_a_board_after_the_region() -> None:
@@ -1283,19 +1281,23 @@ def test_measure_has_no_spacing_without_a_board_after_the_region() -> None:
 
 @pytest.mark.parametrize("node_id", ["shelf", "column", "no-such-id"])
 def test_measure_refuses_what_set_size_refuses(node_id: str) -> None:
-    unit = _column_unit(Fill())
+    unit = _column_unit()
     with pytest.raises(EditError):
         measure(unit, node_id, solve(unit))
 
 
 def test_region_before_and_run_axis() -> None:
-    unit = _column_unit(Fill())
+    unit = _column_unit()
     assert region_before(unit, "shelf") == "lower"
     assert run_axis(unit, "shelf") is Axis.Z
     with pytest.raises(EditError):
         region_before(unit, "bottom")
     with pytest.raises(EditError):
         run_axis(unit, "column")
+
+
+def test_the_minimum_opening_survives_a_rescan() -> None:
+    assert MIN_DRAG_GAP_MM > DEFAULT_CLEARANCE_MM + DEFAULT_SNAP_MM
 
 
 # --- locked and unlocked regions, and the drag -------------------------------
@@ -1307,13 +1309,16 @@ _LAST_UNLOCKED = (
 
 def _three_bays(locked: Collection[str] = ()) -> Unit:
     """A column of three 200 mm bays, ``bay1`` lowest, between 20 mm boards:
-    680 mm tall. Each bay named in ``locked`` is ``Fixed`` at 200 mm."""
+    680 mm tall. Each bay named in ``locked`` is locked."""
     items: list[Item] = [Board(thickness_mm=20.0, id="bottom")]
     for number in (1, 2, 3):
         bay_id = f"bay{number}"
-        rule: SizeRule = Fixed(200.0) if bay_id in locked else Fill()
+        lock_basis = Basis.CLEAR if bay_id in locked else None
         board_id = f"shelf{number}" if number < 3 else "top"
-        items += [Bay(id=bay_id, rule=rule), Board(thickness_mm=20.0, id=board_id)]
+        items += [
+            Bay(size_mm=200.0, lock=lock_basis, id=bay_id),
+            Board(thickness_mm=20.0, id=board_id),
+        ]
     return Unit(
         size_mm=Vec3(600.0, 300.0, 680.0),
         root=Division(axis=Axis.Z, items=items, id="column"),
@@ -1328,10 +1333,9 @@ def _heights_mm(unit: Unit) -> list[float]:
 
 def _units_to_lock() -> list[tuple[Unit, str]]:
     return [
-        (_column_unit(Fill()), "lower"),
-        (_column_unit(Weighted(0.5)), "lower"),
-        (_column_unit(Fixed(300.0, Basis.WITH_NEXT)), "upper"),
-        (_column_unit(Fill()), "topmost"),
+        (_column_unit(), "lower"),
+        (_column_unit(282.0, Basis.WITH_NEXT), "upper"),
+        (_column_unit(), "topmost"),
         (_three_bays(), "bay2"),
         (_three_bays({"bay1"}), "bay3"),
     ]
@@ -1340,38 +1344,11 @@ def _units_to_lock() -> list[tuple[Unit, str]]:
 @pytest.mark.parametrize(("unit", "region_id"), _units_to_lock())
 def test_locking_and_unlocking_move_nothing(unit: Unit, region_id: str) -> None:
     locked = lock(unit, region_id)
-    clear_mm = solve(unit)[region_id].size.z_mm
-    assert _rules_by_id(locked.root)[region_id] == Fixed(clear_mm, Basis.CLEAR)
+    assert _locks_by_id(locked.root)[region_id] is Basis.CLEAR
     _assert_same_layout(unit, locked)
     unlocked = unlock(locked, region_id)
-    assert not isinstance(_rules_by_id(unlocked.root)[region_id], Fixed)
+    assert _locks_by_id(unlocked.root)[region_id] is None
     _assert_same_layout(unit, unlocked)
-
-
-def test_unlocking_holds_the_size_against_the_other_unlocked_regions() -> None:
-    unit = _three_bays({"bay1"})
-    unit = set_unit_size(unit, Vec3(600.0, 300.0, 780.0))
-    # bay1 holds 200 mm; bay2 and bay3 share the rest, 250 mm each.
-    unlocked = unlock(unit, "bay1")
-    assert _rules_by_id(unlocked.root)["bay1"] == Weighted(0.8)
-    _assert_same_layout(unit, unlocked)
-
-
-def test_unlocking_the_only_unlocked_region_of_its_run_gives_fill() -> None:
-    unit = Unit(
-        size_mm=Vec3(600.0, 300.0, 680.0),
-        root=Division(
-            axis=Axis.Z,
-            items=[
-                Board(thickness_mm=20.0, id="bottom"),
-                Bay(id="bay1", rule=Fixed(300.0)),
-                Board(thickness_mm=20.0, id="shelf1"),
-                Bay(id="bay2", rule=Fixed(320.0)),
-                Board(thickness_mm=20.0, id="top"),
-            ],
-        ),
-    )
-    assert _rules_by_id(unlock(unit, "bay1").root)["bay1"] == Fill()
 
 
 def test_locking_a_locked_or_unlocking_an_unlocked_region_changes_nothing() -> None:
@@ -1403,46 +1380,101 @@ def test_the_last_unlocked_region_of_a_run_cannot_be_locked() -> None:
 
 
 def test_a_run_with_no_unlocked_region_keeps_what_it_was_allowed() -> None:
-    """An older record can leave every region of a run locked."""
+    """A scan can leave every region of a run locked: a run of voids beside
+    a compartment, say. Its locks keep the sizes they hold, so a size that
+    would change the run's length is a conflict."""
     unit = Unit(
         size_mm=Vec3(600.0, 300.0, 680.0),
         root=Division(
             axis=Axis.Z,
             items=[
                 Board(thickness_mm=20.0, id="bottom"),
-                Bay(id="bay1", rule=Fixed(300.0)),
+                Bay(size_mm=300.0, lock=Basis.CLEAR, id="bay1"),
                 Board(thickness_mm=20.0, id="shelf1"),
-                Bay(id="bay2", rule=Fixed(320.0)),
+                Bay(size_mm=320.0, lock=Basis.CLEAR, id="bay2"),
                 Board(thickness_mm=20.0, id="top"),
             ],
         ),
     )
     assert lock(unit, "bay1") is unit
-    resized = set_size(unit, "bay1", 290.0, Basis.CLEAR)
-    assert _rules_by_id(resized.root)["bay1"] == Fixed(290.0)
+    with pytest.raises(LayoutSolveError) as err:
+        set_size(unit, "bay1", 290.0, Basis.CLEAR)
+    assert set(err.value.region_ids) == {"bay1", "bay2"}
     spacing = set_basis(unit, "bay1", Basis.WITH_NEXT)
-    assert _rules_by_id(spacing.root)["bay1"] == Fixed(320.0, Basis.WITH_NEXT)
+    assert _locks_by_id(spacing.root)["bay1"] is Basis.WITH_NEXT
+    assert measure(spacing, "bay1", solve(spacing)).size_mm == pytest.approx(320.0)
+    assert set_unit_size(unit, unit.size_mm) == unit
 
 
 def test_a_drag_resizes_the_openings_beside_it_and_leaves_them_unlocked() -> None:
     moved = move_board(_three_bays(), "shelf1", 270.0)
     assert _heights_mm(moved) == pytest.approx([250.0, 150.0, 200.0])
-    rules = _rules_by_id(moved.root)
-    assert not any(isinstance(rules[f"bay{n}"], Fixed) for n in (1, 2, 3))
+    locks = _locks_by_id(moved.root)
+    assert all(locks[f"bay{n}"] is None for n in (1, 2, 3))
     taller = set_unit_size(moved, Vec3(600.0, 300.0, 770.0))
-    assert _heights_mm(taller) == pytest.approx([287.5, 172.5, 230.0])
+    assert _heights_mm(taller) == pytest.approx([250.0, 150.0, 290.0])
+
+
+def test_a_drag_pushes_the_boards_ahead_once_an_opening_reaches_the_minimum() -> None:
+    moved = move_board(_three_bay_column(), "s1", 718.0)
+    assert _bay_mm(moved) == pytest.approx(
+        {"A": 700.0, "B": MIN_DRAG_GAP_MM, "C": 195.0}, abs=1e-3
+    )
+    assert _low_face_mm(moved, "s1") == pytest.approx(718.0, abs=1e-3)
+
+
+def test_a_drag_past_every_minimum_stops_where_the_openings_run_out() -> None:
+    moved = move_board(_three_bay_column(), "s1", 2000.0)
+    assert _low_face_mm(moved, "s1") == pytest.approx(908.0)
+    assert _bay_mm(moved) == pytest.approx(
+        {"A": 890.0, "B": MIN_DRAG_GAP_MM, "C": MIN_DRAG_GAP_MM}
+    )
+
+
+def test_a_drag_down_past_the_minimum_stops_at_the_bottom() -> None:
+    moved = move_board(_column_unit(), "shelf", -100.0)
+    spaces = solve(moved)
+    assert spaces["lower"].size.z_mm == pytest.approx(MIN_DRAG_GAP_MM)
+    assert spaces["shelf"].origin.z_mm == pytest.approx(18.0 + MIN_DRAG_GAP_MM)
 
 
 def test_a_locked_opening_carries_the_board_beyond_it() -> None:
-    unit = _three_bays({"bay2"})
-    before = solve(unit)
-    moved = move_board(unit, "shelf1", 250.0)
-    after = solve(moved)
-    assert _heights_mm(moved) == pytest.approx([230.0, 200.0, 170.0])
-    assert after["shelf2"].origin.z_mm == pytest.approx(
-        before["shelf2"].origin.z_mm + 30.0
+    unit = _three_bay_column(locked="B")
+    moved = move_board(unit, "s1", _low_face_mm(unit, "s1") + 50.0)
+    assert _bay_mm(moved) == pytest.approx(
+        {"A": 350.0, "B": 300.0, "C": 250.0}, abs=1e-3
     )
-    assert _rules_by_id(moved.root)["bay2"] == Fixed(200.0)
+    assert _low_face_mm(moved, "s2") == pytest.approx(
+        _low_face_mm(unit, "s2") + 50.0, abs=1e-3
+    )
+    assert _locks_by_id(moved.root)["B"] is Basis.CLEAR
+
+
+def test_a_drag_never_grows_a_region_already_under_the_minimum() -> None:
+    narrow = _column_unit(2.0)
+    for low_face_mm in (-100.0, 18.0):
+        moved = move_board(narrow, "shelf", low_face_mm)
+        assert solve(moved)["lower"].size.z_mm == pytest.approx(2.0)
+    raised = move_board(narrow, "shelf", 100.0)
+    assert solve(raised)["lower"].size.z_mm == pytest.approx(82.0, abs=1e-3)
+
+
+def test_a_drag_moves_only_the_boards_it_must() -> None:
+    unit = _column_unit()
+    before = solve(unit)
+    moved = move_board(unit, "shelf", 350.0)
+    after = solve(moved)
+    assert after["shelf"].origin.z_mm == pytest.approx(350.0, abs=1e-3)
+    assert after["topmost"].size.z_mm == pytest.approx(before["topmost"].size.z_mm)
+    assert after["shelf2"].origin.z_mm == pytest.approx(before["shelf2"].origin.z_mm)
+
+
+def test_held_by_names_the_lock_that_holds_a_shelf() -> None:
+    assert held_by(_two_bay_column(locked="A"), "s1") == ("A",)
+    assert held_by(_two_bay_column(), "s1") == ()
+    for board_id in ("top", "bottom"):
+        assert held_by(_two_bay_column(), board_id) is None
+        assert held_by(_two_bay_column(locked="A"), board_id) is None
 
 
 def test_a_board_with_only_locks_to_the_end_of_its_run_is_held() -> None:
@@ -1455,12 +1487,17 @@ def test_a_board_with_only_locks_to_the_end_of_its_run_is_held() -> None:
         assert err.value.node_id == holder
 
 
-def test_a_board_held_on_both_sides_names_both_holders() -> None:
+def test_a_board_held_from_either_end_names_the_nearest_lock() -> None:
     unit = _three_bays({"bay1", "bay3"})
-    # bay2 is free between them: shelf1 has it above, shelf2 below.
     assert held_by(unit, "shelf1") == ("bay1",)
     assert held_by(unit, "shelf2") == ("bay3",)
     assert held_by(_three_bays({"bay1"}), "shelf2") == ()
+
+
+def test_a_board_in_a_fully_locked_run_names_one_lock_per_side() -> None:
+    """Every opening locked, as a scan can leave a run: freeing ``s1`` takes
+    unlocking the lock nearest it on each side, low side first."""
+    assert held_by(_three_bay_column(locked="ABC"), "s1") == ("A", "B")
 
 
 def test_a_carcass_board_has_nothing_to_unlock() -> None:
@@ -1474,14 +1511,11 @@ def test_a_carcass_board_has_nothing_to_unlock() -> None:
     assert held_by(_three_bays(), "bay1") is None
 
 
-def test_a_drag_never_changes_another_regions_size() -> None:
-    unit = _column_unit(Fill())
-    before = solve(unit)
-    moved = move_board(unit, "shelf", 350.0)
-    after = solve(moved)
-    assert after["shelf"].origin.z_mm == pytest.approx(350.0)
-    assert after["topmost"].size.z_mm == pytest.approx(before["topmost"].size.z_mm)
-    assert after["shelf2"].origin.z_mm == pytest.approx(before["shelf2"].origin.z_mm)
+@pytest.mark.parametrize("board_id", ["bottom", "no-such-id", "lower"])
+def test_move_board_refuses_a_carcass_board_and_a_non_board(board_id: str) -> None:
+    with pytest.raises(EditError) as err:
+        move_board(_column_unit(), board_id, 350.0)
+    assert err.value.node_id == board_id
 
 
 def test_splitting_a_locked_bay_gives_locked_halves_and_merging_them_locks() -> None:
@@ -1489,14 +1523,17 @@ def test_splitting_a_locked_bay_gives_locked_halves_and_merging_them_locks() -> 
     split = split_region(unit, "bay1", Axis.Z)
     assert isinstance(split.root, Division)
     halves = [item for item in split.root.items[:4] if not isinstance(item, Board)]
-    assert [half.rule for half in halves] == [Fixed(90.0), Fixed(90.0)]
+    assert [(half.size_mm, half.lock) for half in halves] == [
+        (90.0, Basis.CLEAR),
+        (90.0, Basis.CLEAR),
+    ]
     new_board = split.root.items[2]
-    assert _rules_by_id(merge_at(split, new_board.id).root)[halves[0].id] == Fixed(
-        200.0
-    )
+    merged_locked = merge_at(split, new_board.id)
+    assert _locks_by_id(merged_locked.root)[halves[0].id] is Basis.CLEAR
+    assert _bay_mm(merged_locked) == _bay_mm(unit)
     half_unlocked = unlock(split, halves[1].id)
     merged = merge_at(half_unlocked, new_board.id)
-    assert not isinstance(_rules_by_id(merged.root)[halves[0].id], Fixed)
+    assert _locks_by_id(merged.root)[halves[0].id] is None
 
 
 def _stock_unit() -> Unit:
@@ -1508,11 +1545,11 @@ def _stock_unit() -> Unit:
             axis=Axis.Z,
             items=[
                 Board(thickness_mm=18.0, id="bottom"),
-                Bay(rule=Fixed(300.0, Basis.WITH_NEXT), id="spaced"),
+                Bay(size_mm=282.0, lock=Basis.WITH_NEXT, id="spaced"),
                 Board(thickness_mm=18.0, id="s1"),
-                Bay(rule=Fixed(282.0, Basis.CLEAR), id="clear"),
+                Bay(size_mm=282.0, lock=Basis.CLEAR, id="clear"),
                 Board(thickness_mm=18.0, id="s2"),
-                Bay(id="free"),
+                Bay(size_mm=264.0, id="free"),
                 Board(thickness_mm=18.0, id="top"),
             ],
         ),
@@ -1540,14 +1577,15 @@ def test_set_thickness_keeps_the_unit_size_and_a_spacing_holds_its_shelf() -> No
     assert after["s1"].size.z_mm == pytest.approx(12.0)
     assert after["bottom"] == before["bottom"]
     assert after["top"] == before["top"]
+    assert measure(edited, "spaced", after).size_mm == pytest.approx(300.0)
     # The argument is left as it was.
     assert solve(unit) == before
 
 
-def test_set_thickness_that_cannot_fit_fails_the_solve() -> None:
-    edited = set_thickness(_stock_unit(), ["bottom", "s1", "s2", "top"], 200.0)
-    with pytest.raises(LayoutSolveError):
-        solve(edited)
+def test_set_thickness_that_cannot_fit_is_a_conflict() -> None:
+    with pytest.raises(LayoutSolveError) as err:
+        set_thickness(_stock_unit(), ["bottom", "s1", "s2", "top"], 200.0)
+    assert err.value.reason == "conflict"
 
 
 @pytest.mark.parametrize(
@@ -1577,12 +1615,22 @@ def _two_column_unit() -> Unit:
                 Board(thickness_mm=18.0, id="left"),
                 Division(
                     axis=Axis.Z,
-                    items=[Bay(id="a1"), Board(thickness_mm=18.0, id="sa"), Bay()],
+                    items=[
+                        Bay(size_mm=432.0, id="a1"),
+                        Board(thickness_mm=18.0, id="sa"),
+                        Bay(size_mm=450.0),
+                    ],
+                    size_mm=423.0,
                 ),
                 Board(thickness_mm=18.0, id="mid"),
                 Division(
                     axis=Axis.Z,
-                    items=[Bay(id="b1"), Board(thickness_mm=18.0, id="sb"), Bay()],
+                    items=[
+                        Bay(size_mm=432.0, id="b1"),
+                        Board(thickness_mm=18.0, id="sb"),
+                        Bay(size_mm=450.0),
+                    ],
+                    size_mm=423.0,
                 ),
                 Board(thickness_mm=18.0, id="right"),
             ],
@@ -1607,11 +1655,11 @@ def test_remove_boards_removes_two_inner_boards_of_one_run() -> None:
             axis=Axis.Z,
             items=[
                 Board(thickness_mm=18.0, id="bottom"),
-                Bay(id="low"),
+                Bay(size_mm=216.0, id="low"),
                 Board(thickness_mm=18.0, id="s1"),
-                Bay(rule=Weighted(2.0)),
+                Bay(size_mm=432.0),
                 Board(thickness_mm=18.0, id="s2"),
-                Bay(),
+                Bay(size_mm=180.0),
                 Board(thickness_mm=18.0, id="top"),
             ],
         ),

@@ -30,9 +30,7 @@ from freecad.Shelving.core.layout import (
     Bay,
     Board,
     Division,
-    Fixed,
     Region,
-    SizeRule,
 )
 from freecad.Shelving.editor import panel as panel_module
 from freecad.Shelving.editor.fields import DimensionField
@@ -62,14 +60,14 @@ def _bay_ids(region: Region) -> list[str]:
     return []
 
 
-def _rule_of(region: Region, region_id: str) -> SizeRule | None:
+def _lock_of(region: Region, region_id: str) -> Basis | None:
     if region.id == region_id:
-        return region.rule
+        return region.lock
     if isinstance(region, Division):
         for item in region.items:
             if isinstance(item, Board):
                 continue
-            found = _rule_of(item, region_id)
+            found = _lock_of(item, region_id)
             if found is not None:
                 return found
     return None
@@ -110,8 +108,8 @@ class _Fixture:
         self.panel.session.select(node_id)
         self.panel._refresh()
 
-    def rule(self, region_id: str) -> SizeRule | None:
-        return _rule_of(self.panel.session.unit.root, region_id)
+    def lock(self, region_id: str) -> Basis | None:
+        return _lock_of(self.panel.session.unit.root, region_id)
 
     def close(self) -> None:
         self.panel.reject()
@@ -223,9 +221,7 @@ def test_the_basis_menu_measures_the_selected_opening(unit_panel: _Fixture) -> N
     assert combo.currentIndex() == 0
     combo.setCurrentIndex(1)
     _process_events()
-    rule = unit_panel.rule(unit_panel.lower)
-    assert isinstance(rule, Fixed)
-    assert rule.basis is Basis.WITH_NEXT
+    assert unit_panel.lock(unit_panel.lower) is Basis.WITH_NEXT
     # A board has no basis to choose.
     shelf = next(
         node_id
@@ -903,11 +899,11 @@ def test_a_fixed_side_choice_is_an_undo_step_the_panel_follows(
 def test_a_held_arrow_past_a_limit_reports_once(
     unit_panel: _Fixture, reported: list[str]
 ) -> None:
-    """55 mm leaves the two openings around the shelf 0.5 mm each; every
-    repeat of a held down arrow past that refuses, and only the first
+    """64 mm leaves the two openings around the shelf at the 5 mm minimum;
+    every repeat of a held down arrow past that refuses, and only the first
     refusal of the press is reported."""
-    _type_unit_size(unit_panel, "height", "55")
-    assert unit_panel.session.unit_dimension_mm("height") == pytest.approx(55.0)
+    _type_unit_size(unit_panel, "height", "64")
+    assert unit_panel.session.unit_dimension_mm("height") == pytest.approx(64.0)
     spin = unit_panel.panel.unit_fields["height"].quantity_widget
     assert spin is not None
     spin.setFocus()
@@ -922,7 +918,7 @@ def test_a_held_arrow_past_a_limit_reports_once(
         QtWidgets.QApplication.sendEvent(spin, event)
         _process_events()
     assert len(reported) == 1, reported
-    assert unit_panel.session.unit_dimension_mm("height") == pytest.approx(55.0)
+    assert unit_panel.session.unit_dimension_mm("height") == pytest.approx(64.0)
 
 
 def _wheel_down(widget: QtWidgets.QWidget) -> None:
@@ -945,19 +941,19 @@ def test_a_wheel_turn_past_a_limit_reports_once(
     unit_panel: _Fixture, reported: list[str]
 ) -> None:
     """Each notch steps the height down until the openings around the shelf
-    would vanish; the notches past that are one turn of the wheel, and only
-    its first refusal is reported."""
-    _type_unit_size(unit_panel, "height", "60")
+    reach the 5 mm minimum; the notches past that are one turn of the wheel,
+    and only its first refusal is reported."""
+    _type_unit_size(unit_panel, "height", "70")
     spin = unit_panel.panel.unit_fields["height"].quantity_widget
     assert spin is not None
     spin.setFocus()
     _wheel_down(spin)
-    step_mm = 60.0 - unit_panel.session.unit_dimension_mm("height")
+    step_mm = 70.0 - unit_panel.session.unit_dimension_mm("height")
     assert step_mm > 0
     for _notch in range(int(10.0 / step_mm) + 2):
         _wheel_down(spin)
     assert len(reported) == 1, reported
-    assert 54.0 < unit_panel.session.unit_dimension_mm("height") < 60.0
+    assert 64.0 <= unit_panel.session.unit_dimension_mm("height") < 70.0
 
 
 def test_ancestor_watch_names_the_container_hiding_the_form() -> None:

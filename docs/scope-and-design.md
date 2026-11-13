@@ -5,13 +5,13 @@ produces belongs to your document rather than to the workbench.
 
 A unit is designed as a flat front elevation: a rectangle divided into
 compartments by panels of real thickness. Change the height and the
-shelves redistribute; type an exact opening and its neighbors absorb the
-difference. The panels are ordinary FreeCAD solids with nothing hidden
-attached, so any tool can read, cut and export them, and a document opens
-intact where this workbench is not installed. The workbench can also read
-an arrangement of panels back and recover its layout. That makes it work
-on shelving modeled elsewhere, and it makes editing a panel with another
-tool a supported operation.
+openings by the moving edge take up the change; type an exact opening and
+the shelves either side of it move to make room. The panels are ordinary
+FreeCAD solids with nothing hidden attached, so any tool can read, cut and
+export them, and a document opens intact where this workbench is not
+installed. The workbench can also read an arrangement of panels back and
+recover its layout. That makes it work on shelving modeled elsewhere, and
+it makes editing a panel with another tool a supported operation.
 
 ## Why it exists
 
@@ -60,23 +60,29 @@ bounding box that is not part of the unit), or a division. A **division**
 cuts a region along one axis into an ordered run of items, each a board or
 a sub-region; two adjacent boards are two boards face to face.
 
-A board contributes its thickness along the run. A region contributes a
-rule: a fixed size, or a share of what is left. Fixed sizes drive, shares
-absorb, and a run whose fixed sizes overflow, or that has slack and nothing
-to absorb it, is an error naming the region. The user sees a fixed region
-as locked and a sharing one as unlocked. Locking or unlocking moves
-nothing, and the editor keeps one unlocked region in every run so a change
-to the unit's size has somewhere to go.
+A board contributes its thickness along the run, and a region its current
+size. A region may be locked, holding its size through every edit until it
+is unlocked; locking or unlocking moves nothing. Every edit solves the
+layout the way the Sketcher does: the boards move as little as possible
+from where they are, within the locks and a 5 mm minimum opening. A resize
+changes the openings beside the outer faces that move, and pushes inward
+once one reaches the minimum. A typed size locks the opening and moves the
+boards either side of it, half the change each when both are free. An edit
+the locks and the minimum cannot allow is refused, where the Sketcher would
+leave the sketch in error: an unsolvable layout has no panels to write.
+The editor keeps one unlocked region in every run.
 
 A drag moves a board and every board joined to it through locked regions;
-only the first unlocked region on each side changes size. A board with
+every other board moves only when an opening ahead of it reaches the
+minimum, and then is pushed along, in nested runs too. A board with
 only locked regions between it and the end of its run is held until one
 is unlocked. A drag past the end of its travel stops the board there
 without a message, the way a scroll bar's thumb stops at the end of its
-track, leaving the shrinking region 5 mm: a narrower opening would vanish
-the next time the unit is read back from its boards.
+track, leaving each opening ahead of it 5 mm: a narrower opening would
+vanish the next time the unit is read back from its boards, which is also
+why a typed size under 5 mm is refused.
 
-A fixed size measures the clear opening, or includes the next board, which
+A locked size measures the clear opening, or includes the next board, which
 is how a shelf spacing quoted top face to top face is given. The two place
 boards identically and diverge only when a thickness changes: a clear size
 holds the opening, an inclusive size holds the shelves.
@@ -125,10 +131,10 @@ plausible, wrong tree.
 
 Geometry cannot say two things, so both are stored once set:
 
-- **Lock and basis.** A fixed 300 mm opening and a share that solved to
-  300 mm look identical, as do a clear size and a spacing. Without stored
-  intent, every bay shares leftover space in proportion to its size, and a
-  void keeps its size unless nothing beside it can change. Sizes always
+- **Lock and basis.** A locked 300 mm opening and an unlocked one look
+  identical, as do a clear size and a spacing. Without stored intent, no
+  bay is locked, and a void is locked only beside a bay, so a plinth gap
+  holds still. Sizes always
   come from the boards, so a board moved by hand stays where it was moved;
   the record keeps only whether each region is locked and what its size
   measures.
@@ -209,7 +215,7 @@ unlocked opening alone in its run shows no padlock, since it can never
 lock. A selected board held in place shows a closed padlock where its arrow
 would be and outlines the locked openings holding it; clicking that padlock
 unlocks them, and the arrow takes its place. The padlock is the only way to
-unlock: the shares behind unlocked openings never appear in the interface.
+unlock.
 
 The unit's container cannot enter FreeCAD's edit mode without workbench
 state in the document, so the editor adds its drawing and input handling
@@ -239,7 +245,8 @@ one a copied object can carry wrongly.
   another document is a relocation.
 - **On the container:** the unit's id, depth axis, facing, fixed side on
   each model axis (`min`, `center` or `max`; a container without it reads
-  as `min`), and a record of region rules keyed by their bounding boards.
+  as `min`), and a record of the locked regions and what each lock
+  measures, keyed by their bounding boards.
   Positions always come from the solids, the unit's own size and position
   included; a missing or stale record falls back to inference.
 - **Named values** shared between units will live in an ordinary

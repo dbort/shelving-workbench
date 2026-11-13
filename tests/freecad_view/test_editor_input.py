@@ -10,7 +10,7 @@ import FreeCADGui
 import pytest
 from PySide6 import QtCore, QtTest, QtWidgets
 
-from freecad.Shelving.core.layout import Basis, Board, Division, Fixed, Region
+from freecad.Shelving.core.layout import Basis, Board, Division, Region
 from freecad.Shelving.editor.elevation import (
     DimensionLabel,
     board_space,
@@ -183,13 +183,14 @@ def _type(line_edit: QtWidgets.QLineEdit, text: str) -> None:
     QtTest.QTest.keyClick(line_edit, QtCore.Qt.Key.Key_Return)
 
 
-def _rule(region: Region, region_id: str) -> object:
+def _lock(region: Region, region_id: str) -> tuple[Basis | None, float] | None:
+    """The lock and stored size of the region named ``region_id``."""
     if region.id == region_id:
-        return region.rule
+        return region.lock, region.size_mm
     if isinstance(region, Division):
         for item in region.items:
             if not isinstance(item, Board):
-                found = _rule(item, region_id)
+                found = _lock(item, region_id)
                 if found is not None:
                     return found
     return None
@@ -221,8 +222,9 @@ def test_a_click_on_a_dimension_opens_a_field_that_sets_the_size(
     driver.pump()
     assert editor.field is None
     assert list(unit.Document.UndoNames) == ["Set Size", *names]
-    assert _rule(session.unit.root, session.selected_id or "") == Fixed(
-        250.0, Basis.CLEAR
+    assert _lock(session.unit.root, session.selected_id or "") == (
+        Basis.CLEAR,
+        pytest.approx(250.0),
     )
     assert reported == []
     click_task_button("Close", driver)
@@ -244,13 +246,39 @@ def test_a_refused_size_is_reported_once_and_changes_nothing(
     _type(field.line_edit, "5000")
     driver.pump()
     (message,) = reported
-    assert message.startswith("The fixed sizes add up to"), message
+    assert message.startswith("There is no room for that"), message
     assert lower not in message
     assert editor.field is None
     assert list(unit.Document.UndoNames) == names
     assert sorted(panel.session.spaces.values(), key=repr) == sorted(
         spaces.values(), key=repr
     )
+    click_task_button("Close", driver)
+
+
+def test_a_size_under_the_minimum_is_reported_once_and_changes_nothing(
+    unit: FreeCAD.DocumentObject, driver: ViewDriver, reported: list[str]
+) -> None:
+    panel = edit_unit(unit, driver)
+    editor = editor_of(panel)
+    add_board(panel, "vertical", driver)
+    lower = bay_ids(panel.session.unit.root)[0]
+    driver.click(editor.to_document(*_label_of(editor, lower).text_at_mm))
+    driver.pump()
+    field = editor.field
+    assert field is not None
+    names = list(unit.Document.UndoNames)
+    spaces = dict(panel.session.spaces)
+    _type(field.line_edit, "3")
+    driver.pump()
+    (message,) = reported
+    assert "under the 5.0 mm minimum" in message, message
+    assert editor.field is None
+    assert list(unit.Document.UndoNames) == names
+    assert panel.session.spaces == spaces
+    found = _lock(panel.session.unit.root, lower)
+    assert found is not None
+    assert found[0] is None
     click_task_button("Close", driver)
 
 
@@ -578,7 +606,10 @@ def test_fx_in_the_size_fields_leaves_close_adding_nothing(
     QtTest.QTest.keyClick(field.quantity_widget, QtCore.Qt.Key.Key_Equal)
     driver.pump()
     _accept_formula_dialog("VarSet.Len - 20 mm", driver)
-    assert _rule(panel.session.unit.root, lower) == Fixed(280.0, Basis.CLEAR)
+    assert _lock(panel.session.unit.root, lower) == (
+        Basis.CLEAR,
+        pytest.approx(280.0),
+    )
     height = panel.unit_fields["height"].quantity_widget
     assert height is not None
     height.setFocus()
@@ -648,8 +679,9 @@ def test_the_dimension_field_works_on_every_container(
     QtTest.QTest.keyClick(field.quantity_widget, QtCore.Qt.Key.Key_Equal)
     driver.pump()
     _accept_formula_dialog("VarSet.Len", driver)
-    assert _rule(panel.session.unit.root, panel.session.selected_id or "") == Fixed(
-        300.0, Basis.CLEAR
+    assert _lock(panel.session.unit.root, panel.session.selected_id or "") == (
+        Basis.CLEAR,
+        pytest.approx(300.0),
     )
     assert list(doc.UndoNames)[0] == "Set Size"
     click_task_button("Close", driver)

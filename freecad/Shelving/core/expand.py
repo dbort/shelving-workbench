@@ -80,8 +80,8 @@ def _apply_insets(axis: Axis, space: Space, insets: Insets) -> Space:
     """``space`` with ``insets`` applied to its two cross-section axes.
 
     The pair on ``axis`` itself is ignored: a board fills its division's axis
-    with the solved extent (its ``thickness_mm`` unless ``rule`` overrides
-    it), never an inset.
+    with its laid-out extent (its ``thickness_mm`` unless ``extent_mm``
+    overrides it), never an inset.
     """
     origin = space.origin
     size = space.size

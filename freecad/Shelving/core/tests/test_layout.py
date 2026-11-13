@@ -9,11 +9,9 @@ from freecad.Shelving.core.layout import (
     Bay,
     Board,
     Division,
-    Fixed,
     Insets,
     Unit,
     Void,
-    Weighted,
     new_id,
 )
 
@@ -53,18 +51,22 @@ def test_board_thickness_mm_must_be_positive(thickness_mm: float) -> None:
         Board(thickness_mm=thickness_mm)
 
 
-def test_fixed_size_must_be_positive() -> None:
-    with pytest.raises(ValueError, match="size_mm"):
-        Fixed(0.0)
+@pytest.mark.parametrize("extent_mm", [0.0, -5.0])
+def test_board_extent_mm_must_be_positive(extent_mm: float) -> None:
+    with pytest.raises(ValueError, match="extent_mm"):
+        Board(thickness_mm=18.0, extent_mm=extent_mm)
 
 
-def test_weighted_weight_must_be_positive() -> None:
-    with pytest.raises(ValueError, match="weight"):
-        Weighted(0.0)
+def test_regions_default_to_unlocked() -> None:
+    assert Bay(size_mm=300.0).lock is None
+    assert Void(size_mm=300.0).lock is None
+    assert Division(axis=Axis.Z, items=[Bay()], size_mm=300.0).lock is None
 
 
-def test_fixed_basis_defaults_to_clear() -> None:
-    assert Fixed(400.0).basis is Basis.CLEAR
+def test_a_region_carries_its_size_and_lock() -> None:
+    bay = Bay(size_mm=300.0, lock=Basis.WITH_NEXT)
+    assert bay.size_mm == 300.0
+    assert bay.lock is Basis.WITH_NEXT
 
 
 def test_insets_default_to_zero_on_all_six_faces() -> None:
