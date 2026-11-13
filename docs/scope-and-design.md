@@ -94,7 +94,8 @@ span joins it. Both measure the clear opening. The solve counts them after
 the locks, so one the locks already imply is accepted as redundant with a
 warning, and one they contradict is refused as a conflict. Each draws the
 Sketcher's style of icon beside each of its openings' dimensions, in the
-Sketcher's constraint icon color; clicking an icon selects the constraint,
+Sketcher's constraint icon color on a small tile of the 3D view's
+background color; clicking an icon selects the constraint,
 and Delete removes it. A board a constraint holds shows no arrow and no
 padlock, since no unlock frees it, and outlines the openings holding it.
 A board deleted beside an Equal's opening, or added along its row through
@@ -243,7 +244,10 @@ color before its text, as tall as a capital letter, tying the column to
 the mark in the view.
 
 Each opening's dimension carries a padlock just past its text, closed for a
-locked opening and open for an unlocked one, in the dimension's own color.
+locked opening and open for an unlocked one, in the dimension's own color
+on the same tile as a constraint's icon. The tile puts each glyph back on
+the background its theme chose those colors against, where an opening's
+translucent fill would wash out a gray deactivated icon.
 Clicking it locks or unlocks the opening, and typing a size locks it. A
 selected board held in place shows a closed padlock where its arrow
 would be and outlines the locked openings holding it; clicking that padlock

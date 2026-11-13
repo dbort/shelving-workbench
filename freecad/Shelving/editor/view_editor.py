@@ -59,10 +59,13 @@ from freecad.Shelving.editor.elevation import (
 from freecad.Shelving.editor.fields import DimensionField
 from freecad.Shelving.editor.overlay import (
     RGB,
+    TILE_PAD_PX,
+    TILE_RADIUS_PX,
     Coin,
     IconNode,
     PointMarker,
     Style,
+    Tile,
     arrow_geometry,
     coin_destroys_draggers_safely,
     constraint_icon_image,
@@ -299,13 +302,21 @@ def marker_image(ratio: float, rgb: RGB) -> QtGui.QImage:
 
 
 def _padlock_button(
-    parent: QtWidgets.QWidget | None, on_click: Callable[[], None]
+    parent: QtWidgets.QWidget | None, on_click: Callable[[], None], tile_rgb: RGB
 ) -> QtWidgets.QToolButton:
+    """A padlock button whose whole face is a tile in ``tile_rgb``, as a
+    constraint icon sits on one."""
     button = QtWidgets.QToolButton(parent)
     button.setAutoRaise(True)
     button.setIconSize(QtCore.QSize(_PADLOCK_PX, _PADLOCK_PX))
-    button.setFixedSize(_PADLOCK_PX + 4, _PADLOCK_PX + 4)
-    button.setStyleSheet("QToolButton { border: none; padding: 0; }")
+    side_px = _PADLOCK_PX + 2 * TILE_PAD_PX
+    button.setFixedSize(side_px, side_px)
+    red, green, blue = (round(255 * channel) for channel in tile_rgb)
+    button.setStyleSheet(
+        "QToolButton { border: none; padding: 0; "
+        f"background: rgb({red}, {green}, {blue}); "
+        f"border-radius: {TILE_RADIUS_PX}px; }}"
+    )
     # As the add buttons do: keyboard focus stays in the 3D view.
     button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
     button.clicked.connect(on_click)
@@ -698,7 +709,7 @@ class ViewEditor:
         self.held: HeldPadlock | None = None
         # The drawn constraint icons, rebuilt with the drawing.
         self.icon_nodes: list[IconNode] = []
-        self._icon_images: dict[tuple[str, RGB, int], QtGui.QImage] = {}
+        self._icon_images: dict[tuple[str, RGB, Tile, int], QtGui.QImage] = {}
         self.saved_camera = view.getCamera()
         self._saved_orientation = view.getCameraOrientation()
         global _editors_opened
@@ -780,7 +791,9 @@ class ViewEditor:
         )
         self._installed.append((self.add_bar.deleteLater, True))
         self._installed.append((self.add_bar.hide, True))
-        self.board_padlock = _padlock_button(parent, self._unlock_held)
+        self.board_padlock = _padlock_button(
+            parent, self._unlock_held, self.style.tile_rgb
+        )
         self.board_padlock.setIcon(self._padlock_icons[True])
         text = "Unlock the openings holding this board"
         self.board_padlock.setToolTip(text)
@@ -1117,10 +1130,19 @@ class ViewEditor:
         self._place_widgets()
 
     def _icon_metrics_px(self) -> tuple[int, int]:
-        """The constraint icon's side and the gap around it, in device
-        pixels at the view's ratio now."""
+        """The constraint icon's side, its tile included, and the gap
+        around it, in device pixels at the view's ratio now."""
         ratio = self._viewer.devicePixelRatioF()
-        return round(icon_side_px() * ratio), round(_ICON_GAP_PX * ratio)
+        side_px = round(icon_side_px() * ratio) + 2 * self.icon_tile().pad_px
+        return side_px, round(_ICON_GAP_PX * ratio)
+
+    def icon_tile(self) -> Tile:
+        """The tile under each constraint icon, in device pixels at the
+        view's ratio now."""
+        ratio = self._viewer.devicePixelRatioF()
+        return Tile(
+            self.style.tile_rgb, round(TILE_PAD_PX * ratio), TILE_RADIUS_PX * ratio
+        )
 
     def _text_width_px(self, label: DimensionLabel) -> float:
         """``label``'s text as drawn, padlock room included, in device
@@ -1133,14 +1155,15 @@ class ViewEditor:
         """Draw each constraint icon the overlay plans, in its state's color,
         past its dimension's text."""
         side_px, gap_px = self._icon_metrics_px()
+        tile = self.icon_tile()
         self._icons.removeAllChildren()
         self.icon_nodes = []
         for icon in self.overlay.icons:
             rgb = self.style.icon_state_rgb(icon.state)
-            key = (icon.kind, rgb, side_px)
+            key = (icon.kind, rgb, tile, side_px)
             image = self._icon_images.get(key)
             if image is None:
-                image = constraint_icon_image(icon.kind, rgb, side_px)
+                image = constraint_icon_image(icon.kind, rgb, tile, side_px)
                 self._icon_images[key] = image
             lead_px = round(
                 self._text_width_px(icon.label) / 2
@@ -1702,7 +1725,9 @@ class ViewEditor:
         parent = self._viewer.parentWidget()
         while len(self.padlocks) < len(labels):
             button = _padlock_button(
-                parent, _bind_index(self._toggle_lock, len(self.padlocks))
+                parent,
+                _bind_index(self._toggle_lock, len(self.padlocks)),
+                self.style.tile_rgb,
             )
             self.padlocks.append(button)
             self._installed.append((button.deleteLater, True))

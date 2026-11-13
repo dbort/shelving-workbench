@@ -15,7 +15,14 @@ from freecad.Shelving.container import write_container
 from freecad.Shelving.core.layout import ConstraintId
 from freecad.Shelving.editor import overlay
 from freecad.Shelving.editor.elevation import ConstraintIcon, DimensionLabel
-from freecad.Shelving.editor.overlay import ICON_SOURCES, IconNode, label_string
+from freecad.Shelving.editor.overlay import (
+    ICON_SOURCES,
+    RGB,
+    IconNode,
+    ViewParams,
+    background_rgb,
+    label_string,
+)
 from freecad.Shelving.editor.panel import EditUnitPanel
 from freecad.Shelving.editor.view_editor import ViewEditor, label_metrics
 from tests.freecad_view import overlay_nodes
@@ -101,26 +108,44 @@ def _icon_part(node: IconNode, side_px: int) -> QtGui.QImage:
     return image.copy(0, 0, side_px, side_px)
 
 
-def _painted_rgbs(image: QtGui.QImage) -> list[tuple[int, int, int]]:
-    """The color of every pixel of ``image`` at least half covered: at the
-    Sketcher's default 12 px icon side, antialiasing leaves few pixels fully
-    covered."""
-    colors: list[tuple[int, int, int]] = []
-    for y in range(image.height()):
-        for x in range(image.width()):
-            color = image.pixelColor(x, y)
-            if color.alpha() >= 128:
-                colors.append((color.red(), color.green(), color.blue()))
-    return colors
+def _glyph_mismatches(
+    editor: ViewEditor, node: IconNode, rgb: tuple[int, int, int]
+) -> list[tuple[int, int]]:
+    """The pixels of ``node``'s glyph that differ from its SVG drawn in
+    ``rgb`` over the editor's tile, each pixel blended by the SVG's own
+    coverage there, as the Sketcher's source-in recolor leaves it."""
+    side_px, _gap_px = editor._icon_metrics_px()
+    tile = editor.icon_tile()
+    glyph_px = side_px - 2 * tile.pad_px
+    coverage = QtGui.QImage(glyph_px, glyph_px, QtGui.QImage.Format.Format_RGBA8888)
+    coverage.fill(QtCore.Qt.GlobalColor.transparent)
+    painter = QtGui.QPainter(coverage)
+    QtSvg.QSvgRenderer(ICON_SOURCES[node.icon.kind]).render(painter)
+    painter.end()
+    drawn = _icon_part(node, side_px)
+    tile_rgb = _rgb_255(tile.rgb)
+    mismatches: list[tuple[int, int]] = []
+    for y in range(glyph_px):
+        for x in range(glyph_px):
+            weight = coverage.pixelColor(x, y).alpha() / 255
+            got = drawn.pixelColor(x + tile.pad_px, y + tile.pad_px)
+            want = [b + weight * (g - b) for g, b in zip(rgb, tile_rgb, strict=True)]
+            channels = (got.red(), got.green(), got.blue())
+            if got.alpha() != 255 or any(
+                abs(c - w) > 3 for c, w in zip(channels, want, strict=True)
+            ):
+                mismatches.append((x, y))
+    return mismatches
 
 
-def _all_near(
-    colors: list[tuple[int, int, int]], expected: tuple[int, int, int]
-) -> bool:
-    return bool(colors) and all(
-        all(abs(got - want) <= 3 for got, want in zip(color, expected, strict=True))
-        for color in colors
-    )
+def _rgb_255(rgb: RGB) -> tuple[int, int, int]:
+    red, green, blue = (round(255 * channel) for channel in rgb)
+    return (red, green, blue)
+
+
+def _near(color: QtGui.QColor, rgb: tuple[int, int, int]) -> bool:
+    channels = (color.red(), color.green(), color.blue())
+    return all(abs(c - w) <= 3 for c, w in zip(channels, rgb, strict=True))
 
 
 def _packed_rgb(packed: int) -> tuple[int, int, int]:
@@ -199,7 +224,7 @@ def test_icons_sit_at_each_constrained_opening_clear_of_text_padlocks_and_each_o
     click_task_button("Close", driver)
 
 
-def test_the_icons_are_drawn_from_their_svgs_in_the_sketchers_way(
+def test_the_icons_are_drawn_from_their_svgs_in_the_sketchers_way_on_a_tile(
     unit: FreeCAD.DocumentObject, driver: ViewDriver
 ) -> None:
     panel, (a, b, c) = _column_panel(unit, driver)
@@ -208,22 +233,80 @@ def test_the_icons_are_drawn_from_their_svgs_in_the_sketchers_way(
     driver.pump()
     editor = editor_of(panel)
     side_px, _gap_px = editor._icon_metrics_px()
+    tile_rgb = _rgb_255(editor.style.tile_rgb)
+    icon_rgb = _rgb_255(editor.style.icon_rgb)
     for kind in ("equal", "even_spacing"):
         node = next(n for n in editor.icon_nodes if n.icon.kind == kind)
+        assert _glyph_mismatches(editor, node, icon_rgb) == [], kind
         drawn = _icon_part(node, side_px)
-        expected = QtGui.QImage(side_px, side_px, QtGui.QImage.Format.Format_RGBA8888)
-        expected.fill(QtCore.Qt.GlobalColor.transparent)
-        painter = QtGui.QPainter(expected)
-        QtSvg.QSvgRenderer(ICON_SOURCES[kind]).render(painter)
-        painter.end()
-        for y in range(side_px):
-            for x in range(side_px):
-                assert drawn.pixelColor(x, y).alpha() == pytest.approx(
-                    expected.pixelColor(x, y).alpha(), abs=1
-                ), (kind, x, y)
-        painted = _painted_rgbs(drawn)
-        assert _all_near(painted, painted[0])
+        edge = drawn.pixelColor(side_px // 2, 0)
+        assert edge.alpha() == 255 and _near(edge, tile_rgb), kind
+        assert drawn.pixelColor(0, 0).alpha() < 255, kind
     click_task_button("Close", driver)
+
+
+def test_icons_and_padlocks_sit_on_tiles_of_the_view_background(
+    unit: FreeCAD.DocumentObject,
+    driver: ViewDriver,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def background(_params: ViewParams) -> RGB:
+        return (0.2, 0.4, 0.3)
+
+    # The editor's own reading, so FreeCAD's view keeps its background.
+    monkeypatch.setattr(overlay, "background_rgb", background)
+    panel, (a, b, _c) = _column_panel(unit, driver)
+    _constrain(panel, "equal", [a, b])
+    driver.pump()
+    editor = editor_of(panel)
+    tile_rgb = _rgb_255((0.2, 0.4, 0.3))
+    side_px, _gap_px = editor._icon_metrics_px()
+    for node in editor.icon_nodes:
+        assert _near(_icon_part(node, side_px).pixelColor(side_px // 2, 0), tile_rgb)
+    buttons = [button for button in editor.padlocks if button.isVisible()]
+    assert buttons
+    for button in buttons:
+        face = button.grab().toImage()
+        assert _near(face.pixelColor(face.width() // 2, 1), tile_rgb)
+    click_task_button("Close", driver)
+
+
+class _Params:
+    def __init__(self, bools: dict[str, bool], colors: dict[str, int]) -> None:
+        self.bools = bools
+        self.colors = colors
+
+    def GetBool(self, name: str, default: bool, /) -> bool:
+        return self.bools.get(name, default)
+
+    def GetUnsigned(self, name: str, default: int, /) -> int:
+        return self.colors.get(name, default)
+
+
+_ENDS = {"BackgroundColor": 0x102030FF, "BackgroundColor2": 0x204060FF}
+
+
+@pytest.mark.parametrize(
+    ("bools", "colors", "expected"),
+    [
+        ({}, {}, (247, 247, 247)),
+        ({"Simple": True}, _ENDS, (16, 32, 48)),
+        (
+            {"Simple": False, "Gradient": True},
+            {**_ENDS, "BackgroundColor3": 0x406080FF},
+            (48, 80, 112),
+        ),
+        (
+            {"Simple": False, "RadialGradient": True, "UseBackgroundColorMid": True},
+            {**_ENDS, "BackgroundColor4": 0x0A0B0CFF},
+            (10, 11, 12),
+        ),
+    ],
+)
+def test_the_background_is_the_plain_color_or_a_gradients_middle(
+    bools: dict[str, bool], colors: dict[str, int], expected: tuple[int, int, int]
+) -> None:
+    assert _rgb_255(background_rgb(_Params(bools, colors))) == expected
 
 
 def test_clicking_icons_selects_constraints_and_a_click_on_an_opening_drops_them(
@@ -388,17 +471,15 @@ def test_active_deactivated_and_selected_icons_take_their_colors(
     selected_id = panel.session.constraints[2].id
     icon = next(i for i in _icons(editor) if i.constraint_id == selected_id)
     driver.click(editor.icon_center(icon))
-    active, deactivated, selected = (_packed_rgb(packed) for packed in icon_colors)
-    side_px, _gap_px = editor._icon_metrics_px()
-    by_constraint: dict[ConstraintId, list[tuple[int, int, int]]] = {}
-    for node in editor.icon_nodes:
-        by_constraint.setdefault(node.icon.constraint_id, []).extend(
-            _painted_rgbs(_icon_part(node, side_px))
-        )
     ids = [c.id for c in panel.session.constraints]
-    assert _all_near(by_constraint[ids[0]], active)
-    assert _all_near(by_constraint[ids[1]], deactivated)
-    assert _all_near(by_constraint[ids[2]], selected)
+    expected: dict[ConstraintId, tuple[int, int, int]] = {
+        constraint_id: _packed_rgb(packed)
+        for constraint_id, packed in zip(ids, icon_colors, strict=True)
+    }
+    assert {node.icon.constraint_id for node in editor.icon_nodes} == set(ids)
+    for node in editor.icon_nodes:
+        rgb = expected[node.icon.constraint_id]
+        assert _glyph_mismatches(editor, node, rgb) == [], node.icon
     click_task_button("Close", driver)
 
 

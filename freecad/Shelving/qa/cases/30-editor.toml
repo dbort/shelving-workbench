@@ -490,8 +490,8 @@ spaced uprights, both in the style of the Sketcher's constraint icons."""
   expected = """
 The leftmost column's six openings become the same height. Each shows the
 even spacing icon just past its dimension's text, in the red of a
-Sketcher constraint icon, as sharp as the text and clear of it and of the
-padlock."""
+Sketcher constraint icon on a small tile of the view's background like
+the padlock's, as sharp as the text and clear of it and of the padlock."""
 
   [[case.step]]
   id = "equal"
@@ -547,7 +547,8 @@ openings are outlined as the openings holding it."""
   ]
   expected = """
 One notification says constraints the boards no longer meet were
-deactivated. The leftmost column's even spacing icons are gray, the Equal
+deactivated. The leftmost column's even spacing icons are gray on their
+tiles and easy to spot against the openings, the Equal
 icons stay red, and the shelf you raised stays where you put it."""
 
   [[case.step]]

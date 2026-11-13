@@ -356,9 +356,8 @@ def test_delete_meets_another_constraint_left_within_the_clearance(
     doc: FreeCAD.Document,
 ) -> None:
     """Delete is an edit like any other: an active constraint the boards
-    missed within the clearance at open is met in its step, as the Advice's
-    "the next edit makes it exact" says, while the deleted one moves
-    nothing of its own."""
+    missed within the clearance at open is met in its step, so the Delete
+    moves boards (bug-023)."""
     column = _COLUMN.column.id
     container = _written(
         doc,

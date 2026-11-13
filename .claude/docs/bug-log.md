@@ -111,7 +111,11 @@ log happens only when the user asks.
   the run. Root cause not traced: where FreeCAD 1.1 takes its effective
   selection color when the parameter is unset (likely the theme). Fix:
   `ad hoc`, reading the color the view itself uses, once that source is
-  found; not checked on a real install yet.
+  found; not checked on a real install yet. Lead: FreeCAD 1.1's first
+  start writes parts of the FreeCAD Light preference pack into the View
+  preferences (the test FreeCAD's `BackgroundColor` and `HighlightColor`
+  carry its values), and that pack's `SelectionColor` is the blue
+  (59, 91, 219); the editor's default is FreeCAD Classic's green.
 - `bug-023` - **deleting a constraint can move boards**: when the boards
   miss another active constraint by less than the joint clearance
   (`DEFAULT_CLEARANCE_MM`, 3 mm) at open, deleting any constraint makes

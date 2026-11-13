@@ -88,6 +88,9 @@ boards are gone is dropped, with one notification saying so.
       - with distinct values set for `ConstrainedIcoColor`,
         `DeactivatedConstrDimColor` and `SelectionColor`, an active,
         a deactivated and a selected icon are each drawn in their color;
+      - every constraint icon and every padlock sits on a rounded tile of
+        the 3D view's background color, read from the View preferences:
+        the plain color, or a gradient's middle;
       - selecting s1 inside an Even spacing group shows no drag arrow, and
         the group's openings carry the holding outline.
 - [ ] `README.md`'s glossary has entries **Equal**, **Even spacing** and
@@ -156,8 +159,9 @@ boards are gone is dropped, with one notification saying so.
   icon drawing recolors it (read its source). Colors from
   the View preferences: `ConstrainedIcoColor` active,
   `DeactivatedConstrDimColor` deactivated, `SelectionColor` selected.
-- **Sketcher resources:** unverified whether they load before `SketcherGui`
-  is imported. Check first (Plan step 1) and record the answer.
+- **Sketcher resources:** whether they load before `SketcherGui` is
+  imported is checked by Plan step 1 and recorded in
+  `.claude/docs/freecad-notes.md`.
 - **The workbench draws its own Equal icon** (user decision, 2026-11-13):
   the Even spacing icon already copies Sketcher's style and must be kept
   in step with it, so Equal is drawn the same way rather than borrowed.
@@ -224,6 +228,13 @@ boards are gone is dropped, with one notification saying so.
   and with boards selected keeps them and adds nothing. No command takes a
   mix, and under Inventor navigation Ctrl-click is the only way to select a
   board, so it must be able to replace an opening.
+- **Icons and padlocks sit on tiles of the view background** (user
+  decision, 2026-11-13): under a dark theme the opening fill blends to a
+  mid gray that a deactivated icon's gray all but matches. A rounded tile
+  in the 3D view's background color puts every constraint icon and
+  padlock back on the background the theme picks those colors against,
+  as SolidWorks and Fusion set sketch relation glyphs on tiles. No
+  FreeCAD tool draws one; the Sketcher's icons sit on bare background.
 - **Out of scope:** Aligned faces (task 4), the constraint list and
   reactivation (task 3), a spacing basis in the UI, keyboard shortcuts for
   the commands, and bug-021 (a copy loses its constraints as it loses its
