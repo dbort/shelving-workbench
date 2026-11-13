@@ -287,3 +287,8 @@ boards are gone is dropped, with one notification saying so.
 
 ### Round 2: APPROVED
 - **N1: N4's test docstring claims something it does not check** (`tests/freecad/test_constraint_session.py:358`): it says the deleted even spacing "moves nothing of its own" and cites "the Advice", but the test asserts only that A equals B and the Equal remains. Drop the clause and the pointer, or assert it.
+
+### Round 3: REJECTED
+- **F1: Nothing tests the new Must Have "No workbench code imports `SketcherGui`"** (`tasks/active/sh-048-equal-and-even-spacing.md:99`): only a grep confirms it, and `test_both_icons_are_the_workbenchs_own_svgs` pins the icon paths alone, so a reintroduced `import SketcherGui` passes every suite. Add a cheap core-level test that parses every `.py` under `freecad/Shelving/` with `ast` and asserts no `Import`/`ImportFrom` names `SketcherGui`.
+- **N1: Round 2's N1 is still open** (`tests/freecad/test_constraint_session.py:358`): the docstring still says the deleted constraint "moves nothing of its own" and cites "the Advice", asserting neither, and now reads oddly beside bug-023. Drop the clause and the pointer, or point to bug-023.
+- **N2: Stale Advice bullet** (`tasks/active/sh-048-equal-and-even-spacing.md:159`): "Sketcher resources: unverified ... Check first" reads as open though Plan step 1 answered it in `freecad-notes.md`. Optional: say the answer is recorded there.
