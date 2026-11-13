@@ -16,10 +16,10 @@ locks and openings responsible, and so does that warning. This completes
 M18's first task: the solver, with locks as its only constraint.
 
 ## Must Have
-- [ ] `pixi run tests` green; `pyrefly check` clean over the changed code.
-- [ ] `grep -rnwE "_LAST_UNLOCKED|_refuse_last_unlocked|lockable" freecad tests`
+- [x] `pixi run tests` green; `pyrefly check` clean over the changed code.
+- [x] `grep -rnwE "_LAST_UNLOCKED|_refuse_last_unlocked|lockable" freecad tests`
       prints nothing.
-- [ ] Core suite, on a column of 18 mm boards with fixed point `min`:
+- [x] Core suite, on a column of 18 mm boards with fixed point `min`:
       bottom, bay A 300, shelf, bay B 300, top (654 mm tall):
       - locking A, then B, is accepted, and the height then reads as fixed
         by A and B;
@@ -28,29 +28,29 @@ M18's first task: the solver, with locks as its only constraint.
       - typing 350 into A then gives a 704 mm unit whose bottom stays put
         and whose B stays 300;
       - `held_by` of the shelf is `(A, B)` with both locked.
-- [ ] Core suite: when one column's locks already fix a unit's height,
+- [x] Core suite: when one column's locks already fix a unit's height,
       locking the last unlocked opening of a second column is accepted.
       The redundancy query reports the new lock, and the locks it
       duplicates include the first column's. A lock that only turns the
       height into a reference is not reported redundant.
-- [ ] Headless (`tests/freecad/`): locking a redundant opening through
+- [x] Headless (`tests/freecad/`): locking a redundant opening through
       `Session` applies the lock and reports a warning naming the locks it
       duplicates. A refused conflict returns an `EditFailure` that carries
       the responsible region ids, and leaves the document untouched.
       A unit whose record already holds a redundant lock opens in
       `Session` with no warning.
-- [ ] Every opening's dimension carries a padlock:
+- [x] Every opening's dimension carries a padlock:
       `tests/freecad_view/test_padlocks.py` asserts a padlock on a run's
       only opening.
-- [ ] GUI (`tests/freecad_gui/test_panel.py`): with both openings of the
+- [x] GUI (`tests/freecad_gui/test_panel.py`): with both openings of the
       single-shelf column locked, the Height field is read-only and Width
       and Depth are editable; unlocking either opening makes Height
       editable again.
-- [ ] 3D view (`tests/freecad_view/`): after a refused edit, the regions
+- [x] 3D view (`tests/freecad_view/`): after a refused edit, the regions
       its `EditFailure` names carry the holding outline. The outline clears
       on the next edit or selection change. A redundant lock's duplicated
       locks are outlined the same way.
-- [ ] `README.md`'s glossary entries **Size rule** and **The drag rule**
+- [x] `README.md`'s glossary entries **Size rule** and **The drag rule**
       do not contain "One opening in each row stays unlocked", and
       `docs/scope-and-design.md` does not contain "alone in its run shows
       no padlock".
