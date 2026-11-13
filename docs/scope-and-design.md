@@ -95,9 +95,9 @@ the locks, so one the locks already imply is accepted as redundant with a
 warning, and one they contradict is refused as a conflict. Each draws the
 Sketcher's style of icon beside each of its openings' dimensions, in the
 Sketcher's constraint icon color on a small tile of the 3D view's
-background color; clicking an icon selects the constraint,
-and Delete removes it. A board a constraint holds shows no arrow and no
-padlock, since no unlock frees it, and outlines the openings holding it.
+background color; clicking an icon selects the constraint, and Delete
+removes it. A board a constraint holds shows no arrow and no padlock,
+since no unlock frees it, and outlines the openings holding it.
 A board deleted beside an Equal's opening, or added along its row through
 it, drops the Equal, as the Sketcher's Split and Trim drop an Equal on the
 line they cut; an even spacing is dropped only with an end. Geometry wins

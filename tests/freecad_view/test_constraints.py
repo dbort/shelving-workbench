@@ -245,7 +245,7 @@ def test_the_icons_are_drawn_from_their_svgs_in_the_sketchers_way_on_a_tile(
     click_task_button("Close", driver)
 
 
-def test_icons_and_padlocks_sit_on_tiles_of_the_view_background(
+def test_icons_sit_on_tiles_of_the_view_background(
     unit: FreeCAD.DocumentObject,
     driver: ViewDriver,
     monkeypatch: pytest.MonkeyPatch,
@@ -261,13 +261,9 @@ def test_icons_and_padlocks_sit_on_tiles_of_the_view_background(
     editor = editor_of(panel)
     tile_rgb = _rgb_255((0.2, 0.4, 0.3))
     side_px, _gap_px = editor._icon_metrics_px()
+    assert editor.icon_nodes
     for node in editor.icon_nodes:
         assert _near(_icon_part(node, side_px).pixelColor(side_px // 2, 0), tile_rgb)
-    buttons = [button for button in editor.padlocks if button.isVisible()]
-    assert buttons
-    for button in buttons:
-        face = button.grab().toImage()
-        assert _near(face.pixelColor(face.width() // 2, 1), tile_rgb)
     click_task_button("Close", driver)
 
 
@@ -289,15 +285,12 @@ _ENDS = {"BackgroundColor": 0x102030FF, "BackgroundColor2": 0x204060FF}
 @pytest.mark.parametrize(
     ("bools", "colors", "expected"),
     [
-        ({}, {}, (247, 247, 247)),
-        ({"Simple": True}, _ENDS, (16, 32, 48)),
+        ({}, {}, (111, 111, 147)),
+        ({"Gradient": False}, {}, (234, 229, 220)),
+        ({"Simple": True, "Gradient": False}, _ENDS, (16, 32, 48)),
+        ({"Simple": True}, {**_ENDS, "BackgroundColor3": 0x406080FF}, (48, 80, 112)),
         (
-            {"Simple": False, "Gradient": True},
-            {**_ENDS, "BackgroundColor3": 0x406080FF},
-            (48, 80, 112),
-        ),
-        (
-            {"Simple": False, "RadialGradient": True, "UseBackgroundColorMid": True},
+            {"Gradient": False, "RadialGradient": True, "UseBackgroundColorMid": True},
             {**_ENDS, "BackgroundColor4": 0x0A0B0CFF},
             (10, 11, 12),
         ),

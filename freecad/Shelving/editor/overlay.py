@@ -51,9 +51,13 @@ _DIMENSION_LINE_PX = 1.5
 
 
 _VIEW_PARAMS = "User parameter:BaseApp/Preferences/View"
-# FreeCAD 1.1's first start writes the FreeCAD Light preference pack's
-# plain background; a gradient color left unset falls back to it.
-_BACKGROUND_DEFAULT = 0xF7F7F7FF
+# FreeCAD 1.1's background colors for keys left unset, probed in its 3D
+# view (.claude/docs/freecad-notes.md): the plain color, the gradient's
+# top and bottom, and its middle, which matches their average.
+_BACKGROUND_DEFAULT = 0xEAE5DCFF
+_GRADIENT_TOP_DEFAULT = 0x333365FF
+_GRADIENT_BOTTOM_DEFAULT = 0xABABC1FF
+_GRADIENT_MIDDLE_DEFAULT = 0x6F6F93FF
 
 
 class ViewParams(Protocol):
@@ -77,19 +81,25 @@ def _view_color(name: str, default: int) -> RGB:
 
 
 def background_rgb(params: ViewParams) -> RGB:
-    """The 3D view's background as ``params``, FreeCAD's View preferences,
-    set it: the plain color, or a gradient's middle, its own middle color
-    when it has one, otherwise halfway between its two ends."""
-    gradient = params.GetBool("Gradient", False) or params.GetBool(
+    """The 3D view's background color as the View preferences ``params``
+    set it. With neither gradient on, it is ``BackgroundColor``. A gradient
+    gives its middle: ``BackgroundColor4`` when ``UseBackgroundColorMid``
+    is set, otherwise halfway between ``BackgroundColor2`` and
+    ``BackgroundColor3``."""
+    # As FreeCAD's viewer reads them: Gradient defaults to on, and the
+    # dialog's Simple choice is never read.
+    gradient = params.GetBool("Gradient", True) or params.GetBool(
         "RadialGradient", False
     )
-    if params.GetBool("Simple", True) or not gradient:
+    if not gradient:
         return _unpacked(params.GetUnsigned("BackgroundColor", _BACKGROUND_DEFAULT))
     if params.GetBool("UseBackgroundColorMid", False):
-        return _unpacked(params.GetUnsigned("BackgroundColor4", _BACKGROUND_DEFAULT))
-    first = _unpacked(params.GetUnsigned("BackgroundColor2", _BACKGROUND_DEFAULT))
-    last = _unpacked(params.GetUnsigned("BackgroundColor3", _BACKGROUND_DEFAULT))
-    red, green, blue = ((a + b) / 2 for a, b in zip(first, last, strict=True))
+        return _unpacked(
+            params.GetUnsigned("BackgroundColor4", _GRADIENT_MIDDLE_DEFAULT)
+        )
+    top = _unpacked(params.GetUnsigned("BackgroundColor2", _GRADIENT_TOP_DEFAULT))
+    bottom = _unpacked(params.GetUnsigned("BackgroundColor3", _GRADIENT_BOTTOM_DEFAULT))
+    red, green, blue = ((a + b) / 2 for a, b in zip(top, bottom, strict=True))
     return (red, green, blue)
 
 
