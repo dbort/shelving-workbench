@@ -359,7 +359,7 @@ def icon_colors(monkeypatch: pytest.MonkeyPatch) -> Iterator[tuple[int, int, int
     params = FreeCAD.ParamGet(_VIEW_PARAMS)
     colors = (0xC01020FF, 0x30A0B0FF, 0x7020D0FF)
     for name, packed in zip(
-        ("ConstrainedIcoColor", "DeactivatedConstrDimColor"), colors, strict=True
+        ("ConstrainedIcoColor", "DeactivatedConstrDimColor"), colors[:2], strict=True
     ):
         params.SetUnsigned(name, packed)
     real_view_color = overlay._view_color
