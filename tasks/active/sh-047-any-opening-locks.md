@@ -129,3 +129,6 @@ M18's first task: the solver, with locks as its only constraint.
 - **N2: Awkward README sentence** (`README.md:88-89`): "that refused it" says the openings refused the edit.
 - **N3: `Style.outline_rgb` docstring describes its callers** (`freecad/Shelving/editor/overlay.py:186-187`): the sentence about refused edits and redundant locks duplicates `plan_overlay`'s docstring.
 - **N4: Extra solves on every refresh** (`freecad/Shelving/editor/panel.py:582`): `_refresh` runs `size_fixed_by` per dimension after every edit attempt, drag steps included; fine now, worth remembering if drag latency grows.
+
+### Round 2: APPROVED
+- **N1: Extra solves on every refresh, still open** (`freecad/Shelving/editor/panel.py:582`): `_refresh` runs `size_fixed_by` once per dimension after every edit attempt, drag steps included; fine now, revisit if drag latency grows.
