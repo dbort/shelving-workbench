@@ -276,3 +276,10 @@ boards are gone is dropped, with one notification saying so.
       `editor.constraints` case.
 
 ## Review log
+
+### Round 1: REJECTED
+- **F1: The icon color test never sets `SelectionColor`** (`tests/freecad_view/test_constraints.py:352`, `tests/freecad_view/test_constraints.py:392`): the Must Have asks for distinct values set for `ConstrainedIcoColor`, `DeactivatedConstrDimColor` and `SelectionColor`; the fixture sets only the first two and compares the selected icon with `editor.style.selected_rgb`, the code's own reading, so a wrong parameter name in `view_style` (`freecad/Shelving/editor/overlay.py:119`) would pass. Meet it without writing FreeCAD's parameter (e.g. patch the editor's color read for `"SelectionColor"`), or record a user decision in `## Advice`.
+- **N1: Even spacing refusals that do not say what to select** (`freecad/Shelving/core/edit.py:1058`, `freecad/Shelving/core/edit.py:1048`): reword the one-opening and opening-beside-an-opening refusals as "Select ...".
+- **N2: Unit suffixes in the elevation layout test** (`tests/test_editor_elevation.py:570`): `x_px, y_px = label.text_at_mm` holds millimeters; `half_w`, `half_h`, `half` lack suffixes.
+- **N3: Odd line wraps in changed docstrings** (`freecad/Shelving/core/edit.py:23`, `freecad/Shelving/editor/view_editor.py:1449`): reflow both.
+- **N4: Delete of constraints can move boards** (`freecad/Shelving/editor/session.py`, `_apply`): every edit settles, so a Delete makes another active constraint left within the clearance exact; pin the intended behavior with a test or a sentence in Advice.
