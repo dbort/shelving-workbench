@@ -216,8 +216,8 @@ def ensure_container_properties(obj: FreeCAD.DocumentObject) -> ContainerObject:
             "App::PropertyString",
             RULES_PROP,
             GROUP_NAME,
-            "The per-region size rule record, as freecad.Shelving.core."
-            "record.rules_to_json emits it.",
+            "The locked regions, as freecad.Shelving.core."
+            "record.rules_to_json emits them.",
         )
     for axis, name in FIXED_PROPS.items():
         if not hasattr(obj, name):

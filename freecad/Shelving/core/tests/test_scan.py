@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from freecad.Shelving.core.edit import run_axis
+from freecad.Shelving.core.edit import run_axis, set_unit_size
 from freecad.Shelving.core.expand import BoardSpec, expand
 from freecad.Shelving.core.geometry import Vec3
 from freecad.Shelving.core.layout import (
@@ -16,13 +16,10 @@ from freecad.Shelving.core.layout import (
     Bay,
     Board,
     Division,
-    Fill,
-    Fixed,
     Item,
     Region,
     Unit,
     Void,
-    Weighted,
 )
 from freecad.Shelving.core.scan import (
     DEFAULT_SNAP_MM,
@@ -525,7 +522,7 @@ def test_mixed_thicknesses_solve_to_each_boards_own_slot() -> None:
     boards = _boards(unit.root)
     assert sorted(b.role for b in boards) == sorted(measured_mm)
     for board in boards:
-        assert board.rule is None
+        assert board.extent_mm is None
         assert board.thickness_mm == pytest.approx(measured_mm[board.role], abs=1e-6)
         assert _run_extent_mm(unit, board) == pytest.approx(
             board.thickness_mm, abs=1e-6
@@ -545,7 +542,7 @@ def test_snap_drift_puts_a_board_in_its_slot_within_half_the_snap() -> None:
     )
     unit = scan(boxes, snap_mm=0.5).unit
     for board in _boards(unit.root):
-        if board.rule is None:
+        if board.extent_mm is None:
             assert _run_extent_mm(unit, board) == pytest.approx(
                 board.thickness_mm, abs=1e-6
             )
@@ -627,17 +624,19 @@ def _closed_box_unit() -> Unit:
                         Division(
                             axis=Axis.Z,
                             items=[
-                                Bay(),
+                                Bay(size_mm=427.5),
                                 _b("shelf1"),
-                                Bay(),
+                                Bay(size_mm=427.5),
                                 _b("shelf2"),
-                                Bay(),
+                                Bay(size_mm=427.5),
                                 _b("shelf3"),
-                                Bay(),
+                                Bay(size_mm=427.5),
                             ],
+                            size_mm=864.0,
                         ),
                         _b("right"),
                     ],
+                    size_mm=1764.0,
                 ),
                 _b("top"),
             ],
@@ -657,11 +656,24 @@ def _stepped_unit() -> Unit:
                     axis=Axis.X,
                     items=[
                         _b("left"),
-                        Division(axis=Axis.Z, items=[Bay(), _b("top_left")]),
+                        Division(
+                            axis=Axis.Z,
+                            items=[Bay(size_mm=1164.0), _b("top_left")],
+                            size_mm=582.0,
+                        ),
                         _b("mid"),
-                        Division(axis=Axis.Z, items=[Bay(), _b("top_right"), Void()]),
+                        Division(
+                            axis=Axis.Z,
+                            items=[
+                                Bay(size_mm=582.0),
+                                _b("top_right"),
+                                Void(size_mm=582.0, lock=Basis.CLEAR),
+                            ],
+                            size_mm=582.0,
+                        ),
                         _b("right"),
                     ],
+                    size_mm=1182.0,
                 ),
             ],
         ),
@@ -684,13 +696,15 @@ def _second_stock_unit() -> Unit:
                         Division(
                             axis=Axis.Z,
                             items=[
-                                Bay(rule=Fixed(300.0, basis=Basis.CLEAR)),
+                                Bay(size_mm=300.0),
                                 _b("shelf", thickness_mm=12.0),
-                                Bay(rule=Fill()),
+                                Bay(size_mm=1452.0),
                             ],
+                            size_mm=864.0,
                         ),
                         _b("right"),
                     ],
+                    size_mm=1764.0,
                 ),
                 _b("top"),
             ],
@@ -721,16 +735,15 @@ def _board_multiset(
     )
 
 
-def _region_rules(region: Bay | Void | Division) -> list[type[object]]:
-    """Every non-``Board`` item's rule type, pre-order, for asserting rule
-    recovery separately from the shape comparison."""
-    rules: list[type[object]] = []
+def _region_locks(region: Bay | Void | Division) -> list[Basis | None]:
+    """Every non-``Board`` item's lock, pre-order."""
+    locks: list[Basis | None] = []
     if isinstance(region, Division):
         for item in region.items:
             if not isinstance(item, Board):
-                rules.append(type(item.rule))
-                rules.extend(_region_rules(item))
-    return rules
+                locks.append(item.lock)
+                locks.extend(_region_locks(item))
+    return locks
 
 
 @pytest.mark.parametrize("name", sorted(ROUND_TRIP_UNITS))
@@ -746,38 +759,47 @@ def test_round_trip_reproduces_tree_shape_and_boards(name: str) -> None:
     assert _board_multiset(recovered_specs) == _board_multiset(specs)
 
 
-def test_equal_siblings_recover_as_fill() -> None:
+def test_a_scan_locks_no_compartment() -> None:
     original = _closed_box_unit()
     boxes = [
         Box(name=s.node_id, corner_mm=s.placement, size_mm=s.size)
         for s in expand(original)
     ]
     result = scan(boxes)
-    # The outermost two levels have one region each, then the four equal
-    # bays behind the three shelves: every run is all one size, so every
-    # region shares equally.
-    assert _region_rules(result.unit.root) == [Fill, Fill, Fill, Fill, Fill, Fill]
+    assert _region_locks(result.unit.root) == [None] * 6
 
 
-def test_unequal_siblings_share_in_proportion_to_their_size() -> None:
-    """The 300 mm bay under the 12 mm shelf and the bay above it differ, so
-    each shares leftover space weighted by its scanned size, and nothing is
-    fixed: the solve reproduces the scan, and either bay can give or take
-    space."""
+def test_regions_take_their_measured_sizes() -> None:
+    """The 300 mm bay under the 12 mm shelf and the bay above it each take
+    the size the boards around them measure, and neither is locked."""
     original = _second_stock_unit()
     boxes = [
         Box(name=s.node_id, corner_mm=s.placement, size_mm=s.size)
         for s in expand(original)
     ]
     result = scan(boxes)
-    assert _region_rules(result.unit.root) == [Fill, Fill, Weighted, Weighted]
+    assert _region_locks(result.unit.root) == [None] * 4
     root = _division(result.unit.root)
     column = _division(_division(root.items[1]).items[1])
     lower, _shelf, upper = column.items
-    assert isinstance(lower, Bay) and isinstance(lower.rule, Weighted)
-    assert isinstance(upper, Bay) and isinstance(upper.rule, Weighted)
-    assert lower.rule.weight == pytest.approx(300.0)
-    assert upper.rule.weight == pytest.approx(1800.0 - 2 * 18.0 - 300.0 - 12.0)
+    assert isinstance(lower, Bay) and lower.size_mm == pytest.approx(300.0)
+    assert isinstance(upper, Bay)
+    assert upper.size_mm == pytest.approx(1800.0 - 2 * 18.0 - 300.0 - 12.0)
+
+
+def test_a_scan_locks_a_void_beside_a_compartment() -> None:
+    """The void above the short right column holds still while the bay
+    beside it changes."""
+    original = _stepped_unit()
+    boxes = [
+        Box(name=s.node_id, corner_mm=s.placement, size_mm=s.size)
+        for s in expand(original)
+    ]
+    root = _division(scan(boxes).unit.root)
+    right = _division(_division(root.items[1]).items[3])
+    bay, _top, void = right.items
+    assert isinstance(void, Void) and void.lock is Basis.CLEAR
+    assert isinstance(bay, Bay) and bay.lock is None
 
 
 def _kinds_names(division: Division) -> tuple[str, list[str]]:
@@ -859,12 +881,7 @@ def test_real_stair_step_whole_tree() -> None:
     assert isinstance(short_divider.items[0], Void)
     panel_zx012 = short_divider.items[1]
     assert isinstance(panel_zx012, Board)
-    # Comparing against Fixed(size_mm=pytest.approx(...)) directly would
-    # construct a Fixed whose size_mm is an ApproxScalar, and Fixed.__post_init__
-    # validates size_mm > 0 against it, raising TypeError; asserting the type
-    # and then the field separately avoids ever constructing that Fixed.
-    assert isinstance(panel_zx012.rule, Fixed)
-    assert panel_zx012.rule.size_mm == pytest.approx(330.2, abs=0.01)
+    assert panel_zx012.extent_mm == pytest.approx(330.2, abs=0.01)
 
     left = _division(columns.items[1])
     assert left.axis is Axis.Z
@@ -877,8 +894,7 @@ def test_real_stair_step_whole_tree() -> None:
     assert isinstance(mid_divider.items[0], Void)
     panel_zx007 = mid_divider.items[1]
     assert isinstance(panel_zx007, Board)
-    assert isinstance(panel_zx007.rule, Fixed)
-    assert panel_zx007.rule.size_mm == pytest.approx(940.5874, abs=0.01)
+    assert panel_zx007.extent_mm == pytest.approx(940.5874, abs=0.01)
 
     right = _division(columns.items[3])
     assert right.axis is Axis.Z
@@ -887,7 +903,7 @@ def test_real_stair_step_whole_tree() -> None:
 
     panel_zx008 = columns.items[4]
     assert isinstance(panel_zx008, Board)
-    assert panel_zx008.rule is None
+    assert panel_zx008.extent_mm is None
 
     middle = _division(right.items[2])
     assert middle.axis is Axis.Y
@@ -902,7 +918,8 @@ def test_real_stair_step_whole_tree() -> None:
 def test_real_stair_step_solves_at_the_default_snap() -> None:
     """The real stair-step export's panels measure about 18.26 mm. Each
     board takes its slot in the grid as its run-axis extent, so the tree
-    solves at the default ``snap_mm`` with every rule-less board within half
+    solves at the default ``snap_mm`` with every board without an
+    ``extent_mm`` within half
     of it of its measured thickness."""
     boxes = boxes_from_json(REAL_STAIR_STEP.read_text(encoding="utf-8"))
     measured_mm = {
@@ -911,7 +928,7 @@ def test_real_stair_step_solves_at_the_default_snap() -> None:
     unit = scan(boxes).unit
     solve(unit)
     for board in _boards(unit.root):
-        if board.rule is not None:
+        if board.extent_mm is not None:
             continue
         assert _run_extent_mm(unit, board) == pytest.approx(
             board.thickness_mm, abs=1e-6
@@ -925,7 +942,7 @@ def test_real_stair_step_solves_to_three_distinct_divider_heights() -> None:
     """``panelZX012``/``panelZX007``/``panelZX008`` each solve to their own
     measured Z height (330.2 / 940.5874 / 1480.3374 mm) rather than being
     stretched to the tallest's height, with each wrapped divider's solved
-    Z-extent matching its ``rule``. Along the cross axis (Y) each wrapped
+    Z-extent matching its ``extent_mm``. Along the cross axis (Y) each wrapped
     divider keeps its own width, and the two column bodies, one size within
     the snap tolerance, share the rest equally.
     """
@@ -943,9 +960,8 @@ def test_real_stair_step_solves_to_three_distinct_divider_heights() -> None:
         assert board is not None
         solved_z_mm = spaces[board.id].size.z_mm
         assert solved_z_mm == pytest.approx(expected, abs=0.01)
-        if board.rule is not None:
-            assert isinstance(board.rule, Fixed)
-            assert board.rule.size_mm == pytest.approx(solved_z_mm, abs=0.01)
+        if board.extent_mm is not None:
+            assert board.extent_mm == pytest.approx(solved_z_mm, abs=0.01)
 
     root = result.unit.root
     assert isinstance(root, Division)
@@ -965,10 +981,8 @@ def test_real_stair_step_solves_to_three_distinct_divider_heights() -> None:
         assert board is not None
         assert spaces[board.id].size.y_mm == pytest.approx(expected, abs=0.01)
 
-    # `_finalize_items` excludes the dividers' wrap Divisions from rule
-    # recovery, so each keeps its own grid width; the two column bodies are
-    # one size within snap_mm, so both are Fill and share the remaining span
-    # equally (see sh-025 Frontier Advice, "ROOT CAUSE, PART 3").
+    # Each wrap keeps its own grid width, and the two column bodies take
+    # their measured widths (see sh-025 Frontier Advice, "ROOT CAUSE, PART 3").
     assert spaces[shelf015_column.id].size.y_mm == pytest.approx(887.0283, abs=0.01)
     assert spaces[panel_yx003_column.id].size.y_mm == pytest.approx(887.0283, abs=0.01)
 
@@ -999,21 +1013,20 @@ def test_real_two_units_whole_tree() -> None:
     assert spaces[face_void.id].size.y_mm == pytest.approx(1828.7975, abs=0.25)
     face_board = face.items[1]
     assert isinstance(face_board, Board)
-    assert isinstance(face_board.rule, Fixed)
-    assert face_board.rule.size_mm == pytest.approx(1625.6, abs=0.01)
+    assert face_board.extent_mm == pytest.approx(1625.6, abs=0.01)
 
     tops = _division(root.items[2])
     assert tops.axis is Axis.Y
     # Together the two units' top boards span the width; neither spans it
     # alone, so they show up as two adjacent Board items, not one. Each is
-    # thin along Z, not Y, so each carries its Y slot as its own rule rather
+    # thin along Z, not Y, so each carries its Y slot as its extent_mm rather
     # than its thickness.
     assert _kinds_names(tops) == ("PP", ["panelYX", "panelYX004"])
     top_a, top_b = tops.items
-    assert isinstance(top_a, Board) and isinstance(top_a.rule, Fixed)
-    assert top_a.rule.size_mm == pytest.approx(1828.8, abs=0.01)
-    assert isinstance(top_b, Board) and isinstance(top_b.rule, Fixed)
-    assert top_b.rule.size_mm == pytest.approx(1625.6, abs=0.01)
+    assert isinstance(top_a, Board)
+    assert top_a.extent_mm == pytest.approx(1828.8, abs=0.01)
+    assert isinstance(top_b, Board)
+    assert top_b.extent_mm == pytest.approx(1625.6, abs=0.01)
 
     body = _division(root.items[1])
     assert body.axis is Axis.Y
@@ -1030,10 +1043,9 @@ def test_real_two_units_whole_tree() -> None:
     assert spaces[left_void.id].size.z_mm == pytest.approx(921.5374, abs=0.25)
     left_side = left_wrap.items[1]
     assert isinstance(left_side, Board) and left_side.role == "panelZX008"
-    assert isinstance(left_side.rule, Fixed)
-    assert left_side.rule.size_mm == pytest.approx(1480.3374, abs=0.25)
+    assert left_side.extent_mm == pytest.approx(1480.3374, abs=0.25)
     assert isinstance(right_side, Board) and right_side.role == "panelZX001"
-    assert right_side.rule is None
+    assert right_side.extent_mm is None
 
 
 def _stepped_columns_boxes() -> list[Box]:
@@ -1063,9 +1075,9 @@ def test_short_divider_between_differently_sized_bays_keeps_its_own_height() -> 
     """A divider shorter than its taller neighbor solves to its own true
     height, wrapped in a nested ``Division``+``Void`` for the shortfall,
     rather than being stretched to the taller bay's height. Along the axis
-    the outer "body" ``Division`` runs, each wrap is its divider's slot:
-    ``Fixed`` at 18 mm and excluded from rule recovery, so when the unit
-    widens it stays 18 mm and the compartment takes the growth.
+    the outer "body" ``Division`` runs, each wrap is its divider's slot,
+    locked at 18 mm, so when the unit widens it stays 18 mm and the
+    compartment takes the growth.
     """
     boxes = _stepped_columns_boxes()
     result = scan(boxes)
@@ -1081,8 +1093,7 @@ def test_short_divider_between_differently_sized_bays_keeps_its_own_height() -> 
     assert _kinds_names(divider_wrap) == ("Px", ["Divider"])
     divider = divider_wrap.items[0]
     assert isinstance(divider, Board) and divider.role == "Divider"
-    assert isinstance(divider.rule, Fixed)
-    assert divider.rule.size_mm == pytest.approx(582.0)
+    assert divider.extent_mm == pytest.approx(582.0)
     divider_void = divider_wrap.items[1]
     assert isinstance(divider_void, Void)
 
@@ -1113,16 +1124,14 @@ def test_short_divider_between_differently_sized_bays_keeps_its_own_height() -> 
     assert spaces[void_gap_2.id].size.x_mm == pytest.approx(379.0)
     wraps = (divider_wrap, right_side_wrap, divider2_wrap)
     for wrap in wraps:
-        assert isinstance(wrap.rule, Fixed)
-        assert wrap.rule.size_mm == pytest.approx(18.0)
+        assert wrap.lock is Basis.CLEAR
+        assert wrap.size_mm == pytest.approx(18.0)
         assert spaces[wrap.id].size.x_mm == pytest.approx(18.0)
 
-    # A wrap that shared space like a compartment would widen with it.
-    wider = dataclasses.replace(
+    # A wrap that took space like a compartment would widen with it.
+    wider = set_unit_size(
         result.unit,
-        size_mm=dataclasses.replace(
-            result.unit.size_mm, x_mm=result.unit.size_mm.x_mm + 60.0
-        ),
+        dataclasses.replace(result.unit.size_mm, x_mm=result.unit.size_mm.x_mm + 60.0),
     )
     wider_spaces = solve(wider)
     assert wider_spaces[bay_division.id].size.x_mm == pytest.approx(441.0)

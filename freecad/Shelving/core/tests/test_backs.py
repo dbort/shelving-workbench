@@ -11,7 +11,7 @@ from freecad.Shelving.core.backs import (
     place_backs,
     renamed_back_boards,
 )
-from freecad.Shelving.core.edit import merge_at, set_unit_size
+from freecad.Shelving.core.edit import merge_at, move_board, set_unit_size
 from freecad.Shelving.core.expand import expand
 from freecad.Shelving.core.geometry import Vec3
 from freecad.Shelving.core.layout import (
@@ -293,7 +293,7 @@ def test_an_irregular_back_moves_its_low_corner_and_keeps_its_size() -> None:
 
 def test_an_irregular_backs_low_edge_follows_a_moving_divider() -> None:
     """A back over the right opening starts at the divider's right face;
-    widening the unit moves the divider, and the back's low corner with it."""
+    dragging the divider moves the back's low corner with it."""
     unit = scan(
         _carcass(
             _box("Back", (309.0, 280.0, 18.0), (273.0, 6.0, 864.0), irregular=True)
@@ -301,7 +301,9 @@ def test_an_irregular_backs_low_edge_follows_a_moving_divider() -> None:
     ).unit
     assert _only_back(unit).h_min.follows == _follows("Divider", Face.MAX)
 
-    spec = _placed(_resized(unit, 100.0, 0.0, 0.0))
+    spec = _placed(move_board(unit, "Divider", 341.0))
 
-    assert spec.corner_mm == Vec3(359.0, 280.0, 18.0)
+    assert spec.corner_mm.x_mm == pytest.approx(359.0, abs=_TOL_MM)
+    assert spec.corner_mm.y_mm == 280.0
+    assert spec.corner_mm.z_mm == 18.0
     assert spec.size_mm == Vec3(273.0, 6.0, 864.0)

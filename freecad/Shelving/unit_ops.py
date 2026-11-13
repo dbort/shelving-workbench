@@ -61,9 +61,10 @@ def _default_unit() -> Unit:
                     axis=Axis.X,
                     items=[
                         Board(thickness_mm=_DEFAULT_THICKNESS_MM, role="left_side"),
-                        Bay(),
+                        Bay(size_mm=_DEFAULT_WIDTH_MM - 2 * _DEFAULT_THICKNESS_MM),
                         Board(thickness_mm=_DEFAULT_THICKNESS_MM, role="right_side"),
                     ],
+                    size_mm=_DEFAULT_HEIGHT_MM - 2 * _DEFAULT_THICKNESS_MM,
                 ),
                 Board(thickness_mm=_DEFAULT_THICKNESS_MM, role="top"),
             ],
@@ -90,7 +91,7 @@ def create_unit(doc: FreeCAD.Document) -> FreeCAD.DocumentObject:
 
 
 def _rescanned_unit(container: FreeCAD.DocumentObject) -> Unit:
-    """``container`` read fresh and scanned, with its stored rules and unit
+    """``container`` read fresh and scanned, with its stored locks and unit
     id reapplied: the common starting point for :func:`resize_unit` and
     :func:`rescan_unit`, a resize being a rescan that also substitutes the
     outer size."""
@@ -113,8 +114,7 @@ def _rescanned_unit(container: FreeCAD.DocumentObject) -> Unit:
 def unit_size_mm(container: FreeCAD.DocumentObject) -> Vec3:
     """``container``'s outer size as the scan grid measures it, leaving out
     every part the scan sets aside, such as a back panel. Raises
-    ``ScanError`` when the container does not scan, and ``ValueError`` when
-    its stored rule record is malformed."""
+    ``ScanError`` when the container does not scan."""
     # The size is measured from the boards on every call, never stored as a
     # container property: nothing would recompute such a property after a
     # hand edit, so it would become a second source of truth that lies.
@@ -126,7 +126,8 @@ def resize_unit(container: FreeCAD.DocumentObject, size_mm: Vec3) -> WriteResult
     write the result back. The unit's stored fixed point stays where its
     boards put it, so a unit fixed at its minimum corner grows or shrinks on
     its maximum sides. Raises ``EditError`` when any axis of ``size_mm`` is
-    not positive."""
+    not positive, and ``LayoutSolveError`` when the locks and the minimum
+    opening leave no room for it."""
     unit = set_unit_size(_rescanned_unit(container), size_mm)
     return write_container(container, unit)
 

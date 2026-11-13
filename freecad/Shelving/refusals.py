@@ -34,10 +34,10 @@ _print_user_error = cast(
     "Callable[[str, str], None]", FreeCAD.Console.PrintTranslatedUserError
 )
 
-# A solver reason surfaces from a command only when Edit Unit opens a unit
-# that does not solve. A rescan takes every size from the boards, so this
-# needs a unit the scan reads but cannot solve; each solver suggestion still
-# leads back to a state the editor can open.
+# A solver reason surfaces from a command only when a unit the scan reads
+# does not lay out, or a resize the locks leave no room for. A rescan takes
+# every size from the boards, so a misfit is a workbench fault, and each
+# other suggestion leads back to a state the editor can open.
 SUGGESTIONS: Mapping[RefusalReason, str] = {
     "no_boxes": (
         "Put the unit's boards inside the container, or select the container "
@@ -79,23 +79,13 @@ SUGGESTIONS: Mapping[RefusalReason, str] = {
         "Move the sides, top and bottom so they meet, closing the gap in the "
         "unit's outer frame."
     ),
-    "overflow": (
-        "The boards were moved by hand so the unit's stored sizes no longer "
-        "fit between them. Undo that move, then change the sizes in Edit Unit, "
-        "which moves the boards around them."
+    "misfit": (
+        "Nothing in the document was changed. This is a workbench fault: "
+        "report it with the text above."
     ),
-    "no_slack_absorber": (
-        "These sizes were stored before the boards were moved by hand. Undo "
-        "that move so Edit Unit opens, then change a size or leave one "
-        "opening free there."
-    ),
-    "nonpositive_opening": (
-        "The boards were moved by hand so an opening has no room left. Undo "
-        "that move, then change the sizes in Edit Unit."
-    ),
-    "unresolvable_basis": (
-        "The boards were changed by hand so a spacing no longer has a board "
-        "after it. Undo that change, then edit the unit in Edit Unit."
+    "conflict": (
+        "Unlock an opening beside the boards that would have to move, or "
+        "choose a size the locked openings leave room for."
     ),
     "pinned_mismatch": (
         "This board keeps the size it was drawn at, and the layout needs a "

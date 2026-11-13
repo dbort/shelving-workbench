@@ -5,7 +5,7 @@ safe.
 Each scenario below builds its own document rather than sharing one across
 the whole file: the cases cover enough structurally different starting
 points (a bare closed box, one with hand-added irregular or untagged
-geometry, one with a copied board, one with an explicit ``Fixed`` rule)
+geometry, one with a copied board, one with a stored lock)
 that a single shared document would mean each test also carrying the
 side effects of every test before it, which is harder to read than one
 document per scenario is to afford.
@@ -27,10 +27,10 @@ from freecad.Shelving.container import read_container, write_container
 from freecad.Shelving.core.geometry import Vec3
 from freecad.Shelving.core.layout import (
     Axis,
+    Basis,
     Bay,
     Board,
     Division,
-    Fixed,
     FixedPoint,
     FixedSide,
     Unit,
@@ -181,9 +181,10 @@ def _closed_box_unit(front_at_min: bool | None) -> Unit:
                     axis=Axis.X,
                     items=[
                         Board(thickness_mm=18.0, role="left_side"),
-                        Bay(),
+                        Bay(size_mm=564.0),
                         Board(thickness_mm=18.0, role="right_side"),
                     ],
+                    size_mm=864.0,
                 ),
                 Board(thickness_mm=18.0, role="top"),
             ],
@@ -478,9 +479,8 @@ def test_left_alone_objects_are_never_touched() -> None:
 def test_irregular_board_moves_without_rewriting_its_shape() -> None:
     """A hand-built notched board slotted into a real bay is read as an
     irregular ``Box``, adopted (tagged, not relabeled) on the next rescan,
-    then moved, never resized or recreated, by a resize that shifts its
-    region: its solid volume is unchanged, and only its ``Placement``
-    differs."""
+    then moved, never resized or recreated, by a resize that pushes it: its
+    solid volume is unchanged, and only its ``Placement`` differs."""
     doc = _new_document("write_smoke_irregular")
     try:
         container = create_unit(doc)
@@ -509,9 +509,11 @@ def test_irregular_board_moves_without_rewriting_its_shape() -> None:
         volume_before = cast("_ShapeFeature", shelf).Shape.Volume
         placement_before = cast("_Placeable", shelf).Placement.Base
 
-        # Height only: the shelf's own footprint (564 x 300) is unaffected,
-        # so its pinned size still matches and only its Z position moves.
-        move_result = resize_unit(container, Vec3(600.0, 300.0, 1200.0))
+        # Height only, enough to shrink the 423 mm bay above the shelf past
+        # the minimum opening so it pushes the shelf down. The shelf's own
+        # footprint (564 x 300) is unaffected, so its pinned size still
+        # matches and only its Z position moves.
+        move_result = resize_unit(container, Vec3(600.0, 300.0, 470.0))
         doc.recompute()
         assert "NotchedShelf" in move_result.updated
         volume_after = cast("_ShapeFeature", shelf).Shape.Volume
@@ -673,18 +675,16 @@ def test_a_resize_never_changes_a_boards_material_or_grain() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
-def test_fixed_rule_survives_apply_rescan_and_reapply() -> None:
-    """A ``Fixed`` bay sized to exactly match its sibling's slack-absorbed
-    size, so a rescan's rule recovery alone would recover both as
-    ``Fill``, keeps its stored, non-recoverable size across two rescans and
-    a resize: the shelf between them stays at its fixed offset rather than
-    drifting to an even split of the new available space."""
-    doc = _new_document("write_smoke_fixed_rule")
+def test_a_lock_survives_apply_rescan_and_reapply() -> None:
+    """The upper of two equal bays is locked, which geometry alone cannot
+    say, so only the stored record keeps it locked across two rescans; the
+    resize then grows the lower bay and the shelf rises, where an unlocked
+    upper bay beside the moving top would have taken the growth itself."""
+    doc = _new_document("write_smoke_lock")
     try:
         container = cast("FreeCAD.DocumentObject", doc.addObject("App::Part", "Unit"))
-        # Z-span inside bottom/top/mid_shelf: 900 - 18*3 = 846mm; a fixed
-        # 423mm bay leaves exactly 423mm for the Fill sibling, so the two
-        # read back as equal-sized siblings on a plain rescan.
+        # Z-span inside bottom/top/mid_shelf: 900 - 18*3 = 846 mm, two
+        # 423 mm bays.
         unit = Unit(
             size_mm=Vec3(600.0, 300.0, 900.0),
             root=Division(
@@ -698,13 +698,15 @@ def test_fixed_rule_survives_apply_rescan_and_reapply() -> None:
                             Division(
                                 axis=Axis.Z,
                                 items=[
-                                    Bay(rule=Fixed(423.0)),
+                                    Bay(size_mm=423.0),
                                     Board(thickness_mm=18.0, role="mid_shelf"),
-                                    Bay(),
+                                    Bay(size_mm=423.0, lock=Basis.CLEAR),
                                 ],
+                                size_mm=564.0,
                             ),
                             Board(thickness_mm=18.0, role="right_side"),
                         ],
+                        size_mm=864.0,
                     ),
                     Board(thickness_mm=18.0, role="top"),
                 ],
@@ -728,8 +730,9 @@ def test_fixed_rule_survives_apply_rescan_and_reapply() -> None:
         doc.recompute()
         z_after_resize = doc.getObject("mid_shelf").Placement.Base.z
 
-        for got in (z_after_first_rescan, z_after_second_rescan, z_after_resize):
+        for got in (z_after_first_rescan, z_after_second_rescan):
             assert got == pytest.approx(expected_z_mm), (got, expected_z_mm)
+        assert z_after_resize == pytest.approx(expected_z_mm + 300.0)
     finally:
         FreeCAD.closeDocument(doc.Name)
 

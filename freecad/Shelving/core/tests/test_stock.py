@@ -1,5 +1,6 @@
 """The source board a new board copies its stock from, and carcass classification."""
 
+import dataclasses
 from pathlib import Path
 
 import pytest
@@ -7,11 +8,10 @@ import pytest
 from freecad.Shelving.core.geometry import Vec3
 from freecad.Shelving.core.layout import (
     Axis,
+    Basis,
     Bay,
     Board,
     Division,
-    Fill,
-    Fixed,
     Unit,
     Void,
 )
@@ -51,7 +51,10 @@ def test_magic_start_floor_top_and_sides_are_carcass_and_the_shelf_is_not() -> N
 def test_is_carcass_refuses_an_unknown_board() -> None:
     unit = Unit(
         size_mm=Vec3(600.0, 300.0, 900.0),
-        root=Division(axis=Axis.Z, items=[_board("bottom"), Bay(), _board("top")]),
+        root=Division(
+            axis=Axis.Z,
+            items=[_board("bottom"), Bay(size_mm=864.0), _board("top")],
+        ),
     )
     with pytest.raises(KeyError):
         is_carcass(unit, "no-such-id")
@@ -67,9 +70,9 @@ def test_an_interior_board_in_the_same_run_wins_over_a_nearer_carcass_board() ->
             axis=Axis.Z,
             items=[
                 _board("bottom"),
-                Bay(rule=Fixed(200.0), id="target"),
+                Bay(size_mm=200.0, id="target"),
                 _board("shelf", 25.0),
-                Bay(rule=Fill()),
+                Bay(size_mm=739.0),
                 _board("top"),
             ],
         ),
@@ -81,7 +84,8 @@ def _two_column_unit(
     width_mm: float, left_column: Bay | Division, right_column: Bay | Division
 ) -> Unit:
     """A 1000 mm tall unit of 18 mm boards: bottom, top, two sides, and a
-    divider between two columns of equal width."""
+    divider between two columns of equal width, which this sets."""
+    column_mm = (width_mm - 3 * 18.0) / 2
     return Unit(
         size_mm=Vec3(width_mm, 300.0, 1000.0),
         root=Division(
@@ -92,11 +96,12 @@ def _two_column_unit(
                     axis=Axis.X,
                     items=[
                         _board("left"),
-                        left_column,
+                        dataclasses.replace(left_column, size_mm=column_mm),
                         _board("divider"),
-                        right_column,
+                        dataclasses.replace(right_column, size_mm=column_mm),
                         _board("right"),
                     ],
+                    size_mm=964.0,
                 ),
                 _board("top"),
             ],
@@ -113,17 +118,17 @@ def test_an_interior_board_in_the_same_run_wins_over_a_nearer_one_elsewhere() ->
         Division(
             axis=Axis.Z,
             items=[
-                Bay(rule=Fill(), id="target"),
+                Bay(size_mm=899.0, id="target"),
                 _board("shelf_same", 15.0),
-                Bay(rule=Fixed(50.0)),
+                Bay(size_mm=50.0),
             ],
         ),
         Division(
             axis=Axis.Z,
             items=[
-                Bay(rule=Fixed(450.0)),
+                Bay(size_mm=450.0),
                 _board("shelf_other", 16.0),
-                Bay(rule=Fill()),
+                Bay(size_mm=498.0),
             ],
         ),
     )
@@ -141,19 +146,19 @@ def test_with_no_interior_board_in_the_run_the_nearest_interior_board_wins() -> 
         Division(
             axis=Axis.Z,
             items=[
-                Bay(rule=Fixed(300.0)),
+                Bay(size_mm=300.0),
                 _board("shelf_low", 15.0),
-                Bay(rule=Fixed(150.0)),
+                Bay(size_mm=150.0),
                 _board("shelf_high", 16.0),
-                Bay(rule=Fill()),
+                Bay(size_mm=483.0),
             ],
         ),
         Division(
             axis=Axis.Z,
             items=[
-                Void(rule=Fixed(300.0)),
+                Void(size_mm=300.0, lock=Basis.CLEAR),
                 _board("floor_b"),
-                Bay(rule=Fill(), id="target"),
+                Bay(size_mm=646.0, id="target"),
             ],
         ),
     )
@@ -175,11 +180,12 @@ def test_with_no_interior_board_at_all_the_nearest_carcass_board_wins() -> None:
                     axis=Axis.X,
                     items=[
                         _board("left"),
-                        Bay(id="target"),
+                        Bay(size_mm=473.0, id="target"),
                         _board("divider"),
-                        Bay(),
+                        Bay(size_mm=473.0),
                         _board("right"),
                     ],
+                    size_mm=958.0,
                 ),
                 _board("top", 22.0),
             ],
@@ -194,7 +200,11 @@ def test_with_no_parallel_board_the_nearest_board_of_any_kind_wins() -> None:
         size_mm=Vec3(600.0, 300.0, 900.0),
         root=Division(
             axis=Axis.X,
-            items=[_board("left"), Bay(id="target"), _board("right", 20.0)],
+            items=[
+                _board("left"),
+                Bay(size_mm=562.0, id="target"),
+                _board("right", 20.0),
+            ],
         ),
     )
     assert _source_id(unit, "target", Axis.Z) == "left"

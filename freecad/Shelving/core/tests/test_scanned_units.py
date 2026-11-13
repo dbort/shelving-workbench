@@ -1,6 +1,6 @@
 """Units modeled outside this workbench, scanned from real exports: their
-rules solve back to the measured boards and leave every edit somewhere to
-go."""
+measured sizes lay out back to the measured boards, and every edit has
+somewhere to go."""
 
 import dataclasses
 from collections.abc import Iterator
@@ -8,7 +8,13 @@ from pathlib import Path
 
 import pytest
 
-from freecad.Shelving.core.edit import move_board, set_size
+from freecad.Shelving.core.edit import (
+    MIN_DRAG_GAP_MM,
+    move_board,
+    set_size,
+    set_thickness,
+    set_unit_size,
+)
 from freecad.Shelving.core.expand import expand
 from freecad.Shelving.core.geometry import Space, Vec3
 from freecad.Shelving.core.layout import (
@@ -17,13 +23,15 @@ from freecad.Shelving.core.layout import (
     Bay,
     Board,
     Division,
-    Fill,
-    Fixed,
     Item,
     Region,
     Unit,
     Void,
-    Weighted,
+)
+from freecad.Shelving.core.record import (
+    rules_from_json,
+    rules_to_json,
+    with_stored_rules,
 )
 from freecad.Shelving.core.scan import (
     DEFAULT_SNAP_MM,
@@ -34,7 +42,7 @@ from freecad.Shelving.core.scan import (
     export_from_json,
     scan,
 )
-from freecad.Shelving.core.solver import solve
+from freecad.Shelving.core.solver import solve, solve_axis
 
 FIXTURES = Path(__file__).parent / "fixtures"
 _FIXTURE_NAMES = ("real_magicstart_f1", "real_stair_step", "real_two_units")
@@ -75,54 +83,47 @@ def _boards(region: Region) -> Iterator[Board]:
         yield from (item for item in division.items if isinstance(item, Board))
 
 
-def _regions(division: Division) -> list[Item]:
-    return [
-        item
-        for item in division.items
-        if not isinstance(item, Board) and not _is_axis_wrap(item)
-    ]
-
-
-def _sharing(division: Division) -> list[Item]:
-    """The regions of ``division``'s run that share leftover space: its
-    compartments, or its voids when it has no compartment."""
-    regions = _regions(division)
-    compartments: list[Item] = [item for item in regions if not isinstance(item, Void)]
-    return compartments or regions
+@pytest.mark.parametrize("name", _FIXTURE_NAMES)
+def test_a_scan_locks_only_axis_wraps_and_voids_beside_a_compartment(
+    name: str,
+) -> None:
+    unit = _scanned(name)
+    for division in _divisions(unit.root):
+        compartments = [
+            item
+            for item in division.items
+            if isinstance(item, Bay | Division) and not _is_axis_wrap(item)
+        ]
+        for item in division.items:
+            if isinstance(item, Board):
+                continue
+            beside = isinstance(item, Void) and bool(compartments)
+            if _is_axis_wrap(item) or beside:
+                assert item.lock is Basis.CLEAR, item
+            else:
+                assert item.lock is None, item
 
 
 @pytest.mark.parametrize("name", _FIXTURE_NAMES)
-def test_every_scanned_region_shares_space_in_proportion_to_its_size(
-    name: str,
-) -> None:
-    """Only an axis-wrap division, and a void beside a compartment, is
-    fixed. Each run's sharing regions are all ``Fill`` when they are all one
-    size within the snap tolerance, and otherwise all ``Weighted`` by their
-    scanned size."""
+def test_a_unit_read_and_solved_with_no_edit_moves_no_board(name: str) -> None:
+    """Reading back the record the unit would store, then solving each
+    elevation axis with nothing changed, keeps every board within 1e-6 mm."""
     unit = _scanned(name)
-    spaces = solve(unit)
-    for division in _divisions(unit.root):
-        sharing = _sharing(division)
-        for item in division.items:
-            if _is_axis_wrap(item):
-                assert isinstance(item.rule, Fixed)
-            elif isinstance(item, Void) and item not in sharing:
-                assert isinstance(item.rule, Fixed), item
-                assert item.rule.size_mm == pytest.approx(
-                    _component_mm(spaces[item.id].size, division.axis), abs=1e-6
-                )
-        if not sharing:
-            continue
-        sizes_mm = [
-            _component_mm(spaces[item.id].size, division.axis) for item in sharing
-        ]
-        if max(sizes_mm) - min(sizes_mm) <= DEFAULT_SNAP_MM:
-            assert all(isinstance(item.rule, Fill) for item in sharing)
-            continue
-        for item, size_mm in zip(sharing, sizes_mm, strict=True):
-            assert isinstance(item, Bay | Void | Division)
-            assert isinstance(item.rule, Weighted), item
-            assert item.rule.weight == pytest.approx(size_mm, abs=1e-6)
+    before = solve(unit)
+    read = with_stored_rules(unit, rules_from_json(rules_to_json(unit)))
+    assert unit.depth_axis is not None
+    for axis in elevation_axes(unit.depth_axis):
+        read = solve_axis(read, solve(read), axis, MIN_DRAG_GAP_MM)
+    after = solve(read)
+    for board in _boards(unit.root):
+        for axis in Axis:
+            index = axis.component_index
+            assert after[board.id].origin_mm(index) == pytest.approx(
+                before[board.id].origin_mm(index), abs=1e-6
+            ), board.id
+            assert after[board.id].extent_mm(index) == pytest.approx(
+                before[board.id].extent_mm(index), abs=1e-6
+            ), board.id
 
 
 @pytest.mark.parametrize("name", _FIXTURE_NAMES)
@@ -154,7 +155,7 @@ def test_a_scanned_unit_solves_back_to_its_measured_boards(name: str) -> None:
 
 def test_two_side_by_side_tops_fill_their_run_exactly() -> None:
     """The two units' tops lie sideways in their run, so each carries its
-    span as a rule. Their measured spans overrun the run by a fraction of a
+    span as its extent. Their measured spans overrun the run by a fraction of a
     millimeter; their slot widths in the scan grid add up to it exactly."""
     boxes = {box.name: box for box in _boxes("real_two_units")}
     unit = _scanned("real_two_units")
@@ -164,20 +165,20 @@ def test_two_side_by_side_tops_fill_their_run_exactly() -> None:
         for division in _divisions(unit.root)
         if {item.id for item in division.items} == {"panelYX", "panelYX004"}
     )
-    rules_mm = []
+    extents_mm: list[float] = []
     measured_mm = []
     for top in tops.items:
-        assert isinstance(top, Board) and isinstance(top.rule, Fixed)
-        rules_mm.append(top.rule.size_mm)
+        assert isinstance(top, Board) and top.extent_mm is not None
+        extents_mm.append(top.extent_mm)
         measured_mm.append(_component_mm(boxes[top.id].size_mm, tops.axis))
     run_mm = _component_mm(spaces[tops.id].size, tops.axis)
-    assert sum(rules_mm) == pytest.approx(run_mm, abs=1e-9)
+    assert sum(extents_mm) == pytest.approx(run_mm, abs=1e-9)
     assert abs(sum(measured_mm) - run_mm) > 1e-4
 
 
 @pytest.mark.parametrize("name", ["real_stair_step", "real_two_units"])
-def test_a_ruled_board_spans_its_slot_in_the_scan_grid(name: str) -> None:
-    """A board lying across its run carries a rule whose size is the gap
+def test_a_board_with_an_extent_spans_its_slot_in_the_scan_grid(name: str) -> None:
+    """A board lying across its run carries an extent that is the gap
     between two of the scan's snapped grid lines, the lines every sibling's
     size comes from, and its solved edges sit on those lines."""
     boxes = {box.name: box for box in _boxes(name)}
@@ -200,12 +201,11 @@ def test_a_ruled_board_spans_its_slot_in_the_scan_grid(name: str) -> None:
             DEFAULT_SNAP_MM,
         )
         for item in division.items:
-            if not isinstance(item, Board) or item.rule is None:
+            if not isinstance(item, Board) or item.extent_mm is None:
                 continue
-            assert isinstance(item.rule, Fixed)
             ruled += 1
             low_mm = _component_mm(spaces[item.id].origin, axis)
-            high_mm = low_mm + item.rule.size_mm
+            high_mm = low_mm + item.extent_mm
             assert min(abs(low_mm - line_mm) for line_mm in lines_mm) < 1e-6
             assert min(abs(high_mm - line_mm) for line_mm in lines_mm) < 1e-6
     assert ruled >= 2
@@ -222,7 +222,7 @@ def _first(region: Region, kind: type[Item], board_id: str = "") -> Item:
 def _thicknesses_hold(unit: Unit, spaces: dict[str, Space]) -> None:
     for division in _divisions(unit.root):
         for item in division.items:
-            if isinstance(item, Board) and item.rule is None:
+            if isinstance(item, Board) and item.extent_mm is None:
                 assert _component_mm(
                     spaces[item.id].size, division.axis
                 ) == pytest.approx(item.thickness_mm, abs=1e-6), item.id
@@ -230,11 +230,8 @@ def _thicknesses_hold(unit: Unit, spaces: dict[str, Space]) -> None:
 
 def _resized(unit: Unit, axis: Axis, delta_mm: float) -> Unit:
     size_mm = unit.size_mm
-    return dataclasses.replace(
-        unit,
-        size_mm=_with_component_mm(
-            size_mm, axis, _component_mm(size_mm, axis) + delta_mm
-        ),
+    return set_unit_size(
+        unit, _with_component_mm(size_mm, axis, _component_mm(size_mm, axis) + delta_mm)
     )
 
 
@@ -251,8 +248,9 @@ def _magic_start_column(unit: Unit) -> Division:
 
 
 def test_magic_start_takes_a_typed_size_and_holds_its_floor() -> None:
-    """The upper bay takes up the difference; the plinth gap, a void beside
-    compartments, keeps its size, so the floor stays where it was."""
+    """The shelf moves up and the upper bay takes up the difference; the
+    plinth gap, a void beside compartments, keeps its size, so the floor
+    stays where it was."""
     unit = _scanned("real_magicstart_f1")
     lower_bay = [i for i in _magic_start_column(unit).items if isinstance(i, Bay)][0]
     floor_z_mm = solve(unit)["Floor"].origin.z_mm
@@ -265,37 +263,13 @@ def test_magic_start_takes_a_shelf_drag() -> None:
     unit = _scanned("real_magicstart_f1")
     low_face_mm = solve(unit)["Shelf"].origin.z_mm + 30.0
     spaces = solve(move_board(unit, "Shelf", low_face_mm))
-    assert spaces["Shelf"].origin.z_mm == pytest.approx(low_face_mm)
+    assert spaces["Shelf"].origin.z_mm == pytest.approx(low_face_mm, abs=1e-3)
 
 
 def test_magic_start_takes_a_thinner_shelf() -> None:
     unit = _scanned("real_magicstart_f1")
-    column = _magic_start_column(unit)
-    items = [
-        dataclasses.replace(item, thickness_mm=12.0)
-        if isinstance(item, Board) and item.id == "Shelf"
-        else item
-        for item in column.items
-    ]
-    thinner = dataclasses.replace(
-        unit,
-        root=_replaced(unit.root, column.id, dataclasses.replace(column, items=items)),
-    )
+    thinner = set_thickness(unit, ["Shelf"], 12.0)
     assert solve(thinner)["Shelf"].size.z_mm == pytest.approx(12.0)
-
-
-def _replaced(region: Region, region_id: str, replacement: Region) -> Region:
-    if region.id == region_id:
-        return replacement
-    if not isinstance(region, Division):
-        return region
-    return dataclasses.replace(
-        region,
-        items=[
-            item if isinstance(item, Board) else _replaced(item, region_id, replacement)
-            for item in region.items
-        ],
-    )
 
 
 @pytest.mark.parametrize(
@@ -328,9 +302,9 @@ def test_a_scanned_unit_resizes_and_keeps_every_board_thickness(
     _thicknesses_hold(resized, spaces)
 
 
-def test_magic_start_grows_taller_in_its_bays_and_keeps_its_plinth() -> None:
-    """The plinth gap is a void beside compartments, so the two bays take
-    all 40 mm, in proportion to their sizes."""
+def test_magic_start_grows_taller_in_its_upper_bay_and_keeps_its_plinth() -> None:
+    """The bay beside the top, which moves, takes all 40 mm; the shelf and
+    the plinth gap, a void beside compartments, hold still."""
     unit = _scanned("real_magicstart_f1")
     before = solve(unit)
     column = _magic_start_column(unit)
@@ -342,5 +316,5 @@ def test_magic_start_grows_taller_in_its_bays_and_keeps_its_plinth() -> None:
         after[bay.id].size.z_mm - before[bay.id].size.z_mm
         for bay in (lower_bay, upper_bay)
     ]
-    assert sum(growth_mm) == pytest.approx(40.0)
-    assert growth_mm[0] / growth_mm[1] == pytest.approx(253.0 / 353.0)
+    assert growth_mm == pytest.approx([0.0, 40.0])
+    assert after["Shelf"] == before["Shelf"]

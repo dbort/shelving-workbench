@@ -1,62 +1,80 @@
-"""Spacing solver: a region tree plus a unit size to 3D spaces.
+"""Layout of a region tree's stored geometry, and the engine calls an edit
+solves its result with.
 
-``solve`` walks the tree from the unit's outer
-:class:`~freecad.Shelving.core.geometry.Space` placing one space per region
-and board id. Slack along a division's axis is distributed by
-:func:`distribute`, a pure function that knows nothing about
-regions, boards, or axes: a board contributes ``Fixed(thickness_mm)``, or its
-own ``rule`` when that is set, and a region contributes its own rule, so the
-arithmetic never needs to know which is which. A layout that cannot be
-satisfied raises :class:`LayoutSolveError` with a machine-readable ``reason``
-and the id of the offending node.
+``solve`` places one :class:`~freecad.Shelving.core.geometry.Space` per
+region and board id from the sizes the tree stores and checks that they fit:
+it never moves anything. An edit that moves boards builds the constraint
+system for one axis with :func:`solve_axis`, which hands it to
+:func:`freecad.Shelving.core.axis_solver.solve` and writes the solved sizes
+back into the tree, so every unit an edit returns already holds the geometry
+``solve`` lays out.
 
-All lengths are float millimeters. There is no rounding or quantization;
-:data:`EPS_MM` is the tolerance for the "does it fit" and "is it positive"
-comparisons only.
+The system's positions are each board's low face on runs along the axis and
+the unit's two outer faces, plus one seam where two regions meet with no
+board between them. A board's high face is its low face plus its extent, so
+a run of boards face to face shares one position. Relations hold the boards
+in their runs, the unit's fixed point, each lock, and the unit's size, in
+that order: the engine reports the later member of a dependent group as
+redundant, so the size drops out when locks already determine it and
+conflicts when they contradict it.
+
+All lengths are float millimeters. :data:`EPS_MM` is the tolerance for the
+"does it fit" and "is it positive" comparisons only.
 """
 
-from collections.abc import Mapping, Sequence
+from __future__ import annotations
+
+import dataclasses
+from collections.abc import Collection, Mapping, Sequence
 from typing import Literal
 
-from freecad.Shelving.core.geometry import AxisIndex, Space, Vec3
+from freecad.Shelving.core import axis_solver
+from freecad.Shelving.core.axis_solver import (
+    ConstraintId,
+    LowerBound,
+    PositionId,
+    Relation,
+    Target,
+)
+from freecad.Shelving.core.geometry import Space, Vec3
 from freecad.Shelving.core.layout import (
     Axis,
-    Basis,
     Board,
     Division,
-    Fill,
-    Fixed,
+    FixedSide,
     Item,
     Region,
-    SizeRule,
     Unit,
-    Weighted,
 )
 
 EPS_MM: float = 1e-6
 
-SolveErrorReason = Literal[
-    "overflow",
-    "no_slack_absorber",
-    "nonpositive_opening",
-    "unresolvable_basis",
-    "pinned_mismatch",
-]
+# A solved size within this of the size stored before the edit keeps the
+# stored value, so the rounding a solve leaves on an untouched region never
+# reaches the document.
+_SETTLE_MM: float = 1e-7
+
+SolveErrorReason = Literal["misfit", "pinned_mismatch", "conflict"]
 
 
 class LayoutSolveError(Exception):
     """A layout that cannot be satisfied.
 
-    ``node_id`` is the offending ``Division`` id for ``"overflow"`` and
-    ``"no_slack_absorber"``, the region whose ``Basis.WITH_NEXT`` rule could
-    not be resolved for ``"unresolvable_basis"``, the child item's id for
-    ``"nonpositive_opening"``, and the pinned board's id for
-    ``"pinned_mismatch"``. ``detail`` carries the numbers that explain the
-    failure.
+    ``node_id`` is the offending ``Division`` id for a ``"misfit"`` whose
+    sizes do not add up to its span, and the item's id for one with a size
+    that is not positive; the pinned board's id for ``"pinned_mismatch"``;
+    and for ``"conflict"`` the first of ``region_ids``, or the root's id when
+    that is empty. ``region_ids`` is set only for ``"conflict"``: the regions
+    whose locks or minimum widths the engine named, in tree order. ``detail``
+    carries the numbers that explain the failure.
     """
 
     def __init__(
-        self, node_id: str, reason: SolveErrorReason, detail: Mapping[str, float]
+        self,
+        node_id: str,
+        reason: SolveErrorReason,
+        detail: Mapping[str, float],
+        region_ids: Sequence[str] = (),
     ) -> None:
         super().__init__(
             f"layout solve failed at {node_id!r}: {reason} ({dict(detail)})"
@@ -64,160 +82,29 @@ class LayoutSolveError(Exception):
         self.node_id = node_id
         self.reason = reason
         self.detail = detail
+        self.region_ids: tuple[str, ...] = tuple(region_ids)
 
 
-def _driven_weight(rule: Weighted | Fill) -> float:
-    """Weight a driven rule contributes to slack sharing; ``Fill`` counts as 1."""
-    return rule.weight if isinstance(rule, Weighted) else 1.0
-
-
-def distribute(
-    axis_span_mm: float,
-    rules: Sequence[SizeRule],
-    divider_thicknesses_mm: Sequence[float],
-    *,
-    node_id: str,
-) -> list[float]:
-    """One opening size per rule, sharing slack by fixed / weighted / fill.
-
-    ``Fixed`` openings take their stated size; ``Weighted`` and ``Fill`` split
-    what remains of ``axis_span_mm`` after divider thicknesses and fixed sizes,
-    in proportion to weight (``Fill`` is weight 1). Raises
-    :class:`LayoutSolveError` with ``reason="overflow"`` when the dividers alone
-    exceed the span or the fixed sizes leave negative slack, and
-    ``reason="no_slack_absorber"`` when there is leftover positive slack but no
-    driven rule to absorb it. Overflow is checked first, so an all-``Fixed``
-    run whose sizes exceed the span reports ``"overflow"``, not
-    ``"no_slack_absorber"``. It does not check for nonpositive openings; the
-    caller does that against the offending item's id. Every ``Fixed`` rule
-    here must already be resolved to ``Basis.CLEAR``; this function has no
-    basis case of its own.
-    """
-    dividers_total_mm = sum(divider_thicknesses_mm)
-    if dividers_total_mm > axis_span_mm + EPS_MM:
-        raise LayoutSolveError(
-            node_id,
-            "overflow",
-            {
-                "axis_span_mm": axis_span_mm,
-                "dividers_total_mm": dividers_total_mm,
-            },
-        )
-    available_mm = axis_span_mm - dividers_total_mm
-    fixed_sum_mm = sum(rule.size_mm for rule in rules if isinstance(rule, Fixed))
-    slack_mm = available_mm - fixed_sum_mm
-    driven = [rule for rule in rules if isinstance(rule, (Weighted, Fill))]
-    # Negative slack is an overflow regardless of whether a driven rule exists,
-    # so this precedes the no_slack_absorber check: an all-Fixed run that
-    # overruns the span reports the more informative "overflow" reason.
-    if slack_mm < -EPS_MM:
-        raise LayoutSolveError(
-            node_id,
-            "overflow",
-            {"slack_mm": slack_mm, "available_mm": available_mm},
-        )
-    # no_slack_absorber is the underfill case only: leftover positive slack and
-    # no Weighted/Fill rule to take it up.
-    if not driven and slack_mm > EPS_MM:
-        raise LayoutSolveError(
-            node_id,
-            "no_slack_absorber",
-            {"slack_mm": slack_mm, "available_mm": available_mm},
-        )
-    total_weight = sum(_driven_weight(rule) for rule in driven)
-    sizes: list[float] = []
-    for rule in rules:
-        match rule:
-            case Fixed(size_mm=size_mm):
-                sizes.append(size_mm)
-            case Weighted() | Fill():
-                sizes.append(_driven_weight(rule) / total_weight * slack_mm)
-    return sizes
-
-
-def _axis_index(axis: Axis) -> AxisIndex:
-    match axis:
-        case Axis.X:
-            return 0
-        case Axis.Y:
-            return 1
-        case Axis.Z:
-            return 2
-
-
-def _component_mm(v: Vec3, axis_index: AxisIndex) -> float:
-    return (v.x_mm, v.y_mm, v.z_mm)[axis_index]
-
-
-def _replace_component_mm(v: Vec3, axis_index: AxisIndex, value_mm: float) -> Vec3:
+def _replace_component_mm(v: Vec3, axis_index: int, value_mm: float) -> Vec3:
     components = [v.x_mm, v.y_mm, v.z_mm]
     components[axis_index] = value_mm
     return Vec3(*components)
 
 
-def _resolve_with_next(
-    rule: Fixed,
-    index: int,
-    items: Sequence[Item],
-    region_id: str,
-) -> Fixed:
-    """Resolve a ``Basis.WITH_NEXT`` rule to an equivalent ``Basis.CLEAR`` one.
-
-    Subtracts the resolved thickness of the item immediately after ``index``
-    in ``items``. Raises :class:`LayoutSolveError` with reason
-    ``"unresolvable_basis"`` when there is no next item or it is not a
-    ``Board``, and with reason ``"nonpositive_opening"`` when the next item
-    is at least as thick as the quoted spacing.
-    """
-    if index + 1 >= len(items) or not isinstance(items[index + 1], Board):
-        raise LayoutSolveError(region_id, "unresolvable_basis", {})
-    next_board = items[index + 1]
-    assert isinstance(next_board, Board)
-    resolved_size_mm = rule.size_mm - next_board.thickness_mm
-    if resolved_size_mm <= 0:
-        # Fixed.__post_init__ would reject this with a bare ValueError, which
-        # breaks the LayoutSolveError contract solve's callers are told to
-        # catch; raise the uniform error before constructing it.
-        raise LayoutSolveError(
-            region_id, "nonpositive_opening", {"size_mm": resolved_size_mm}
-        )
-    return Fixed(size_mm=resolved_size_mm)
+def board_extent_mm(board: Board) -> float:
+    """``board``'s size along its run: its ``extent_mm`` when set, else its
+    thickness."""
+    return board.thickness_mm if board.extent_mm is None else board.extent_mm
 
 
-def _rule_for_item(
-    item: Item,
-    index: int,
-    items: Sequence[Item],
-) -> SizeRule:
-    """The rule ``distribute`` should use for ``item``.
-
-    A board's size along the axis is its thickness, a ``Fixed`` rule, so
-    boards and regions go through one distribution, unless the board's own
-    ``rule`` is set, in which case that rule is used directly instead. A
-    board's own rule is never routed through ``_resolve_with_next``: that
-    resolution is for a region's ``Basis.WITH_NEXT`` quoting a spacing
-    relative to the next item, a distinct concept a board's own size has no
-    use for. A region's own ``Basis.WITH_NEXT`` rule is resolved to
-    ``Basis.CLEAR`` first.
-    """
-    if isinstance(item, Board):
-        if item.rule is not None:
-            return item.rule
-        return Fixed(size_mm=item.thickness_mm)
-    rule = item.rule
-    if isinstance(rule, Fixed) and rule.basis is Basis.WITH_NEXT:
-        return _resolve_with_next(rule, index, items, item.id)
-    return rule
+def _item_size_mm(item: Item) -> float:
+    return board_extent_mm(item) if isinstance(item, Board) else item.size_mm
 
 
 def _check_pinned(board: Board, size: Vec3) -> None:
-    """Verify a pinned board's derived ``size`` against its ``pinned_size_mm``.
-
-    The solver never lets a pinned size drive the layout; it derives the
-    board's extent the same way as any other item, then checks it here.
-    Raises :class:`LayoutSolveError` with reason ``"pinned_mismatch"`` when
-    any axis differs by more than :data:`EPS_MM`.
-    """
+    """Raise a ``"pinned_mismatch"`` :class:`LayoutSolveError` when the
+    extent ``size`` laid out for ``board`` differs from its
+    ``pinned_size_mm`` by more than :data:`EPS_MM` on any axis."""
     pinned = board.pinned_size_mm
     if pinned is None:
         return
@@ -240,38 +127,17 @@ def _check_pinned(board: Board, size: Vec3) -> None:
         )
 
 
-def _place(
-    region: Region,
-    space: Space,
-    out: dict[str, Space],
-) -> None:
-    """Record one :class:`~freecad.Shelving.core.geometry.Space` per node id in the
-    subtree rooted at ``region``.
-
-    A ``Division`` shares ``space``'s extent along its own axis among its
-    items and passes the other two axes through unchanged. Items are placed
-    from the low edge in list order. ``out`` is mutated in place. A resolved
-    opening ``<= EPS_MM`` raises :class:`LayoutSolveError` against that
-    item's id.
-    """
+def _lay_out(region: Region, space: Space, out: dict[str, Space]) -> None:
     out[region.id] = space
     if not isinstance(region, Division):
         return
-    axis_index = _axis_index(region.axis)
-    axis_span_mm = space.extent_mm(axis_index)
-    rules: list[SizeRule] = [
-        _rule_for_item(item, index, region.items)
-        for index, item in enumerate(region.items)
-    ]
-    sizes_mm = distribute(axis_span_mm, rules, [], node_id=region.id)
-    cursor_mm = _component_mm(space.origin, axis_index)
-    for item, size_mm in zip(region.items, sizes_mm, strict=True):
+    axis_index = region.axis.component_index
+    start_mm = space.origin_mm(axis_index)
+    cursor_mm = start_mm
+    for item in region.items:
+        size_mm = _item_size_mm(item)
         if size_mm <= EPS_MM:
-            raise LayoutSolveError(
-                item.id,
-                "nonpositive_opening",
-                {"size_mm": size_mm},
-            )
+            raise LayoutSolveError(item.id, "misfit", {"size_mm": size_mm})
         child_space = Space(
             origin=_replace_component_mm(space.origin, axis_index, cursor_mm),
             size=_replace_component_mm(space.size, axis_index, size_mm),
@@ -281,19 +147,335 @@ def _place(
             _check_pinned(item, child_space.size)
             out[item.id] = child_space
         else:
-            _place(item, child_space, out)
+            _lay_out(item, child_space, out)
+    span_mm = space.extent_mm(axis_index)
+    if abs(cursor_mm - start_mm - span_mm) > EPS_MM:
+        raise LayoutSolveError(
+            region.id,
+            "misfit",
+            {"span_mm": span_mm, "sizes_total_mm": cursor_mm - start_mm},
+        )
 
 
 def solve(unit: Unit) -> dict[str, Space]:
-    """One :class:`~freecad.Shelving.core.geometry.Space` per region and board id.
+    """One :class:`~freecad.Shelving.core.geometry.Space` per region and board
+    id, laid out from the stored sizes.
 
     The root is placed at ``unit.position_mm`` with extent ``unit.size_mm``,
-    so every space is in the frame the unit's boards are written in.
+    so every space is in the frame the unit's boards are written in. Raises
+    a ``"misfit"`` :class:`LayoutSolveError` when a run's sizes do not add up
+    to its span or one is not positive, and a ``"pinned_mismatch"`` one when
+    a pinned board would change size.
     """
     out: dict[str, Space] = {}
-    root_space = Space(origin=unit.position_mm, size=unit.size_mm)
-    _place(unit.root, root_space, out)
+    _lay_out(unit.root, Space(origin=unit.position_mm, size=unit.size_mm), out)
     return out
+
+
+@dataclasses.dataclass(frozen=True)
+class _Edge:
+    """A face along the system's axis: a position plus a fixed offset."""
+
+    position: PositionId
+    offset_mm: float
+
+
+_OUTER_MIN = PositionId("outer:min")
+_OUTER_MAX = PositionId("outer:max")
+_FIXED_ID = ConstraintId("outer:fixed")
+_SIZE_ID = ConstraintId("outer:size")
+_HELD_MAX_ID = ConstraintId("outer:held")
+
+
+def _span(low: _Edge, high: _Edge) -> tuple[Mapping[PositionId, float], float]:
+    """``high - low`` as relation coefficients and the offset to subtract
+    from the constant."""
+    if low.position == high.position:
+        return {}, high.offset_mm - low.offset_mm
+    return {high.position: 1.0, low.position: -1.0}, high.offset_mm - low.offset_mm
+
+
+@dataclasses.dataclass
+class _System:
+    """One axis's positions and structural relations, built from a unit."""
+
+    axis: Axis
+    current_mm: dict[PositionId, float]
+    board_low: dict[str, _Edge]
+    # Every region whose parent runs along the axis, in tree order.
+    regions: list[Region]
+    region_edges: dict[str, tuple[_Edge, _Edge]]
+    structural: list[Relation]
+
+    def value_mm(self, edge: _Edge, positions_mm: Mapping[PositionId, float]) -> float:
+        return positions_mm[edge.position] + edge.offset_mm
+
+    def lock_id(self, region_id: str) -> ConstraintId:
+        return ConstraintId(f"{region_id}:lock")
+
+    def min_id(self, region_id: str) -> ConstraintId:
+        return ConstraintId(f"{region_id}:min")
+
+    def lock_relations(self, without: Collection[str] = ()) -> list[Relation]:
+        relations: list[Relation] = []
+        for region in self.regions:
+            if region.lock is None or region.id in without:
+                continue
+            coefficients, offset_mm = _span(*self.region_edges[region.id])
+            relations.append(
+                Relation(
+                    self.lock_id(region.id), coefficients, region.size_mm - offset_mm
+                )
+            )
+        return relations
+
+    def region_ids(self, constraint_ids: Collection[ConstraintId]) -> list[str]:
+        """The regions whose lock or minimum width ``constraint_ids`` names,
+        in tree order."""
+        return [
+            region.id
+            for region in self.regions
+            if self.lock_id(region.id) in constraint_ids
+            or self.min_id(region.id) in constraint_ids
+        ]
+
+
+def _build(unit: Unit, spaces: Mapping[str, Space], axis: Axis) -> _System:
+    """The system for ``axis`` with ``unit``'s boards, locks and stored
+    sizes, at the current positions ``spaces`` lays out."""
+    axis_index = axis.component_index
+    root_space = spaces[unit.root.id]
+    system = _System(
+        axis=axis,
+        current_mm={
+            _OUTER_MIN: root_space.origin_mm(axis_index),
+            _OUTER_MAX: root_space.origin_mm(axis_index)
+            + root_space.extent_mm(axis_index),
+        },
+        board_low={},
+        regions=[],
+        region_edges={},
+        structural=[],
+    )
+
+    def walk(region: Region, low: _Edge, high: _Edge) -> None:
+        if not isinstance(region, Division):
+            return
+        if region.axis is not axis:
+            for item in region.items:
+                if not isinstance(item, Board):
+                    walk(item, low, high)
+            return
+        cursor = low
+        last = len(region.items) - 1
+        for index, item in enumerate(region.items):
+            if isinstance(item, Board):
+                system.board_low[item.id] = cursor
+                cursor = _Edge(
+                    cursor.position, cursor.offset_mm + board_extent_mm(item)
+                )
+                if index == last:
+                    coefficients, offset_mm = _span(cursor, high)
+                    system.structural.append(
+                        Relation(
+                            ConstraintId(f"{item.id}:fit"), coefficients, -offset_mm
+                        )
+                    )
+                continue
+            if index == last:
+                item_high = high
+            else:
+                after = region.items[index + 1]
+                if isinstance(after, Board):
+                    position = PositionId(after.id)
+                    system.current_mm[position] = spaces[after.id].origin_mm(axis_index)
+                else:
+                    position = PositionId(f"{item.id}:end")
+                    space = spaces[item.id]
+                    system.current_mm[position] = space.origin_mm(
+                        axis_index
+                    ) + space.extent_mm(axis_index)
+                item_high = _Edge(position, 0.0)
+            system.regions.append(item)
+            system.region_edges[item.id] = (cursor, item_high)
+            walk(item, cursor, item_high)
+            cursor = item_high
+
+    walk(unit.root, _Edge(_OUTER_MIN, 0.0), _Edge(_OUTER_MAX, 0.0))
+    return system
+
+
+def _fixed_relation(unit: Unit, system: _System) -> Relation:
+    """The unit's fixed point along the system's axis, where it is now."""
+    low_mm = system.current_mm[_OUTER_MIN]
+    high_mm = system.current_mm[_OUTER_MAX]
+    match unit.fixed_point.side(system.axis):
+        case "min":
+            return Relation(_FIXED_ID, {_OUTER_MIN: 1.0}, low_mm)
+        case "center":
+            return Relation(
+                _FIXED_ID, {_OUTER_MIN: 0.5, _OUTER_MAX: 0.5}, (low_mm + high_mm) / 2
+            )
+        case "max":
+            return Relation(_FIXED_ID, {_OUTER_MAX: 1.0}, high_mm)
+
+
+# How far along an axis, as a fraction of the unit's size there, each fixed
+# side lies from the unit's minimum corner.
+FIXED_FRACTION: Mapping[FixedSide, float] = {"min": 0.0, "center": 0.5, "max": 1.0}
+
+
+def _settled(new_mm: float, old_mm: float) -> float:
+    return old_mm if abs(new_mm - old_mm) <= _SETTLE_MM else new_mm
+
+
+def _with_sizes(region: Region, sizes_mm: Mapping[str, float]) -> Region:
+    """``region`` with each region ``sizes_mm`` names at that size, copying
+    only the paths down to them."""
+    new_region = region
+    if region.id in sizes_mm:
+        size_mm = _settled(sizes_mm[region.id], region.size_mm)
+        if size_mm != region.size_mm:
+            new_region = dataclasses.replace(region, size_mm=size_mm)
+    if not isinstance(new_region, Division):
+        return new_region
+    new_items: list[Item] = []
+    changed = False
+    for item in new_region.items:
+        new_item = item if isinstance(item, Board) else _with_sizes(item, sizes_mm)
+        changed = changed or new_item is not item
+        new_items.append(new_item)
+    if changed:
+        return dataclasses.replace(new_region, items=new_items)
+    return new_region
+
+
+def solve_axis(
+    unit: Unit,
+    spaces: Mapping[str, Space],
+    axis: Axis,
+    minimum_mm: float,
+    *,
+    size_mm: float | None = None,
+    target: tuple[str, float] | None = None,
+) -> Unit:
+    """``unit`` with its sizes along ``axis`` solved by moving the boards as
+    little as possible from where ``spaces`` places them.
+
+    ``unit`` carries the constraints after an edit: its boards' extents, its
+    locks at their stored sizes, and its fixed point; ``spaces`` is the
+    layout before it, the reference the motion is measured from, and must
+    hold every node of ``unit``. The fixed point stays where ``spaces`` has
+    it, and the unit's size along ``axis`` becomes ``size_mm``, or stays as
+    it is when that is ``None``, unless the locks already determine it. With
+    ``target``, the board it names is pulled so its low face reaches the
+    given unit-frame coordinate wherever the constraints allow. Every region
+    in a run along ``axis`` keeps at least ``minimum_mm``, or its current
+    size when that is smaller. Only sizes along ``axis`` and the unit's size
+    and position on it change.
+
+    Raises a ``"conflict"`` :class:`LayoutSolveError` when no layout meets
+    the constraints, naming the regions whose locks or minimum widths the
+    engine found in conflict.
+    """
+    system = _build(unit, spaces, axis)
+    axis_index = axis.component_index
+    current_size_mm = system.current_mm[_OUTER_MAX] - system.current_mm[_OUTER_MIN]
+    wanted_size_mm = current_size_mm if size_mm is None else size_mm
+    relations = [
+        *system.structural,
+        _fixed_relation(unit, system),
+        *system.lock_relations(),
+        Relation(_SIZE_ID, {_OUTER_MAX: 1.0, _OUTER_MIN: -1.0}, wanted_size_mm),
+    ]
+    bounds: list[LowerBound] = []
+    for region in system.regions:
+        low, high = system.region_edges[region.id]
+        if low.position == high.position:
+            continue
+        now_mm = system.value_mm(high, system.current_mm) - system.value_mm(
+            low, system.current_mm
+        )
+        bounds.append(
+            LowerBound(
+                system.min_id(region.id),
+                low.position,
+                high.position,
+                min(minimum_mm, now_mm) - high.offset_mm + low.offset_mm,
+            )
+        )
+    targets: list[Target] = []
+    if target is not None:
+        board_id, low_face_mm = target
+        edge = system.board_low[board_id]
+        targets.append(Target(edge.position, low_face_mm - edge.offset_mm))
+    result = axis_solver.solve(system.current_mm, relations, bounds, targets)
+    if isinstance(result, axis_solver.Conflict):
+        region_ids = system.region_ids(result.conflicting)
+        raise LayoutSolveError(
+            region_ids[0] if region_ids else unit.root.id,
+            "conflict",
+            {"minimum_mm": minimum_mm},
+            region_ids,
+        )
+    positions_mm = result.positions_mm
+    sizes_mm = {
+        region_id: system.value_mm(high, positions_mm)
+        - system.value_mm(low, positions_mm)
+        for region_id, (low, high) in system.region_edges.items()
+    }
+    new_size_mm = _settled(
+        positions_mm[_OUTER_MAX] - positions_mm[_OUTER_MIN], wanted_size_mm
+    )
+    # From the fixed point rather than the solved face, so the fixed point
+    # stays exactly where it was.
+    old_low_mm = system.current_mm[_OUTER_MIN]
+    old_size_mm = system.current_mm[_OUTER_MAX] - old_low_mm
+    fraction = FIXED_FRACTION[unit.fixed_point.side(axis)]
+    new_low_mm = old_low_mm + fraction * (old_size_mm - new_size_mm)
+    return dataclasses.replace(
+        unit,
+        root=_with_sizes(unit.root, sizes_mm),
+        size_mm=_replace_component_mm(unit.size_mm, axis_index, new_size_mm),
+        position_mm=_replace_component_mm(unit.position_mm, axis_index, new_low_mm),
+    )
+
+
+def fixing_locks(
+    unit: Unit,
+    spaces: Mapping[str, Space],
+    board_id: str,
+    axis: Axis,
+    without: Collection[str] = (),
+) -> frozenset[str] | None:
+    """The locked regions that fix the board ``board_id``'s low face along
+    ``axis``, the axis of its run, with the unit's outer faces held and
+    every region free to take any size; ``None`` when that leaves the face
+    free.
+
+    ``spaces`` is ``unit`` laid out. A lock on a region ``without`` names is
+    left out, as though that region were unlocked. An empty set means the
+    boards and outer faces alone fix the face, as for a carcass board. When
+    several sets of locks fix it, the result is one of them.
+    """
+    system = _build(unit, spaces, axis)
+    relations = [
+        *system.structural,
+        Relation(_FIXED_ID, {_OUTER_MIN: 1.0}, system.current_mm[_OUTER_MIN]),
+        Relation(_HELD_MAX_ID, {_OUTER_MAX: 1.0}, system.current_mm[_OUTER_MAX]),
+        *system.lock_relations(without),
+    ]
+    result = axis_solver.solve(system.current_mm, relations, [])
+    if isinstance(result, axis_solver.Conflict):
+        # The current layout meets every lock, so only rounding beyond the
+        # engine's tolerance gets here.
+        raise LayoutSolveError(
+            unit.root.id, "conflict", {}, system.region_ids(result.conflicting)
+        )
+    freedom = result.freedom({system.board_low[board_id].position: 1.0})
+    if not freedom.determined:
+        return None
+    return frozenset(system.region_ids(freedom.fixed_by))
 
 
 def describe_solve_error(err: LayoutSolveError) -> str:
@@ -305,34 +487,21 @@ def describe_solve_error(err: LayoutSolveError) -> str:
     """
     detail = err.detail
     match err.reason:
-        case "overflow" if "dividers_total_mm" in detail:
+        case "misfit":
             return (
-                f"The boards alone take {detail['dividers_total_mm']:.1f} mm, more "
-                f"than the {detail['axis_span_mm']:.1f} mm they have to fit in."
-            )
-        case "overflow":
-            return (
-                f"The fixed sizes add up to {-detail['slack_mm']:.1f} mm more than "
-                "the space available."
-            )
-        case "no_slack_absorber":
-            return (
-                "Every opening in this row or column has a fixed size, leaving "
-                f"{detail['slack_mm']:.1f} mm with nowhere to go. Change a size, "
-                "or leave one opening free to take up the rest."
-            )
-        case "nonpositive_opening":
-            return (
-                "That would leave an opening with no room in it "
-                f"({detail['size_mm']:.1f} mm)."
-            )
-        case "unresolvable_basis":
-            return (
-                "A spacing is measured through the board after an opening, but "
-                "this opening has no board after it."
+                "The stored sizes of a row or column do not add up to the space "
+                "it fills."
             )
         case "pinned_mismatch":
             return (
                 "A board this workbench cannot reshape would have to change size "
                 "to fit."
             )
+        case "conflict" if "minimum_mm" in detail:
+            return (
+                "There is no room for that: the locked openings, and openings "
+                f"already at their {detail['minimum_mm']:.1f} mm minimum, hold "
+                "the boards where they are."
+            )
+        case "conflict":
+            return "The locked openings cannot all keep their sizes."

@@ -190,7 +190,7 @@ class Untagged:
 
 
 def _read_unit(container: FreeCAD.DocumentObject) -> tuple[Unit, Mapping[str, str]]:
-    """``container`` read fresh and scanned, with its stored rules and unit
+    """``container`` read fresh and scanned, with its stored locks and unit
     id reapplied, and the reason each part the scan did not place in the
     tree was set aside, keyed by ``Name``.
 
@@ -215,7 +215,7 @@ def _read_unit(container: FreeCAD.DocumentObject) -> tuple[Unit, Mapping[str, st
     if record.unit_id is not None:
         unit = dataclasses.replace(unit, id=record.unit_id)
     unit = dataclasses.replace(unit, fixed_point=record.fixed_point)
-    watch.lap("stored rules")
+    watch.lap("stored locks")
     reasons = {entry.name: entry.reason for entry in scan_result.skipped}
     reasons.update((panel.name, _PANEL_REASON) for panel in scan_result.panels)
     reasons.update((back.name, _BACK_REASON) for back in unit.backs)
@@ -515,6 +515,8 @@ class Session:
             candidate = set_unit_size(self.unit, Vec3(*components))
         except EditError as err:
             return EditFailure(str(err), err.node_id)
+        except LayoutSolveError as err:
+            return EditFailure(describe_solve_error(err), err.node_id)
         return self._step(
             "Resize Unit", lambda: self._apply(candidate, select=self._selection)
         )
@@ -647,6 +649,8 @@ class Session:
                 candidate = set_thickness(self.unit, boards, thickness_mm)
             except EditError as err:
                 return EditFailure(str(err), err.node_id)
+            except LayoutSolveError as err:
+                return EditFailure(describe_solve_error(err), err.node_id)
         paint_rgb = color
         if paint_rgb is None and material is not None:
             paint_rgb = properties.material_color(material)
@@ -708,6 +712,8 @@ class Session:
             candidate = set_size(self.unit, region_id, size_mm, basis)
         except EditError as err:
             return EditFailure(str(err), err.node_id)
+        except LayoutSolveError as err:
+            return EditFailure(describe_solve_error(err), err.node_id)
         return self._step(
             "Set Size", lambda: self._apply(candidate, select=(region_id,))
         )
@@ -724,8 +730,6 @@ class Session:
             candidate = set_basis(self.unit, region_id, basis)
         except EditError as err:
             return EditFailure(str(err), err.node_id)
-        except LayoutSolveError as err:
-            return EditFailure(describe_solve_error(err), err.node_id)
         return self._step(
             "Change What a Size Measures",
             lambda: self._apply(candidate, select=(region_id,)),
@@ -762,8 +766,6 @@ class Session:
                 candidate = (lock if locked else unlock)(candidate, region_id)
         except EditError as err:
             return EditFailure(str(err), err.node_id)
-        except LayoutSolveError as err:
-            return EditFailure(describe_solve_error(err), err.node_id)
         return self._step(name, lambda: self._apply(candidate, select=self._selection))
 
     def held_by(self, board_id: str) -> tuple[str, ...] | None:
@@ -800,7 +802,7 @@ class Session:
         """Move the dragged board so its grab point follows ``pointer_mm``
         along its run's axis, re-solving and writing the boards, and select
         the board. Boards joined to it through locked regions move with it,
-        and only the first unlocked region on each side changes size.
+        and an opening it narrows to the minimum pushes the boards beyond.
         Returns an :class:`EditFailure`, leaving the last good state, when
         this move is refused or would not solve, or no drag is in
         progress."""
@@ -812,6 +814,8 @@ class Session:
             candidate = move_board(self.unit, board_id, low_face_mm)
         except EditError as err:
             return EditFailure(str(err), err.node_id)
+        except LayoutSolveError as err:
+            return EditFailure(describe_solve_error(err), err.node_id)
         return self._apply(candidate, select=(board_id,))
 
     def end_drag(self) -> None:

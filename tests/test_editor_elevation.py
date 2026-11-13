@@ -5,7 +5,7 @@ import dataclasses
 
 import pytest
 
-from freecad.Shelving.core.edit import lock
+from freecad.Shelving.core.edit import lock, set_unit_size
 from freecad.Shelving.core.geometry import Vec3
 from freecad.Shelving.core.layout import (
     Axis,
@@ -13,7 +13,6 @@ from freecad.Shelving.core.layout import (
     Bay,
     Board,
     Division,
-    Fixed,
     FixedSide,
     Unit,
     Void,
@@ -61,15 +60,17 @@ def _bookcase(front_at_min: bool | None = None) -> Unit:
                             axis=Axis.Z,
                             id="column",
                             items=[
-                                Bay(id="lower", rule=Fixed(200.0)),
+                                Bay(size_mm=200.0, lock=Basis.CLEAR, id="lower"),
                                 Board(thickness_mm=_T_MM, id="shelf"),
-                                Bay(id="upper"),
+                                Bay(size_mm=346.0, id="upper"),
                             ],
+                            size_mm=423.0,
                         ),
                         Board(thickness_mm=_T_MM, id="divider"),
-                        Void(id="void"),
+                        Void(size_mm=423.0, id="void"),
                         Board(thickness_mm=_T_MM, id="right"),
                     ],
+                    size_mm=564.0,
                 ),
                 Board(thickness_mm=_T_MM, id="top"),
             ],
@@ -277,9 +278,9 @@ def test_a_spacing_spans_through_the_next_board() -> None:
             axis=Axis.Z,
             id="root",
             items=[
-                Bay(id="lower", rule=Fixed(218.0, Basis.WITH_NEXT)),
+                Bay(size_mm=200.0, lock=Basis.WITH_NEXT, id="lower"),
                 Board(thickness_mm=_T_MM, id="shelf"),
-                Bay(id="upper"),
+                Bay(size_mm=382.0, id="upper"),
             ],
         ),
         depth_axis=Axis.Y,
@@ -311,9 +312,7 @@ def test_a_region_holding_others_dimensions_outside_the_unit() -> None:
 def test_resizing_the_unit_leaves_its_outer_dimensions_rows_in_place() -> None:
     """Only a dimension's length follows the unit's size: the rows keep
     their spacing whatever the unit's longer side."""
-    taller = dataclasses.replace(
-        _UNIT, size_mm=Vec3(_UNIT.size_mm.x_mm, _UNIT.size_mm.y_mm, 1800.0)
-    )
+    taller = set_unit_size(_UNIT, Vec3(_UNIT.size_mm.x_mm, _UNIT.size_mm.y_mm, 1800.0))
     before = {label.region_id: label for label in _labels()}
     after = {label.region_id: label for label in _labels(unit=taller)}
     assert after["row"].start_mm[0] == pytest.approx(before["row"].start_mm[0])
@@ -326,7 +325,11 @@ def test_a_run_through_the_depth_draws_no_dimension() -> None:
         size_mm=Vec3(900.0, 300.0, 600.0),
         root=Division(
             axis=Axis.Y,
-            items=[Bay(id="front"), Board(thickness_mm=_T_MM), Bay(id="rear")],
+            items=[
+                Bay(size_mm=141.0, id="front"),
+                Board(thickness_mm=_T_MM),
+                Bay(size_mm=141.0, id="rear"),
+            ],
         ),
         depth_axis=Axis.Y,
     )
@@ -400,7 +403,7 @@ def test_held_and_carcass_boards_get_no_arrow() -> None:
     assert arrow_for(_UNIT, _SPACES, frame, "top") is None
     assert arrow_for(_UNIT, _SPACES, frame, "lower") is None
     unlocked = _bookcase()
-    lower = Bay(id="lower")
+    lower = Bay(size_mm=200.0, id="lower")
     _replace_lower(unlocked, lower)
     arrow = arrow_for(unlocked, solve(unlocked), frame, "shelf")
     assert arrow is not None
@@ -421,9 +424,11 @@ def test_every_dimension_but_a_lone_unlocked_regions_can_lock() -> None:
     locked_row = _bookcase()
     root = locked_row.root
     assert isinstance(root, Division)
-    root.items[1] = dataclasses.replace(root.items[1], rule=Fixed(564.0))
-    (row,) = [x for x in _labels(unit=locked_row) if x.region_id == "row"]
-    assert row.lockable
+    row = root.items[1]
+    assert isinstance(row, Division)
+    root.items[1] = dataclasses.replace(row, lock=Basis.CLEAR)
+    (label,) = [x for x in _labels(unit=locked_row) if x.region_id == "row"]
+    assert label.lockable
 
 
 def test_a_held_board_gets_a_padlock_where_its_arrow_would_be() -> None:
@@ -433,7 +438,7 @@ def test_a_held_board_gets_a_padlock_where_its_arrow_would_be() -> None:
     assert padlock.holders == ("lower",)
     # Beside the lower bay's dimension, level with the shelf, where an arrow would sit.
     unlocked = _bookcase()
-    _replace_lower(unlocked, Bay(id="lower"))
+    _replace_lower(unlocked, Bay(size_mm=200.0, id="lower"))
     arrow = arrow_for(unlocked, solve(unlocked), frame, "shelf")
     assert arrow is not None
     assert padlock.at_mm[0] == pytest.approx(arrow.at_mm[0])

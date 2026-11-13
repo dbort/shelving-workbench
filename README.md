@@ -71,25 +71,29 @@ The vocabulary the documentation and the code share.
   can have several tops.
 - **Insets**: how far a board is set back from its region on each face
   other than the two along its own run.
-- **Size rule**: how a division sizes one region. A **locked** opening is
-  fixed at an exact size; an **unlocked** one takes a weighted share of what
-  is left in its row (**fill** is an equal share). Locking or unlocking
-  moves nothing, and typing a size locks the opening. One opening in each
-  row stays unlocked, so a change to the unit's size always has somewhere
-  to go.
-- **Measurement basis**: what a fixed size measures. **Clear opening** is
+- **Size rule**: how a division sizes one region. A **locked** opening
+  keeps its size through every edit until you unlock it; an **unlocked**
+  one takes whatever size the panels around it leave. Every edit moves the
+  panels as little as it can. When the unit's size changes, the openings
+  beside the edges that move take up the change, and one that reaches
+  5 mm pushes the panels beyond it inward. Typing a size locks the opening
+  at that size and moves the panels either side of it, half the change
+  each when both can move; a size under 5 mm is refused, and so is any
+  edit the locked openings leave no room for. Locking or unlocking moves
+  nothing. One opening in each row stays unlocked.
+- **Measurement basis**: what a locked size measures. **Clear opening** is
   the region alone; **Spacing** runs through the next board, as a shelf
   spacing is quoted top face to top face. Switching basis moves nothing.
   When stock thickness changes, a spacing holds the next board in place and
   a clear opening moves it.
 - **The drag rule**: dragging a board moves it, together with every board
-  joined to it through locked openings, by the same distance. Only the
-  nearest unlocked opening on each side changes size, and both stay
-  unlocked; a drag never locks or unlocks anything. A board dragged as far
-  as it goes stops with a 5 mm opening beside it, or with that opening's
-  current size when it is already narrower. A board with nothing
-  but boards and locked openings between it and the end of its row is
-  held until one of those openings is unlocked.
+  joined to it through locked openings, by the same distance. The openings
+  beside it change size, and one that narrows to 5 mm, or to its current
+  size when it is already narrower, pushes the boards beyond it along, in
+  nested rows too. A board dragged as far as it goes stops when every
+  opening ahead of it is that narrow. A drag never locks or unlocks
+  anything. A board with nothing but boards and locked openings between it
+  and the end of its row is held until one of those openings is unlocked.
 - **Local frame**: origin at the unit's front-bottom-left corner, +X right,
   +Y back, +Z up, in millimeters. A container's own placement is excluded,
   so a unit reads the same wherever it sits.

@@ -176,10 +176,10 @@ tried before any new constraint exists.
   (a copy loses its locks) stays open.
 
 ## Plan
-- [ ] **Step 1** (`core/layout.py`, `core/tests/test_layout.py`): regions
+- [x] **Step 1** (`core/layout.py`, `core/tests/test_layout.py`): regions
       carry their current clear size and an optional lock basis; delete
       `Weighted` and `Fill`.
-- [ ] **Step 2** (`core/solver.py`, `core/tests/test_solver.py`): `solve`
+- [x] **Step 2** (`core/solver.py`, `core/tests/test_solver.py`): `solve`
       lays out stored geometry and checks it. A per-axis system builder
       and an apply-back turn a unit, plus an edit's change (outer size,
       lock, thickness, drag target) and the minimum opening, into engine
@@ -189,30 +189,30 @@ tried before any new constraint exists.
       `_driven_weight`. Reduce `SolveErrorReason` to the reasons that can
       still occur, add the conflict error carrying region ids, and update
       `describe_solve_error`.
-- [ ] **Step 3** (`core/edit.py`, `core/tests/test_edit.py`): every edit
+- [x] **Step 3** (`core/edit.py`, `core/tests/test_edit.py`): every edit
       returns a solved unit. Rework `set_unit_size`, `set_size` (minimum
       refusal), `set_basis`, `lock`, `unlock`, `move_board` (target,
       push), `set_thickness`, `split_region` and `merge_at` (sizes in
       place of weights), `held_by` and `require_movable` (from freedom),
       and `measure`. Delete `_driven_weight` and `_other_driven_anchor`.
       `MIN_DRAG_GAP_MM` stays here as the one definition.
-- [ ] **Step 4** (`core/scan.py`, `core/tests/test_scan.py`,
+- [x] **Step 4** (`core/scan.py`, `core/tests/test_scan.py`,
       `core/tests/test_scanned_units.py`): measured sizes, no
       `_recover_rules`, and the void and axis-wrap locks kept.
-- [ ] **Step 5** (`core/record.py`, `core/tests/test_record.py`): the
+- [x] **Step 5** (`core/record.py`, `core/tests/test_record.py`): the
       rewritten version 1 shape, a malformed record read as none, and
       `with_stored_rules` applying locks at scanned sizes. Update the
       module docstring and `unit_ops.unit_size_mm`'s "ValueError when
       malformed" clause.
-- [ ] **Step 6** (`core/expand.py`, `core/stock.py`, `core/backs.py`,
+- [x] **Step 6** (`core/expand.py`, `core/stock.py`, `core/backs.py`,
       `unit_ops.py`, `container.py`, `core/tests/test_stock.py`,
       `core/tests/test_expand.py`, `core/tests/test_backs.py`): build and
       write units with sizes. `unit_ops._default_unit` gives its bays
       concrete sizes.
-- [ ] **Step 7** (`refusals.py`, `tests/freecad/test_refusals.py`,
+- [x] **Step 7** (`refusals.py`, `tests/freecad/test_refusals.py`,
       `tests/freecad_gui/test_refusals.py`): `SUGGESTIONS` matches the
       reduced reasons, with one for a conflict.
-- [ ] **Step 8** (`tests/freecad/test_editor_session.py`,
+- [x] **Step 8** (`tests/freecad/test_editor_session.py`,
       `tests/freecad/test_edit_history.py`, `tests/freecad/test_write.py`,
       `tests/freecad/test_backs.py`, `tests/test_editor_elevation.py`,
       `tests/freecad_view/test_editor_input.py`,
@@ -220,7 +220,7 @@ tried before any new constraint exists.
       under `editor/` where they build or read rules): update every test
       that asserts proportional sharing to the minimal-motion outcome, and
       add the headless old-record and conflict tests from the Must Have.
-- [ ] **Step 9** (`README.md`, `docs/scope-and-design.md`,
+- [x] **Step 9** (`README.md`, `docs/scope-and-design.md`,
       `.claude/docs/bug-log.md`):
       - rewrite the glossary entries Size rule and The drag rule: minimal
         motion, push at 5 mm;

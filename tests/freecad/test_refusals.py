@@ -86,8 +86,8 @@ def _unit() -> tuple[Unit, Division, Bay, Board, Board]:
     sides."""
     left = Board(thickness_mm=18.0, role="left_side", id="left_side")
     right = Board(thickness_mm=18.0, role="right_side", id="right_side")
-    bay = Bay()
-    run = Division(axis=Axis.X, items=[left, bay, right])
+    bay = Bay(size_mm=564.0)
+    run = Division(axis=Axis.X, items=[left, bay, right], size_mm=864.0)
     root = Division(
         axis=Axis.Z,
         items=[
@@ -103,7 +103,7 @@ def test_a_solve_refusal_names_the_boards_a_user_would_move() -> None:
     unit, run, bay, left, right = _unit()
 
     def objects(node_id: str) -> tuple[str, ...]:
-        err = LayoutSolveError(node_id, "overflow", {})
+        err = LayoutSolveError(node_id, "conflict", {})
         return refusals.solve_error_objects(unit, err)
 
     assert objects(unit.root.id) == ("bottom", "top")
