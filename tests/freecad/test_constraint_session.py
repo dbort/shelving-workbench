@@ -352,6 +352,34 @@ def test_delete_removes_selected_constraints_as_one_step_that_undo_restores(
         session.close()
 
 
+def test_delete_meets_another_constraint_left_within_the_clearance(
+    doc: FreeCAD.Document,
+) -> None:
+    """Delete is an edit like any other: an active constraint the boards
+    missed within the clearance at open is met in its step, as the Advice's
+    "the next edit makes it exact" says, while the deleted one moves
+    nothing of its own."""
+    column = _COLUMN.column.id
+    container = _written(
+        doc,
+        _equal(_COLUMN.a, _COLUMN.b),
+        EvenSpacing(run_id=column, start="shelf_a", end=RunEnd.END),
+    )
+    _move_up(doc, "shelf_a", 1.0)
+    session = _opened(container)
+    try:
+        equal, spacing = session.constraints
+        assert equal.active and spacing.active
+        session.select_constraints([spacing.id])
+        assert session.delete_constraints() is None
+        doc.recompute()
+        a_mm, b_mm, _c_mm = _heights_mm(doc)
+        assert a_mm == pytest.approx(b_mm)
+        assert [c.id for c in session.constraints] == [equal.id]
+    finally:
+        session.close()
+
+
 def test_delete_with_no_constraint_selected_is_refused(doc: FreeCAD.Document) -> None:
     session = _opened(_written(doc, _equal(_COLUMN.a, _COLUMN.b)))
     try:

@@ -13,6 +13,7 @@ from PySide6 import QtCore, QtGui, QtSvg, QtWidgets
 
 from freecad.Shelving.container import write_container
 from freecad.Shelving.core.layout import ConstraintId
+from freecad.Shelving.editor import overlay
 from freecad.Shelving.editor.elevation import ConstraintIcon, DimensionLabel
 from freecad.Shelving.editor.overlay import (
     ICON_SOURCES,
@@ -349,17 +350,27 @@ def _z(unit: FreeCAD.DocumentObject, name: str) -> float:
 
 
 @pytest.fixture
-def icon_colors() -> Iterator[tuple[int, int]]:
-    """Distinct active and deactivated icon colors, packed. The selection
-    color stays FreeCAD's, as ``dimension_style`` leaves it: the 3D view
-    keeps a changed one after the preference is removed, and every later
-    test's selection highlight would take it."""
+def icon_colors(monkeypatch: pytest.MonkeyPatch) -> Iterator[tuple[int, int, int]]:
+    """Distinct active, deactivated and selection colors, packed. The two
+    icon colors go into the View preferences. The selection color reaches
+    only the editor's own reading of ``SelectionColor``: the 3D view keeps
+    a changed preference after it is removed, and every later test's
+    selection highlight would take it (bug-022)."""
     params = FreeCAD.ParamGet(_VIEW_PARAMS)
-    colors = (0xC01020FF, 0x30A0B0FF)
+    colors = (0xC01020FF, 0x30A0B0FF, 0x7020D0FF)
     for name, packed in zip(
         ("ConstrainedIcoColor", "DeactivatedConstrDimColor"), colors, strict=True
     ):
         params.SetUnsigned(name, packed)
+    real_view_color = overlay._view_color
+
+    def view_color(name: str, default: int) -> tuple[float, float, float]:
+        if name == "SelectionColor":
+            red, green, blue = _packed_rgb(colors[2])
+            return (red / 255, green / 255, blue / 255)
+        return real_view_color(name, default)
+
+    monkeypatch.setattr(overlay, "_view_color", view_color)
     yield colors
     for name in ("ConstrainedIcoColor", "DeactivatedConstrDimColor"):
         params.RemUnsigned(name)
@@ -368,7 +379,7 @@ def icon_colors() -> Iterator[tuple[int, int]]:
 def test_active_deactivated_and_selected_icons_take_their_colors(
     unit: FreeCAD.DocumentObject,
     driver: ViewDriver,
-    icon_colors: tuple[int, int],
+    icon_colors: tuple[int, int, int],
 ) -> None:
     panel, (a, b, c) = _column_panel(unit, driver)
     _constrain(panel, "equal", [a, b])
@@ -388,14 +399,7 @@ def test_active_deactivated_and_selected_icons_take_their_colors(
     selected_id = panel.session.constraints[2].id
     icon = next(i for i in _icons(editor) if i.constraint_id == selected_id)
     driver.click(editor.icon_center(icon))
-    active, deactivated = (_packed_rgb(packed) for packed in icon_colors)
-    selected_rgb = editor.style.selected_rgb
-    selected = (
-        round(selected_rgb[0] * 255),
-        round(selected_rgb[1] * 255),
-        round(selected_rgb[2] * 255),
-    )
-    assert len({active, deactivated, selected}) == 3
+    active, deactivated, selected = (_packed_rgb(packed) for packed in icon_colors)
     side_px, _gap_px = editor._icon_metrics_px()
     by_constraint: dict[ConstraintId, list[tuple[int, int, int]]] = {}
     for node in editor.icon_nodes:

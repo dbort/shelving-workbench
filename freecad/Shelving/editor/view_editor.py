@@ -1446,9 +1446,9 @@ class ViewEditor:
         aside back out of FreeCAD's selection; with no board selected it
         adds the opening there to the selected openings, or takes it back
         out. Any other click selects the opening there, or nothing. A
-        selection never mixes boards and openings, which no command takes. FreeCAD
-        knows no openings, so this is the one place the editor reads a
-        modifier: under Inventor navigation, where FreeCAD selects only on
+        selection never mixes boards and openings, which no command takes.
+        FreeCAD knows no openings, so this is the one place the editor reads
+        a modifier: under Inventor navigation, where FreeCAD selects only on
         Ctrl-click, a plain click is what reaches an opening."""
         if self._closed:
             return

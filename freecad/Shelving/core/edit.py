@@ -20,10 +20,9 @@ structural edits carry the constraints over to the new tree, dropping those
 whose openings or end boards they remove (:func:`carry_constraints`).
 
 ``split_region`` and ``merge_at`` are each other's exact inverse while every
-constraint holds. No edit
-here mutates the argument ``Unit``: untouched subtrees are shared by
-reference with the result, so the argument must stay unmodified for the
-result to stay valid.
+constraint holds. No edit here mutates the argument ``Unit``: untouched
+subtrees are shared by reference with the result, so the argument must stay
+unmodified for the result to stay valid.
 
 Imports no Qt and no FreeCAD, so the fast suite exercises every edit
 directly, the same way :mod:`freecad.Shelving.core.solver` does.
@@ -1044,8 +1043,9 @@ def add_even_spacing(unit: Unit, node_ids: Sequence[str]) -> Unit:
         if start is None or end is None:
             raise EditError(
                 distinct[0],
-                "An opening at an end of this selection has another opening "
-                "beside it, with no board between them to space from.",
+                "Select the boards at the ends instead: an opening at an end "
+                "of this selection has another opening beside it, with no "
+                "board between them.",
             )
     else:
         raise EditError(distinct[0], what)
@@ -1055,7 +1055,7 @@ def add_even_spacing(unit: Unit, node_ids: Sequence[str]) -> Unit:
     if group is None or len(group) < 2:
         raise EditError(
             distinct[0],
-            "Even spacing needs two or more openings between its ends.",
+            "Select ends with two or more openings between them to space evenly.",
         )
     return solve_axis(edited, solve(unit), run.axis, MIN_DRAG_GAP_MM)
 

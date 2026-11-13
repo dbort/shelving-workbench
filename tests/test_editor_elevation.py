@@ -564,20 +564,24 @@ def test_an_icon_takes_the_deactivated_or_selected_state() -> None:
 def test_icons_sit_past_the_text_clear_of_it_and_of_each_other() -> None:
     unit = add_even_spacing(add_equal(_column(), ["A", "B"]), ["A", "C"])
     overlay = _overlay(unit)
+    # One pixel a millimeter, so the text's center doubles as its pixel
+    # position.
     text_width_px, icon_px, gap_px = 60.0, 16.0, 3.0
     boxes: list[tuple[float, float, float, float]] = []
     for label in overlay.labels:
-        x_px, y_px = label.text_at_mm
-        half_w, half_h = (
+        h_mm, v_mm = label.text_at_mm
+        half_w_px, half_h_px = (
             (text_width_px / 2, 8.0) if label.horizontal else (8.0, text_width_px / 2)
         )
-        boxes.append((x_px - half_w, y_px - half_h, x_px + half_w, y_px + half_h))
+        boxes.append(
+            (h_mm - half_w_px, v_mm - half_h_px, h_mm + half_w_px, v_mm + half_h_px)
+        )
     for icon in overlay.icons:
         x_px, y_px = icon_center_px(
             icon, icon.label.text_at_mm, text_width_px, icon_px, gap_px
         )
-        half = icon_px / 2
-        boxes.append((x_px - half, y_px - half, x_px + half, y_px + half))
+        half_px = icon_px / 2
+        boxes.append((x_px - half_px, y_px - half_px, x_px + half_px, y_px + half_px))
     for index, a in enumerate(boxes):
         for b in boxes[index + 1 :]:
             assert a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1]
