@@ -1384,7 +1384,7 @@ def test_typing_a_size_or_a_basis_locks_a_runs_last_unlocked_opening() -> None:
     unit = _two_bay_column(locked="A")
     sized = set_size(unit, "B", 300.0, Basis.CLEAR)
     assert _height_fixed_by(sized) == ("A", "B")
-    spacing = set_basis(unit, "B", Basis.CLEAR)
+    spacing = set_basis(unit, "B", Basis.WITH_NEXT)
     assert _height_fixed_by(spacing) == ("A", "B")
 
 
