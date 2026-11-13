@@ -283,3 +283,6 @@ boards are gone is dropped, with one notification saying so.
 - **N2: Unit suffixes in the elevation layout test** (`tests/test_editor_elevation.py:570`): `x_px, y_px = label.text_at_mm` holds millimeters; `half_w`, `half_h`, `half` lack suffixes.
 - **N3: Odd line wraps in changed docstrings** (`freecad/Shelving/core/edit.py:23`, `freecad/Shelving/editor/view_editor.py:1449`): reflow both.
 - **N4: Delete of constraints can move boards** (`freecad/Shelving/editor/session.py`, `_apply`): every edit settles, so a Delete makes another active constraint left within the clearance exact; pin the intended behavior with a test or a sentence in Advice.
+
+### Round 2: APPROVED
+- **N1: N4's test docstring claims something it does not check** (`tests/freecad/test_constraint_session.py:358`): it says the deleted even spacing "moves nothing of its own" and cites "the Advice", but the test asserts only that A equals B and the Equal remains. Drop the clause and the pointer, or assert it.
