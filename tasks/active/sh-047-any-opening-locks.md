@@ -122,3 +122,10 @@ M18's first task: the solver, with locks as its only constraint.
       exception.
 
 ## Review log
+
+### Round 1: REJECTED
+- **F1: The drag rule glossary entry makes a false claim about nested rows** (`README.md:102-104`): "locking every opening of a row holds all its boards and makes the unit's size along it a reference" holds only for a row spanning the whole unit; a fully locked row nested beside an unlocked column leaves the width free (`size_fixed_by` returns `None`). Use the Size rule's condition, or keep only "holds all its boards".
+- **N1: The "opens with no warning" test cannot see a warning raised during open** (`tests/freecad/test_editor_session.py:873`): `on_warning` is attached after `open()` and `resize` never warns; lock another region on the reopened unit and assert no new warning, exercising the before/after comparison against recorded redundancy.
+- **N2: Awkward README sentence** (`README.md:88-89`): "that refused it" says the openings refused the edit.
+- **N3: `Style.outline_rgb` docstring describes its callers** (`freecad/Shelving/editor/overlay.py:186-187`): the sentence about refused edits and redundant locks duplicates `plan_overlay`'s docstring.
+- **N4: Extra solves on every refresh** (`freecad/Shelving/editor/panel.py:582`): `_refresh` runs `size_fixed_by` per dimension after every edit attempt, drag steps included; fine now, worth remembering if drag latency grows.
