@@ -919,8 +919,7 @@ def test_real_stair_step_solves_at_the_default_snap() -> None:
     """The real stair-step export's panels measure about 18.26 mm. Each
     board takes its slot in the grid as its run-axis extent, so the tree
     solves at the default ``snap_mm`` with every board without an
-    ``extent_mm`` within half
-    of it of its measured thickness."""
+    ``extent_mm`` within half of it of its measured thickness."""
     boxes = boxes_from_json(REAL_STAIR_STEP.read_text(encoding="utf-8"))
     measured_mm = {
         b.name: min(b.size_mm.x_mm, b.size_mm.y_mm, b.size_mm.z_mm) for b in boxes

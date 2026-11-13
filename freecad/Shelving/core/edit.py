@@ -6,8 +6,7 @@ A region with a ``lock`` holds its size through edits; an unlocked one
 takes whatever size the boards around it leave. Every edit returns a unit
 whose stored sizes are already solved: one that moves boards solves them with
 :func:`~freecad.Shelving.core.solver.solve_axis`, moving the boards as little
-as possible from where they are, so the unit before the edit is the reference
-only the edit holds. A caller treats a
+as possible from where they stood before the edit. A caller treats a
 :class:`~freecad.Shelving.core.solver.LayoutSolveError` from an edit or from
 laying out its result as its own kind of refusal, distinct from
 :class:`EditError`.

@@ -574,9 +574,8 @@ def test_split_region_refuses_a_unit_with_no_board() -> None:
 
 def _replace_node(region: Region, node_id: str, replacement: Region) -> Region:
     """``region`` with the node named ``node_id`` replaced by ``replacement``,
-    used only to seed a lock onto the bay a test is about to
-    split, the same shape :mod:`freecad.Shelving.core.edit`'s own recursion
-    uses."""
+    used only to seed a lock onto the bay a test is about to split, the same
+    shape :mod:`freecad.Shelving.core.edit`'s own recursion uses."""
     if region.id == node_id:
         return replacement
     if not isinstance(region, Division):
@@ -966,14 +965,14 @@ def _assert_same_layout(before: Unit, after: Unit) -> None:
 
 
 def _two_bay_column(locked: Collection[str] = (), side: FixedSide = "min") -> Unit:
-    """The Must Have column: 18 mm boards, bottom, bay A 300, shelf ``s1``,
-    bay B 300, top, 654 mm tall."""
+    """A column of 18 mm boards: bottom, bay A 300, shelf ``s1``, bay B 300,
+    top, 654 mm tall."""
     return _bays_column((300.0, 300.0), locked, side)
 
 
 def _three_bay_column(locked: Collection[str] = ()) -> Unit:
-    """The Must Have column: 18 mm boards, bottom, A 300, shelf ``s1``, B 300,
-    shelf ``s2``, C 300, top, 972 mm tall."""
+    """A column of 18 mm boards: bottom, A 300, shelf ``s1``, B 300, shelf
+    ``s2``, C 300, top, 972 mm tall."""
     return _bays_column((300.0, 300.0, 300.0), locked, "min")
 
 

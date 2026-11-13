@@ -98,9 +98,9 @@ def source_board(
 
     ``spaces`` is ``unit`` solved. A candidate is parallel to the new board
     when it runs along ``axis`` with no ``extent_mm`` of its own, since a
-    board with one is not thin along its run. The first non-empty tier wins, and
-    within a tier the board whose center is nearest ``region_id``'s center,
-    the first in pre-order on a tie:
+    board with one is not thin along its run. The first non-empty tier wins,
+    and within a tier the board whose center is nearest ``region_id``'s
+    center, the first in pre-order on a tie:
 
     1. a parallel interior board in the run the new board joins;
     2. a parallel interior board anywhere in the unit;

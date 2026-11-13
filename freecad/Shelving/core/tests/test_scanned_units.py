@@ -155,8 +155,9 @@ def test_a_scanned_unit_solves_back_to_its_measured_boards(name: str) -> None:
 
 def test_two_side_by_side_tops_fill_their_run_exactly() -> None:
     """The two units' tops lie sideways in their run, so each carries its
-    span as its extent. Their measured spans overrun the run by a fraction of a
-    millimeter; their slot widths in the scan grid add up to it exactly."""
+    span as its extent. Their measured spans overrun the run by a fraction
+    of a millimeter; their slot widths in the scan grid add up to it
+    exactly."""
     boxes = {box.name: box for box in _boxes("real_two_units")}
     unit = _scanned("real_two_units")
     spaces = solve(unit)

@@ -7,11 +7,11 @@ A unit is designed as a flat front elevation: a rectangle divided into
 compartments by panels of real thickness. Change the height and the
 openings by the moving edge take up the change; type an exact opening and
 the shelves either side of it move to make room. The panels are ordinary
-FreeCAD solids with nothing hidden attached, so any tool can read, cut and export them, and a document opens
-intact where this workbench is not installed. The workbench can also read
-an arrangement of panels back and recover its layout. That makes it work
-on shelving modeled elsewhere, and it makes editing a panel with another
-tool a supported operation.
+FreeCAD solids with nothing hidden attached, so any tool can read, cut and
+export them, and a document opens intact where this workbench is not
+installed. The workbench can also read an arrangement of panels back and
+recover its layout. That makes it work on shelving modeled elsewhere, and
+it makes editing a panel with another tool a supported operation.
 
 ## Why it exists
 

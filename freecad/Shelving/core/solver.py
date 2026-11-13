@@ -14,12 +14,12 @@ the unit's two outer faces, plus one seam where two regions meet with no
 board between them. A board's high face is its low face plus its extent, so
 a run of boards face to face shares one position. The engine gives every
 position the same motion weight, so a seam's motion counts as much as a
-board's; the outer faces' never decides anything, since the fixed point and
-the size, or the faces held for a drag, place them. Relations hold the boards
-in their runs, the unit's fixed point, each lock, and the unit's size, in
-that order: the engine reports the later member of a dependent group as
-redundant, so the size drops out when locks already determine it and
-conflicts when they contradict it.
+board's; the outer faces' motion never decides anything, since the fixed
+point and the size, or the faces held for a drag, place them. Relations hold
+the boards in their runs, the unit's fixed point, each lock, and the unit's
+size, in that order: the engine reports the later member of a dependent
+group as redundant, so the size drops out when locks already determine it
+and conflicts when they contradict it.
 
 All lengths are float millimeters. :data:`EPS_MM` is the tolerance for the
 "does it fit" and "is it positive" comparisons only.
