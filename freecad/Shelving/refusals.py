@@ -5,7 +5,8 @@ The suggested next step is data in :data:`SUGGESTIONS`, keyed by the same
 reason codes :class:`~freecad.Shelving.core.scan.ScanError` and
 :class:`~freecad.Shelving.core.solver.LayoutSolveError` carry, so a reason
 reads the same whichever command reports it. The editor's own refused edits
-go through :func:`report_error` alone, with no suggestion or selection.
+go through :func:`report_error` alone, with no suggestion or selection, and
+an edit it accepts with a caveat through :func:`report_warning`.
 """
 
 from collections.abc import Callable, Iterable, Mapping
@@ -32,6 +33,10 @@ RefusalReason = ScanErrorReason | SolveErrorReason | CommandRefusalReason
 # labels the popup in the Notification Area.
 _print_user_error = cast(
     "Callable[[str, str], None]", FreeCAD.Console.PrintTranslatedUserError
+)
+
+_print_user_warning = cast(
+    "Callable[[str, str], None]", FreeCAD.Console.PrintTranslatedUserWarning
 )
 
 # A solver reason surfaces from a command only when a unit the scan reads
@@ -119,6 +124,13 @@ def report_error(message: str) -> None:
     """Show ``message`` as a Shelving error in FreeCAD's Notification Area,
     which pops it up briefly and keeps it in the Report view."""
     _print_user_error("Shelving", message + "\n")
+
+
+def report_warning(message: str) -> None:
+    """Show ``message`` as a Shelving warning in FreeCAD's Notification
+    Area: an edit that went through, with something the user should know
+    about it."""
+    _print_user_warning("Shelving", message + "\n")
 
 
 def report_refusal(summary: str, objects: Iterable[str], suggestion: str) -> None:

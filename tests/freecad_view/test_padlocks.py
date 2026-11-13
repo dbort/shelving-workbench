@@ -178,6 +178,44 @@ def _rounded(point: FreeCAD.Vector) -> tuple[float, float, float]:
     return (round(point.x, 3), round(point.y, 3), round(point.z, 3))
 
 
+def _lone_regions(region: Region) -> set[str]:
+    """Every region alone in its run: the only one that is not a board."""
+    if not isinstance(region, Division):
+        return set()
+    children = [item for item in region.items if not isinstance(item, Board)]
+    lone = {children[0].id} if len(children) == 1 else set()
+    for child in children:
+        lone |= _lone_regions(child)
+    return lone
+
+
+_Corners = frozenset[tuple[float, float, float]]
+
+
+def _corners(editor: ViewEditor, region_id: str) -> _Corners:
+    """The document points of ``region_id``'s four corners on the drawn face."""
+    rect = editor.frame.rect(editor.session.spaces[region_id])
+    return frozenset(
+        _rounded(editor.to_document(h_mm, v_mm, 0.0))
+        for h_mm in (rect.h0_mm, rect.h1_mm)
+        for v_mm in (rect.v0_mm, rect.v1_mm)
+    )
+
+
+def _holding_outlines(editor: ViewEditor) -> set[_Corners]:
+    """The corners of each outline drawn in the locked dimension color,
+    brought back onto the face from the lift outlines sit at."""
+    locked_rgb = _rgb("ConstrainedDimColor")
+    lift_mm = editor.to_document(
+        0, 0, editor.frame.z_sign * LIFT_MM
+    ) - editor.to_document(0, 0, 0)
+    return {
+        frozenset(_rounded(point - lift_mm) for point in outline.points)
+        for outline in overlay_nodes.outlines(editor.root)
+        if _close_rgb(outline.rgb, locked_rgb)
+    }
+
+
 def _three_bays(panel: EditUnitPanel, driver: ViewDriver) -> tuple[str, str]:
     """Split the lowest bay twice; returns the two shelves, lowest first."""
     added = [add_board(panel, "vertical", driver) for _ in range(2)]
@@ -189,7 +227,7 @@ def _three_bays(panel: EditUnitPanel, driver: ViewDriver) -> tuple[str, str]:
 @pytest.mark.parametrize(
     "unit_system", ["Standard (mm, kg, s, °)", "Building US (ft-in, sqft, cft)"]
 )
-def test_each_lockable_dimension_shows_its_padlock_beside_its_text(
+def test_every_dimension_shows_its_padlock_beside_its_text(
     unit: FreeCAD.DocumentObject,
     driver: ViewDriver,
     dimension_style: None,
@@ -215,26 +253,31 @@ def _check_padlocks_beside_their_text(
     assert session.set_lock(lower, locked=True) is None
     panel._refresh()
     driver.pump()
-    lone = [x for x in editor.overlay.labels if not x.lockable]
-    # The fresh unit's single column of bays sits alone in its row.
-    assert lone and all(x.color == "unlocked" for x in lone)
+    # The fresh unit's single column of bays sits alone in its row, and
+    # still shows a padlock.
+    lone = _lone_regions(session.unit.root)
+    assert lone & {x.region_id for x in editor.overlay.labels}
     for label in editor.overlay.labels:
-        if not label.lockable:
-            assert editor.padlock_for(label.region_id) is None
-            continue
         _assert_shows(_padlock(editor, label.region_id), label.color == "locked")
         assert _misplaced(driver, editor, label) is None
     shown = [b for b in editor.padlocks if b.isVisible()]
-    assert len(shown) == len(editor.overlay.labels) - len(lone)
+    assert len(shown) == len(editor.overlay.labels)
     # The padlocks follow their labels when the camera pans and zooms.
     camera = editor.view.getCameraNode()
     x_mm, y_mm, z_mm = camera.position.getValue().getValue()
     camera.position.setValue(x_mm + 40.0, y_mm, z_mm + 30.0)
     camera.height.setValue(float(camera.height.getValue()) * 0.8)
     driver.pump()
-    for label in editor.overlay.labels:
-        if label.lockable:
-            assert _misplaced(driver, editor, label) is None
+    # A padlock the pan carries off the viewport hides.
+    viewport = editor.viewport.rect()
+    on_view = [
+        label
+        for label in editor.overlay.labels
+        if viewport.contains(_anchor(driver, editor, label.text_at_mm).toPoint())
+    ]
+    assert on_view
+    for label in on_view:
+        assert _misplaced(driver, editor, label) is None
     click_task_button("Close", driver)
 
 
@@ -269,8 +312,6 @@ def test_a_padlock_sits_in_a_blank_of_its_line_just_before_the_first_digit(
     image = driver.grab()
     read = []
     for label in editor.overlay.labels:
-        if not label.lockable:
-            continue
         anchor = _anchor(driver, editor, label.text_at_mm)
         start = _anchor(driver, editor, label.start_mm)
         width_px, _lead = _lead_px(editor, label)
@@ -330,13 +371,13 @@ def test_padlocks_follow_their_labels_when_the_view_resizes(
         window.resize(size.width() - 300, size.height() - 200)
         driver.pump()
         assert editor.viewport.size() != viewport_size
-        lockable = [x for x in editor.overlay.labels if x.lockable]
-        assert lockable
-        problems = [_misplaced(driver, editor, label) for label in lockable]
+        labels = list(editor.overlay.labels)
+        assert labels
+        problems = [_misplaced(driver, editor, label) for label in labels]
     finally:
         window.resize(size)
         driver.pump()
-    assert problems == [None] * len(lockable)
+    assert problems == [None] * len(labels)
     click_task_button("Close", driver)
 
 
@@ -392,10 +433,9 @@ class _DragWatch:
             for button in editor.padlocks:
                 self.seen.setdefault(id(button), button)
             for label in editor.overlay.labels:
-                if label.lockable:
-                    problem = _misplaced(self.driver, editor, label)
-                    if problem is not None:
-                        self.problems.append(problem)
+                problem = _misplaced(self.driver, editor, label)
+                if problem is not None:
+                    self.problems.append(problem)
 
         return placed
 
@@ -457,21 +497,31 @@ def test_a_padlock_locks_and_unlocks_its_opening_moving_nothing(
     _assert_shows(_padlock(editor, lower), locked=True)
     assert _label_of(editor, lower).color == "locked"
 
-    # The column's last unlocked bay refuses to lock, in the Notification
-    # Area, changing nothing.
+    # The column's last unlocked bay locks too, with no report, and makes
+    # the unit's height a reference.
     count = notification_count()
     _click(_padlock(editor, upper), driver)
-    assert len(reported) == 1, reported
-    assert "stays unlocked" in reported[0]
-    assert notification_count() == count + 1
-    assert not _locked(session.unit.root, upper)
-    assert list(doc.UndoNames) == ["Lock Opening", *names]
+    assert reported == []
+    assert notification_count() == count
+    assert _locked(session.unit.root, upper)
+    assert list(doc.UndoNames) == ["Lock Opening", "Lock Opening", *names]
     assert _same_spaces(session.spaces, spaces)
-    _assert_shows(_padlock(editor, upper), locked=False)
+    _assert_shows(_padlock(editor, upper), locked=True)
+    assert panel.unit_fields["height"].read_only
+    _click(_padlock(editor, upper), driver)
+    assert not _locked(session.unit.root, upper)
+    assert not panel.unit_fields["height"].read_only
+    assert list(doc.UndoNames) == [
+        "Unlock Opening",
+        "Lock Opening",
+        "Lock Opening",
+        *names,
+    ]
+    names = list(doc.UndoNames)
 
     _click(_padlock(editor, lower), driver)
     assert not _locked(session.unit.root, lower)
-    assert list(doc.UndoNames) == ["Unlock Opening", "Lock Opening", *names]
+    assert list(doc.UndoNames) == ["Unlock Opening", *names]
     assert _same_spaces(session.spaces, spaces)
     _assert_shows(_padlock(editor, lower), locked=False)
 
@@ -480,6 +530,75 @@ def test_a_padlock_locks_and_unlocks_its_opening_moving_nothing(
     lower = bay_ids(session.unit.root)[0]
     assert _locked(session.unit.root, lower)
     _assert_shows(_padlock(editor, lower), locked=True)
+    click_task_button("Close", driver)
+
+
+def test_a_refused_edit_outlines_its_locks_until_the_next_edit_or_selection(
+    unit: FreeCAD.DocumentObject, driver: ViewDriver, dimension_style: None
+) -> None:
+    """With both bays of the column locked, a new height is refused, and
+    the two locks its failure names carry the holding outline, as the
+    Sketcher highlights the constraints in a conflict."""
+    panel = edit_unit(unit, driver)
+    editor = editor_of(panel)
+    add_board(panel, "vertical", driver)
+    session = panel.session
+    lower, upper = bay_ids(session.unit.root)
+    _click(_padlock(editor, lower), driver)
+    _click(_padlock(editor, upper), driver)
+    editor.select(None)
+    driver.pump()
+    assert _holding_outlines(editor) == set()
+    expected = {_corners(editor, lower), _corners(editor, upper)}
+
+    def refuse() -> None:
+        failure = session.resize("height", 1000.0)
+        assert failure is not None
+        assert failure.region_ids == (lower, upper)
+        panel._refresh()
+        driver.pump()
+        assert _holding_outlines(editor) == expected
+
+    refuse()
+    editor.select(upper)
+    driver.pump()
+    assert _holding_outlines(editor) == set()
+    editor.select(None)
+    refuse()
+    assert session.resize("width", 700.0) is None
+    panel._refresh()
+    driver.pump()
+    assert _holding_outlines(editor) == set()
+    click_task_button("Close", driver)
+
+
+def test_a_redundant_lock_warns_and_outlines_the_locks_it_repeats(
+    unit: FreeCAD.DocumentObject, driver: ViewDriver, dimension_style: None
+) -> None:
+    """With both bays of the column locked, the padlock of the row holding
+    the column repeats them: it locks, a warning reaches the Notification
+    Area, and the two bays carry the holding outline."""
+    panel = edit_unit(unit, driver)
+    editor = editor_of(panel)
+    add_board(panel, "vertical", driver)
+    session = panel.session
+    lower, upper = bay_ids(session.unit.root)
+    _click(_padlock(editor, lower), driver)
+    _click(_padlock(editor, upper), driver)
+    editor.select(None)
+    driver.pump()
+    root = session.unit.root
+    assert isinstance(root, Division)
+    row = next(item for item in root.items if isinstance(item, Division))
+    count = notification_count()
+    _click(_padlock(editor, row.id), driver)
+    assert _locked(session.unit.root, row.id)
+    assert notification_count() == count + 1
+    assert session.flagged == (lower, upper)
+    assert _holding_outlines(editor) == {
+        _corners(editor, lower),
+        _corners(editor, upper),
+    }
     click_task_button("Close", driver)
 
 

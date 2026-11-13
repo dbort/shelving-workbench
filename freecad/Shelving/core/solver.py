@@ -18,8 +18,9 @@ board's; the outer faces' motion never decides anything, since the fixed
 point and the size, or the faces held for a drag, place them. Relations hold
 the boards in their runs, the unit's fixed point, each lock, and the unit's
 size, in that order: the engine reports the later member of a dependent
-group as redundant, so the size drops out when locks already determine it
-and conflicts when they contradict it.
+group as redundant. When the locks already determine the size, it is a
+reference, as a Sketcher reference dimension is: the size relation is left
+out and the size follows the locks.
 
 All lengths are float millimeters. :data:`EPS_MM` is the tolerance for the
 "does it fit" and "is it positive" comparisons only.
@@ -188,6 +189,7 @@ _OUTER_MAX = PositionId("outer:max")
 _FIXED_ID = ConstraintId("outer:fixed")
 _SIZE_ID = ConstraintId("outer:size")
 _HELD_MAX_ID = ConstraintId("outer:held")
+_SIZE_EXPRESSION: Mapping[PositionId, float] = {_OUTER_MAX: 1.0, _OUTER_MIN: -1.0}
 
 
 def _span(low: _Edge, high: _Edge) -> tuple[Mapping[PositionId, float], float]:
@@ -370,7 +372,9 @@ def solve_axis(
     layout before it, the reference the motion is measured from, and must
     hold every node of ``unit``. The fixed point stays where ``spaces`` has
     it, and the unit's size along ``axis`` becomes ``size_mm``, or stays as
-    it is when that is ``None``, unless the locks already determine it. With
+    it is when that is ``None``. When the locks determine that size, as
+    :func:`size_fixed_by` reports, it takes the size they give instead, and a
+    ``size_mm`` that differs from it is a conflict. With
     ``target``, the board it names is pulled so its low face reaches the
     given unit-frame coordinate wherever the constraints allow. Every region
     in a run along ``axis`` keeps at least ``minimum_mm``, or its current
@@ -379,18 +383,31 @@ def solve_axis(
 
     Raises a ``"conflict"`` :class:`LayoutSolveError` when no layout meets
     the constraints, naming the regions whose locks or minimum widths the
-    engine found in conflict.
+    engine found in conflict. One for a ``size_mm`` the locks rule out names
+    the locks that determine the size, and its ``detail`` carries that size
+    as ``"fixed_size_mm"``.
     """
     system = _build(unit, spaces, axis)
     axis_index = axis.component_index
     current_size_mm = system.current_mm[_OUTER_MAX] - system.current_mm[_OUTER_MIN]
-    wanted_size_mm = current_size_mm if size_mm is None else size_mm
     relations = [
         *system.structural,
         _fixed_relation(unit, system),
         *system.lock_relations(),
-        Relation(_SIZE_ID, {_OUTER_MAX: 1.0, _OUTER_MIN: -1.0}, wanted_size_mm),
     ]
+    reference = _reference(unit, system)
+    if reference is None:
+        wanted_size_mm = current_size_mm if size_mm is None else size_mm
+        relations.append(Relation(_SIZE_ID, _SIZE_EXPRESSION, wanted_size_mm))
+    else:
+        region_ids, wanted_size_mm = reference
+        if size_mm is not None and abs(size_mm - wanted_size_mm) > EPS_MM:
+            raise LayoutSolveError(
+                region_ids[0] if region_ids else unit.root.id,
+                "conflict",
+                {"fixed_size_mm": wanted_size_mm},
+                region_ids,
+            )
     bounds: list[LowerBound] = []
     for region in system.regions:
         low, high = system.region_edges[region.id]
@@ -442,6 +459,77 @@ def solve_axis(
         size_mm=_replace_component_mm(unit.size_mm, axis_index, new_size_mm),
         position_mm=_replace_component_mm(unit.position_mm, axis_index, new_low_mm),
     )
+
+
+def _reference(unit: Unit, system: _System) -> tuple[tuple[str, ...], float] | None:
+    """The locked regions, in tree order, that determine ``unit``'s size
+    along the system's axis, and the size they give it; ``None`` when that
+    size is free. The minimum widths play no part."""
+    relations = [
+        *system.structural,
+        _fixed_relation(unit, system),
+        *system.lock_relations(),
+    ]
+    result = axis_solver.solve(system.current_mm, relations, [])
+    if isinstance(result, axis_solver.Conflict):
+        # Locks that contradict each other leave no size to report; the
+        # solve that follows names them.
+        return None
+    freedom = result.freedom(_SIZE_EXPRESSION)
+    if not freedom.determined:
+        return None
+    positions_mm = result.positions_mm
+    return (
+        tuple(system.region_ids(freedom.fixed_by)),
+        positions_mm[_OUTER_MAX] - positions_mm[_OUTER_MIN],
+    )
+
+
+def size_fixed_by(
+    unit: Unit, spaces: Mapping[str, Space], axis: Axis
+) -> tuple[str, ...] | None:
+    """The locked regions, in tree order, whose locks determine ``unit``'s
+    size along ``axis``, making that size a reference; ``None`` when the
+    size is free.
+
+    ``spaces`` is ``unit`` laid out. The boards' extents count alongside the
+    locks, and the openings' minimum widths do not. An empty tuple means the
+    boards alone determine the size. When several sets of locks determine
+    it, the result is one of them.
+    """
+    reference = _reference(unit, _build(unit, spaces, axis))
+    return None if reference is None else reference[0]
+
+
+def duplicated_locks(
+    unit: Unit, spaces: Mapping[str, Space], region_id: str, axis: Axis
+) -> tuple[str, ...] | None:
+    """The other locked regions, in tree order, whose locks, with the
+    boards, already imply the lock on the region ``region_id``; ``None``
+    when that lock is not redundant.
+
+    ``axis`` is the axis of the region's run, and ``spaces`` is ``unit``
+    laid out. The unit's size counts as free, so a lock that only makes the
+    size a reference is not redundant. ``None`` too when ``region_id`` names
+    no locked region on a run along ``axis``. When several sets of locks
+    imply it, the result is one of them.
+    """
+    system = _build(unit, spaces, axis)
+    lock_id = system.lock_id(region_id)
+    own = [r for r in system.lock_relations() if r.id == lock_id]
+    if not own:
+        return None
+    relations = [
+        *system.structural,
+        _fixed_relation(unit, system),
+        *system.lock_relations(without=(region_id,)),
+        *own,
+    ]
+    result = axis_solver.solve(system.current_mm, relations, [])
+    duplicates = result.redundant.get(lock_id)
+    if duplicates is None:
+        return None
+    return tuple(system.region_ids(duplicates))
 
 
 def fixing_locks(
@@ -500,6 +588,11 @@ def describe_solve_error(err: LayoutSolveError) -> str:
             return (
                 "A board this workbench cannot reshape would have to change size "
                 "to fit."
+            )
+        case "conflict" if "fixed_size_mm" in detail:
+            return (
+                "Locked openings fix this size of the unit at "
+                f"{detail['fixed_size_mm']:.1f} mm: unlock one of them to change it."
             )
         case "conflict" if "minimum_mm" in detail:
             return (

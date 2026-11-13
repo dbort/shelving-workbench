@@ -43,7 +43,12 @@ from freecad.Shelving.core.layout import (
     Void,
 )
 from freecad.Shelving.core.scan import DEFAULT_CLEARANCE_MM, DEFAULT_SNAP_MM
-from freecad.Shelving.core.solver import LayoutSolveError, solve
+from freecad.Shelving.core.solver import (
+    LayoutSolveError,
+    duplicated_locks,
+    size_fixed_by,
+    solve,
+)
 
 
 def _closed_box_unit() -> Unit:
@@ -1302,10 +1307,6 @@ def test_the_minimum_opening_survives_a_rescan() -> None:
 
 # --- locked and unlocked regions, and the drag -------------------------------
 
-_LAST_UNLOCKED = (
-    "One opening in each row stays unlocked, to take up changes to the unit's size."
-)
-
 
 def _three_bays(locked: Collection[str] = ()) -> Unit:
     """A column of three 200 mm bays, ``bay1`` lowest, between 20 mm boards:
@@ -1366,23 +1367,117 @@ def test_lock_and_unlock_refuse_what_set_size_refuses(node_id: str) -> None:
         assert err.value.node_id == node_id
 
 
-def test_the_last_unlocked_region_of_a_run_cannot_be_locked() -> None:
-    unit = _three_bays({"bay1", "bay2"})
-    with pytest.raises(EditError, match=_LAST_UNLOCKED) as err:
-        lock(unit, "bay3")
-    assert err.value.node_id == "bay3"
-    with pytest.raises(EditError, match=_LAST_UNLOCKED) as err:
-        set_size(unit, "bay3", 150.0, Basis.CLEAR)
-    assert err.value.node_id == "bay3"
-    with pytest.raises(EditError, match=_LAST_UNLOCKED) as err:
-        set_basis(unit, "bay3", Basis.WITH_NEXT)
-    assert err.value.node_id == "bay3"
+def _height_fixed_by(unit: Unit) -> tuple[str, ...] | None:
+    return size_fixed_by(unit, solve(unit), Axis.Z)
 
 
-def test_a_run_with_no_unlocked_region_keeps_what_it_was_allowed() -> None:
+def test_locking_every_opening_makes_the_height_a_reference() -> None:
+    unit = lock(_two_bay_column(), "A")
+    assert _height_fixed_by(unit) is None
+    unit = lock(unit, "B")
+    assert _locks_by_id(unit.root)["B"] is Basis.CLEAR
+    assert _height_fixed_by(unit) == ("A", "B")
+    assert held_by(unit, "s1") == ("A", "B")
+
+
+def test_typing_a_size_or_a_basis_locks_a_runs_last_unlocked_opening() -> None:
+    unit = _two_bay_column(locked="A")
+    sized = set_size(unit, "B", 300.0, Basis.CLEAR)
+    assert _height_fixed_by(sized) == ("A", "B")
+    spacing = set_basis(unit, "B", Basis.WITH_NEXT)
+    assert _height_fixed_by(spacing) == ("A", "B")
+
+
+def test_a_reference_height_refuses_a_new_height_and_takes_other_sizes() -> None:
+    unit = _two_bay_column(locked="AB")
+    with pytest.raises(LayoutSolveError) as err:
+        set_unit_size(unit, _with_height(unit, 700.0))
+    assert err.value.reason == "conflict"
+    assert err.value.region_ids == ("A", "B")
+    assert err.value.detail["fixed_size_mm"] == pytest.approx(654.0)
+    assert set_unit_size(unit, unit.size_mm) == unit
+    wider = set_unit_size(unit, Vec3(700.0, 350.0, 654.0))
+    assert wider.size_mm == Vec3(700.0, 350.0, 654.0)
+    assert _bay_mm(wider) == pytest.approx({"A": 300.0, "B": 300.0})
+
+
+def test_a_reference_height_follows_a_typed_size_from_the_fixed_point() -> None:
+    unit = _two_bay_column(locked="AB")
+    taller = set_size(unit, "A", 350.0, Basis.CLEAR)
+    assert taller.size_mm.z_mm == pytest.approx(704.0)
+    assert _bay_mm(taller) == pytest.approx({"A": 350.0, "B": 300.0})
+    assert _low_face_mm(taller, "bottom") == pytest.approx(_low_face_mm(unit, "bottom"))
+    assert held_by(taller, "s1") == ("A", "B")
+    top_fixed = set_size(
+        _two_bay_column(locked="AB", side="max"), "A", 350.0, Basis.CLEAR
+    )
+    assert _low_face_mm(top_fixed, "top") == pytest.approx(636.0)
+    assert _low_face_mm(top_fixed, "bottom") == pytest.approx(-50.0)
+
+
+def test_a_reference_height_follows_a_thicker_shelf() -> None:
+    thicker = set_thickness(_two_bay_column(locked="AB"), ["s1"], 30.0)
+    assert thicker.size_mm.z_mm == pytest.approx(666.0)
+    assert _bay_mm(thicker) == pytest.approx({"A": 300.0, "B": 300.0})
+
+
+def _basis(region_id: str, locked: Collection[str]) -> Basis | None:
+    return Basis.CLEAR if region_id in locked else None
+
+
+def _two_full_columns(locked: Collection[str] = ()) -> Unit:
+    """Two columns, each a 300 mm lower bay (``a1``, ``b1``), an 18 mm shelf
+    and a 300 mm upper bay (``a2``, ``b2``), between 18 mm side boards in a
+    618 mm tall box. Each bay named in ``locked`` is locked."""
+
+    def column(name: str) -> Division:
+        return Division(
+            axis=Axis.Z,
+            items=[
+                Bay(size_mm=300.0, lock=_basis(f"{name}1", locked), id=f"{name}1"),
+                Board(thickness_mm=18.0, id=f"s{name}"),
+                Bay(size_mm=300.0, lock=_basis(f"{name}2", locked), id=f"{name}2"),
+            ],
+            size_mm=400.0,
+            id=f"column_{name}",
+        )
+
+    return Unit(
+        size_mm=Vec3(854.0, 300.0, 618.0),
+        root=Division(
+            axis=Axis.X,
+            items=[
+                Board(thickness_mm=18.0, id="left"),
+                column("a"),
+                Board(thickness_mm=18.0, id="mid"),
+                column("b"),
+                Board(thickness_mm=18.0, id="right"),
+            ],
+        ),
+        depth_axis=Axis.Y,
+    )
+
+
+def test_locking_a_second_columns_last_opening_is_a_redundant_lock() -> None:
+    unit = _two_full_columns({"a1", "a2", "b1"})
+    assert _height_fixed_by(unit) == ("a1", "a2")
+    assert duplicated_locks(unit, solve(unit), "b1", Axis.Z) is None
+    locked = lock(unit, "b2")
+    _assert_same_layout(unit, locked)
+    duplicates = duplicated_locks(locked, solve(locked), "b2", Axis.Z)
+    assert duplicates == ("a1", "a2", "b1")
+
+
+def test_a_lock_that_only_makes_the_height_a_reference_is_not_redundant() -> None:
+    unit = lock(_two_bay_column(locked="A"), "B")
+    assert duplicated_locks(unit, solve(unit), "B", Axis.Z) is None
+    assert duplicated_locks(unit, solve(unit), "A", Axis.Z) is None
+
+
+def test_a_run_with_no_unlocked_region_lets_the_height_follow_its_locks() -> None:
     """A scan can leave every region of a run locked: a run of voids beside
-    a compartment, say. Its locks keep the sizes they hold, so a size that
-    would change the run's length is a conflict."""
+    a compartment, say. A typed size then moves the face the fixed point
+    leaves free, and a new height is a conflict."""
     unit = Unit(
         size_mm=Vec3(600.0, 300.0, 680.0),
         root=Division(
@@ -1397,8 +1492,10 @@ def test_a_run_with_no_unlocked_region_keeps_what_it_was_allowed() -> None:
         ),
     )
     assert lock(unit, "bay1") is unit
+    shorter = set_size(unit, "bay1", 290.0, Basis.CLEAR)
+    assert shorter.size_mm.z_mm == pytest.approx(670.0)
     with pytest.raises(LayoutSolveError) as err:
-        set_size(unit, "bay1", 290.0, Basis.CLEAR)
+        set_unit_size(unit, Vec3(600.0, 300.0, 700.0))
     assert set(err.value.region_ids) == {"bay1", "bay2"}
     spacing = set_basis(unit, "bay1", Basis.WITH_NEXT)
     assert _locks_by_id(spacing.root)["bay1"] is Basis.WITH_NEXT

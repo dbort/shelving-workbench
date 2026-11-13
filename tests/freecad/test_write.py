@@ -36,6 +36,7 @@ from freecad.Shelving.core.layout import (
     Unit,
 )
 from freecad.Shelving.core.scan import scan
+from freecad.Shelving.core.solver import LayoutSolveError
 from freecad.Shelving.unit_ops import (
     create_unit,
     rescan_unit,
@@ -733,6 +734,65 @@ def test_a_lock_survives_apply_rescan_and_reapply() -> None:
         for got in (z_after_first_rescan, z_after_second_rescan):
             assert got == pytest.approx(expected_z_mm), (got, expected_z_mm)
         assert z_after_resize == pytest.approx(expected_z_mm + 300.0)
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def _two_bay_carcass(locked: Basis | None) -> Unit:
+    """A closed 900 mm tall carcass of 18 mm boards whose one column holds
+    two 423 mm bays, both locked by ``locked``."""
+    return Unit(
+        size_mm=Vec3(600.0, 300.0, 900.0),
+        root=Division(
+            axis=Axis.Z,
+            items=[
+                Board(thickness_mm=18.0, role="bottom"),
+                Division(
+                    axis=Axis.X,
+                    items=[
+                        Board(thickness_mm=18.0, role="left_side"),
+                        Division(
+                            axis=Axis.Z,
+                            items=[
+                                Bay(size_mm=423.0, lock=locked),
+                                Board(thickness_mm=18.0, role="mid_shelf"),
+                                Bay(size_mm=423.0, lock=locked),
+                            ],
+                            size_mm=564.0,
+                        ),
+                        Board(thickness_mm=18.0, role="right_side"),
+                    ],
+                    size_mm=864.0,
+                ),
+                Board(thickness_mm=18.0, role="top"),
+            ],
+        ),
+        depth_axis=Axis.Y,
+        front_at_min=None,
+    )
+
+
+def test_a_resize_refuses_a_height_the_locks_fix_and_takes_a_width() -> None:
+    """With both bays of the column locked, the height is a reference: a
+    resize to another height raises the conflict naming both locks and
+    writes nothing, while a wider unit is accepted."""
+    doc = _new_document("write_smoke_reference")
+    try:
+        container = cast("FreeCAD.DocumentObject", doc.addObject("App::Part", "Unit"))
+        write_container(container, _two_bay_carcass(Basis.CLEAR))
+        doc.recompute()
+        top = doc.getObject("top")
+        before = top.Placement.Base.z
+        with pytest.raises(LayoutSolveError) as err:
+            resize_unit(container, Vec3(600.0, 300.0, 1000.0))
+        assert err.value.reason == "conflict"
+        assert len(err.value.region_ids) == 2
+        doc.recompute()
+        assert top.Placement.Base.z == pytest.approx(before)
+        resize_unit(container, Vec3(700.0, 300.0, 900.0))
+        doc.recompute()
+        assert doc.getObject("right_side").Placement.Base.x == pytest.approx(682.0)
+        assert top.Placement.Base.z == pytest.approx(before)
     finally:
         FreeCAD.closeDocument(doc.Name)
 

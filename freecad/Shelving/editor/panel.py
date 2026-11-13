@@ -29,6 +29,7 @@ from freecad.Shelving.editor.overlay import RGB, marker_rgb
 from freecad.Shelving.editor.session import (
     FIELD_PROPERTIES,
     EditFailure,
+    EditWarning,
     Session,
     UnitDimension,
 )
@@ -39,7 +40,7 @@ from freecad.Shelving.editor.view_editor import (
     marker_path,
     select_in_freecad,
 )
-from freecad.Shelving.refusals import report_error
+from freecad.Shelving.refusals import report_error, report_warning
 
 _UNIT_DIMENSIONS: tuple[tuple[UnitDimension, str], ...] = (
     ("width", "Width"),
@@ -54,6 +55,8 @@ _FIXED_TIPS: Mapping[UnitDimension, str] = {
     "height": "The side that stays put when the height changes",
 }
 
+_REFERENCE_TIP = "Locked openings fix this size. Unlock one of them to change it here."
+
 # The stock list's columns; a row's board count stands alone in the last, so
 # no text depends on how many boards it counts.
 STOCK_COLUMNS = ("Thickness", "Material", "Color", "Boards")
@@ -63,6 +66,10 @@ _BASIS_CHOICES: tuple[tuple[str, Basis], ...] = (
     ("Clear opening", Basis.CLEAR),
     ("Spacing (through the next board)", Basis.WITH_NEXT),
 )
+
+
+def _report_warning(warning: EditWarning) -> None:
+    report_warning(warning.message)
 
 
 class FirstEvents(QtCore.QObject):
@@ -277,6 +284,7 @@ class EditUnitPanel:
         watch.lap("session")
         self.session.open(lambda settle: QtCore.QTimer.singleShot(0, settle))
         self.session.on_change = self._follow_document
+        self.session.on_warning = _report_warning
         watch.lap("open session")
         self.editor: ViewEditor | None = None
         # Without this, a failure building the form or the in-view editor
@@ -571,6 +579,8 @@ class EditUnitPanel:
         view; called after every edit attempt, successful or not."""
         for dimension, field in self.unit_fields.items():
             field.show_mm(self.session.unit_dimension_mm(dimension))
+            reference = self.session.size_fixed_by(dimension) is not None
+            field.set_read_only(reference, _REFERENCE_TIP)
         for dimension, combo in self.fixed_combos.items():
             choices = self.session.fixed_choices(dimension)
             side = self.session.fixed_side(dimension)

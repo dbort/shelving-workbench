@@ -67,7 +67,7 @@ class Style:
     unlocked_rgb: RGB
     marker_rgb: RGB
     label_size_pt: int
-    # The spaces leading a lockable dimension's text: SoDatumLabel breaks
+    # The spaces leading a dimension's text: SoDatumLabel breaks
     # its line around the whole text, so they leave its padlock a blank
     # stretch of line before the first digit.
     padlock_spaces: int = 0
@@ -165,10 +165,8 @@ def length_text(length_mm: float) -> str:
 
 
 def label_string(label: DimensionLabel, style: Style) -> str:
-    """``label``'s text as drawn, led by the room for its padlock when it
-    has one."""
-    lead = " " * style.padlock_spaces if label.lockable else ""
-    return lead + length_text(label.size_mm)
+    """``label``'s text as drawn, led by the room for its padlock."""
+    return " " * style.padlock_spaces + length_text(label.size_mm)
 
 
 def datum_label_node(

@@ -679,6 +679,60 @@ def test_a_refused_unit_size_reports_and_changes_nothing(
     assert _unit_field_mm(unit_panel, "height") == pytest.approx(900.0)
 
 
+def _read_only(unit_panel: _Fixture) -> dict[UnitDimension, bool]:
+    fields = unit_panel.panel.unit_fields
+    return {dimension: field.read_only for dimension, field in fields.items()}
+
+
+def test_a_height_the_locks_fix_is_read_only_until_one_unlocks(
+    unit_panel: _Fixture,
+) -> None:
+    """Both openings of the column locked make the height a reference, as
+    the Sketcher shows a dimension it computes: its field takes no typing
+    or steps, while width and depth stay editable."""
+    editable: dict[UnitDimension, bool] = {
+        "width": False,
+        "depth": False,
+        "height": False,
+    }
+    assert _read_only(unit_panel) == editable
+    for unlocked in (unit_panel.lower, unit_panel.upper):
+        for region_id in (unit_panel.lower, unit_panel.upper):
+            assert unit_panel.session.set_lock(region_id, locked=True) is None
+        unit_panel.panel._refresh()
+        assert _read_only(unit_panel) == {**editable, "height": True}
+        height = unit_panel.panel.unit_fields["height"]
+        assert height.widget.toolTip()
+        spin = height.quantity_widget
+        assert spin is not None
+        spin.setFocus()
+        QtTest.QTest.keyClick(spin, QtCore.Qt.Key.Key_Up)
+        _process_events()
+        assert unit_panel.session.unit_dimension_mm("height") == pytest.approx(900.0)
+        assert unit_panel.session.set_lock(unlocked, locked=False) is None
+        unit_panel.panel._refresh()
+        assert _read_only(unit_panel) == editable
+        assert not height.widget.toolTip()
+
+
+def test_a_redundant_lock_reaches_the_notification_area(
+    unit_panel: _Fixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With both openings of the column locked, locking the run that holds
+    the column repeats them: the panel passes the session's warning on."""
+    warned: list[str] = []
+    monkeypatch.setattr(panel_module, "report_warning", warned.append)
+    for region_id in (unit_panel.lower, unit_panel.upper):
+        assert unit_panel.session.set_lock(region_id, locked=True) is None
+    assert warned == []
+    root = unit_panel.session.unit.root
+    assert isinstance(root, Division)
+    run = next(item for item in root.items if isinstance(item, Division))
+    assert unit_panel.session.set_lock(run.id, locked=True) is None
+    (message,) = warned
+    assert "redundant" in message
+
+
 def _board_ids(region: Region) -> set[str]:
     if not isinstance(region, Division):
         return set()
