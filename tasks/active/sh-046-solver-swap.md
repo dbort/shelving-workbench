@@ -230,3 +230,11 @@ tried before any new constraint exists.
       - delete bug-019.
 
 ## Review log
+
+### Round 1: REJECTED
+- **F1: Unlocking a scan-set lock is lost on Undo, Redo or reopen** (`freecad/Shelving/core/record.py:200`, `freecad/Shelving/core/record.py:171`): `with_stored_rules` only adds locks, and the record has no entry for an unlocked region, so a plinth void unlocked with its padlock is locked again by the next rescan. `main` handled this (`test_an_unlocked_region_the_scan_fixed_shares_at_its_scanned_size`); the branch replaces it with `test_with_stored_rules_keeps_a_lock_the_scan_set`, asserting the opposite. Suggested fix: a valid record is the full lock state, the scan's locks apply only with no valid record; add core and headless `Session` round-trip tests. Tradeoff: a void whose bounding board is renamed loses its scan lock.
+- **N1: Unwrapped lines in the design doc** (`docs/scope-and-design.md:9`, `docs/scope-and-design.md:72`): two edited lines run to 107 and 101 characters.
+- **N2: Broken comment rewrap** (`freecad/Shelving/core/layout.py:88`): the `thickness_mm` comment breaks after "A new board".
+- **N3: Glossary word choice** (`README.md:76`): **Size rule** says "panels" where the rest of the glossary says "boards".
+- **N4: `fixing_locks` can raise where callers don't expect it** (`freecad/Shelving/core/solver.py:472`): `held_by`, `Session.held_by` and the padlock planner do not catch its `LayoutSolveError`.
+- **N5: Extra motion terms beyond what Advice specifies** (`freecad/Shelving/core/solver.py:599`): seams and outer faces carry a weight-1 motion term too, so a seam weighs as a board when a typed size is split.
