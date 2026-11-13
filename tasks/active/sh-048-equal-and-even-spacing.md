@@ -309,3 +309,7 @@ boards are gone is dropped, with one notification saying so.
 - **N1: Hard-to-parse `background_rgb` docstring** (`freecad/Shelving/editor/overlay.py:80`): chained appositives; split into short sentences naming `UseBackgroundColorMid`, `BackgroundColor2` and `BackgroundColor3`.
 - **N2: Short line wraps left by the edits** (`docs/scope-and-design.md:98`, `freecad/Shelving/qa/cases/30-editor.toml:551`): reflow both paragraphs.
 - **N3: Defaults when the gradient keys are unset** (`freecad/Shelving/editor/overlay.py:83`): a missing `Simple` reads as true and a missing `Gradient` as false; FreeCAD may read `Gradient` with a default of true and not read `Simple`. Low risk, since every bundled preference pack sets them; comment if deliberate.
+
+### Round 5: APPROVED
+- **N1: Missing noun in the new notes section** (`.claude/docs/freecad-notes.md:291`): "writes the FreeCAD Light pack's plain (247, 247, 247)" needs "plain color".
+- **N2: `Style.tile_rgb` default is out of step with the new background defaults** (`freecad/Shelving/editor/overlay.py:125`): the dataclass default is still FreeCAD Light's (247, 247, 247), unlike `_BACKGROUND_DEFAULT` and the gradient-middle default; `view_style` always sets it, so nothing draws with it. Optional: say why in the field's comment, or drop the default.
