@@ -16,6 +16,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable, Mapping, Sequence
 from functools import partial
+from typing import Literal, Protocol, cast
 
 import FreeCAD
 from PySide6 import QtCore, QtGui, QtWidgets
@@ -56,6 +57,84 @@ _FIXED_TIPS: Mapping[UnitDimension, str] = {
 }
 
 _REFERENCE_TIP = "Locked openings fix this size. Unlock one of them to change it here."
+
+# The commands on the toolbar the panel shows while it is open; the Shelving
+# menu lists the same ones (freecad/Shelving/init_gui.py).
+CONSTRAINT_TOOLBAR_COMMANDS = (
+    "Shelving_ConstrainEqual",
+    "Shelving_ConstrainEvenSpacing",
+)
+CONSTRAINT_TOOLBAR_NAME = "ShelvingConstraints"
+
+ConstraintCommand = Literal["equal", "even_spacing"]
+
+# The panel open now, which the constraint commands act through; at most one
+# task panel is open at a time.
+_active: EditUnitPanel | None = None
+
+
+def active_panel() -> EditUnitPanel | None:
+    """The Edit Unit panel open now, or ``None`` outside an edit."""
+    return _active
+
+
+class _GuiCommand(Protocol):
+    """``FreeCADGui.Command.get``'s result; the stubs do not declare it."""
+
+    def getAction(self) -> list[QtGui.QAction]: ...
+
+
+class _MainWindow(Protocol):
+    workbenchActivated: QtCore.SignalInstance
+
+    def addToolBar(self, toolbar: QtWidgets.QToolBar, /) -> None: ...
+    def removeToolBar(self, toolbar: QtWidgets.QToolBar, /) -> None: ...
+
+
+class ConstraintToolBar:
+    """The constraint commands' toolbar in FreeCAD's main window, shown while
+    an edit is open whatever the active workbench, as the Sketcher shows its
+    edit-mode toolbars. A workbench switch rebuilds the main window's
+    toolbars, so the toolbar shows itself again after one."""
+
+    def __init__(self) -> None:
+        import FreeCADGui
+
+        main = cast("_MainWindow", FreeCADGui.getMainWindow())
+        # None once closed.
+        self._window: _MainWindow | None = main
+        self.toolbar = QtWidgets.QToolBar(
+            "Shelving constraints", cast("QtWidgets.QMainWindow", main)
+        )
+        self.toolbar.setObjectName(CONSTRAINT_TOOLBAR_NAME)
+        for name in CONSTRAINT_TOOLBAR_COMMANDS:
+            command = cast("_GuiCommand | None", FreeCADGui.Command.get(name))
+            if command is not None:
+                for action in command.getAction():
+                    self.toolbar.addAction(action)
+        main.addToolBar(self.toolbar)
+        self.toolbar.show()
+        main.workbenchActivated.connect(self._reshow)
+
+    def _reshow(self, _name: str) -> None:
+        # After the switch has finished hiding the toolbars it does not list.
+        QtCore.QTimer.singleShot(0, self._show)
+
+    def _show(self) -> None:
+        if self._window is not None:
+            self.toolbar.show()
+
+    def close(self) -> None:
+        """Take the toolbar out of the main window for good."""
+        window = self._window
+        if window is None:
+            return
+        self._window = None
+        window.workbenchActivated.disconnect(self._reshow)
+        self.toolbar.hide()
+        window.removeToolBar(self.toolbar)
+        self.toolbar.deleteLater()
+
 
 # The stock list's columns; a row's board count stands alone in the last, so
 # no text depends on how many boards it counts.
@@ -287,6 +366,7 @@ class EditUnitPanel:
         self.session.on_warning = _report_warning
         watch.lap("open session")
         self.editor: ViewEditor | None = None
+        self.toolbar: ConstraintToolBar | None = None
         # Without this, a failure building the form or the in-view editor
         # would leave the session following the document with no dialog to
         # end it.
@@ -295,9 +375,15 @@ class EditUnitPanel:
             if view is not None:
                 self.editor = ViewEditor(self.session, view, self._refresh)
                 watch.lap("view editor")
+            if FreeCAD.GuiUp:
+                self.toolbar = ConstraintToolBar()
         except BaseException:
+            if self.editor is not None:
+                self.editor.close(restore_camera=False)
             self.session.close()
             raise
+        global _active
+        _active = self
 
     def _build(self, watch: Stopwatch) -> None:
         self.form = QtWidgets.QWidget()
@@ -607,7 +693,24 @@ class EditUnitPanel:
         if self.editor is not None:
             self.editor.rebuild()
 
+    def constrain(self, command: ConstraintCommand) -> None:
+        """Make the constraint ``command`` names from the selection,
+        reporting a refusal through the Notification Area."""
+        if command == "equal":
+            failure = self.session.constrain_equal()
+        else:
+            failure = self.session.constrain_even_spacing()
+        if failure is None and self.editor is not None:
+            select_in_freecad(self.session.container.Document.Name, [])
+        self._show_result(failure)
+
     def _end(self) -> None:
+        global _active
+        if _active is self:
+            _active = None
+        if self.toolbar is not None:
+            self.toolbar.close()
+            self.toolbar = None
         if self.stock_dialog is not None:
             self.stock_dialog.reject()
         if self.editor is not None:

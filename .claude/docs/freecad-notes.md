@@ -230,6 +230,25 @@ widget editable again: the abort alone leaves it read-only.
 - It reports itself transparent, so Coin sorts it with other transparent
   shapes unless an `SoTransparencyType` of `BLEND` is in force.
 
+## The Sketcher's icons load with `SketcherGui`
+
+`:/icons/constraints/Constraint_EqualLength.svg` does not exist before
+`SketcherGui` is imported (FreeCAD 1.1.3, verified with `NoneWorkbench` as
+the start workbench). The Sketcher registers its icon resources when its
+GUI module loads, which PartDesign, FreeCAD 1.1's default start workbench,
+does at startup, so a check made after a PartDesign start passes by
+accident. `freecad/Shelving/editor/overlay.py`'s `load_sketcher_resources`
+imports it before the editor draws a constraint icon or a command asks for
+the icon; `tests/freecad_view/test_constraints.py` keeps the check. Every
+FreeCAD build ships the Sketcher, so there is no fallback icon.
+
+The Sketcher draws a constraint's in-view icon from its SVG at the
+`ConstraintSymbolSize` View preference (the application font's pixel size
+by default), then fills it with the constraint's color under
+`QPainter::CompositionMode_SourceIn`: `ConstrainedIcoColor` active,
+`DeactivatedConstrDimColor` deactivated, `SelectionColor` selected
+(`EditModeConstraintCoinManager::renderConstrIcon` and `constrColor`).
+
 ## FreeCAD 1.1 offers a settings migration at the first GUI start
 
 Settings live per version under the XDG directories

@@ -217,53 +217,59 @@ boards are gone is dropped, with one notification saying so.
   both relations hold. Close, move one shelf by hand, reopen, and see
   that relation greyed and removable, with nothing moved. Add no setup
   action.
+- **A selection never mixes boards and openings** (user decision,
+  2026-11-12): a click on a board, Ctrl or not, replaces a selection of
+  openings; Ctrl-click on an opening toggles it in a selection of openings,
+  and with boards selected keeps them and adds nothing. No command takes a
+  mix, and under Inventor navigation Ctrl-click is the only way to select a
+  board, so it must be able to replace an opening.
 - **Out of scope:** Aligned faces (task 4), the constraint list and
   reactivation (task 3), a spacing basis in the UI, keyboard shortcuts for
   the commands, and bug-021 (a copy loses its constraints as it loses its
   locks).
 
 ## Plan
-- [ ] **Step 1** (`tests/freecad_view/`, `.claude/docs/freecad-notes.md`):
+- [x] **Step 1** (`tests/freecad_view/`, `.claude/docs/freecad-notes.md`):
       find whether Sketcher's constraint icon resources exist before
       `SketcherGui` is imported, record it, and keep the check as a test
       of whatever the editor relies on.
-- [ ] **Step 2** (`core/layout.py`, `core/tests/test_layout.py`): `Equal`
+- [x] **Step 2** (`core/layout.py`, `core/tests/test_layout.py`): `Equal`
       and `EvenSpacing` with id, basis and active flag. `Unit` carries
       them, and an Even spacing resolves its openings from the tree.
-- [ ] **Step 3** (`core/solver.py`, `core/tests/test_solver.py`): active
+- [x] **Step 3** (`core/solver.py`, `core/tests/test_solver.py`): active
       constraints become engine relations. Conflict, redundancy and
       freedom results carry constraint ids beside region ids.
-- [ ] **Step 4** (`core/edit.py`, `core/tests/test_edit.py`): creating
+- [x] **Step 4** (`core/edit.py`, `core/tests/test_edit.py`): creating
       Equal (chained) and Even spacing with their refusals, removing
       constraints, the drops in `split_region`, `merge_at` and board
       deletion, and `held_by` naming constraints.
-- [ ] **Step 5** (`core/record.py`, `core/scan.py` if needed,
+- [x] **Step 5** (`core/record.py`, `core/scan.py` if needed,
       `core/tests/test_record.py`): the version 2 record, version 1 and
       malformed read as none, and the open reconciliation (deactivate,
       drop) returning a report.
-- [ ] **Step 6** (`container.py`, `unit_ops.py`, `tests/freecad/test_write.py`,
+- [x] **Step 6** (`container.py`, `unit_ops.py`, `tests/freecad/test_write.py`,
       `tests/freecad/`): read and write constraints; resize and rescan
       honor active ones.
-- [ ] **Step 7** (`editor/session.py`, `tests/freecad/test_editor_session.py`,
+- [x] **Step 7** (`editor/session.py`, `tests/freecad/test_editor_session.py`,
       `tests/freecad/test_edit_history.py`): the ordered item selection,
       the constraint selection, the two creations, Delete of constraints,
       and the open report, posted once.
-- [ ] **Step 8** (`editor/elevation.py`, `tests/test_editor_elevation.py`):
+- [x] **Step 8** (`editor/elevation.py`, `tests/test_editor_elevation.py`):
       icon positions per opening, clear of text, padlocks and each other,
       and hit-testing; the selection and holding outlines for
       constraints.
-- [ ] **Step 9** (`editor/overlay.py`, `editor/view_editor.py`,
+- [x] **Step 9** (`editor/overlay.py`, `editor/view_editor.py`,
       `editor/panel.py`, `tests/freecad_view/test_constraints.py`,
       `tests/freecad_view/test_multi_selection.py`): draw and recolor the
       icons, Ctrl-click on openings, icon clicks, Delete routing, the held
       board's outline, and the panel's state with several openings or a
       constraint selected.
-- [ ] **Step 10** (`commands/constrain_equal.py`,
+- [x] **Step 10** (`commands/constrain_equal.py`,
       `commands/constrain_even_spacing.py`, `init_gui.py`,
       `resources/`, `refusals.py`, `tests/freecad_gui/`): the commands, the
       edit-only toolbar, the menu entries, the Even spacing SVG, and the
       open notification.
-- [ ] **Step 11** (`README.md`, `docs/scope-and-design.md`,
+- [x] **Step 11** (`README.md`, `docs/scope-and-design.md`,
       `.claude/docs/code-map.md`, `freecad/Shelving/qa/cases/30-editor.toml`):
       the three glossary entries; "What is stored" names the constraint
       record; the code map's `resources/` entry covers the new icon; the

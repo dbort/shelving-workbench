@@ -84,6 +84,28 @@ duplicates are outlined. A lock that only makes the unit's size a
 reference is not redundant, and redundancy already in a unit when the
 editor opens raises no warning.
 
+Two constraints relate openings, as the Sketcher's relate its geometry.
+Equal holds two openings whose rows run the same way at one size; N
+selected openings make N-1 of them, chained in selection order, as the
+Sketcher's Equal does. Even spacing holds every opening between two ends
+of one row the same size, the ends being boards or the row's own ends, and
+reads its openings afresh at every solve, so an opening added inside the
+span joins it. Both measure the clear opening. The solve counts them after
+the locks, so one the locks already imply is accepted as redundant with a
+warning, and one they contradict is refused as a conflict. Each draws the
+Sketcher's style of icon beside each of its openings' dimensions, in the
+Sketcher's constraint icon color; clicking an icon selects the constraint,
+and Delete removes it. A board a constraint holds shows no arrow and no
+padlock, since no unlock frees it, and outlines the openings holding it.
+A board deleted beside an Equal's opening, or added along its row through
+it, drops the Equal, as the Sketcher's Split and Trim drop an Equal on the
+line they cut; an even spacing is dropped only with an end. Geometry wins
+when a unit opens: a constraint the boards miss by more than the joint
+clearance comes in deactivated, drawn grayed and never solved, and one
+naming boards or openings that are gone is dropped, each said once in a
+notification. The constraint commands sit on a toolbar shown only while
+Edit Unit is open, as the Sketcher's edit-mode toolbars are.
+
 A drag moves a board and every board joined to it through locked regions;
 every other board moves only when an opening ahead of it reaches the
 minimum, and then is pushed along, in nested runs too. A board with
@@ -258,7 +280,9 @@ one a copied object can carry wrongly.
 - **On the container:** the unit's id, depth axis, facing, fixed side on
   each model axis (`min`, `center` or `max`; a container without it reads
   as `min`), and a record of the locked regions and what each lock
-  measures, keyed by their bounding boards.
+  measures, keyed by their bounding boards, and of the constraints between
+  openings: each Equal by its two openings' keys and each even spacing by
+  its row's key and its end boards, with whether it is active.
   Positions always come from the solids, the unit's own size and position
   included; a missing or stale record falls back to inference.
 - **Named values** shared between units will live in an ordinary

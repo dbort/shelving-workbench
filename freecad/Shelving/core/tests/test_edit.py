@@ -11,6 +11,7 @@ import pytest
 from freecad.Shelving.core.edit import (
     MIN_DRAG_GAP_MM,
     EditError,
+    Held,
     Measurement,
     fixed_point_mm,
     held_by,
@@ -1377,7 +1378,7 @@ def test_locking_every_opening_makes_the_height_a_reference() -> None:
     unit = lock(unit, "B")
     assert _locks_by_id(unit.root)["B"] is Basis.CLEAR
     assert _height_fixed_by(unit) == ("A", "B")
-    assert held_by(unit, "s1") == ("A", "B")
+    assert held_by(unit, "s1") == Held(("A", "B"))
 
 
 def test_typing_a_size_or_a_basis_locks_a_runs_last_unlocked_opening() -> None:
@@ -1407,7 +1408,7 @@ def test_a_reference_height_follows_a_typed_size_from_the_fixed_point() -> None:
     assert taller.size_mm.z_mm == pytest.approx(704.0)
     assert _bay_mm(taller) == pytest.approx({"A": 350.0, "B": 300.0})
     assert _low_face_mm(taller, "bottom") == pytest.approx(_low_face_mm(unit, "bottom"))
-    assert held_by(taller, "s1") == ("A", "B")
+    assert held_by(taller, "s1") == Held(("A", "B"))
     top_fixed = set_size(
         _two_bay_column(locked="AB", side="max"), "A", 350.0, Basis.CLEAR
     )
@@ -1567,8 +1568,8 @@ def test_a_drag_moves_only_the_boards_it_must() -> None:
 
 
 def test_held_by_names_the_lock_that_holds_a_shelf() -> None:
-    assert held_by(_two_bay_column(locked="A"), "s1") == ("A",)
-    assert held_by(_two_bay_column(), "s1") == ()
+    assert held_by(_two_bay_column(locked="A"), "s1") == Held(("A",))
+    assert held_by(_two_bay_column(), "s1") == Held()
     for board_id in ("top", "bottom"):
         assert held_by(_two_bay_column(), board_id) is None
         assert held_by(_two_bay_column(locked="A"), board_id) is None
@@ -1576,8 +1577,8 @@ def test_held_by_names_the_lock_that_holds_a_shelf() -> None:
 
 def test_a_board_with_only_locks_to_the_end_of_its_run_is_held() -> None:
     unit = _three_bays({"bay1", "bay2"})
-    assert held_by(unit, "shelf1") == ("bay1",)
-    assert held_by(unit, "shelf2") == ("bay2",)
+    assert held_by(unit, "shelf1") == Held(("bay1",))
+    assert held_by(unit, "shelf2") == Held(("bay2",))
     for board_id, holder in (("shelf1", "bay1"), ("shelf2", "bay2")):
         with pytest.raises(EditError) as err:
             move_board(unit, board_id, 300.0)
@@ -1586,15 +1587,15 @@ def test_a_board_with_only_locks_to_the_end_of_its_run_is_held() -> None:
 
 def test_a_board_held_from_either_end_names_the_nearest_lock() -> None:
     unit = _three_bays({"bay1", "bay3"})
-    assert held_by(unit, "shelf1") == ("bay1",)
-    assert held_by(unit, "shelf2") == ("bay3",)
-    assert held_by(_three_bays({"bay1"}), "shelf2") == ()
+    assert held_by(unit, "shelf1") == Held(("bay1",))
+    assert held_by(unit, "shelf2") == Held(("bay3",))
+    assert held_by(_three_bays({"bay1"}), "shelf2") == Held()
 
 
 def test_a_board_in_a_fully_locked_run_names_one_lock_per_side() -> None:
     """Every opening locked, as a scan can leave a run: freeing ``s1`` takes
     unlocking the lock nearest it on each side, low side first."""
-    assert held_by(_three_bay_column(locked="ABC"), "s1") == ("A", "B")
+    assert held_by(_three_bay_column(locked="ABC"), "s1") == Held(("A", "B"))
 
 
 def test_a_carcass_board_has_nothing_to_unlock() -> None:
@@ -1604,7 +1605,7 @@ def test_a_carcass_board_has_nothing_to_unlock() -> None:
         with pytest.raises(EditError) as err:
             move_board(unit, "top", 600.0)
         assert err.value.node_id == "top"
-    assert held_by(_three_bays(), "shelf1") == ()
+    assert held_by(_three_bays(), "shelf1") == Held()
     assert held_by(_three_bays(), "bay1") is None
 
 

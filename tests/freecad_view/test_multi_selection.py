@@ -124,6 +124,8 @@ def test_ctrl_click_on_an_opening_keeps_the_boards(
     )
     driver.pump()
     _assert_mirrored(panel, ("Shelf", "Top"))
+    # A selection never mixes boards and openings.
+    assert session.selected_items == ("Shelf", "Top")
     assert all(obj != "Back" for obj, _subs in selection())
     click_task_button("Close", driver)
 

@@ -1,5 +1,5 @@
 ---
-next_id: bug-022
+next_id: bug-023
 ---
 
 # Bug log
@@ -100,3 +100,15 @@ log happens only when the user asks.
   qualify (Copy and Paste, a clone, a Link) and how a record maps onto
   them are design questions, and M18's constraint record keys the same
   way.
+- `bug-022` - **the editor's selection color can differ from FreeCAD's
+  highlight**: `editor/overlay.py`'s `view_style` reads `SelectionColor`
+  with FreeCAD 1.1's parameter default, green `#1CAD1C`, but with the
+  parameter unset the 3D-view tests' FreeCAD highlights selected boards in
+  a blue (`tests/freecad_view/test_scan_and_write.py` asserts it). So a
+  selected opening's outline, and a selected constraint's icon, may be
+  green beside blue board highlights. Found in sh-048, when a test that
+  wrote `SelectionColor` turned the view's highlight green for the rest of
+  the run. Root cause not traced: where FreeCAD 1.1 takes its effective
+  selection color when the parameter is unset (likely the theme). Fix:
+  `ad hoc`, reading the color the view itself uses, once that source is
+  found; not checked on a real install yet.

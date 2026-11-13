@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Even spacing, drawn on the 64 px grid, fills and strokes of the
+     Sketcher's Constraint_EqualLength icon: three uprights the same
+     distance apart. -->
+<svg
+   xmlns="http://www.w3.org/2000/svg"
+   width="64"
+   height="64"
+   viewBox="0 0 64 64"
+   version="1.1"
+   id="svg2816">
+  <g
+     id="layer1">
+    <rect
+       style="fill:#cc0000;fill-opacity:1;stroke:#280000;stroke-width:2;stroke-linecap:square;stroke-linejoin:round"
+       id="upright1"
+       width="6"
+       height="30"
+       x="11"
+       y="17" />
+    <rect
+       style="fill:#cc0000;fill-opacity:1;stroke:#280000;stroke-width:2;stroke-linecap:square;stroke-linejoin:round"
+       id="upright2"
+       width="6"
+       height="30"
+       x="29"
+       y="17" />
+    <rect
+       style="fill:#cc0000;fill-opacity:1;stroke:#280000;stroke-width:2;stroke-linecap:square;stroke-linejoin:round"
+       id="upright3"
+       width="6"
+       height="30"
+       x="47"
+       y="17" />
+    <path
+       style="fill:none;stroke:#ef2929;stroke-width:2;stroke-linecap:square;stroke-linejoin:round"
+       d="M 13,19 V 45 M 31,19 V 45 M 49,19 V 45"
+       id="highlights" />
+    <path
+       style="fill:none;stroke:#280000;stroke-width:2;stroke-linecap:square;stroke-linejoin:round"
+       d="M 19,32 H 27 M 37,32 H 45"
+       id="gaps" />
+  </g>
+</svg>

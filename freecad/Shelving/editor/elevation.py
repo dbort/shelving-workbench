@@ -17,6 +17,7 @@ from typing import Literal, NamedTuple
 
 from freecad.Shelving.core.edit import (
     EditError,
+    Held,
     held_by,
     is_locked,
     measure,
@@ -30,12 +31,15 @@ from freecad.Shelving.core.layout import (
     Basis,
     Bay,
     Board,
+    ConstraintId,
     Division,
+    Equal,
     FixedSide,
     Insets,
     Region,
     Unit,
     Void,
+    constraint_regions,
 )
 from freecad.Shelving.core.scan import elevation_axes
 from freecad.Shelving.core.solver import LayoutSolveError, solve
@@ -44,6 +48,10 @@ Side = Literal["front", "back"]
 FaceKind = Literal["bay", "void"]
 OutlineRole = Literal["region", "selected", "holding"]
 LabelColor = Literal["locked", "unlocked"]
+ConstraintKind = Literal["equal", "even_spacing"]
+# The color an icon takes, as the Sketcher colors its own: a selected one
+# in the selection color, a deactivated one grayed.
+IconState = Literal["active", "deactivated", "selected"]
 
 # How far in front of the face outlines and dimensions sit, so they do not
 # z-fight with the board faces they lie on. Opening faces sit on the face
@@ -352,13 +360,74 @@ class DimensionLabel:
 
 
 @dataclass(frozen=True)
+class ConstraintIcon:
+    """One constraint's icon beside one of its openings' dimension text."""
+
+    constraint_id: ConstraintId
+    kind: ConstraintKind
+    # The opening's dimension, whose text the icon sits after.
+    label: DimensionLabel
+    # The icon's place in the row after that text, counted from 0.
+    slot: int
+    state: IconState
+
+
+@dataclass(frozen=True)
 class Overlay:
     """Everything drawn over the unit, in the order Coin draws it: faces,
-    then outlines, then dimensions."""
+    then outlines, then dimensions, then constraint icons."""
 
     faces: Sequence[Face] = ()
     outlines: Sequence[Outline] = ()
     labels: Sequence[DimensionLabel] = ()
+    icons: Sequence[ConstraintIcon] = ()
+
+
+def icon_center_px(
+    icon: ConstraintIcon,
+    text_at_px: tuple[float, float],
+    text_width_px: float,
+    icon_px: float,
+    gap_px: float,
+) -> tuple[float, float]:
+    """Where ``icon``'s center goes in device pixels with y up, given where
+    its dimension's text is centered and how wide that text is, padlock room
+    included: past the text's end, which a padlock never sits beside, after
+    ``slot`` icons before it, ``gap_px`` clear of the text and of each
+    other. Along the dimension's line: rightward for a horizontal one,
+    upward for a vertical one, which the text reads toward."""
+    along_px = text_width_px / 2 + gap_px + icon_px / 2 + icon.slot * (icon_px + gap_px)
+    x_px, y_px = text_at_px
+    if icon.label.horizontal:
+        return (x_px + along_px, y_px)
+    return (x_px, y_px + along_px)
+
+
+def icon_at(
+    icons: Sequence[ConstraintIcon],
+    project: Callable[[float, float], tuple[float, float]],
+    text_width_px: Callable[[DimensionLabel], float],
+    icon_px: float,
+    gap_px: float,
+    x_px: float,
+    y_px: float,
+) -> ConstraintIcon | None:
+    """The icon whose square, placed as :func:`icon_center_px` places it,
+    holds the device point ``(x_px, y_px)``; ``project`` takes an elevation
+    point to device pixels with y up. Of two, the one drawn later."""
+    found: ConstraintIcon | None = None
+    half_px = icon_px / 2
+    for icon in icons:
+        center_x_px, center_y_px = icon_center_px(
+            icon,
+            project(*icon.label.text_at_mm),
+            text_width_px(icon.label),
+            icon_px,
+            gap_px,
+        )
+        if abs(x_px - center_x_px) <= half_px and abs(y_px - center_y_px) <= half_px:
+            found = icon
+    return found
 
 
 # The spans already taken outside the unit, per edge (the elevation axis
@@ -517,29 +586,57 @@ def plan_overlay(
     selected_id: str | None,
     outer_row_mm: float,
     flagged: Collection[str] = (),
+    *,
+    selected_items: Collection[str] = (),
+    selected_constraints: Collection[ConstraintId] = (),
 ) -> Overlay:
     """What to draw for ``unit`` solved as ``spaces`` on ``frame``'s face:
-    a face per bay and void, an outline per opening and for the selected
-    node, a "holding" outline for each locked region holding a selected
-    board that :func:`held_padlock` gives a padlock and for each region
-    ``flagged`` names, and a dimension for every region in a run along an
-    elevation axis. The selected outline wins over a holding one, and an
-    id in ``flagged`` that names no region draws nothing. ``spaces`` must
-    hold every node of ``unit``. A dimension outside the unit sits a whole
-    number of ``outer_row_mm`` rows out from its outer face, so resizing the
-    unit moves only the rows past the faces that move."""
+    a face per bay and void, an outline per opening and for each selected
+    node, a "holding" outline for each region holding a selected board, and
+    for each region ``flagged`` names or a constraint it names holds, a
+    dimension for every region in a run along an elevation axis, and an
+    icon for each constraint beside each of its openings' dimensions.
+
+    ``selected_id`` is the single selection, ``selected_items`` every
+    selected board and opening, and ``selected_constraints`` the selected
+    constraints, whose openings take the selected outline and whose icons
+    the "selected" state. A board is held by the locked regions
+    :func:`held_padlock` gives a padlock, or by constraints, whose openings
+    then take the holding outline. The selected outline wins over a holding
+    one, and an id in ``flagged`` that names nothing draws nothing.
+    ``spaces`` must hold every node of ``unit``. A dimension outside the
+    unit sits a whole number of ``outer_row_mm`` rows out from its outer
+    face, so resizing the unit moves only the rows past the faces that
+    move. Icons at one opening sit in a row in the order the constraints
+    were made."""
     planner = _Planner(unit, spaces, frame, outer_row_mm)
-    padlock = (
-        None if selected_id is None else held_padlock(unit, spaces, frame, selected_id)
-    )
-    holding = frozenset(() if padlock is None else padlock.holders) | frozenset(flagged)
+    held: Held | None = None
+    if selected_id is not None:
+        held = held_by(unit, selected_id)
+    by_id = {constraint.id: constraint for constraint in unit.constraints}
+    holding: set[str] = set()
+    if held is not None:
+        holding.update(held.locks)
+        for constraint_id in held.constraints:
+            holding.update(constraint_regions(unit, by_id[constraint_id]))
+    for flag in flagged:
+        constraint = by_id.get(ConstraintId(flag))
+        if constraint is None:
+            holding.add(flag)
+        else:
+            holding.update(constraint_regions(unit, constraint))
+    selected = {*selected_items, *([] if selected_id is None else [selected_id])}
+    for constraint_id in selected_constraints:
+        constraint = by_id.get(constraint_id)
+        if constraint is not None:
+            selected.update(constraint_regions(unit, constraint))
     faces: list[Face] = []
     outlines: list[Outline] = []
     labels: list[DimensionLabel] = []
     for node, _depth, parent in _walk(unit.root):
-        selected = node.id == selected_id
+        is_selected = node.id in selected
         if isinstance(node, Board):
-            if selected and parent is not None:
+            if is_selected and parent is not None:
                 inset = _apply_insets(parent.axis, spaces[node.id], node.insets)
                 outlines.append(Outline(frame.rect(inset), "selected"))
             continue
@@ -547,7 +644,7 @@ def plan_overlay(
         if isinstance(node, Bay | Void):
             kind: FaceKind = "void" if isinstance(node, Void) else "bay"
             faces.append(Face(node.id, kind, rect))
-        if selected:
+        if is_selected:
             outlines.append(Outline(rect, "selected"))
         elif node.id in holding:
             outlines.append(Outline(rect, "holding"))
@@ -555,7 +652,28 @@ def plan_overlay(
             outlines.append(Outline(rect, "region"))
         if isinstance(node, Division):
             labels.extend(planner.labels(node))
-    return Overlay(faces=faces, outlines=outlines, labels=labels)
+    label_of = {label.region_id: label for label in labels}
+    slots: dict[str, int] = {}
+    icons: list[ConstraintIcon] = []
+    for constraint in unit.constraints:
+        state: IconState = (
+            "selected"
+            if constraint.id in selected_constraints
+            else "active"
+            if constraint.active
+            else "deactivated"
+        )
+        kind_name: ConstraintKind = (
+            "equal" if isinstance(constraint, Equal) else "even_spacing"
+        )
+        for region_id in constraint_regions(unit, constraint):
+            label = label_of.get(region_id)
+            if label is None:
+                continue
+            slot = slots.get(region_id, 0)
+            slots[region_id] = slot + 1
+            icons.append(ConstraintIcon(constraint.id, kind_name, label, slot, state))
+    return Overlay(faces=faces, outlines=outlines, labels=labels, icons=icons)
 
 
 def region_at(
@@ -645,8 +763,10 @@ def arrow_for(
     elevation plane; ``None`` for a board a locked opening holds, a carcass
     board, a board whose run runs through the depth, and a region. The
     arrow sits beside the dimension of the region before the board, just
-    past its line, so a view zoomed in on that region shows both."""
-    if held_by(unit, board_id) != ():
+    past its line, so a view zoomed in on that region shows both. A board a
+    constraint holds gets none either."""
+    held = held_by(unit, board_id)
+    if held is None or not held.free:
         return None
     return _arrow_place(unit, spaces, frame, board_id)
 
@@ -714,17 +834,17 @@ class HeldPadlock:
 def held_padlock(
     unit: Unit, spaces: Mapping[str, Space], frame: ElevationFrame, board_id: str
 ) -> HeldPadlock | None:
-    """The padlock for ``board_id`` when locked regions hold it and unlocking
-    them would give it an arrow; ``None`` for a board a drag may move, a
-    carcass board, a board whose run runs through the depth, and a
-    region."""
-    holders = held_by(unit, board_id)
-    if not holders:
+    """The padlock for ``board_id`` when locked regions alone hold it, so
+    unlocking them would give it an arrow; ``None`` for a board a drag may
+    move, a board a constraint holds, which no unlock frees, a carcass
+    board, a board whose run runs through the depth, and a region."""
+    held = held_by(unit, board_id)
+    if held is None or not held.locks or held.constraints:
         return None
     place = _arrow_place(unit, spaces, frame, board_id)
     if place is None:
         return None
-    return HeldPadlock(board_id, place.at_mm, holders)
+    return HeldPadlock(board_id, place.at_mm, held.locks)
 
 
 def dragged_to_mm(arrow: Arrow, offset_mm: float) -> Vec3:

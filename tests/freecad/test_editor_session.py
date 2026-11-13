@@ -20,6 +20,7 @@ from freecad.Shelving.container import (
     unit_for_selection,
     write_container,
 )
+from freecad.Shelving.core.edit import Held
 from freecad.Shelving.core.geometry import Vec3
 from freecad.Shelving.core.layout import (
     Axis,
@@ -1122,7 +1123,7 @@ def test_dimensions_drag_basis_and_untagged() -> None:
             # unlocking moves nothing.
             shelf_z_mm = _z_mm(container, left_shelf_id)
             grab_mm = Vec3(100.0, 0.0, shelf_z_mm + 5.0)
-            assert session.held_by(left_shelf_id) == (left_lower_id,)
+            assert session.held_by(left_shelf_id) == Held((left_lower_id,))
             held = session.begin_drag(left_shelf_id, grab_mm)
             assert isinstance(held, EditFailure), held
             assert held.node_id == left_lower_id
@@ -1130,7 +1131,7 @@ def test_dimensions_drag_basis_and_untagged() -> None:
             doc.recompute()
             assert _board_snapshot(container) == boards_before_toggle
             assert _lock_of(session.unit.root, left_lower_id) is None
-            assert session.held_by(left_shelf_id) == ()
+            assert session.held_by(left_shelf_id) == Held()
             assert isinstance(session.unlock_holders(left_shelf_id), EditFailure)
 
             # Locking both bays of the column is accepted, moves nothing,
