@@ -836,8 +836,8 @@ class Session:
     def set_lock(self, region_id: str, locked: bool) -> EditFailure | None:
         """Lock ``region_id`` when ``locked``, else unlock it, as one undo
         step that moves nothing and keeps the selection. Returns an
-        :class:`EditFailure` on refusal, for an id that names no region,
-        leaving the session and document untouched."""
+        :class:`EditFailure` on refusal, such as for an id that names no
+        region, leaving the session and document untouched."""
         self.settle()
         name = "Lock Opening" if locked else "Unlock Opening"
         return self._set_locks(name, [region_id], locked)
@@ -878,9 +878,9 @@ class Session:
     ) -> EditFailure | None:
         """Apply ``candidate`` as the undo step ``name``, selecting
         ``select``, then warn through :attr:`on_warning` and flag the
-        duplicated locks when it left a lock on a region ``locking`` names
-        redundant that was not before, as the Sketcher accepts and flags a
-        redundant constraint."""
+        duplicated locks when the lock on a region ``locking`` names is
+        redundant after the step and was not before, as the Sketcher accepts
+        and flags a redundant constraint."""
         before_unit, before_spaces = self.unit, self.spaces
         failure = self._step(name, lambda: self._apply(candidate, select=select))
         if failure is not None:

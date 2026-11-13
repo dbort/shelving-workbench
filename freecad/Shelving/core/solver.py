@@ -17,7 +17,8 @@ position the same motion weight, so a seam's motion counts as much as a
 board's; the outer faces' motion never decides anything, since the fixed
 point and the size, or the faces held for a drag, place them. Relations hold
 the boards in their runs, the unit's fixed point, each lock, and the unit's
-size, in that order. When the locks already determine the size, it is a
+size, in that order: the engine reports the later member of a dependent
+group as redundant. When the locks already determine the size, it is a
 reference, as a Sketcher reference dimension is: the size relation is left
 out and the size follows the locks.
 
