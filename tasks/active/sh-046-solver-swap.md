@@ -245,3 +245,9 @@ tried before any new constraint exists.
 - **N3: Glossary word choice** (`README.md:76`): **Size rule** says "panels" where the rest of the glossary says "boards".
 - **N4: `fixing_locks` can raise where callers don't expect it** (`freecad/Shelving/core/solver.py:472`): `held_by`, `Session.held_by` and the padlock planner do not catch its `LayoutSolveError`.
 - **N5: Extra motion terms beyond what Advice specifies** (`freecad/Shelving/core/solver.py:599`): seams and outer faces carry a weight-1 motion term too, so a seam weighs as a board when a typed size is split.
+
+### Round 2: APPROVED
+- **N1: One design-doc line is still unwrapped** (`docs/scope-and-design.md:10`): the round 1 rewrap moved the overflow down a line; that line runs to 108 characters.
+- **N2: Elided possessive reads awkwardly** (`freecad/Shelving/core/solver.py:17`): "the outer faces' never decides anything" would read better as "the outer faces' motion never decides anything".
+- **N3: `fixing_locks` conflict branch is untested** (`freecad/Shelving/core/solver.py:478`): the `return frozenset()` on an engine conflict needs rounding beyond the engine's tolerance to reach; `held_by` maps it to `None`, as intended.
+- **N4: Undo/Redo half of round 1 F1 has no direct headless test** (`tests/freecad/test_editor_session.py:1205`): reopening is tested; Undo and Redo re-read through the same `_read_unit` path.
