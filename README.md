@@ -86,7 +86,7 @@ The vocabulary the documentation and the code share.
   it follows the other edits with the fixed point staying put. A lock that
   repeats what other locks already fix is accepted with a warning, and the
   locks it repeats are outlined. A refused edit outlines the locked
-  openings, and any opening held at 5 mm, that refused it.
+  openings, and any opening held at 5 mm, that stand in its way.
 - **Measurement basis**: what a locked size measures. **Clear opening** is
   the region alone; **Spacing** runs through the next board, as a shelf
   spacing is quoted top face to top face. Switching basis moves nothing.
@@ -100,8 +100,7 @@ The vocabulary the documentation and the code share.
   opening ahead of it is that narrow. A drag never locks or unlocks
   anything. A board with nothing but boards and locked openings between it
   and the end of its row is held until one of those openings is unlocked,
-  so locking every opening of a row holds all its boards and makes the
-  unit's size along it a reference.
+  so locking every opening of a row holds all its boards.
 - **Local frame**: origin at the unit's front-bottom-left corner, +X right,
   +Y back, +Z up, in millimeters. A container's own placement is excluded,
   so a unit reads the same wherever it sits.

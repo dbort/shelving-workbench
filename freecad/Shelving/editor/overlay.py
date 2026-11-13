@@ -78,8 +78,7 @@ class Style:
     def outline_rgb(self, role: OutlineRole) -> RGB:
         """The selection color for "selected", the locked dimension color
         for "holding", so a holding region reads as the lock it is, and a
-        dark gray for "region". A refused edit's or a redundant lock's
-        regions are outlined as "holding" too."""
+        dark gray for "region"."""
         if role == "selected":
             return self.selected_rgb
         if role == "holding":

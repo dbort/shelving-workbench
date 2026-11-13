@@ -869,8 +869,8 @@ def test_a_redundant_lock_is_applied_with_a_warning_naming_what_it_repeats() -> 
             session.close()
 
         reopened = Session(container)
-        reopened.open()
         reopened.on_warning = warnings.append
+        reopened.open()
         try:
             # A rescan gives the regions new ids.
             bay_ids = _find_bay_ids_in_order(reopened.unit.root)
@@ -878,6 +878,10 @@ def test_a_redundant_lock_is_applied_with_a_warning_naming_what_it_repeats() -> 
             assert locks == [Basis.CLEAR] * 4
             assert reopened.flagged == ()
             assert reopened.resize("width", 700.0) is None
+            # Restating a lock that was already redundant raises nothing new.
+            reopened.select(bay_ids[3])
+            assert reopened.set_basis(Basis.CLEAR) is None
+            assert _lock_of(reopened.unit.root, bay_ids[3]) is Basis.CLEAR
             assert len(warnings) == 1
             assert reopened.flagged == ()
         finally:
