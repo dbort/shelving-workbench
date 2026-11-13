@@ -6,6 +6,7 @@ from collections.abc import Mapping
 
 import pytest
 
+from freecad.Shelving.core.edit import unlock
 from freecad.Shelving.core.expand import expand
 from freecad.Shelving.core.geometry import Vec3
 from freecad.Shelving.core.layout import (
@@ -21,6 +22,7 @@ from freecad.Shelving.core.layout import (
 )
 from freecad.Shelving.core.record import (
     RULE_RECORD_VERSION,
+    parse_locks,
     region_keys,
     rule_key,
     rules_from_json,
@@ -164,7 +166,7 @@ def _rescan_with_board_moved(
 
 
 def _restored(original: Unit, rescanned: Unit) -> Unit:
-    return with_stored_rules(rescanned, rules_from_json(rules_to_json(original)))
+    return with_stored_rules(rescanned, parse_locks(rules_to_json(original)))
 
 
 def _locks(unit: Unit) -> Mapping[str, Basis | None]:
@@ -262,6 +264,11 @@ def test_rules_from_json_round_trips_both_bases() -> None:
 )
 def test_rules_from_json_reads_any_other_shape_as_no_locks(text: str) -> None:
     assert rules_from_json(text) == {}
+    assert parse_locks(text) is None
+
+
+def test_parse_locks_tells_an_empty_record_from_no_record() -> None:
+    assert parse_locks(rules_to_json(_closed_box_unit())) == {}
 
 
 # --- with_stored_rules() ------------------------------------------------------
@@ -280,15 +287,9 @@ def test_with_stored_rules_locks_a_matching_region_and_moves_nothing() -> None:
     assert set(others.values()) == {None}
 
 
-def test_with_stored_rules_with_no_locks_returns_the_unit() -> None:
-    scanned = _closed_box_unit()
-    assert with_stored_rules(scanned, {}) is scanned
-
-
-def test_with_stored_rules_keeps_a_lock_the_scan_set() -> None:
-    """A scan locks a plinth void beside compartments; a record that does not
-    name it leaves it locked."""
-    scanned = Unit(
+def _plinth_unit() -> Unit:
+    """A column over a plinth void, which a scan locks beside the bays."""
+    return Unit(
         size_mm=Vec3(600.0, 300.0, 954.0),
         root=Division(
             axis=Axis.Z,
@@ -302,11 +303,33 @@ def test_with_stored_rules_keeps_a_lock_the_scan_set() -> None:
             ],
         ),
     )
+
+
+def test_with_no_record_the_scans_locks_stand() -> None:
+    scanned = _plinth_unit()
+    assert with_stored_rules(scanned, None) is scanned
+
+
+def test_a_record_is_the_whole_lock_state() -> None:
+    """A region the record does not name is unlocked, the scan's lock on a
+    plinth void included."""
+    scanned = _plinth_unit()
     restored = with_stored_rules(scanned, {rule_key("shelf", "top"): Basis.CLEAR})
     locks = _locks(restored)
-    assert locks[rule_key(None, "bottom")] is Basis.CLEAR
+    assert locks[rule_key(None, "bottom")] is None
     assert locks[rule_key("shelf", "top")] is Basis.CLEAR
     assert locks[rule_key("bottom", "shelf")] is None
+    assert solve(restored) == solve(scanned)
+    assert set(_locks(with_stored_rules(scanned, {})).values()) == {None}
+
+
+def test_an_unlocked_void_stays_unlocked_across_a_rescan() -> None:
+    scanned = _plinth_unit()
+    edited = unlock(scanned, "plinth")
+    restored = with_stored_rules(scanned, parse_locks(rules_to_json(edited)))
+    assert _locks(restored)[rule_key(None, "bottom")] is None
+    kept = with_stored_rules(scanned, parse_locks(rules_to_json(scanned)))
+    assert _locks(kept)[rule_key(None, "bottom")] is Basis.CLEAR
 
 
 def test_a_stored_spacing_with_no_board_after_it_locks_its_clear_size() -> None:
@@ -349,10 +372,10 @@ def test_round_trip_recovers_a_spacing_a_scan_always_loses() -> None:
     _assert_same_spaces(restored, original)
 
 
-def test_renamed_bounding_board_leaves_its_regions_as_scanned() -> None:
+def test_renamed_bounding_board_leaves_its_regions_unlocked() -> None:
     """Renaming "shelf2" invalidates the keys of the two regions it bounds;
-    those keep what the scan gave them rather than the call raising, while
-    every other region still recovers its stored lock."""
+    those come back unlocked rather than the call raising, while every other
+    region still recovers its stored lock."""
     original = _closed_box_unit(Basis.CLEAR)
     serialized = rules_to_json(original)
     rescanned = _rescan_with_board_moved(original)

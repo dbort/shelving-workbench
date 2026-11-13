@@ -85,8 +85,8 @@ class Board:
     # The board's own thickness. A scanned board without an ``extent_mm``
     # takes its slot width in the scan's snapped grid, so its run adds up
     # exactly; one with an ``extent_mm`` keeps its measured size across its
-    # thin axis. A new board
-    # copies the thickness of the board it takes its stock from.
+    # thin axis. A new board copies the thickness of the board it takes its
+    # stock from.
     thickness_mm: float
     # ``None`` means the board is regenerable: the solver derives its extent
     # from the layout, same as any other item. A value means the workbench

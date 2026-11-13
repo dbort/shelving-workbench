@@ -6,8 +6,8 @@ produces belongs to your document rather than to the workbench.
 A unit is designed as a flat front elevation: a rectangle divided into
 compartments by panels of real thickness. Change the height and the
 openings by the moving edge take up the change; type an exact opening and
-the shelves either side of it move to make room. The panels are ordinary FreeCAD solids with nothing hidden
-attached, so any tool can read, cut and export them, and a document opens
+the shelves either side of it move to make room. The panels are ordinary
+FreeCAD solids with nothing hidden attached, so any tool can read, cut and export them, and a document opens
 intact where this workbench is not installed. The workbench can also read
 an arrangement of panels back and recover its layout. That makes it work
 on shelving modeled elsewhere, and it makes editing a panel with another
@@ -69,8 +69,8 @@ changes the openings beside the outer faces that move, and pushes inward
 once one reaches the minimum. A typed size locks the opening and moves the
 boards either side of it, half the change each when both are free. An edit
 the locks and the minimum cannot allow is refused, where the Sketcher would
-leave the sketch in error: an unsolvable layout has no panels to write. The editor keeps one unlocked
-region in every run.
+leave the sketch in error: an unsolvable layout has no panels to write.
+The editor keeps one unlocked region in every run.
 
 A drag moves a board and every board joined to it through locked regions;
 every other board moves only when an opening ahead of it reaches the

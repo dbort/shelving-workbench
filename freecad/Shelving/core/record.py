@@ -19,14 +19,16 @@ bounds at most one region on each side within one run.
 GEOMETRY WINS. A rescan takes every region's size from the boards, so a
 board moved by hand stays where it was moved. The record contributes only
 what geometry cannot say: which regions are locked, and in which basis. A
-stored lock takes its region's scanned size, and a region the record does
-not name keeps whatever lock the scan gave it.
+stored lock takes its region's scanned size. A valid record is the whole
+lock state: a region it does not name is unlocked, even where the scan
+would have locked it, so an opening the user unlocked stays unlocked. The
+scan's own locks stand only when the container holds no valid record.
 
 CONSEQUENCES of keying this way, because they are not obvious. Renaming or
 deleting a bounding board invalidates its neighbors' keys; the correct
 response, and what :func:`with_stored_rules` does, is to leave that region
-as scanned rather than raise. The geometry scanned is still correct, only
-the stored lock for that one region is lost.
+unlocked rather than raise. The geometry scanned is still correct, only the
+stored lock for that one region is lost.
 
 A lock's :class:`~freecad.Shelving.core.layout.Basis` rides along in the
 record, because it cannot be recovered from geometry: a clear opening and a
@@ -36,8 +38,8 @@ identically, and a scan always locks in ``Basis.CLEAR``. A stored
 at all.
 
 A record in any other shape than :func:`rules_to_json` writes reads as no
-record: the unit opens with only the locks the scan gives it, where raising
-would leave it unopenable.
+record (:func:`parse_locks` gives ``None``): the unit opens with the locks
+the scan gives it, where raising would leave it unopenable.
 
 WHAT IS NOT IN THE RECORD. Anything but the locks. A unit's id, its depth
 axis, and its facing are single values with an obvious home as ordinary
@@ -131,7 +133,11 @@ def rules_to_json(unit: Unit) -> str:
     return json.dumps(doc)
 
 
-def _parse(text: str) -> Mapping[str, Basis] | None:
+def parse_locks(text: str) -> Mapping[str, Basis] | None:
+    """Each stored lock's basis, keyed by :func:`rule_key`, from the record
+    :func:`rules_to_json` emitted; ``None`` for a record in any other shape,
+    or text that is not JSON, which an empty record never gives. Never
+    raises."""
     try:
         parsed: object = json.loads(text)
     except ValueError:
@@ -164,14 +170,14 @@ def rules_from_json(text: str) -> Mapping[str, Basis]:
     """Each stored lock's basis, keyed by :func:`rule_key`, from the record
     :func:`rules_to_json` emitted. A record in any other shape, or text that
     is not JSON, gives no locks; this never raises."""
-    locks = _parse(text)
+    locks = parse_locks(text)
     return {} if locks is None else locks
 
 
 def _locked_items(run: Division, locks: Mapping[str, Basis]) -> list[Item]:
     """``run``'s items, each region whose key ``locks`` names locked in its
     stored basis, and in ``Basis.CLEAR`` when that is ``Basis.WITH_NEXT``
-    and no board follows it any more."""
+    and no board follows it any more; every other region unlocked."""
     items = run.items
     new_items: list[Item] = []
     for index, item in enumerate(items):
@@ -185,7 +191,7 @@ def _locked_items(run: Division, locks: Mapping[str, Basis]) -> list[Item]:
         basis = locks.get(key)
         if basis is Basis.WITH_NEXT and _neighbor_board_id(items, index + 1) is None:
             basis = Basis.CLEAR
-        if basis is not None:
+        if new_item.lock is not basis:
             new_item = dataclasses.replace(new_item, lock=basis)
         new_items.append(new_item)
     return new_items
@@ -197,15 +203,17 @@ def _with_stored_locks(region: Region, locks: Mapping[str, Basis]) -> Region:
     return dataclasses.replace(region, items=_locked_items(region, locks))
 
 
-def with_stored_rules(unit: Unit, locks: Mapping[str, Basis]) -> Unit:
+def with_stored_rules(unit: Unit, locks: Mapping[str, Basis] | None) -> Unit:
     """``unit``, as scanned, with each region whose :func:`rule_key` matches
-    an entry in ``locks`` locked in that entry's basis at its scanned size,
-    so every node keeps the space it had in ``unit``.
+    an entry in ``locks`` locked in that entry's basis and every other
+    region unlocked, each at its scanned size, so every node keeps the space
+    it had in ``unit``. Returns ``unit`` itself, with the scan's locks, when
+    ``locks`` is ``None``: no valid record.
 
-    A region no entry matches keeps the lock the scan gave it, or none; a
-    key with no match, most often because a bounding board was renamed or
-    deleted since the record was written, is not an error.
+    A region no entry matches, most often because a bounding board was
+    renamed or deleted since the record was written, is unlocked, not an
+    error.
     """
-    if not locks:
+    if locks is None:
         return unit
     return dataclasses.replace(unit, root=_with_stored_locks(unit.root, locks))

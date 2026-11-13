@@ -30,6 +30,7 @@ from freecad.Shelving.core.layout import (
     FixedPoint,
     Region,
     Unit,
+    Void,
 )
 from freecad.Shelving.core.record import region_keys
 from freecad.Shelving.core.scan import elevation_axes
@@ -1150,9 +1151,9 @@ def test_a_woodworking_magic_start_unit_takes_and_gives_up_a_divider(
 
 
 def test_a_magic_start_unit_takes_a_typed_size(tmp_path: Path) -> None:
-    """Its openings all differ in size, and each shares leftover space, so
-    sizing the lower bay moves the shelf and the upper bay takes up the
-    rest."""
+    """None of its openings is locked, so sizing the lower bay moves the
+    shelf above it and the upper bay takes up the rest, while the plinth
+    gap under the floor holds."""
     path = tmp_path / _MAGIC_START.name
     shutil.copyfile(_MAGIC_START, path)
     doc = FreeCAD.openDocument(str(path))
@@ -1171,6 +1172,61 @@ def test_a_magic_start_unit_takes_a_typed_size(tmp_path: Path) -> None:
             assert abs(_z_mm(container, "Floor") - floor_z_mm) < 1e-6
         finally:
             session.close()
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def _plinth_id(region: Region) -> str | None:
+    """The id of the first locked void in ``region``'s subtree, or ``None``."""
+    if not isinstance(region, Division):
+        return None
+    for item in region.items:
+        if isinstance(item, Void) and item.lock is not None:
+            return item.id
+        if isinstance(item, Division):
+            found = _plinth_id(item)
+            if found is not None:
+                return found
+    return None
+
+
+def _void_locks(region: Region) -> list[Basis | None]:
+    if not isinstance(region, Division):
+        return []
+    locks: list[Basis | None] = []
+    for item in region.items:
+        if isinstance(item, Void):
+            locks.append(item.lock)
+        elif isinstance(item, Division):
+            locks += _void_locks(item)
+    return locks
+
+
+def test_an_unlocked_plinth_gap_stays_unlocked_when_reopened(tmp_path: Path) -> None:
+    """The scan locks Magic Start's plinth gap; once unlocked with its
+    padlock, the stored record keeps it unlocked through a fresh read."""
+    path = tmp_path / _MAGIC_START.name
+    shutil.copyfile(_MAGIC_START, path)
+    doc = FreeCAD.openDocument(str(path))
+    try:
+        container = doc.getObject("LinkGroup")
+        assert container is not None
+        session = Session(container)
+        session.open()
+        try:
+            plinth_id = _plinth_id(session.unit.root)
+            assert plinth_id is not None
+            assert session.set_lock(plinth_id, locked=False) is None
+            assert _void_locks(session.unit.root) == [None]
+        finally:
+            session.close()
+        doc.recompute()
+
+        reopened = Session(container)
+        try:
+            assert _void_locks(reopened.unit.root) == [None]
+        finally:
+            reopened.close()
     finally:
         FreeCAD.closeDocument(doc.Name)
 

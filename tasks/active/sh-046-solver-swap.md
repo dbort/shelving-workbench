@@ -157,6 +157,13 @@ tried before any new constraint exists.
   `scope-and-design.md` already says a missing or stale record falls back
   to inference, and raising would make every existing unit unopenable.
   The `ShelvingRules` property keeps its name.
+- **A valid record is the whole lock state** (added 2026-11-12, user
+  decision after review round 1): `with_stored_rules` unlocks every region
+  the record does not name, the scan's own locks included, so a plinth
+  void unlocked with its padlock stays unlocked across Undo, Redo and
+  reopening. The scan's locks stand only when the container holds no valid
+  record (`parse_locks` gives `None`). Accepted cost: a void whose bounding
+  board is renamed, or one a hand edit creates, comes back unlocked.
 - **Typed Python:** signatures use no bare `dict` or `list`; reuse the
   engine's id `NewType`s at the boundary.
 - **Shell stays simple:** no shell in this task.

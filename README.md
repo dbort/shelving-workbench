@@ -73,11 +73,11 @@ The vocabulary the documentation and the code share.
   other than the two along its own run.
 - **Size rule**: how a division sizes one region. A **locked** opening
   keeps its size through every edit until you unlock it; an **unlocked**
-  one takes whatever size the panels around it leave. Every edit moves the
-  panels as little as it can. When the unit's size changes, the openings
+  one takes whatever size the boards around it leave. Every edit moves the
+  boards as little as it can. When the unit's size changes, the openings
   beside the edges that move take up the change, and one that reaches
-  5 mm pushes the panels beyond it inward. Typing a size locks the opening
-  at that size and moves the panels either side of it, half the change
+  5 mm pushes the boards beyond it inward. Typing a size locks the opening
+  at that size and moves the boards either side of it, half the change
   each when both can move; a size under 5 mm is refused, and so is any
   edit the locked openings leave no room for. Locking or unlocking moves
   nothing. One opening in each row stays unlocked.

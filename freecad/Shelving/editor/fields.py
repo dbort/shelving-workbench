@@ -223,7 +223,7 @@ class DimensionField:
             self.line_edit.installEventFilter(self._event_filter)
         # What show_mm last displayed. editingFinished also fires when the
         # field merely loses focus, and reporting an unchanged value would
-        # quietly fix a region that shares leftover space.
+        # quietly lock an unlocked region.
         self._shown_mm: float | None = None
         self._shown_text = ""
         # The fallback text parseQuantity last refused. A consumed Return and

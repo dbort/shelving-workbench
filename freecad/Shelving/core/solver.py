@@ -12,7 +12,10 @@ back into the tree, so every unit an edit returns already holds the geometry
 The system's positions are each board's low face on runs along the axis and
 the unit's two outer faces, plus one seam where two regions meet with no
 board between them. A board's high face is its low face plus its extent, so
-a run of boards face to face shares one position. Relations hold the boards
+a run of boards face to face shares one position. The engine gives every
+position the same motion weight, so a seam's motion counts as much as a
+board's; the outer faces' never decides anything, since the fixed point and
+the size, or the faces held for a drag, place them. Relations hold the boards
 in their runs, the unit's fixed point, each lock, and the unit's size, in
 that order: the engine reports the later member of a dependent group as
 redundant, so the size drops out when locks already determine it and
@@ -455,8 +458,11 @@ def fixing_locks(
 
     ``spaces`` is ``unit`` laid out. A lock on a region ``without`` names is
     left out, as though that region were unlocked. An empty set means the
-    boards and outer faces alone fix the face, as for a carcass board. When
-    several sets of locks fix it, the result is one of them.
+    boards and outer faces alone fix the face, as for a carcass board, and
+    is also the answer when the layout misses its own locks by more than the
+    engine's tolerance, so a caller treats the board as immovable rather
+    than failing. When several sets of locks fix it, the result is one of
+    them. Never raises for a board of ``unit`` on a run along ``axis``.
     """
     system = _build(unit, spaces, axis)
     relations = [
@@ -469,9 +475,7 @@ def fixing_locks(
     if isinstance(result, axis_solver.Conflict):
         # The current layout meets every lock, so only rounding beyond the
         # engine's tolerance gets here.
-        raise LayoutSolveError(
-            unit.root.id, "conflict", {}, system.region_ids(result.conflicting)
-        )
+        return frozenset()
     freedom = result.freedom({system.board_low[board_id].position: 1.0})
     if not freedom.determined:
         return None

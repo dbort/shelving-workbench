@@ -28,7 +28,7 @@ from freecad.Shelving.container import WriteResult, read_container, write_contai
 from freecad.Shelving.core.edit import set_unit_size
 from freecad.Shelving.core.geometry import Vec3
 from freecad.Shelving.core.layout import Axis, Bay, Board, Division, Unit
-from freecad.Shelving.core.record import rules_from_json, with_stored_rules
+from freecad.Shelving.core.record import parse_locks, with_stored_rules
 from freecad.Shelving.core.scan import scan
 
 # Shelving_CreateUnit's starting point: a single enclosed bay, closed on
@@ -104,7 +104,7 @@ def _rescanned_unit(container: FreeCAD.DocumentObject) -> Unit:
     )
     unit = scan_result.unit
     if record.rules_json is not None:
-        unit = with_stored_rules(unit, rules_from_json(record.rules_json))
+        unit = with_stored_rules(unit, parse_locks(record.rules_json))
     if record.unit_id is not None:
         unit = dataclasses.replace(unit, id=record.unit_id)
     unit = dataclasses.replace(unit, fixed_point=record.fixed_point)

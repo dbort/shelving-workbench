@@ -944,7 +944,7 @@ def test_real_stair_step_solves_to_three_distinct_divider_heights() -> None:
     stretched to the tallest's height, with each wrapped divider's solved
     Z-extent matching its ``extent_mm``. Along the cross axis (Y) each wrapped
     divider keeps its own width, and the two column bodies, one size within
-    the snap tolerance, share the rest equally.
+    the snap tolerance, take the rest.
     """
     boxes = boxes_from_json(REAL_STAIR_STEP.read_text(encoding="utf-8"))
     result = scan(boxes)
