@@ -127,7 +127,8 @@ def resize_unit(container: FreeCAD.DocumentObject, size_mm: Vec3) -> WriteResult
     boards put it, so a unit fixed at its minimum corner grows or shrinks on
     its maximum sides. Raises ``EditError`` when any axis of ``size_mm`` is
     not positive, and ``LayoutSolveError`` when the locks and the minimum
-    opening leave no room for it."""
+    opening leave no room for it, or when it changes a size the locks
+    determine, naming those locks."""
     unit = set_unit_size(_rescanned_unit(container), size_mm)
     return write_container(container, unit)
 

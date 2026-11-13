@@ -36,6 +36,7 @@ from freecad.Shelving.core.record import region_keys
 from freecad.Shelving.core.scan import elevation_axes
 from freecad.Shelving.editor.session import (
     EditFailure,
+    EditWarning,
     Session,
     SplitDirection,
 )
@@ -818,6 +819,108 @@ def test_a_conflicting_resize_refuses_and_leaves_the_document_untouched() -> Non
         FreeCAD.closeDocument(doc.Name)
 
 
+def _two_column_session(container: FreeCAD.DocumentObject) -> tuple[Session, list[str]]:
+    """An open session on ``container``, a new unit split by a divider into
+    two columns of two bays each, and the bays' ids: left lower, left
+    upper, right lower, right upper."""
+    session = Session(container)
+    session.open()
+    _split_bay(session, _find_bay_id(session.unit.root), "horizontal")
+    left_id, right_id = _find_bay_ids_in_order(session.unit.root)
+    _split_bay(session, left_id, "vertical")
+    right_id = _find_bay_ids_in_order(session.unit.root)[-1]
+    _split_bay(session, right_id, "vertical")
+    return session, _find_bay_ids_in_order(session.unit.root)
+
+
+def test_a_redundant_lock_is_applied_with_a_warning_naming_what_it_repeats() -> None:
+    """Once the left column's locks fix the height, locking the right
+    column's last unlocked bay repeats them: the lock applies, and the
+    session warns once, flagging the locks it duplicates until the
+    selection changes. The locks that only make the height a reference
+    raise no warning."""
+    doc = FreeCAD.newDocument("editor_redundant_lock")
+    try:
+        container = create_unit(doc)
+        doc.recompute()
+        session, (left_lower, left_upper, right_lower, right_upper) = (
+            _two_column_session(container)
+        )
+        warnings: list[EditWarning] = []
+        session.on_warning = warnings.append
+        try:
+            for region_id in (left_lower, left_upper, right_lower):
+                assert session.set_lock(region_id, locked=True) is None
+            assert warnings == []
+            assert session.flagged == ()
+            snapshot = _board_snapshot(container)
+            assert session.set_lock(right_upper, locked=True) is None
+            doc.recompute()
+            assert _lock_of(session.unit.root, right_upper) is Basis.CLEAR
+            assert _board_snapshot(container) == snapshot
+            assert [w.region_ids for w in warnings] == [
+                (left_lower, left_upper, right_lower)
+            ]
+            assert "redundant" in warnings[0].message
+            assert session.flagged == (left_lower, left_upper, right_lower)
+            session.select(right_upper)
+            assert session.flagged == ()
+        finally:
+            session.close()
+
+        reopened = Session(container)
+        reopened.open()
+        reopened.on_warning = warnings.append
+        try:
+            # A rescan gives the regions new ids.
+            bay_ids = _find_bay_ids_in_order(reopened.unit.root)
+            locks = [_lock_of(reopened.unit.root, bay_id) for bay_id in bay_ids]
+            assert locks == [Basis.CLEAR] * 4
+            assert reopened.flagged == ()
+            assert reopened.resize("width", 700.0) is None
+            assert len(warnings) == 1
+            assert reopened.flagged == ()
+        finally:
+            reopened.close()
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def test_a_refused_conflict_names_its_locks_and_writes_nothing() -> None:
+    """With the left column's two bays locked, a new height is a conflict:
+    the failure carries both locks, the session flags them until the next
+    edit, and the document and undo history are untouched."""
+    doc = FreeCAD.newDocument("editor_conflict_regions")
+    try:
+        container = create_unit(doc)
+        doc.recompute()
+        session, (left_lower, left_upper, _right_lower, _right_upper) = (
+            _two_column_session(container)
+        )
+        try:
+            for region_id in (left_lower, left_upper):
+                assert session.set_lock(region_id, locked=True) is None
+            doc.recompute()
+            snapshot = _board_snapshot(container)
+            unit_before = session.unit
+            undo_count = doc.UndoCount
+            refused = session.resize("height", 1000.0)
+            assert isinstance(refused, EditFailure), refused
+            assert refused.region_ids == (left_lower, left_upper)
+            assert "Locked openings fix" in refused.message, refused.message
+            assert session.flagged == (left_lower, left_upper)
+            doc.recompute()
+            assert _board_snapshot(container) == snapshot
+            assert session.unit is unit_before
+            assert doc.UndoCount == undo_count
+            assert session.resize("width", 700.0) is None
+            assert session.flagged == ()
+        finally:
+            session.close()
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
 def test_split_direction_follows_the_units_depth_axis() -> None:
     """A unit whose depth axis is X, not Y. Add Divider and Add Shelf
     must resolve their model axis from
@@ -940,10 +1043,10 @@ def test_dimensions_drag_basis_and_untagged() -> None:
     session: a typed size locks its region and moves the shelf above it;
     toggling the basis moves no board; a locked region holds a drag until
     unlocked, unlocking moves nothing, and locking a column's last unlocked
-    bay is refused; a drag resizes the bays beside the board and leaves them
-    unlocked; an unsolvable size changes nothing; an untagged box is
-    listed as left alone, survives every write, and goes only when named;
-    and Close leaves the edits in place."""
+    bay makes the height a reference; a drag resizes the bays beside the
+    board and leaves them unlocked; an unsolvable size changes nothing; an
+    untagged box is listed as left alone, survives every write, and goes
+    only when named; and Close leaves the edits in place."""
     doc = FreeCAD.newDocument("editor_smoke_dimensions")
     try:
         container = create_unit(doc)
@@ -1026,15 +1129,17 @@ def test_dimensions_drag_basis_and_untagged() -> None:
             assert session.held_by(left_shelf_id) == ()
             assert isinstance(session.unlock_holders(left_shelf_id), EditFailure)
 
-            # Locking both bays of the column would leave it nothing to take
-            # up a change of the unit's height: refused, changing nothing.
+            # Locking both bays of the column is accepted, moves nothing,
+            # and makes the unit's height a reference.
+            assert session.size_fixed_by("height") is None
             assert session.set_lock(left_lower_id, locked=True) is None
-            refused = session.set_lock(left_upper_id, locked=True)
-            assert isinstance(refused, EditFailure), refused
-            assert refused.node_id == left_upper_id
+            assert session.set_lock(left_upper_id, locked=True) is None
             doc.recompute()
             assert _board_snapshot(container) == boards_before_toggle
-            assert _lock_of(session.unit.root, left_upper_id) is None
+            assert session.size_fixed_by("height") == (left_lower_id, left_upper_id)
+            assert session.size_fixed_by("width") is None
+            assert session.size_fixed_by("depth") is None
+            assert session.set_lock(left_upper_id, locked=False) is None
             assert session.set_lock(left_lower_id, locked=False) is None
             assert _lock_of(session.unit.root, left_lower_id) is None
 

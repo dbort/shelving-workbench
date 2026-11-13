@@ -80,6 +80,24 @@ def test_report_error_reaches_freecads_console() -> None:
     refusals.report_error("refusals smoke: report_error reached the console")
 
 
+def test_report_warning_is_a_shelving_warning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    warned: list[tuple[str, str]] = []
+
+    def record(notifier: str, message: str) -> None:
+        warned.append((notifier, message))
+
+    monkeypatch.setattr(refusals, "_print_user_warning", record)
+    refusals.report_warning("Already fixed.")
+    assert warned == [("Shelving", "Already fixed.\n")]
+
+
+def test_report_warning_reaches_freecads_console() -> None:
+    """The real call, unpatched: the two-argument form the stubs omit."""
+    refusals.report_warning("refusals smoke: report_warning reached the console")
+
+
 def _unit() -> tuple[Unit, Division, Bay, Board, Board]:
     """A closed single-bay unit: the root stacks bottom, the run of sides
     and the bay, and top. Returns the unit, the run, the bay and its two

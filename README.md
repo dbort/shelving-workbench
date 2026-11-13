@@ -80,7 +80,13 @@ The vocabulary the documentation and the code share.
   at that size and moves the boards either side of it, half the change
   each when both can move; a size under 5 mm is refused, and so is any
   edit the locked openings leave no room for. Locking or unlocking moves
-  nothing. One opening in each row stays unlocked.
+  nothing, and any opening may lock. When the locked openings fix the
+  unit's width or height, that size is a **reference**, as a Sketcher
+  reference dimension is: its field in the panel shows it read-only, and
+  it follows the other edits with the fixed point staying put. A lock that
+  repeats what other locks already fix is accepted with a warning, and the
+  locks it repeats are outlined. A refused edit outlines the locked
+  openings, and any opening held at 5 mm, that refused it.
 - **Measurement basis**: what a locked size measures. **Clear opening** is
   the region alone; **Spacing** runs through the next board, as a shelf
   spacing is quoted top face to top face. Switching basis moves nothing.
@@ -93,7 +99,9 @@ The vocabulary the documentation and the code share.
   nested rows too. A board dragged as far as it goes stops when every
   opening ahead of it is that narrow. A drag never locks or unlocks
   anything. A board with nothing but boards and locked openings between it
-  and the end of its row is held until one of those openings is unlocked.
+  and the end of its row is held until one of those openings is unlocked,
+  so locking every opening of a row holds all its boards and makes the
+  unit's size along it a reference.
 - **Local frame**: origin at the unit's front-bottom-left corner, +X right,
   +Y back, +Z up, in millimeters. A container's own placement is excluded,
   so a unit reads the same wherever it sits.

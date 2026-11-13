@@ -95,15 +95,15 @@ M18's first task: the solver, with locks as its only constraint.
   sh-048.
 
 ## Plan
-- [ ] **Step 1** (`core/solver.py`, `core/edit.py`, their tests): the
+- [x] **Step 1** (`core/solver.py`, `core/edit.py`, their tests): the
       determined-axis query and the redundancy query, each with the lock
       ids involved; `set_unit_size` refuses on a reference axis; delete
       the one-unlocked rule.
-- [ ] **Step 2** (`unit_ops.py`, `refusals.py`,
+- [x] **Step 2** (`unit_ops.py`, `refusals.py`,
       `tests/freecad/test_refusals.py`, `tests/freecad_gui/test_refusals.py`):
       `resize_unit` raises the conflict on a reference axis; add a
       Notification Area warning beside `report_error`.
-- [ ] **Step 3** (`editor/session.py`, `editor/elevation.py`,
+- [x] **Step 3** (`editor/session.py`, `editor/elevation.py`,
       `editor/overlay.py`, `editor/view_editor.py`, `editor/panel.py`,
       `editor/fields.py`; tests in `tests/freecad/test_editor_session.py`,
       `tests/test_editor_elevation.py`, `tests/freecad_gui/test_panel.py`,
@@ -116,7 +116,7 @@ M18's first task: the solver, with locks as its only constraint.
       - the overlay outlines the regions of a refusal or warning until the
         next edit or selection change;
       - the panel makes a reference axis's size field read-only.
-- [ ] **Step 4** (`README.md`, `docs/scope-and-design.md`): the glossary's Size rule and The drag
+- [x] **Step 4** (`README.md`, `docs/scope-and-design.md`): the glossary's Size rule and The drag
       rule say any opening locks and describe the reference axis; the
       Editing section's padlock paragraph loses the lone-opening
       exception.

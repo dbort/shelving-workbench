@@ -11,7 +11,7 @@ picking an opening into a ray meeting z = 0.
 from __future__ import annotations
 
 import math
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Literal, NamedTuple
 
@@ -324,9 +324,6 @@ class DimensionLabel:
     color: LabelColor
     # Where the text's center sits along the line, as a fraction from start.
     text_fraction: float
-    # Whether the region can lock or unlock: false only for an unlocked
-    # region alone in its run, which could never lock.
-    lockable: bool
 
     @property
     def text_at_mm(self) -> tuple[float, float]:
@@ -455,7 +452,6 @@ class _Planner:
         # From the outer face rather than the region's edge, so a thick
         # board cannot carry its own dimension onto it.
         outer = frame.rect(self.spaces[self.unit.root.id])
-        alone = sum(not isinstance(item, Board) for item in division.items) == 1
         for index, item in enumerate(division.items):
             if isinstance(item, Board):
                 continue
@@ -511,7 +507,6 @@ class _Planner:
                 size_mm=measure(self.unit, item.id, self.spaces).size_mm,
                 color=color,
                 text_fraction=text_fraction,
-                lockable=locked or not alone,
             )
 
 
@@ -521,20 +516,23 @@ def plan_overlay(
     frame: ElevationFrame,
     selected_id: str | None,
     outer_row_mm: float,
+    flagged: Collection[str] = (),
 ) -> Overlay:
     """What to draw for ``unit`` solved as ``spaces`` on ``frame``'s face:
     a face per bay and void, an outline per opening and for the selected
     node, a "holding" outline for each locked region holding a selected
-    board that :func:`held_padlock` gives a padlock, and a dimension for
-    every region in a run along an elevation axis. ``spaces`` must hold
-    every node of ``unit``. A dimension outside the unit sits a whole
+    board that :func:`held_padlock` gives a padlock and for each region
+    ``flagged`` names, and a dimension for every region in a run along an
+    elevation axis. The selected outline wins over a holding one, and an
+    id in ``flagged`` that names no region draws nothing. ``spaces`` must
+    hold every node of ``unit``. A dimension outside the unit sits a whole
     number of ``outer_row_mm`` rows out from its outer face, so resizing the
     unit moves only the rows past the faces that move."""
     planner = _Planner(unit, spaces, frame, outer_row_mm)
     padlock = (
         None if selected_id is None else held_padlock(unit, spaces, frame, selected_id)
     )
-    holding = frozenset(() if padlock is None else padlock.holders)
+    holding = frozenset(() if padlock is None else padlock.holders) | frozenset(flagged)
     faces: list[Face] = []
     outlines: list[Outline] = []
     labels: list[DimensionLabel] = []

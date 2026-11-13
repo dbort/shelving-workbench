@@ -3,7 +3,10 @@ remove several boards, size a region, change what a size measures, lock or
 unlock a region, drag a board, change boards' thickness.
 
 A region with a ``lock`` holds its size through edits; an unlocked one
-takes whatever size the boards around it leave. Every edit returns a unit
+takes whatever size the boards around it leave. Any region may lock. Where
+the locks determine the unit's size along an axis, that size is a reference:
+:func:`set_unit_size` refuses to change it, and every other edit lets it
+follow the locks with the unit's fixed point holding. Every edit returns a unit
 whose stored sizes are already solved: one that moves boards solves them with
 :func:`~freecad.Shelving.core.solver.solve_axis`, moving the boards as little
 as possible from where they stood before the edit. A caller treats a
@@ -61,29 +64,9 @@ class EditError(ValueError):
         self.node_id = node_id
 
 
-_LAST_UNLOCKED = (
-    "One opening in each row stays unlocked, to take up changes to the unit's size."
-)
-
-
 def is_locked(item: Item) -> bool:
     """Whether ``item`` is a region with a lock; a board never is."""
     return not isinstance(item, Board) and item.lock is not None
-
-
-def _refuse_last_unlocked(parent: Division, index: int) -> None:
-    """Raise :class:`EditError` naming ``parent.items[index]`` when locking it
-    would leave its run no unlocked region. A region already locked passes:
-    a run a scan left with none keeps what it was allowed."""
-    region = parent.items[index]
-    if isinstance(region, Board) or is_locked(region):
-        return
-    if not any(
-        not isinstance(item, Board) and not is_locked(item)
-        for other, item in enumerate(parent.items)
-        if other != index
-    ):
-        raise EditError(region.id, _LAST_UNLOCKED)
 
 
 def split_region(unit: Unit, region_id: str, axis: Axis) -> Unit:
@@ -498,15 +481,18 @@ MIN_DRAG_GAP_MM = 5.0
 
 def set_unit_size(unit: Unit, size_mm: Vec3) -> Unit:
     """``unit`` with outer size ``size_mm`` and :func:`fixed_point_mm` where
-    it was, unless locks already determine its size along an axis, in which
-    case asking for that size changes nothing there.
+    it was.
 
     Inside, the boards move as little as possible: the openings beside the
     outer faces that move take up the change, and push the boards beyond
-    them once they reach :data:`MIN_DRAG_GAP_MM`. Raises :class:`EditError`
-    naming ``unit.id`` when any axis of ``size_mm`` is not positive, and a
-    ``"conflict"`` :class:`~freecad.Shelving.core.solver.LayoutSolveError`
-    when the locks and that minimum leave no room for the size.
+    them once they reach :data:`MIN_DRAG_GAP_MM`. An axis whose size
+    ``size_mm`` leaves as it is changes nothing there, even when locks
+    determine it. Raises :class:`EditError` naming ``unit.id`` when any axis
+    of ``size_mm`` is not positive, and a ``"conflict"``
+    :class:`~freecad.Shelving.core.solver.LayoutSolveError` when the locks
+    and that minimum leave no room for the size, or when it changes a size
+    the locks determine (:func:`~freecad.Shelving.core.solver.size_fixed_by`),
+    naming those locks.
     """
     for axis, value_mm in zip(
         Axis, (size_mm.x_mm, size_mm.y_mm, size_mm.z_mm), strict=True
@@ -538,14 +524,12 @@ def set_size(unit: Unit, region_id: str, size_mm: float, basis: Basis) -> Unit:
     ``size_mm`` gives is under :data:`MIN_DRAG_GAP_MM`, whatever the
     region's size now, since the next scan would drop so narrow an opening;
     when ``basis`` is ``Basis.WITH_NEXT`` and the next item in the region's
-    run is not a board; when ``region_id`` names the root, a board, or
-    nothing in ``unit``; or when it names its run's last unlocked region.
-    Raises a ``"conflict"``
+    run is not a board; or when ``region_id`` names the root, a board, or
+    nothing in ``unit``. Raises a ``"conflict"``
     :class:`~freecad.Shelving.core.solver.LayoutSolveError` when the other
     locks and the minimum leave no room for the size.
     """
     parent, index = _locate_region(unit, region_id)
-    _refuse_last_unlocked(parent, index)
     board = _next_board(parent, index, basis)
     clear_mm = size_mm if board is None else size_mm - board.thickness_mm
     if clear_mm < MIN_DRAG_GAP_MM - EPS_MM:
@@ -586,11 +570,10 @@ def set_basis(unit: Unit, region_id: str, basis: Basis) -> Unit:
 
     Raises :class:`EditError` naming ``region_id`` when ``basis`` is
     ``Basis.WITH_NEXT`` and the next item in the region's run is not a
-    board, when ``region_id`` names the root, a board, or nothing in
-    ``unit``, or when it names its run's last unlocked region.
+    board, or when ``region_id`` names the root, a board, or nothing in
+    ``unit``.
     """
     parent, index = _locate_region(unit, region_id)
-    _refuse_last_unlocked(parent, index)
     _next_board(parent, index, basis)
     return dataclasses.replace(unit, root=_with_region(unit.root, region_id, basis))
 
@@ -634,12 +617,12 @@ def lock(unit: Unit, region_id: str) -> Unit:
     """``unit`` with the region named ``region_id`` locked in
     ``Basis.CLEAR`` at its current size, moving nothing. Returns ``unit``
     itself when the region is already locked. Raises :class:`EditError` for
-    the root, a board, an unknown id, or its run's last unlocked region.
+    the root, a board, or an unknown id. The lock may make the unit's size
+    along the run a reference, or duplicate other locks; neither is refused.
     """
     parent, index = _locate_region(unit, region_id)
     if is_locked(parent.items[index]):
         return unit
-    _refuse_last_unlocked(parent, index)
     return dataclasses.replace(
         unit, root=_with_region(unit.root, region_id, Basis.CLEAR)
     )

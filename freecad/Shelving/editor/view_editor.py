@@ -677,7 +677,7 @@ class ViewEditor:
         self._field_region: str | None = None
         self._field_applied = False
         self._add_anchor: tuple[float, float] | None = None
-        # One padlock per lockable dimension, reused across rebuilds, which a
+        # One padlock per dimension, reused across rebuilds, which a
         # drag runs at every step; never shrunk, so it holds as many as were
         # ever shown at once. Button i is the padlock of _padlock_labels[i].
         self.padlocks: list[QtWidgets.QToolButton] = []
@@ -1074,7 +1074,12 @@ class ViewEditor:
         self._frame_transform.rotation.setValue(_sbrotation(placement.Rotation))
         selected = session.selected_id
         self.overlay = plan_overlay(
-            unit, session.spaces, self.frame, selected, self._outer_row_mm
+            unit,
+            session.spaces,
+            self.frame,
+            selected,
+            self._outer_row_mm,
+            session.flagged,
         )
         self._update_preview()
         self._drawing.removeAllChildren()
@@ -1572,10 +1577,9 @@ class ViewEditor:
         self._place_widgets()
 
     def _update_padlocks(self) -> None:
-        """Give each lockable dimension a padlock from the pool, growing it
-        only when more are shown at once than ever before, and hide the
-        rest."""
-        labels = [label for label in self.overlay.labels if label.lockable]
+        """Give each dimension a padlock from the pool, growing it only when
+        more are shown at once than ever before, and hide the rest."""
+        labels = list(self.overlay.labels)
         parent = self._viewer.parentWidget()
         while len(self.padlocks) < len(labels):
             button = _padlock_button(
@@ -1601,7 +1605,7 @@ class ViewEditor:
 
     def padlock_for(self, region_id: str) -> QtWidgets.QToolButton | None:
         """The padlock on ``region_id``'s dimension, or ``None`` when its
-        dimension has none or is not drawn."""
+        dimension is not drawn."""
         for button, label in zip(self.padlocks, self._padlock_labels, strict=False):
             if label.region_id == region_id:
                 return button

@@ -340,6 +340,23 @@ class DimensionField:
         self.last_change_was_step = False
         self._on_size(float(quantity.Value))
 
+    @property
+    def read_only(self) -> bool:
+        """Whether the field shows its value without taking edits."""
+        if isinstance(self.widget, QtWidgets.QAbstractSpinBox):
+            return self.widget.isReadOnly()
+        return self.line_edit.isReadOnly()
+
+    def set_read_only(self, read_only: bool, tip: str = "") -> None:
+        """Show the value without taking typed text, steps or the wheel when
+        ``read_only``, with ``tip`` as the field's tooltip, as the Sketcher
+        shows a reference dimension it computes; editable again otherwise,
+        with no tooltip."""
+        if isinstance(self.widget, QtWidgets.QAbstractSpinBox):
+            self.widget.setReadOnly(read_only)
+        self.line_edit.setReadOnly(read_only)
+        self.widget.setToolTip(tip if read_only else "")
+
     def show_mm(self, value_mm: float | None) -> None:
         """Display ``value_mm``, or clear the field for ``None``; never
         reports back through ``on_size``."""

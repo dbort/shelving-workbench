@@ -70,7 +70,19 @@ once one reaches the minimum. A typed size locks the opening and moves the
 boards either side of it, half the change each when both are free. An edit
 the locks and the minimum cannot allow is refused, where the Sketcher would
 leave the sketch in error: an unsolvable layout has no panels to write.
-The editor keeps one unlocked region in every run.
+The refusal outlines the locks it names, and any opening held at the
+minimum, as the Sketcher highlights the constraints in a conflict.
+
+Any region may lock. When the locks fix the unit's size along an axis,
+that size is a reference, as a Sketcher reference dimension is: a resize
+along it is refused naming those locks, the panel shows its field
+read-only, and every other edit lets it follow the locks with the fixed
+point holding. Depth is never divided, so it is never a reference. A lock
+the other locks already imply is redundant: as the Sketcher does, the edit
+is accepted with a warning in the Notification Area and the locks it
+duplicates are outlined. A lock that only makes the unit's size a
+reference is not redundant, and redundancy already in a unit when the
+editor opens raises no warning.
 
 A drag moves a board and every board joined to it through locked regions;
 every other board moves only when an opening ahead of it reaches the
@@ -210,12 +222,12 @@ the mark in the view.
 
 Each opening's dimension carries a padlock just past its text, closed for a
 locked opening and open for an unlocked one, in the dimension's own color.
-Clicking it locks or unlocks the opening, and typing a size locks it. An
-unlocked opening alone in its run shows no padlock, since it can never
-lock. A selected board held in place shows a closed padlock where its arrow
+Clicking it locks or unlocks the opening, and typing a size locks it. A
+selected board held in place shows a closed padlock where its arrow
 would be and outlines the locked openings holding it; clicking that padlock
 unlocks them, and the arrow takes its place. The padlock is the only way to
-unlock.
+unlock. A refused edit's or a redundant lock's outline uses the same
+color, and lasts until the next edit or selection change.
 
 The unit's container cannot enter FreeCAD's edit mode without workbench
 state in the document, so the editor adds its drawing and input handling

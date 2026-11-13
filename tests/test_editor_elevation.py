@@ -355,7 +355,7 @@ def test_region_at_finds_the_opening_under_a_point(
 
 
 def _label(region_id: str, at_mm: tuple[float, float]) -> DimensionLabel:
-    return DimensionLabel(region_id, at_mm, at_mm, 1.0, "unlocked", 0.5, lockable=True)
+    return DimensionLabel(region_id, at_mm, at_mm, 1.0, "unlocked", 0.5)
 
 
 def test_label_at_takes_the_nearest_within_reach_and_the_later_on_a_tie() -> None:
@@ -412,23 +412,11 @@ def test_held_and_carcass_boards_get_no_arrow() -> None:
     assert arrow_for(relocked, solve(relocked), frame, "shelf") is None
 
 
-def test_every_dimension_but_a_lone_unlocked_regions_can_lock() -> None:
-    lockable = {label.region_id: label.lockable for label in _labels()}
-    assert lockable == {
-        "row": False,
-        "column": True,
-        "void": True,
-        "lower": True,
-        "upper": True,
-    }
-    locked_row = _bookcase()
-    root = locked_row.root
-    assert isinstance(root, Division)
-    row = root.items[1]
-    assert isinstance(row, Division)
-    root.items[1] = dataclasses.replace(row, lock=Basis.CLEAR)
-    (label,) = [x for x in _labels(unit=locked_row) if x.region_id == "row"]
-    assert label.lockable
+def test_every_region_in_a_run_gets_a_dimension_even_alone() -> None:
+    """The row is the only region in its run, and still gets a dimension,
+    and with it a padlock: any opening may lock."""
+    regions = {label.region_id for label in _labels()}
+    assert regions == {"row", "column", "void", "lower", "upper"}
 
 
 def test_a_held_board_gets_a_padlock_where_its_arrow_would_be() -> None:
@@ -447,6 +435,17 @@ def test_a_held_board_gets_a_padlock_where_its_arrow_would_be() -> None:
     assert padlock.at_mm[1] == pytest.approx(frame.rect(shelf).center_mm[1])
     for movable_or_carcass in ("divider", "top", "lower"):
         assert held_padlock(_UNIT, _SPACES, frame, movable_or_carcass) is None
+
+
+def test_flagged_regions_get_the_holding_outline_unless_selected() -> None:
+    frame = elevation_frame(_UNIT)
+    overlay = plan_overlay(
+        _UNIT, _SPACES, frame, "upper", _ROW_MM, ("upper", "void", "gone")
+    )
+    holding = [o.rect for o in overlay.outlines if o.role == "holding"]
+    assert holding == [frame.rect(_SPACES["void"])]
+    selected = [o.rect for o in overlay.outlines if o.role == "selected"]
+    assert selected == [frame.rect(_SPACES["upper"])]
 
 
 def test_a_selected_held_board_outlines_the_openings_holding_it() -> None:

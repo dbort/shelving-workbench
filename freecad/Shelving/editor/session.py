@@ -20,8 +20,9 @@ this session never reads theirs.
 from __future__ import annotations
 
 import dataclasses
+import functools
 from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
-from typing import Literal
+from typing import Concatenate, Literal, ParamSpec
 
 import FreeCAD
 
@@ -67,7 +68,13 @@ from freecad.Shelving.core.record import (
     with_stored_rules,
 )
 from freecad.Shelving.core.scan import elevation_axes, scan
-from freecad.Shelving.core.solver import LayoutSolveError, describe_solve_error, solve
+from freecad.Shelving.core.solver import (
+    LayoutSolveError,
+    describe_solve_error,
+    duplicated_locks,
+    size_fixed_by,
+    solve,
+)
 from freecad.Shelving.core.stock import BoardStock, Color, StockGroup, group_stocks
 from freecad.Shelving.debug_log import Stopwatch
 from freecad.Shelving.editor.elevation import FixedChoice, fixed_choices
@@ -121,6 +128,49 @@ class EditFailure:
     # caller asked to edit, or the node a re-solve refused at. None only when
     # nothing was selected to act on.
     node_id: str | None
+    # The regions a refused re-solve holds responsible, in tree order: the
+    # locks in conflict and any opening held at its minimum. Empty for every
+    # other refusal.
+    region_ids: tuple[str, ...] = ()
+
+
+@dataclasses.dataclass(frozen=True)
+class EditWarning:
+    """An accepted session edit that the user should hear something about."""
+
+    # Plain words for the user; names no internal id.
+    message: str
+    # The regions the warning is about, in tree order.
+    region_ids: tuple[str, ...]
+
+
+_REDUNDANT_LOCK = (
+    "The outlined locks already fix this opening's size, so its own lock is redundant."
+)
+
+
+def _solve_failure(err: LayoutSolveError) -> EditFailure:
+    return EditFailure(describe_solve_error(err), err.node_id, err.region_ids)
+
+
+_P = ParamSpec("_P")
+
+
+def _edit(
+    method: Callable[Concatenate[Session, _P], EditFailure | None],
+) -> Callable[Concatenate[Session, _P], EditFailure | None]:
+    """Mark ``method`` as a session edit: it clears :attr:`Session.flagged`
+    before it runs, and a refusal it returns flags the regions it names."""
+
+    @functools.wraps(method)
+    def run(self: Session, *args: _P.args, **kwargs: _P.kwargs) -> EditFailure | None:
+        self.flagged = ()
+        failure = method(self, *args, **kwargs)
+        if failure is not None:
+            self.flagged = failure.region_ids
+        return failure
+
+    return run
 
 
 def _find_node(region: Region, node_id: str) -> Region | Board | None:
@@ -139,6 +189,28 @@ def _find_node(region: Region, node_id: str) -> Region | Board | None:
             if found is not None:
                 return found
     return None
+
+
+def _regions(region: Region) -> Iterator[Region]:
+    """``region`` and every region below it, in tree order."""
+    yield region
+    if isinstance(region, Division):
+        for item in region.items:
+            if not isinstance(item, Board):
+                yield from _regions(item)
+
+
+def _duplicated(
+    unit: Unit, spaces: Mapping[str, Space], region_id: str
+) -> tuple[str, ...] | None:
+    """:func:`~freecad.Shelving.core.solver.duplicated_locks` for the region
+    ``region_id`` on its own run; ``None`` too when ``unit`` holds no such
+    region."""
+    try:
+        axis = run_axis(unit, region_id)
+    except EditError:
+        return None
+    return duplicated_locks(unit, spaces, region_id, axis)
 
 
 def _boards(region: Region) -> Iterator[Board]:
@@ -259,6 +331,11 @@ class Session:
         # Whether an Undo or Redo left no unit to read: the container gone,
         # or no longer scanning or solving. The panel closes then.
         self.lost = False
+        # Receives each EditWarning an accepted edit raises.
+        self.on_warning: Callable[[EditWarning], None] | None = None
+        # The regions the last edit's refusal or warning names, which the
+        # view outlines until the next edit, Undo, Redo or selection change.
+        self.flagged: tuple[str, ...] = ()
 
     def open(self, schedule: Schedule | None = None) -> None:
         """Add the size fields' properties to the container and start
@@ -344,6 +421,7 @@ class Session:
         self._set_aside_reasons = reasons
         self.untagged = self._unplaced(reasons)
         self._selection = tuple(selected)
+        self.flagged = ()
         if self.on_change is not None:
             self.on_change()
 
@@ -382,12 +460,17 @@ class Session:
 
     def select(self, node_id: str | None) -> None:
         """Make ``node_id`` the single selection, or clear it for ``None``."""
-        self._selection = () if node_id is None else (node_id,)
+        self._set_selection(() if node_id is None else (node_id,))
 
     def select_boards(self, board_ids: Sequence[str]) -> None:
         """Select the boards ``board_ids`` names, each once; one board is a
         single selection, as :meth:`select` makes it."""
-        self._selection = tuple(dict.fromkeys(board_ids))
+        self._set_selection(tuple(dict.fromkeys(board_ids)))
+
+    def _set_selection(self, selection: tuple[str, ...]) -> None:
+        if selection != self._selection:
+            self.flagged = ()
+        self._selection = selection
 
     def can_split(self) -> bool:
         """Whether the current selection is a ``Bay``: the only region
@@ -440,7 +523,7 @@ class Session:
             # LayoutSolveError from either call means nothing was written.
             result = write_container(self.container, candidate)
         except LayoutSolveError as err:
-            return EditFailure(describe_solve_error(err), err.node_id)
+            return _solve_failure(err)
         except BackFitError as err:
             return EditFailure(
                 f"{self._label(err.name)} follows the unit's boards, and this "
@@ -491,6 +574,12 @@ class Session:
             return vertical
         return next(axis for axis in Axis if axis not in (horizontal, vertical))
 
+    def size_fixed_by(self, dimension: UnitDimension) -> tuple[str, ...] | None:
+        """The locked regions whose locks determine the unit's size along
+        ``dimension``, making it a reference that :meth:`resize` refuses to
+        change; ``None`` when the size is free, as the depth always is."""
+        return size_fixed_by(self.unit, self.spaces, self._unit_axis(dimension))
+
     def unit_dimension_mm(self, dimension: UnitDimension) -> float:
         """The unit's outer size along ``dimension``, as scanned or last set:
         a part the scan set aside, such as a back panel, does not count."""
@@ -499,11 +588,13 @@ class Session:
             self._unit_axis(dimension).component_index
         ]
 
+    @_edit
     def resize(self, dimension: UnitDimension, size_mm: float) -> EditFailure | None:
         """Set the unit's outer size along ``dimension``, keeping its fixed
         point where it is and the selection as it was. Returns ``None`` on
         success or an :class:`EditFailure` on refusal, which changes
-        nothing."""
+        nothing; a new size along a dimension :meth:`size_fixed_by` reports
+        is refused, naming the locks that fix it."""
         self.settle()
         components = [
             self.unit.size_mm.x_mm,
@@ -516,7 +607,7 @@ class Session:
         except EditError as err:
             return EditFailure(str(err), err.node_id)
         except LayoutSolveError as err:
-            return EditFailure(describe_solve_error(err), err.node_id)
+            return _solve_failure(err)
         return self._step(
             "Resize Unit", lambda: self._apply(candidate, select=self._selection)
         )
@@ -533,6 +624,7 @@ class Session:
         ``dimension`` changes."""
         return self.unit.fixed_point.side(self._unit_axis(dimension))
 
+    @_edit
     def set_fixed_side(
         self, dimension: UnitDimension, side: FixedSide
     ) -> EditFailure | None:
@@ -551,6 +643,7 @@ class Session:
             "Set Fixed Point", lambda: self._apply(candidate, select=self._selection)
         )
 
+    @_edit
     def split(self, direction: SplitDirection) -> EditFailure | None:
         """Split the selected ``Bay`` in two with a board that copies its stock
         from :func:`~freecad.Shelving.core.stock.source_board`'s choice.
@@ -573,6 +666,7 @@ class Session:
         name = "Add Divider" if direction == "horizontal" else "Add Shelf"
         return self._step(name, lambda: self._apply(candidate))
 
+    @_edit
     def delete_boards(self) -> EditFailure | None:
         """Remove every selected board as :meth:`merge` removes one, as one
         undo step, clearing the selection. Returns an :class:`EditFailure`,
@@ -610,6 +704,7 @@ class Session:
             )
         return group_stocks(records)
 
+    @_edit
     def swap_stock(
         self,
         thickness_mm: float | None = None,
@@ -650,7 +745,7 @@ class Session:
             except EditError as err:
                 return EditFailure(str(err), err.node_id)
             except LayoutSolveError as err:
-                return EditFailure(describe_solve_error(err), err.node_id)
+                return _solve_failure(err)
         paint_rgb = color
         if paint_rgb is None and material is not None:
             paint_rgb = properties.material_color(material)
@@ -674,6 +769,7 @@ class Session:
 
         return self._step("Change Stock", swap)
 
+    @_edit
     def merge(self) -> EditFailure | None:
         """Remove the selected ``Board`` and merge its neighboring regions.
         Returns ``None`` on success, which clears the selection, or an
@@ -698,6 +794,7 @@ class Session:
         except EditError:
             return None
 
+    @_edit
     def set_size(self, size_mm: float) -> EditFailure | None:
         """Fix the selected region at ``size_mm``, a value FreeCAD's own
         quantity widget already resolved, in the basis the region already
@@ -713,11 +810,12 @@ class Session:
         except EditError as err:
             return EditFailure(str(err), err.node_id)
         except LayoutSolveError as err:
-            return EditFailure(describe_solve_error(err), err.node_id)
-        return self._step(
-            "Set Size", lambda: self._apply(candidate, select=(region_id,))
+            return _solve_failure(err)
+        return self._locking_step(
+            "Set Size", candidate, [region_id], select=(region_id,)
         )
 
+    @_edit
     def set_basis(self, basis: Basis) -> EditFailure | None:
         """Change what the selected region's size measures, moving nothing.
         The selection is kept. Returns ``None`` on success or an
@@ -730,20 +828,21 @@ class Session:
             candidate = set_basis(self.unit, region_id, basis)
         except EditError as err:
             return EditFailure(str(err), err.node_id)
-        return self._step(
-            "Change What a Size Measures",
-            lambda: self._apply(candidate, select=(region_id,)),
+        return self._locking_step(
+            "Change What a Size Measures", candidate, [region_id], select=(region_id,)
         )
 
+    @_edit
     def set_lock(self, region_id: str, locked: bool) -> EditFailure | None:
         """Lock ``region_id`` when ``locked``, else unlock it, as one undo
         step that moves nothing and keeps the selection. Returns an
-        :class:`EditFailure` on refusal, such as locking a run's last
-        unlocked region, leaving the session and document untouched."""
+        :class:`EditFailure` on refusal, for an id that names no region,
+        leaving the session and document untouched."""
         self.settle()
         name = "Lock Opening" if locked else "Unlock Opening"
         return self._set_locks(name, [region_id], locked)
 
+    @_edit
     def unlock_holders(self, board_id: str) -> EditFailure | None:
         """Unlock every region :meth:`held_by` names for ``board_id``, as one
         undo step that moves nothing and keeps the selection, so a drag may
@@ -766,7 +865,41 @@ class Session:
                 candidate = (lock if locked else unlock)(candidate, region_id)
         except EditError as err:
             return EditFailure(str(err), err.node_id)
-        return self._step(name, lambda: self._apply(candidate, select=self._selection))
+        return self._locking_step(
+            name, candidate, region_ids if locked else (), select=self._selection
+        )
+
+    def _locking_step(
+        self,
+        name: str,
+        candidate: Unit,
+        locking: Sequence[str],
+        select: Sequence[str],
+    ) -> EditFailure | None:
+        """Apply ``candidate`` as the undo step ``name``, selecting
+        ``select``, then warn through :attr:`on_warning` and flag the
+        duplicated locks when it left a lock on a region ``locking`` names
+        redundant that was not before, as the Sketcher accepts and flags a
+        redundant constraint."""
+        before_unit, before_spaces = self.unit, self.spaces
+        failure = self._step(name, lambda: self._apply(candidate, select=select))
+        if failure is not None:
+            return failure
+        duplicated: dict[str, None] = {}
+        for region_id in locking:
+            found = _duplicated(self.unit, self.spaces, region_id)
+            if found and not _duplicated(before_unit, before_spaces, region_id):
+                duplicated.update(dict.fromkeys(found))
+        if duplicated:
+            regions = _regions(self.unit.root)
+            order = {node.id: index for index, node in enumerate(regions)}
+            warning = EditWarning(
+                _REDUNDANT_LOCK, tuple(sorted(duplicated, key=order.__getitem__))
+            )
+            self.flagged = warning.region_ids
+            if self.on_warning is not None:
+                self.on_warning(warning)
+        return None
 
     def held_by(self, board_id: str) -> tuple[str, ...] | None:
         """:func:`~freecad.Shelving.core.edit.held_by` for this session's
@@ -774,6 +907,7 @@ class Session:
         empty when it may move, ``None`` when no unlock would free it."""
         return held_by(self.unit, board_id)
 
+    @_edit
     def begin_drag(self, board_id: str, grab_mm: Vec3) -> EditFailure | None:
         """Start dragging ``board_id``, grabbed at the unit-frame point
         ``grab_mm``; each :meth:`drag_to` keeps that point under the pointer.
@@ -798,6 +932,7 @@ class Session:
             self._history.begin("Move Board")
         return None
 
+    @_edit
     def drag_to(self, pointer_mm: Vec3) -> EditFailure | None:
         """Move the dragged board so its grab point follows ``pointer_mm``
         along its run's axis, re-solving and writing the boards, and select
@@ -815,7 +950,7 @@ class Session:
         except EditError as err:
             return EditFailure(str(err), err.node_id)
         except LayoutSolveError as err:
-            return EditFailure(describe_solve_error(err), err.node_id)
+            return _solve_failure(err)
         return self._apply(candidate, select=(board_id,))
 
     def end_drag(self) -> None:
@@ -825,6 +960,7 @@ class Session:
         if self._history is not None and self._history.step_open:
             self._history.end(keep=True)
 
+    @_edit
     def delete_untagged(self, names: Collection[str]) -> EditFailure | None:
         """Delete the listed :attr:`untagged` objects as one undo step, so
         Undo restores them. Refuses, deleting nothing,

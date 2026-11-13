@@ -1,6 +1,7 @@
 """Solver: laying out stored geometry, the per-axis engine system an edit
 solves with, and failure reasons."""
 
+import dataclasses
 from collections.abc import Mapping, Sequence
 
 import pytest
@@ -23,7 +24,9 @@ from freecad.Shelving.core.solver import (
     LayoutSolveError,
     SolveErrorReason,
     describe_solve_error,
+    duplicated_locks,
     fixing_locks,
+    size_fixed_by,
     solve,
     solve_axis,
 )
@@ -345,7 +348,81 @@ def test_solve_axis_locks_that_fix_the_size_refuse_another_one() -> None:
     with pytest.raises(LayoutSolveError) as excinfo:
         solve_axis(unit, solve(unit), Axis.Z, 5.0, size_mm=700.0)
     assert excinfo.value.reason == "conflict"
-    assert set(excinfo.value.region_ids) == {"A", "B"}
+    assert excinfo.value.region_ids == ("A", "B")
+    assert excinfo.value.node_id == "A"
+    assert excinfo.value.detail == {"fixed_size_mm": pytest.approx(654.0)}
+
+
+def test_solve_axis_lets_a_size_the_locks_fix_follow_them() -> None:
+    before = _column([300.0, 300.0], locked=["A", "B"], side="center")
+    assert isinstance(before.root, Division)
+    after = dataclasses.replace(
+        before,
+        root=dataclasses.replace(
+            before.root,
+            items=[
+                Bay(size_mm=340.0, lock=Basis.CLEAR, id=item.id)
+                if item.id == "A"
+                else item
+                for item in before.root.items
+            ],
+        ),
+    )
+    solved = solve_axis(after, solve(before), Axis.Z, 5.0)
+    assert _sizes(solved) == {"A": 340.0, "B": 300.0}
+    assert solved.size_mm.z_mm == pytest.approx(694.0)
+    assert solved.position_mm.z_mm == pytest.approx(-20.0)
+
+
+# --- size_fixed_by() and duplicated_locks(): reference sizes and redundancy. ---
+
+
+def test_size_fixed_by_is_none_until_the_locks_fix_the_size() -> None:
+    unlocked: list[str] = []
+    for locked in (unlocked, ["A"], ["B"]):
+        unit = _column([300.0, 300.0], locked=locked)
+        assert size_fixed_by(unit, solve(unit), Axis.Z) is None
+    unit = _column([300.0, 300.0], locked=["A", "B"])
+    assert size_fixed_by(unit, solve(unit), Axis.Z) == ("A", "B")
+    assert size_fixed_by(unit, solve(unit), Axis.X) is None
+
+
+def test_duplicated_locks_names_what_a_redundant_lock_repeats() -> None:
+    """Two rows stacked under one shelf: once the lower row's two locks fix
+    the width, locking both of the upper row's openings repeats them."""
+    root = Division(
+        axis=Axis.Z,
+        items=[
+            Division(
+                axis=Axis.X,
+                items=[
+                    Bay(size_mm=200.0, lock=Basis.CLEAR, id="L1"),
+                    Board(thickness_mm=18.0, id="dl"),
+                    Bay(size_mm=282.0, lock=Basis.CLEAR, id="L2"),
+                ],
+                size_mm=200.0,
+                id="lower",
+            ),
+            Board(thickness_mm=18.0, id="shelf"),
+            Division(
+                axis=Axis.X,
+                items=[
+                    Bay(size_mm=300.0, lock=Basis.CLEAR, id="U1"),
+                    Board(thickness_mm=18.0, id="du"),
+                    Bay(size_mm=182.0, lock=Basis.CLEAR, id="U2"),
+                ],
+                size_mm=200.0,
+                id="upper",
+            ),
+        ],
+        id="root",
+    )
+    unit = Unit(size_mm=Vec3(500.0, 300.0, 418.0), root=root)
+    spaces = solve(unit)
+    assert duplicated_locks(unit, spaces, "U2", Axis.X) == ("L1", "L2", "U1")
+    assert duplicated_locks(unit, spaces, "L1", Axis.X) == ("L2", "U1", "U2")
+    assert duplicated_locks(unit, spaces, "shelf", Axis.X) is None
+    assert duplicated_locks(unit, spaces, "lower", Axis.Z) is None
 
 
 def test_solve_axis_leaves_the_other_axes_alone() -> None:
@@ -385,6 +462,7 @@ def test_fixing_locks_names_the_lock_and_honors_without() -> None:
         ("misfit", {"span_mm": 600.0, "sizes_total_mm": 518.0}, "do not add up"),
         ("pinned_mismatch", {"derived_x_mm": 1.0}, "cannot reshape"),
         ("conflict", {"minimum_mm": 5.0}, "at their 5.0 mm minimum"),
+        ("conflict", {"fixed_size_mm": 654.0}, "at 654.0 mm"),
         ("conflict", {}, "cannot all keep their sizes"),
     ],
 )
