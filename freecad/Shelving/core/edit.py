@@ -1,6 +1,7 @@
 """Tree-rewriting edits for the elevation editor: split a bay, merge a board,
 remove several boards, size a region, change what a size measures, lock or
-unlock a region, drag a board, change boards' thickness.
+unlock a region, drag a board, change boards' thickness, and make or remove
+Equal and even spacing constraints.
 
 A region with a ``lock`` holds its size through edits; an unlocked one
 takes whatever size the boards around it leave. Any region may lock. Where
@@ -14,10 +15,14 @@ as possible from where they stood before the edit. A caller treats a
 laying out its result as its own kind of refusal, distinct from
 :class:`EditError`.
 
-``split_region`` and ``merge_at`` are each other's exact inverse. No edit
-here mutates the argument ``Unit``: untouched subtrees are shared by
-reference with the result, so the argument must stay unmodified for the
-result to stay valid.
+An active constraint holds through every edit as a lock does, and the
+structural edits carry the constraints over to the new tree, dropping those
+whose openings or end boards they remove (:func:`carry_constraints`).
+
+``split_region`` and ``merge_at`` are each other's exact inverse while every
+constraint holds. No edit here mutates the argument ``Unit``: untouched
+subtrees are shared by reference with the result, so the argument must stay
+unmodified for the result to stay valid.
 
 Imports no Qt and no FreeCAD, so the fast suite exercises every edit
 directly, the same way :mod:`freecad.Shelving.core.solver` does.
@@ -34,15 +39,26 @@ from freecad.Shelving.core.layout import (
     Basis,
     Bay,
     Board,
+    Constraint,
+    ConstraintId,
     Division,
+    Equal,
+    EvenSpacing,
     Item,
     Region,
+    RunEnd,
+    SpacingEnd,
     Unit,
+    find_division,
+    spacing_group,
 )
+from freecad.Shelving.core.record import keys_by_region, unique_regions_by_key
 from freecad.Shelving.core.solver import (
     EPS_MM,
     FIXED_FRACTION,
     board_extent_mm,
+    constraint_axis,
+    constraint_spread_mm,
     fixing_locks,
     solve,
     solve_axis,
@@ -72,7 +88,7 @@ def is_locked(item: Item) -> bool:
 def split_region(unit: Unit, region_id: str, axis: Axis) -> Unit:
     """``unit`` with the ``Bay`` named ``region_id`` replaced by a board on
     ``axis``, splitting it into two bays of equal size and moving nothing
-    else.
+    else while every constraint still holds.
 
     When ``region_id``'s parent ``Division`` runs along a *different* axis
     than ``axis``, the replacement is a new ``Division`` on ``axis`` holding
@@ -91,6 +107,12 @@ def split_region(unit: Unit, region_id: str, axis: Axis) -> Unit:
     ``unit`` at all, or a ``Bay`` too small to hold the new board and still
     leave two positive-sized halves, or when ``unit`` has no board to copy
     stock from.
+
+    The constraints carry over as :func:`carry_constraints` carries them,
+    and an active one the new board leaves unmet, as when it adds an
+    opening to an even spacing, is solved again. Raises a ``"conflict"``
+    :class:`~freecad.Shelving.core.solver.LayoutSolveError` when that solve
+    finds no layout.
     """
     if unit.root.id == region_id and not isinstance(unit.root, Bay):
         raise EditError(region_id, "Only an open compartment can be split.")
@@ -108,7 +130,7 @@ def split_region(unit: Unit, region_id: str, axis: Axis) -> Unit:
     replaced_root, found = _split_in_division(unit.root, region_id, axis, board, spaces)
     if not found:
         raise EditError(region_id, "That is not part of this unit.")
-    return dataclasses.replace(unit, root=replaced_root)
+    return _structural(unit, dataclasses.replace(unit, root=replaced_root))
 
 
 def _split_in_division(
@@ -168,7 +190,8 @@ def _split_replacement(
 
 def merge_at(unit: Unit, board_id: str) -> Unit:
     """``unit`` with the ``Board`` named ``board_id`` removed and the regions
-    either side of it merged into one, moving nothing else.
+    either side of it merged into one, moving nothing else while every
+    constraint still holds.
 
     The merged region takes the first (lower-index) neighbor's id and a size
     of the neighbors' combined size plus the removed board's extent, locked
@@ -193,7 +216,19 @@ def merge_at(unit: Unit, board_id: str) -> Unit:
     axis matches its *new* parent's axis, leaving it in place would produce
     bug-006's same-axis nesting through merge, so its items splice into the
     new parent's run in its place instead, each keeping its size and lock.
+
+    The constraints carry over as :func:`carry_constraints` carries them,
+    so one on either merged region or ending at the board is dropped, and
+    an active one left unmet is solved again. Raises a ``"conflict"``
+    :class:`~freecad.Shelving.core.solver.LayoutSolveError` when that solve
+    finds no layout.
     """
+    return _structural(unit, _merged(unit, board_id))
+
+
+def _merged(unit: Unit, board_id: str) -> Unit:
+    """:func:`merge_at`'s tree edit alone, its constraints left as they
+    were."""
     new_root, found, _collapsed = _merge_at(unit.root, board_id)
     if not found:
         raise EditError(board_id, "That is not a board of this unit.")
@@ -269,15 +304,16 @@ def remove_boards(unit: Unit, board_ids: Sequence[str]) -> Unit:
     neighbor of a merge discards a whole subtree, is skipped. Raises the
     first :class:`EditError` any removal raises, so a refused board refuses
     the whole edit, including one ``board_ids`` names that is not a board of
-    ``unit``.
+    ``unit``. The constraints carry over and settle once, after the last
+    removal, as for :func:`merge_at`.
     """
     present = _board_ids(unit.root)
     result = unit
     for board_id in board_ids:
         if board_id in present and board_id not in _board_ids(result.root):
             continue
-        result = merge_at(result, board_id)
-    return result
+        result = _merged(result, board_id)
+    return _structural(unit, result)
 
 
 def _board_ids(region: Region) -> frozenset[str]:
@@ -638,17 +674,35 @@ def unlock(unit: Unit, region_id: str) -> Unit:
     return dataclasses.replace(unit, root=_with_region(unit.root, region_id, None))
 
 
-def held_by(unit: Unit, board_id: str) -> tuple[str, ...] | None:
-    """The locked regions to unlock so a drag may move the board
-    ``board_id``.
+@dataclasses.dataclass(frozen=True)
+class Held:
+    """What keeps a drag from moving a board, as :func:`held_by` finds it."""
 
-    Empty when a drag may move the board: with the unit's outer faces held,
-    the locks leave its position free, whatever the openings' minimum
-    widths allow. Otherwise the fewest locks whose unlocking frees it: the
-    locked region nearest the board on each blocked side, low side first,
-    and further ones only when those leave it held, as across nested runs.
-    ``None`` when ``board_id`` names no board, or no unlock frees it, as for
-    a carcass board.
+    # The locked regions to unlock, low side first.
+    locks: tuple[str, ...] = ()
+    # The active constraints that hold the board with those locks unlocked,
+    # in the unit's order. No unlock frees a board one holds.
+    constraints: tuple[ConstraintId, ...] = ()
+
+    @property
+    def free(self) -> bool:
+        """Whether a drag may move the board as it is."""
+        return not self.locks and not self.constraints
+
+
+def held_by(unit: Unit, board_id: str) -> Held | None:
+    """What holds the board ``board_id`` against a drag.
+
+    :attr:`Held.free` when a drag may move the board: with the unit's outer
+    faces held, the locks and active constraints leave its position free,
+    whatever the openings' minimum widths allow. Otherwise the fewest locks
+    whose unlocking frees it, or that unlocking leaves to the constraints:
+    the locked region nearest the board on each blocked side, low side
+    first, and further ones only when those leave it held, as across nested
+    runs. When constraints still hold it with those unlocked, they are
+    named and the board stays held whatever is unlocked. ``None`` when
+    ``board_id`` names no board, or the boards alone hold it, as for a
+    carcass board.
     """
     found = _locate(unit.root, board_id)
     if found is None or not isinstance(found[0].items[found[1]], Board):
@@ -659,16 +713,27 @@ def held_by(unit: Unit, board_id: str) -> tuple[str, ...] | None:
     board_space = spaces[board_id]
     low_face_mm = board_space.origin_mm(axis_index)
     high_face_mm = low_face_mm + board_space.extent_mm(axis_index)
+    order: dict[str, int] = {
+        constraint.id: index for index, constraint in enumerate(unit.constraints)
+    }
     low_side: list[str] = []
     high_side: list[str] = []
     while True:
         fixing = fixing_locks(unit, spaces, board_id, axis, low_side + high_side)
         if fixing is None:
-            return tuple(low_side + high_side)
+            return Held(locks=tuple(low_side + high_side))
         if not fixing:
             return None
-        below = [r for r in fixing if spaces[r].origin_mm(axis_index) < low_face_mm]
-        above = [r for r in fixing if r not in below]
+        regions = [r for r in fixing if r not in order]
+        if not regions:
+            return Held(
+                locks=tuple(low_side + high_side),
+                constraints=tuple(
+                    ConstraintId(c) for c in sorted(fixing, key=order.__getitem__)
+                ),
+            )
+        below = [r for r in regions if spaces[r].origin_mm(axis_index) < low_face_mm]
+        above = [r for r in regions if r not in below]
         if below:
             low_side.append(
                 max(
@@ -691,13 +756,15 @@ def held_by(unit: Unit, board_id: str) -> tuple[str, ...] | None:
 def require_movable(unit: Unit, board_id: str) -> None:
     """Return when a drag may move the board ``board_id``. Raises
     :class:`EditError` naming ``board_id`` when :func:`held_by` gives
-    ``None``, and naming the nearest holding region when it gives a
-    non-empty tuple."""
+    ``None`` or names constraints, and naming the nearest holding region
+    when it names only locks."""
     held = held_by(unit, board_id)
     if held is None:
         raise EditError(board_id, "This board has no opening on each side to move.")
-    if held:
-        raise EditError(held[0], "A locked opening holds this board in place.")
+    if held.constraints:
+        raise EditError(board_id, "A constraint holds this board in place.")
+    if held.locks:
+        raise EditError(held.locks[0], "A locked opening holds this board in place.")
 
 
 def move_board(unit: Unit, board_id: str, low_face_mm: float) -> Unit:
@@ -710,9 +777,8 @@ def move_board(unit: Unit, board_id: str, low_face_mm: float) -> Unit:
     other board moves as little as it can: an opening shrinks until it
     reaches :data:`MIN_DRAG_GAP_MM`, or its current size when that is
     already smaller, and then pushes the boards ahead of it, in nested runs
-    too. Nothing is locked or unlocked. Raises :class:`EditError` naming
-    ``board_id`` when :func:`held_by` gives ``None``, and naming the nearest
-    holding region when it gives a non-empty tuple.
+    too. Nothing is locked or unlocked. Raises :class:`EditError` as
+    :func:`require_movable` does.
     """
     require_movable(unit, board_id)
     axis = run_axis(unit, board_id)
@@ -760,4 +826,249 @@ def measure(unit: Unit, region_id: str, spaces: Mapping[str, Space]) -> Measurem
         fixed=region.lock is not None,
         clear_mm=clear_mm,
         spacing_mm=spacing_mm,
+    )
+
+
+def _region_carried(
+    region_id: str,
+    before_keys: Mapping[str, str],
+    after_keys: Mapping[str, str],
+    after_by_key: Mapping[str, str],
+) -> str | None:
+    """The id in the edited tree of the region ``region_id`` named before
+    the edit: its own id while the boards bounding it are unchanged, else
+    the one region bounded as it was; ``None`` when its bounding boards
+    changed, as when a board beside it was deleted or a board added along
+    its run split it."""
+    key = before_keys.get(region_id)
+    if key is None:
+        return None
+    if after_keys.get(region_id) == key:
+        return region_id
+    return after_by_key.get(key)
+
+
+def _run_carried(
+    spacing: EvenSpacing,
+    before: Unit,
+    after: Unit,
+    before_keys: Mapping[str, str],
+    after_by_key: Mapping[str, str],
+) -> Division | None:
+    """The run ``spacing`` lies in after the edit: the one holding a board
+    end, else the run found again as :func:`_region_carried` finds a region,
+    or the root when the run was the root. ``None`` when that run is gone
+    or now runs along another axis."""
+    old_run = find_division(before.root, spacing.run_id)
+    if old_run is None:
+        return None
+    for end in (spacing.start, spacing.end):
+        if not isinstance(end, RunEnd):
+            found = _locate(after.root, end)
+            run = None if found is None else found[0]
+            return run if run is not None and run.axis is old_run.axis else None
+    if old_run.id == before.root.id:
+        run_id: str | None = after.root.id
+    else:
+        run_id = _region_carried(
+            old_run.id, before_keys, keys_by_region(after), after_by_key
+        )
+    run = None if run_id is None else find_division(after.root, run_id)
+    return run if run is not None and run.axis is old_run.axis else None
+
+
+def carry_constraints(before: Unit, after: Unit) -> Unit:
+    """``after``, an edit of ``before``'s tree, with ``before``'s
+    constraints that still hold their regions renamed to them and the rest
+    dropped.
+
+    An ``Equal`` is dropped when either opening's bounding boards changed:
+    deleting a board beside it merges it away, and a board added along its
+    run splits it. A board added across its run keeps it, since its slot
+    and size are unchanged. An ``EvenSpacing`` is kept while its ends are
+    still in one run along its axis, in order, whatever happens between
+    them. Keeps each constraint's order, id and active flag.
+    """
+    before_keys = keys_by_region(before)
+    after_keys = keys_by_region(after)
+    after_by_key = unique_regions_by_key(after)
+    carried: list[Constraint] = []
+    for constraint in before.constraints:
+        if isinstance(constraint, Equal):
+            first, second = (
+                _region_carried(region_id, before_keys, after_keys, after_by_key)
+                for region_id in constraint.region_ids
+            )
+            if first is None or second is None:
+                continue
+            carried.append(dataclasses.replace(constraint, region_ids=(first, second)))
+            continue
+        run = _run_carried(constraint, before, after, before_keys, after_by_key)
+        if run is None:
+            continue
+        moved = dataclasses.replace(constraint, run_id=run.id)
+        if spacing_group(after, moved) is None:
+            continue
+        carried.append(moved)
+    return dataclasses.replace(after, constraints=tuple(carried))
+
+
+def settle_constraints(unit: Unit) -> Unit:
+    """``unit`` with every axis that holds an active constraint its sizes
+    miss by more than :data:`~freecad.Shelving.core.solver.EPS_MM` solved
+    again, moving the boards as little as possible; ``unit`` itself when
+    every active constraint holds. Raises a ``"conflict"``
+    :class:`~freecad.Shelving.core.solver.LayoutSolveError` when no layout
+    meets them."""
+    spaces = solve(unit)
+    axes: list[Axis] = []
+    for constraint in unit.constraints:
+        if not constraint.active:
+            continue
+        spread_mm = constraint_spread_mm(unit, spaces, constraint)
+        axis = constraint_axis(unit, constraint)
+        if spread_mm is None or spread_mm <= EPS_MM or axis is None:
+            continue
+        if axis not in axes:
+            axes.append(axis)
+    result = unit
+    for axis in axes:
+        result = solve_axis(result, spaces, axis, MIN_DRAG_GAP_MM)
+    return result
+
+
+def _structural(before: Unit, after: Unit) -> Unit:
+    """``after``, a structural edit of ``before``, with the constraints
+    carried over and settled."""
+    if not before.constraints:
+        return after
+    return settle_constraints(carry_constraints(before, after))
+
+
+def _opening(unit: Unit, region_id: str) -> tuple[Division, int]:
+    """The run holding the opening ``region_id`` and its index there. Raises
+    :class:`EditError` naming ``region_id`` when it names a board, the whole
+    unit, or nothing."""
+    if unit.root.id == region_id:
+        raise EditError(region_id, "Select openings, not the whole unit.")
+    found = _locate(unit.root, region_id)
+    if found is None:
+        raise EditError(region_id, "That is not part of this unit.")
+    if isinstance(found[0].items[found[1]], Board):
+        raise EditError(region_id, "Select openings for Equal, not boards.")
+    return found
+
+
+def add_equal(unit: Unit, region_ids: Sequence[str]) -> Unit:
+    """``unit`` with an :class:`~freecad.Shelving.core.layout.Equal` between
+    each two openings next to each other in ``region_ids``, so N openings
+    make N-1 constraints chained in that order, appended after its others
+    and solved by moving the boards as little as possible.
+
+    Raises :class:`EditError` when ``region_ids`` holds fewer than two
+    distinct openings, names a board, the whole unit or nothing, or names
+    openings whose runs lie along different axes. Raises a ``"conflict"``
+    :class:`~freecad.Shelving.core.solver.LayoutSolveError` naming the
+    locks and constraints that rule the new ones out.
+    """
+    distinct = list(dict.fromkeys(region_ids))
+    if len(distinct) < 2:
+        raise EditError(
+            distinct[0] if distinct else unit.id,
+            "Select two or more openings to make equal.",
+        )
+    axes = {_opening(unit, region_id)[0].axis for region_id in distinct}
+    if len(axes) > 1:
+        raise EditError(
+            distinct[0],
+            "Select openings that are all widths or all heights to make equal.",
+        )
+    added = tuple(
+        Equal(region_ids=(first, second))
+        for first, second in zip(distinct, distinct[1:], strict=False)
+    )
+    edited = dataclasses.replace(unit, constraints=(*unit.constraints, *added))
+    return solve_axis(edited, solve(unit), axes.pop(), MIN_DRAG_GAP_MM)
+
+
+def _spacing_end(run: Division, index: int, step: int) -> SpacingEnd | None:
+    """What bounds ``run.items[index]`` on the side ``step`` points to: the
+    board there, the run's own end, or ``None`` for another region."""
+    neighbor = index + step
+    if neighbor < 0:
+        return RunEnd.START
+    if neighbor >= len(run.items):
+        return RunEnd.END
+    item = run.items[neighbor]
+    return item.id if isinstance(item, Board) else None
+
+
+def add_even_spacing(unit: Unit, node_ids: Sequence[str]) -> Unit:
+    """``unit`` with an :class:`~freecad.Shelving.core.layout.EvenSpacing`
+    appended after its other constraints and solved by moving the boards as
+    little as possible.
+
+    ``node_ids`` names two boards of one run, which become its ends, or two
+    or more openings of one run: then its group runs from the first opening
+    to the last in run order, and each end is the board bounding it there
+    or the run's own end. Raises :class:`EditError` for any other
+    selection, for an opening bounded there by another opening, and when
+    fewer than two openings lie between the ends. Raises a ``"conflict"``
+    :class:`~freecad.Shelving.core.solver.LayoutSolveError` naming the
+    locks and constraints that rule it out.
+    """
+    distinct = list(dict.fromkeys(node_ids))
+    what = (
+        "Select two boards of one row or column, or two or more openings of "
+        "one row or column, to space evenly."
+    )
+    if len(distinct) < 2:
+        raise EditError(distinct[0] if distinct else unit.id, what)
+    found = [_locate(unit.root, node_id) for node_id in distinct]
+    if any(place is None for place in found) or unit.root.id in distinct:
+        raise EditError(distinct[0], what)
+    places = [place for place in found if place is not None]
+    run = places[0][0]
+    if any(place[0] is not run for place in places):
+        raise EditError(distinct[0], what)
+    indices = sorted(index for _run, index in places)
+    boards = [isinstance(run.items[index], Board) for index in indices]
+    start: SpacingEnd | None
+    end: SpacingEnd | None
+    if all(boards) and len(indices) == 2:
+        start, end = run.items[indices[0]].id, run.items[indices[1]].id
+    elif not any(boards):
+        start = _spacing_end(run, indices[0], -1)
+        end = _spacing_end(run, indices[-1], 1)
+        if start is None or end is None:
+            raise EditError(
+                distinct[0],
+                "Select the boards at the ends instead: an opening at an end "
+                "of this selection has another opening beside it, with no "
+                "board between them.",
+            )
+    else:
+        raise EditError(distinct[0], what)
+    spacing = EvenSpacing(run_id=run.id, start=start, end=end)
+    edited = dataclasses.replace(unit, constraints=(*unit.constraints, spacing))
+    group = spacing_group(edited, spacing)
+    if group is None or len(group) < 2:
+        raise EditError(
+            distinct[0],
+            "Select ends with two or more openings between them to space evenly.",
+        )
+    return solve_axis(edited, solve(unit), run.axis, MIN_DRAG_GAP_MM)
+
+
+def remove_constraints(unit: Unit, constraint_ids: Collection[ConstraintId]) -> Unit:
+    """``unit`` without the constraints ``constraint_ids`` names, active or
+    deactivated, moving nothing. Raises :class:`EditError` naming the first
+    id that names no constraint of ``unit``."""
+    known = {constraint.id for constraint in unit.constraints}
+    for constraint_id in constraint_ids:
+        if constraint_id not in known:
+            raise EditError(constraint_id, "That constraint is not part of this unit.")
+    return dataclasses.replace(
+        unit,
+        constraints=tuple(c for c in unit.constraints if c.id not in constraint_ids),
     )

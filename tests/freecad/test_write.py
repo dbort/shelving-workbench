@@ -12,6 +12,7 @@ document per scenario is to afford.
 """
 
 import dataclasses
+import json
 import zipfile
 from collections.abc import Iterator
 from pathlib import Path
@@ -31,8 +32,10 @@ from freecad.Shelving.core.layout import (
     Bay,
     Board,
     Division,
+    EvenSpacing,
     FixedPoint,
     FixedSide,
+    RunEnd,
     Unit,
 )
 from freecad.Shelving.core.scan import scan
@@ -838,3 +841,130 @@ def test_document_reopens_without_the_workbench(tmp_path: Path) -> None:
         assert bottom_box.Height == pytest.approx(_THICKNESS_MM)
     finally:
         FreeCAD.closeDocument(reopened.Name)
+
+
+def _three_bay_carcass() -> tuple[Unit, Board]:
+    """A closed 936 mm tall carcass of 18 mm boards whose one column holds
+    three 288 mm bays behind shelves ``shelf_a`` and ``shelf_b``, with an
+    even spacing from ``shelf_a`` to the column's top, and that board."""
+    shelf_a = Board(thickness_mm=18.0, role="shelf_a")
+    column = Division(
+        axis=Axis.Z,
+        items=[
+            Bay(size_mm=288.0),
+            shelf_a,
+            Bay(size_mm=288.0),
+            Board(thickness_mm=18.0, role="shelf_b"),
+            Bay(size_mm=288.0),
+        ],
+        size_mm=564.0,
+    )
+    unit = Unit(
+        size_mm=Vec3(600.0, 300.0, 936.0),
+        root=Division(
+            axis=Axis.Z,
+            items=[
+                Board(thickness_mm=18.0, role="bottom"),
+                Division(
+                    axis=Axis.X,
+                    items=[
+                        Board(thickness_mm=18.0, role="left_side"),
+                        column,
+                        Board(thickness_mm=18.0, role="right_side"),
+                    ],
+                    size_mm=900.0,
+                ),
+                Board(thickness_mm=18.0, role="top"),
+            ],
+        ),
+        depth_axis=Axis.Y,
+        front_at_min=None,
+        constraints=(EvenSpacing(run_id=column.id, start=shelf_a.id, end=RunEnd.END),),
+    )
+    return unit, shelf_a
+
+
+def test_the_record_names_a_constraint_end_by_its_objects_name() -> None:
+    doc = _new_document("write_smoke_constraint_record")
+    try:
+        container = cast("FreeCAD.DocumentObject", doc.addObject("App::Part", "Unit"))
+        unit, _shelf = _three_bay_carcass()
+        write_container(container, unit)
+        text = properties.read_container_rules_json(container)
+        assert text is not None
+        (entry,) = json.loads(text)["constraints"]
+        assert entry["kind"] == "even_spacing"
+        assert (entry["start"], entry["end"]) == ("shelf_a", "~end")
+        assert doc.getObject("shelf_a") is not None
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def test_a_resize_keeps_an_even_spacing_even() -> None:
+    """Growing the unit 100 mm from its bottom would grow only the top bay;
+    the even spacing keeps the two bays above ``shelf_a`` equal, moving the
+    shelves as little as that allows: ``shelf_b`` up 40 mm and ``shelf_a``
+    down 20 mm."""
+    doc = _new_document("write_smoke_even_resize")
+    try:
+        container = cast("FreeCAD.DocumentObject", doc.addObject("App::Part", "Unit"))
+        write_container(container, _three_bay_carcass()[0])
+        doc.recompute()
+        resize_unit(container, Vec3(600.0, 300.0, 1036.0))
+        doc.recompute()
+        shelf_a = doc.getObject("shelf_a").Placement.Base.z
+        shelf_b = doc.getObject("shelf_b").Placement.Base.z
+        top = doc.getObject("top").Placement.Base.z
+        assert shelf_a == pytest.approx(18.0 + 268.0)
+        assert shelf_b - (shelf_a + 18.0) == pytest.approx(348.0)
+        assert top - (shelf_b + 18.0) == pytest.approx(348.0)
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def test_a_rescan_meets_an_even_spacing_missed_within_the_clearance() -> None:
+    doc = _new_document("write_smoke_even_rescan")
+    try:
+        container = cast("FreeCAD.DocumentObject", doc.addObject("App::Part", "Unit"))
+        write_container(container, _three_bay_carcass()[0])
+        doc.recompute()
+        shelf_b = cast("_Placeable", doc.getObject("shelf_b"))
+        # The bays above and below it then differ by 2 mm, inside the
+        # scan's 3 mm clearance.
+        moved = shelf_b.Placement
+        moved.Base.z += 1.0
+        shelf_b.Placement = moved
+        doc.recompute()
+        rescan_unit(container)
+        doc.recompute()
+        shelf_a_z = doc.getObject("shelf_a").Placement.Base.z
+        top_z = doc.getObject("top").Placement.Base.z
+        assert shelf_b.Placement.Base.z - (shelf_a_z + 18.0) == pytest.approx(
+            top_z - (shelf_b.Placement.Base.z + 18.0)
+        )
+        text = properties.read_container_rules_json(container)
+        assert text is not None
+        assert json.loads(text)["constraints"][0]["active"] is True
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def test_a_rescan_deactivates_an_even_spacing_missed_beyond_the_clearance() -> None:
+    doc = _new_document("write_smoke_even_deactivated")
+    try:
+        container = cast("FreeCAD.DocumentObject", doc.addObject("App::Part", "Unit"))
+        write_container(container, _three_bay_carcass()[0])
+        doc.recompute()
+        shelf_b = cast("_Placeable", doc.getObject("shelf_b"))
+        moved = shelf_b.Placement
+        moved.Base.z += 40.0
+        shelf_b.Placement = moved
+        doc.recompute()
+        rescan_unit(container)
+        doc.recompute()
+        assert shelf_b.Placement.Base.z == pytest.approx(18.0 + 288.0 * 2 + 18.0 + 40.0)
+        text = properties.read_container_rules_json(container)
+        assert text is not None
+        assert json.loads(text)["constraints"][0]["active"] is False
+    finally:
+        FreeCAD.closeDocument(doc.Name)

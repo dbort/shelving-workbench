@@ -6,14 +6,17 @@ box that is not part of the unit), or a ``Division`` (a region cut into an
 ordered run of boards and sub-regions along one ``Axis``). The carcass
 shell is not a distinguished rule here: it is the outermost boards of the
 outermost divisions, built from the same items an interior division uses.
+A unit also carries the constraints between its openings, ``Equal`` and
+``EvenSpacing``, which name the tree's regions and boards by id.
 """
 
 from __future__ import annotations
 
 import enum
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
-from typing import Literal
+from typing import Literal, NewType
 
 from freecad.Shelving.core.geometry import AxisIndex, Vec3
 
@@ -21,6 +24,14 @@ from freecad.Shelving.core.geometry import AxisIndex, Vec3
 def new_id() -> str:
     """Fresh node identifier: the string form of a random UUID4."""
     return str(uuid.uuid4())
+
+
+ConstraintId = NewType("ConstraintId", str)
+
+
+def new_constraint_id() -> ConstraintId:
+    """Fresh constraint identifier, minted as :func:`new_id` mints a node's."""
+    return ConstraintId(new_id())
 
 
 class Axis(enum.StrEnum):
@@ -265,6 +276,55 @@ class FixedPoint:
                 return replace(self, z=side)
 
 
+class RunEnd(enum.Enum):
+    """One end of a ``Division``'s run, where an ``EvenSpacing`` group ends
+    with no board."""
+
+    START = "start"
+    END = "end"
+
+
+# Where an EvenSpacing group ends: a board of its run, by id, or the run's
+# own end.
+SpacingEnd = str | RunEnd
+
+
+@dataclass(frozen=True)
+class Equal:
+    """Two openings whose runs lie along one model axis, held the same size."""
+
+    # The two regions' ids, in the order they were selected.
+    region_ids: tuple[str, str]
+    # What both sizes measure.
+    basis: Basis = Basis.CLEAR
+    # A deactivated constraint is kept and drawn but never solved.
+    active: bool = True
+    id: ConstraintId = field(default_factory=new_constraint_id)
+
+
+@dataclass(frozen=True)
+class EvenSpacing:
+    """Every opening of one run between two ends, held the same size.
+
+    The group is read from the tree at each use, so a board added inside
+    the span adds an opening to it and one deleted there removes one.
+    """
+
+    # The Division whose run the group lies in.
+    run_id: str
+    # The low end and the high end, in run order.
+    start: SpacingEnd
+    end: SpacingEnd
+    # What every opening's size measures.
+    basis: Basis = Basis.CLEAR
+    # A deactivated constraint is kept and drawn but never solved.
+    active: bool = True
+    id: ConstraintId = field(default_factory=new_constraint_id)
+
+
+Constraint = Equal | EvenSpacing
+
+
 @dataclass
 class Unit:
     """A shelving unit: an outer size, a position, and a root region.
@@ -297,6 +357,9 @@ class Unit:
     # Per model axis rather than per elevation side, so a facing found or
     # corrected later renames the choice but keeps the physical side.
     fixed_point: FixedPoint = FixedPoint()
+    # The geometric constraints between openings, in the order they were
+    # made. Each names regions and boards of this tree.
+    constraints: tuple[Constraint, ...] = ()
     id: str = field(default_factory=new_id)
 
     def __post_init__(self) -> None:
@@ -306,3 +369,93 @@ class Unit:
             raise ValueError(f"Unit.size_mm.y_mm must be > 0, got {self.size_mm.y_mm}")
         if self.size_mm.z_mm <= 0:
             raise ValueError(f"Unit.size_mm.z_mm must be > 0, got {self.size_mm.z_mm}")
+
+
+def _span_items(
+    run: Division, start: SpacingEnd, end: SpacingEnd
+) -> tuple[int, int] | None:
+    """The indices in ``run.items`` just past ``start`` and just before
+    ``end``; ``None`` when a board end is not in ``run`` or the ends are out
+    of order."""
+    index = {item.id: position for position, item in enumerate(run.items)}
+    if isinstance(start, RunEnd):
+        if start is not RunEnd.START:
+            return None
+        first = 0
+    else:
+        if start not in index or not isinstance(run.items[index[start]], Board):
+            return None
+        first = index[start] + 1
+    if isinstance(end, RunEnd):
+        if end is not RunEnd.END:
+            return None
+        last = len(run.items) - 1
+    else:
+        if end not in index or not isinstance(run.items[index[end]], Board):
+            return None
+        last = index[end] - 1
+    if first > last + 1:
+        return None
+    return first, last
+
+
+def find_division(region: Region, division_id: str) -> Division | None:
+    """The ``Division`` named ``division_id`` in ``region``'s subtree,
+    ``region`` included; ``None`` when there is none."""
+    if not isinstance(region, Division):
+        return None
+    if region.id == division_id:
+        return region
+    for item in region.items:
+        if not isinstance(item, Board):
+            found = find_division(item, division_id)
+            if found is not None:
+                return found
+    return None
+
+
+def spacing_group(unit: Unit, spacing: EvenSpacing) -> tuple[str, ...] | None:
+    """The ids of the regions of ``spacing``'s run between its ends, in run
+    order; ``None`` when its run or an end board is no longer in ``unit``,
+    or the ends are out of order. An empty or one-region group is
+    returned as it is."""
+    run = find_division(unit.root, spacing.run_id)
+    if run is None:
+        return None
+    span = _span_items(run, spacing.start, spacing.end)
+    if span is None:
+        return None
+    first, last = span
+    return tuple(
+        item.id for item in run.items[first : last + 1] if not isinstance(item, Board)
+    )
+
+
+def constraint_regions(unit: Unit, constraint: Constraint) -> tuple[str, ...]:
+    """The regions ``constraint`` holds in ``unit``, in its own order: an
+    ``Equal``'s two, or an ``EvenSpacing``'s group, empty when the group no
+    longer resolves."""
+    if isinstance(constraint, Equal):
+        return constraint.region_ids
+    return spacing_group(unit, constraint) or ()
+
+
+def renamed_constraint_boards(
+    constraints: tuple[Constraint, ...], renames: Mapping[str, str]
+) -> tuple[Constraint, ...]:
+    """``constraints`` with every board end ``renames`` maps renamed, as a
+    board created by a write takes its object's ``Name``; regions keep their
+    ids."""
+    if not renames:
+        return constraints
+    renamed: list[Constraint] = []
+    for constraint in constraints:
+        if isinstance(constraint, EvenSpacing):
+            start, end = constraint.start, constraint.end
+            constraint = replace(
+                constraint,
+                start=start if isinstance(start, RunEnd) else renames.get(start, start),
+                end=end if isinstance(end, RunEnd) else renames.get(end, end),
+            )
+        renamed.append(constraint)
+    return tuple(renamed)

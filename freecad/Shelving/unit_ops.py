@@ -25,11 +25,11 @@ import FreeCAD
 
 from freecad.Shelving import properties
 from freecad.Shelving.container import WriteResult, read_container, write_container
-from freecad.Shelving.core.edit import set_unit_size
+from freecad.Shelving.core.edit import set_unit_size, settle_constraints
 from freecad.Shelving.core.geometry import Vec3
 from freecad.Shelving.core.layout import Axis, Bay, Board, Division, Unit
-from freecad.Shelving.core.record import parse_locks, with_stored_rules
-from freecad.Shelving.core.scan import scan
+from freecad.Shelving.core.record import parse_rules, restore_rules
+from freecad.Shelving.core.scan import DEFAULT_CLEARANCE_MM, scan
 
 # Shelving_CreateUnit's starting point: a single enclosed bay, closed on
 # every side, that the Edit Unit panel reshapes from there. The values
@@ -91,10 +91,11 @@ def create_unit(doc: FreeCAD.Document) -> FreeCAD.DocumentObject:
 
 
 def _rescanned_unit(container: FreeCAD.DocumentObject) -> Unit:
-    """``container`` read fresh and scanned, with its stored locks and unit
-    id reapplied: the common starting point for :func:`resize_unit` and
-    :func:`rescan_unit`, a resize being a rescan that also substitutes the
-    outer size."""
+    """``container`` read fresh and scanned, with its stored locks,
+    constraints and unit id reapplied, a constraint the boards miss beyond
+    the scan's clearance deactivated: the common starting point for
+    :func:`resize_unit` and :func:`rescan_unit`, a resize being a rescan
+    that also substitutes the outer size."""
     boxes, skipped, record = read_container(container)
     scan_result = scan(
         boxes,
@@ -104,7 +105,9 @@ def _rescanned_unit(container: FreeCAD.DocumentObject) -> Unit:
     )
     unit = scan_result.unit
     if record.rules_json is not None:
-        unit = with_stored_rules(unit, parse_locks(record.rules_json))
+        unit, _report = restore_rules(
+            unit, parse_rules(record.rules_json), DEFAULT_CLEARANCE_MM
+        )
     if record.unit_id is not None:
         unit = dataclasses.replace(unit, id=record.unit_id)
     unit = dataclasses.replace(unit, fixed_point=record.fixed_point)
@@ -125,15 +128,18 @@ def resize_unit(container: FreeCAD.DocumentObject, size_mm: Vec3) -> WriteResult
     """Rescan ``container``, substitute ``size_mm`` for its outer size, and
     write the result back. The unit's stored fixed point stays where its
     boards put it, so a unit fixed at its minimum corner grows or shrinks on
-    its maximum sides. Raises ``EditError`` when any axis of ``size_mm`` is
-    not positive, and ``LayoutSolveError`` when the locks and the minimum
-    opening leave no room for it, or when it changes a size the locks
-    determine, naming those locks."""
-    unit = set_unit_size(_rescanned_unit(container), size_mm)
+    its maximum sides. The active constraints hold as the locks do, and one
+    the boards miss within the clearance is met. Raises ``EditError`` when
+    any axis of ``size_mm`` is not positive, and ``LayoutSolveError`` when
+    the locks, constraints and the minimum opening leave no room for it, or
+    when it changes a size they determine, naming them."""
+    unit = settle_constraints(set_unit_size(_rescanned_unit(container), size_mm))
     return write_container(container, unit)
 
 
 def rescan_unit(container: FreeCAD.DocumentObject) -> WriteResult:
     """Rescan ``container`` and write the result straight back: the reflow
-    a hand edit needs, with no size change of its own."""
-    return write_container(container, _rescanned_unit(container))
+    a hand edit needs, with no size change of its own, beyond meeting an
+    active constraint the boards miss within the clearance. Raises
+    ``LayoutSolveError`` when no layout meets the active constraints."""
+    return write_container(container, settle_constraints(_rescanned_unit(container)))

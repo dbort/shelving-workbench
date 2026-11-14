@@ -12,19 +12,23 @@ instead: fills, then outlines, then dimensions.
 from __future__ import annotations
 
 import math
+import os
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, TypeAlias
+from typing import Any, Protocol, TypeAlias
 
 import FreeCAD
 from pivy import coin
-from PySide6 import QtCore
+from PySide6 import QtCore, QtGui, QtSvg, QtWidgets
 
 from freecad.Shelving.editor.elevation import (
     LIFT_MM,
+    ConstraintIcon,
+    ConstraintKind,
     DimensionLabel,
     ElevationFrame,
+    IconState,
     LabelColor,
     OutlineRole,
     Overlay,
@@ -46,16 +50,57 @@ _THICK_LINE_PX = 3.0
 _DIMENSION_LINE_PX = 1.5
 
 
-def _view_color(name: str, default: int) -> RGB:
-    """A packed 0xRRGGBBAA color from FreeCAD's View preferences."""
-    packed = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/View").GetUnsigned(
-        name, default
-    )
+_VIEW_PARAMS = "User parameter:BaseApp/Preferences/View"
+# FreeCAD 1.1's background colors for keys left unset, probed in its 3D
+# view (.claude/docs/freecad-notes.md): the plain color, the gradient's
+# top and bottom, and its middle, which matches their average.
+_BACKGROUND_DEFAULT = 0xEAE5DCFF
+_GRADIENT_TOP_DEFAULT = 0x333365FF
+_GRADIENT_BOTTOM_DEFAULT = 0xABABC1FF
+_GRADIENT_MIDDLE_DEFAULT = 0x6F6F93FF
+
+
+class ViewParams(Protocol):
+    """The part of a FreeCAD parameter group the background reading uses."""
+
+    def GetBool(self, name: str, default: bool, /) -> bool: ...
+    def GetUnsigned(self, name: str, default: int, /) -> int: ...
+
+
+def _unpacked(packed: int) -> RGB:
     return (
         ((packed >> 24) & 0xFF) / 255,
         ((packed >> 16) & 0xFF) / 255,
         ((packed >> 8) & 0xFF) / 255,
     )
+
+
+def _view_color(name: str, default: int) -> RGB:
+    """A packed 0xRRGGBBAA color from FreeCAD's View preferences."""
+    return _unpacked(FreeCAD.ParamGet(_VIEW_PARAMS).GetUnsigned(name, default))
+
+
+def background_rgb(params: ViewParams) -> RGB:
+    """The 3D view's background color as the View preferences ``params``
+    set it. With neither gradient on, it is ``BackgroundColor``. A gradient
+    gives its middle: ``BackgroundColor4`` when ``UseBackgroundColorMid``
+    is set, otherwise halfway between ``BackgroundColor2`` and
+    ``BackgroundColor3``."""
+    # As FreeCAD's viewer reads them: Gradient defaults to on, and the
+    # dialog's Simple choice is never read.
+    gradient = params.GetBool("Gradient", True) or params.GetBool(
+        "RadialGradient", False
+    )
+    if not gradient:
+        return _unpacked(params.GetUnsigned("BackgroundColor", _BACKGROUND_DEFAULT))
+    if params.GetBool("UseBackgroundColorMid", False):
+        return _unpacked(
+            params.GetUnsigned("BackgroundColor4", _GRADIENT_MIDDLE_DEFAULT)
+        )
+    top = _unpacked(params.GetUnsigned("BackgroundColor2", _GRADIENT_TOP_DEFAULT))
+    bottom = _unpacked(params.GetUnsigned("BackgroundColor3", _GRADIENT_BOTTOM_DEFAULT))
+    red, green, blue = ((a + b) / 2 for a, b in zip(top, bottom, strict=True))
+    return (red, green, blue)
 
 
 @dataclass(frozen=True)
@@ -71,9 +116,25 @@ class Style:
     # its line around the whole text, so they leave its padlock a blank
     # stretch of line before the first digit.
     padlock_spaces: int = 0
+    # An active constraint's icon, and a deactivated one's.
+    icon_rgb: RGB = (1.0, 38 / 255, 0.0)
+    deactivated_rgb: RGB = (127 / 255, 127 / 255, 127 / 255)
+    # The tile under each constraint icon and padlock: the view's own
+    # background, which the theme picks the dimension and icon colors to
+    # stand out against, where an opening's fill would blur them.
+    tile_rgb: RGB = (247 / 255, 247 / 255, 247 / 255)
 
     def label_rgb(self, color: LabelColor) -> RGB:
         return self.locked_rgb if color == "locked" else self.unlocked_rgb
+
+    def icon_state_rgb(self, state: IconState) -> RGB:
+        """The color a constraint's icon takes in ``state``, as the
+        Sketcher's ``constrColor`` picks it."""
+        if state == "selected":
+            return self.selected_rgb
+        if state == "deactivated":
+            return self.deactivated_rgb
+        return self.icon_rgb
 
     def outline_rgb(self, role: OutlineRole) -> RGB:
         """The selection color for "selected", the locked dimension color
@@ -97,7 +158,9 @@ def view_style(label_size_pt: int, padlock_spaces: int) -> Style:
     constraint icon colors, read from the View preferences now: red for a
     size that drives (a locked opening), blue for one that only reports,
     and the fixed point's marker in the color of the Sketcher's own
-    billboard icons. Defaults from FreeCAD 1.1."""
+    billboard icons. A constraint's icon takes the Sketcher's icon color,
+    or its deactivated color, and sits with each padlock on a tile of the
+    view's background. Defaults from FreeCAD 1.1."""
     return Style(
         selected_rgb=_view_color("SelectionColor", 0x1CAD1CFF),
         locked_rgb=_view_color("ConstrainedDimColor", 0xFF2600FF),
@@ -105,7 +168,106 @@ def view_style(label_size_pt: int, padlock_spaces: int) -> Style:
         marker_rgb=marker_rgb(),
         label_size_pt=label_size_pt,
         padlock_spaces=padlock_spaces,
+        icon_rgb=_view_color("ConstrainedIcoColor", 0xFF2600FF),
+        deactivated_rgb=_view_color("DeactivatedConstrDimColor", 0x7F7F7FFF),
+        tile_rgb=background_rgb(FreeCAD.ParamGet(_VIEW_PARAMS)),
     )
+
+
+# The workbench's own icons in the Sketcher's constraint style. Drawing
+# Equal as well as Even spacing keeps the pair matched and spares
+# importing SketcherGui, whose import alone registers the Sketcher's icons
+# (.claude/docs/freecad-notes.md).
+_RESOURCES = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources")
+ICON_SOURCES: Mapping[ConstraintKind, str] = {
+    "equal": os.path.join(_RESOURCES, "Constraint_Equal.svg"),
+    "even_spacing": os.path.join(_RESOURCES, "Constraint_EvenSpacing.svg"),
+}
+
+
+# The tile's margin around a glyph and its corner radius, in logical
+# pixels; a padlock button's margin around its icon is the same.
+TILE_PAD_PX = 2
+TILE_RADIUS_PX = 3
+
+
+@dataclass(frozen=True)
+class Tile:
+    """The tile a constraint icon's glyph sits on, in device pixels."""
+
+    rgb: RGB
+    pad_px: int
+    radius_px: float
+
+
+def icon_side_px() -> int:
+    """The constraint icon's side in logical pixels: the Sketcher's
+    ``ConstraintSymbolSize`` preference, by default the application font's
+    pixel size, as ``EditModeCoinManager`` reads it."""
+    default_px = QtGui.QFontInfo(QtWidgets.QApplication.font()).pixelSize()
+    return FreeCAD.ParamGet("User parameter:BaseApp/Preferences/View").GetInt(
+        "ConstraintSymbolSize", default_px
+    )
+
+
+def constraint_icon_image(
+    kind: ConstraintKind, rgb: RGB, tile: Tile, side_px: int
+) -> QtGui.QImage:
+    """``kind``'s icon on ``tile``, ``side_px`` device pixels square. The
+    glyph, ``tile.pad_px`` in from each edge, fills every painted pixel with
+    ``rgb`` at its own coverage, as the Sketcher's ``renderConstrIcon``
+    recolors its icons with a source-in fill; the tile's rounded corners
+    stay transparent."""
+    glyph_px = side_px - 2 * tile.pad_px
+    glyph = QtGui.QImage(glyph_px, glyph_px, QtGui.QImage.Format.Format_RGBA8888)
+    glyph.fill(QtCore.Qt.GlobalColor.transparent)
+    painter = QtGui.QPainter(glyph)
+    QtSvg.QSvgRenderer(ICON_SOURCES[kind]).render(painter)
+    painter.setCompositionMode(QtGui.QPainter.CompositionMode.CompositionMode_SourceIn)
+    painter.fillRect(glyph.rect(), QtGui.QColor.fromRgbF(*rgb))
+    painter.end()
+    image = QtGui.QImage(side_px, side_px, QtGui.QImage.Format.Format_RGBA8888)
+    image.fill(QtCore.Qt.GlobalColor.transparent)
+    painter = QtGui.QPainter(image)
+    painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+    painter.setPen(QtCore.Qt.PenStyle.NoPen)
+    painter.setBrush(QtGui.QColor.fromRgbF(*tile.rgb))
+    painter.drawRoundedRect(
+        QtCore.QRectF(0, 0, side_px, side_px), tile.radius_px, tile.radius_px
+    )
+    painter.drawImage(QtCore.QPointF(tile.pad_px, tile.pad_px), glyph)
+    painter.end()
+    return image
+
+
+def coin_rgba(image: QtGui.QImage) -> tuple[int, int, bytes]:
+    """``image``, in RGBA8888, as the width, height and bytes an ``SoImage``
+    takes: rows from the bottom up, where Qt runs them top down."""
+    pixels = bytes(image.constBits())
+    stride = image.bytesPerLine()
+    row_bytes = image.width() * 4
+    rows = [
+        pixels[start : start + row_bytes] for start in range(0, len(pixels), stride)
+    ]
+    return image.width(), image.height(), b"".join(reversed(rows))
+
+
+def padded_icon_image(
+    icon: QtGui.QImage, horizontal: bool, lead_px: int
+) -> QtGui.QImage:
+    """``icon`` after ``lead_px`` transparent device pixels: to its left for
+    a horizontal dimension, below it for a vertical one, so an image
+    anchored at the text's center by its left or bottom edge puts the icon
+    that far along the line, whatever the zoom."""
+    side_px = icon.width()
+    width_px = side_px + lead_px if horizontal else side_px
+    height_px = side_px if horizontal else side_px + lead_px
+    padded = QtGui.QImage(width_px, height_px, QtGui.QImage.Format.Format_RGBA8888)
+    padded.fill(QtCore.Qt.GlobalColor.transparent)
+    painter = QtGui.QPainter(padded)
+    painter.drawImage(QtCore.QPointF(lead_px if horizontal else 0, 0), icon)
+    painter.end()
+    return padded
 
 
 def _material(rgb: RGB, transparency: float = 0.0) -> Coin:
@@ -309,6 +471,43 @@ class PointMarker:
         """Show ``rgba``, four bytes a pixel in rows from the bottom up, as
         Coin lays an image out, at ``width_px`` by ``height_px`` device
         pixels."""
+        self.image.image.setValue(coin.SbVec2s(width_px, height_px), 4, rgba)
+
+
+class IconNode:
+    """A constraint's icon, drawn as :class:`PointMarker` draws its image,
+    after its dimension's text along the line."""
+
+    def __init__(self, icon: ConstraintIcon) -> None:
+        self.icon = icon
+        self.root: Coin = coin.SoSeparator()
+        pick_style = coin.SoPickStyle()
+        pick_style.style = coin.SoPickStyle.UNPICKABLE
+        self.root.addChild(pick_style)
+        depth = coin.SoDepthBuffer()
+        depth.getField("test").setValue(False)
+        depth.getField("write").setValue(False)
+        self.root.addChild(depth)
+        translation = coin.SoTranslation()
+        h_mm, v_mm = icon.label.text_at_mm
+        translation.translation.setValue(h_mm, v_mm, 0.0)
+        self.root.addChild(translation)
+        self.image: Coin = coin.SoImage()
+        if icon.label.horizontal:
+            self.image.horAlignment = coin.SoImage.LEFT
+            self.image.vertAlignment = coin.SoImage.HALF
+        else:
+            self.image.horAlignment = coin.SoImage.CENTER
+            self.image.vertAlignment = coin.SoImage.BOTTOM
+        self.root.addChild(self.image)
+        self.drawn = QtGui.QImage()
+
+    def set_image(self, image: QtGui.QImage) -> None:
+        """Show ``image``, from :func:`padded_icon_image`, at one image pixel
+        a device pixel."""
+        # Kept for reading back: pivy decodes an SoSFImage's bytes as text.
+        self.drawn = image
+        width_px, height_px, rgba = coin_rgba(image)
         self.image.image.setValue(coin.SbVec2s(width_px, height_px), 4, rgba)
 
 

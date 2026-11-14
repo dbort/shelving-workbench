@@ -101,6 +101,30 @@ The vocabulary the documentation and the code share.
   anything. A board with nothing but boards and locked openings between it
   and the end of its row is held until one of those openings is unlocked,
   so locking every opening of a row holds all its boards.
+- **Equal**: a constraint that keeps two openings the same size. Select two
+  or more widths, or two or more heights, in any rows or columns, and run
+  Constrain Equal: each opening is made equal to the next in the order you
+  selected them, as the Sketcher chains its Equal. Each shows an equals
+  sign icon beside its dimension. Deleting a board beside an
+  opening, or adding a board along its row that splits it, removes its
+  Equal; a board added across it keeps the Equal.
+- **Even spacing**: a constraint that keeps every opening between two ends
+  of one row or column the same size. Select the two boards at its ends,
+  or its first and last openings, and run Constrain Even Spacing; a column's
+  top and bottom openings space the whole column. An opening a new board
+  adds inside the span joins it, and a deleted board's openings merge
+  within it; deleting an end board removes the even spacing. A board an
+  even spacing holds shows no drag arrow, and selecting it outlines the
+  openings holding it. Click a constraint's icon to select it, Ctrl-click
+  to select more, and press Delete to remove them. The commands sit on a
+  toolbar shown only while Edit Unit is open, and in the Shelving menu.
+- **Deactivated constraint**: one the boards no longer meet when a unit is
+  opened, as after a shelf was moved by hand: nothing moves, the
+  constraint stays, drawn grayed, holds nothing, and can be removed with
+  Delete. One the boards miss by no more than the joint clearance stays
+  active, and the next edit makes it exact. A constraint whose openings or
+  end boards are gone is removed. A notification says so once, when Edit
+  Unit opens.
 - **Local frame**: origin at the unit's front-bottom-left corner, +X right,
   +Y back, +Z up, in millimeters. A container's own placement is excluded,
   so a unit reads the same wherever it sits.

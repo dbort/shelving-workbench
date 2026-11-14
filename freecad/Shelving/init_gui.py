@@ -35,13 +35,26 @@ TOOLBAR_COMMANDS = (
     "Shelving_EditUnit",
 )
 
+# On the toolbar Edit Unit shows while it is open, in whatever workbench,
+# as the Sketcher's edit-mode toolbars are, and grayed in the menu outside
+# it.
+CONSTRAINT_COMMANDS = (
+    "Shelving_ConstrainEqual",
+    "Shelving_ConstrainEvenSpacing",
+)
+
 
 def menu_commands() -> list[str]:
-    """The Shelving menu's command ids: the toolbar's, plus the QA Wizard
-    while its developer flag is on."""
+    """The Shelving menu's command ids: the toolbar's, the constraint
+    commands, and the QA Wizard while its developer flag is on."""
     from freecad.Shelving import qa
 
-    return [*TOOLBAR_COMMANDS, *(["Shelving_QAWizard"] if qa.is_enabled() else [])]
+    return [
+        *TOOLBAR_COMMANDS,
+        "Separator",
+        *CONSTRAINT_COMMANDS,
+        *(["Shelving_QAWizard"] if qa.is_enabled() else []),
+    ]
 
 
 class ShelvingWorkbench(_WorkbenchBase):
@@ -56,6 +69,8 @@ class ShelvingWorkbench(_WorkbenchBase):
         # Deferred so a headless `import freecad.Shelving.init_gui` never reaches
         # GUI-only code: each command module runs `Gui.addCommand` at import.
         from freecad.Shelving.commands import (  # noqa: F401
+            constrain_equal,
+            constrain_even_spacing,
             create_unit,
             edit_unit,
             export_boxes,

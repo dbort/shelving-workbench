@@ -26,7 +26,7 @@ from typing import Concatenate, Literal, ParamSpec
 
 import FreeCAD
 
-from freecad.Shelving import properties
+from freecad.Shelving import properties, refusals
 from freecad.Shelving.container import (
     read_container,
     renamed_board_ids,
@@ -35,19 +35,24 @@ from freecad.Shelving.container import (
 from freecad.Shelving.core.backs import BackFitError, renamed_back_boards
 from freecad.Shelving.core.edit import (
     EditError,
+    Held,
     Measurement,
+    add_equal,
+    add_even_spacing,
     held_by,
     lock,
     measure,
     merge_at,
     move_board,
     remove_boards,
+    remove_constraints,
     require_movable,
     run_axis,
     set_basis,
     set_size,
     set_thickness,
     set_unit_size,
+    settle_constraints,
     split_region,
     unlock,
 )
@@ -57,20 +62,27 @@ from freecad.Shelving.core.layout import (
     Basis,
     Bay,
     Board,
+    Constraint,
+    ConstraintId,
     Division,
     FixedSide,
     Region,
     Unit,
+    constraint_regions,
+    renamed_constraint_boards,
 )
 from freecad.Shelving.core.record import (
-    parse_locks,
+    OpenReport,
+    parse_rules,
     region_keys,
-    with_stored_rules,
+    restore_rules,
 )
-from freecad.Shelving.core.scan import elevation_axes, scan
+from freecad.Shelving.core.scan import DEFAULT_CLEARANCE_MM, elevation_axes, scan
 from freecad.Shelving.core.solver import (
     LayoutSolveError,
+    constraint_axis,
     describe_solve_error,
+    duplicated_constraint,
     duplicated_locks,
     size_fixed_by,
     solve,
@@ -132,6 +144,9 @@ class EditFailure:
     # locks in conflict and any opening held at its minimum. Empty for every
     # other refusal.
     region_ids: tuple[str, ...] = ()
+    # The constraints a refused re-solve holds responsible, in the unit's
+    # order; a constraint the refused edit was making is named too.
+    constraint_ids: tuple[ConstraintId, ...] = ()
 
 
 @dataclasses.dataclass(frozen=True)
@@ -142,15 +157,43 @@ class EditWarning:
     message: str
     # The regions the warning is about, in tree order.
     region_ids: tuple[str, ...]
+    # The constraints the warning is about, in the unit's order.
+    constraint_ids: tuple[ConstraintId, ...] = ()
 
 
 _REDUNDANT_LOCK = (
     "The outlined locks already fix this opening's size, so its own lock is redundant."
 )
+_REDUNDANT_CONSTRAINT = (
+    "The outlined locks and constraints already fix these sizes, so the new "
+    "constraint is redundant."
+)
+# Worded without a count, so the text reads the same for one constraint as
+# for several and stays one string to translate.
+_DEACTIVATED_AT_OPEN = (
+    "Constraints the boards no longer meet were deactivated. They are drawn "
+    "grayed, hold nothing, and can be removed with Delete."
+)
+_DROPPED_AT_OPEN = (
+    "Constraints whose openings or boards are gone were removed from this unit."
+)
+
+
+def open_message(report: OpenReport) -> str | None:
+    """The one notification :class:`Session` posts at open for ``report``;
+    ``None`` when nothing was deactivated or dropped."""
+    lines = []
+    if report.deactivated:
+        lines.append(_DEACTIVATED_AT_OPEN)
+    if report.dropped:
+        lines.append(_DROPPED_AT_OPEN)
+    return "\n".join(lines) if lines else None
 
 
 def _solve_failure(err: LayoutSolveError) -> EditFailure:
-    return EditFailure(describe_solve_error(err), err.node_id, err.region_ids)
+    return EditFailure(
+        describe_solve_error(err), err.node_id, err.region_ids, err.constraint_ids
+    )
 
 
 _P = ParamSpec("_P")
@@ -160,14 +203,15 @@ def _edit(
     method: Callable[Concatenate[Session, _P], EditFailure | None],
 ) -> Callable[Concatenate[Session, _P], EditFailure | None]:
     """Mark ``method`` as a session edit: it clears :attr:`Session.flagged`
-    before it runs, and a refusal it returns flags the regions it names."""
+    before it runs, and a refusal it returns flags the regions and
+    constraints it names."""
 
     @functools.wraps(method)
     def run(self: Session, *args: _P.args, **kwargs: _P.kwargs) -> EditFailure | None:
         self.flagged = ()
         failure = method(self, *args, **kwargs)
         if failure is not None:
-            self.flagged = failure.region_ids
+            self.flagged = (*failure.region_ids, *failure.constraint_ids)
         return failure
 
     return run
@@ -261,10 +305,13 @@ class Untagged:
     reason: str
 
 
-def _read_unit(container: FreeCAD.DocumentObject) -> tuple[Unit, Mapping[str, str]]:
-    """``container`` read fresh and scanned, with its stored locks and unit
-    id reapplied, and the reason each part the scan did not place in the
-    tree was set aside, keyed by ``Name``.
+def _read_unit(
+    container: FreeCAD.DocumentObject,
+) -> tuple[Unit, Mapping[str, str], OpenReport]:
+    """``container`` read fresh and scanned, with its stored locks,
+    constraints and unit id reapplied, the reason each part the scan did not
+    place in the tree was set aside, keyed by ``Name``, and what reapplying
+    the constraints deactivated and dropped.
 
     Mirrors :func:`freecad.Shelving.unit_ops._rescanned_unit`; kept as its
     own copy here rather than imported, the way every other small
@@ -282,8 +329,11 @@ def _read_unit(container: FreeCAD.DocumentObject) -> tuple[Unit, Mapping[str, st
     )
     watch.lap("scan")
     unit = scan_result.unit
+    report = OpenReport()
     if record.rules_json is not None:
-        unit = with_stored_rules(unit, parse_locks(record.rules_json))
+        unit, report = restore_rules(
+            unit, parse_rules(record.rules_json), DEFAULT_CLEARANCE_MM
+        )
     if record.unit_id is not None:
         unit = dataclasses.replace(unit, id=record.unit_id)
     unit = dataclasses.replace(unit, fixed_point=record.fixed_point)
@@ -291,7 +341,7 @@ def _read_unit(container: FreeCAD.DocumentObject) -> tuple[Unit, Mapping[str, st
     reasons = {entry.name: entry.reason for entry in scan_result.skipped}
     reasons.update((panel.name, _PANEL_REASON) for panel in scan_result.panels)
     reasons.update((back.name, _BACK_REASON) for back in unit.backs)
-    return unit, reasons
+    return unit, reasons, report
 
 
 class Session:
@@ -304,17 +354,25 @@ class Session:
         self.container = container
         # unit and spaces are the current, already-solved state, replaced
         # wholesale by every accepted edit.
-        self.unit, self._set_aside_reasons = _read_unit(container)
+        self.unit, self._set_aside_reasons, report = _read_unit(container)
+        # What reading the stored constraints deactivated and dropped, which
+        # open() reports once. A reload after an Undo or Redo reports
+        # nothing, and opening writes nothing, so the next open reports the
+        # same again until an edit writes the record.
+        self.open_report = report
         watch.lap("read unit")
         try:
             self.spaces: Mapping[str, Space] = solve(self.unit)
         except LayoutSolveError as err:
             raise UnsolvableUnit(err, self.unit) from err
         watch.lap("solve")
-        # Empty, one region or board id, or several board ids: never a
-        # region beside anything else. A split or merge clears it, since the
-        # id it just edited no longer names anything the caller can act on.
+        # Boards and openings, in the order they were selected. A split or
+        # merge clears it, since the id it just edited no longer names
+        # anything the caller can act on.
         self._selection: tuple[str, ...] = ()
+        # Constraints, in the order they were selected; empty whenever
+        # _selection is not, so Delete never means both merge and remove.
+        self._constraint_selection: tuple[ConstraintId, ...] = ()
         # Untagged objects the tree does not place: what a write leaves
         # alone, and the backs. Before the first write that is every
         # set-aside part that is one of the unit's backs or carries no board
@@ -333,8 +391,9 @@ class Session:
         self.lost = False
         # Receives each EditWarning an accepted edit raises.
         self.on_warning: Callable[[EditWarning], None] | None = None
-        # The regions the last edit's refusal or warning names, which the
-        # view outlines until the next edit, Undo, Redo or selection change.
+        # The regions and constraints the last edit's refusal or warning
+        # names, which the view outlines until the next edit, Undo, Redo or
+        # selection change.
         self.flagged: tuple[str, ...] = ()
 
     def open(self, schedule: Schedule | None = None) -> None:
@@ -359,6 +418,9 @@ class Session:
                 )
                 self.container.setPropertyStatus(name, "Hidden")
         self._history = EditHistory(doc, self, schedule or (lambda _settle: None))
+        message = open_message(self.open_report)
+        if message is not None:
+            refusals.report_warning(message)
 
     def settle(self) -> None:
         """Read a pending Undo or Redo back into this session now. Every
@@ -395,7 +457,7 @@ class Session:
         selected, then tell :attr:`on_change`. Sets :attr:`lost` instead of
         rescanning when the container no longer reads."""
         try:
-            unit, reasons = _read_unit(self.container)
+            unit, reasons, _report = _read_unit(self.container)
             spaces = solve(unit)
         except Exception:  # noqa: BLE001 - an Undo can leave anything behind
             self.lost = True
@@ -421,6 +483,9 @@ class Session:
         self._set_aside_reasons = reasons
         self.untagged = self._unplaced(reasons)
         self._selection = tuple(selected)
+        # A rescan mints fresh constraint ids, and the steps that change
+        # constraints clear this selection anyway.
+        self._constraint_selection = ()
         self.flagged = ()
         if self.on_change is not None:
             self.on_change()
@@ -447,16 +512,40 @@ class Session:
     @property
     def selected_id(self) -> str | None:
         """The single selected region or board; ``None`` when nothing is
-        selected and when several boards are."""
+        selected and when several items are."""
         return self._selection[0] if len(self._selection) == 1 else None
 
     @property
+    def selected_items(self) -> tuple[str, ...]:
+        """Every selected board and opening, in the order they were
+        selected."""
+        return self._selection
+
+    @property
     def selected_boards(self) -> tuple[str, ...]:
-        """Every selected board, in the order they were selected: the one
-        board of a single selection, empty while the selection is a region
-        or nothing."""
+        """Every selected board, in the order they were selected."""
         boards = {board.id for board in _boards(self.unit.root)}
         return tuple(node_id for node_id in self._selection if node_id in boards)
+
+    @property
+    def selected_constraints(self) -> tuple[ConstraintId, ...]:
+        """Every selected constraint, in the order they were selected; empty
+        while any board or opening is selected."""
+        return self._constraint_selection
+
+    @property
+    def constraints(self) -> tuple[Constraint, ...]:
+        """The unit's constraints, active and deactivated, in the order they
+        were made."""
+        return self.unit.constraints
+
+    def constraint_regions(self, constraint_id: ConstraintId) -> tuple[str, ...]:
+        """The openings the constraint ``constraint_id`` holds, empty when
+        it names none of this unit's constraints."""
+        for constraint in self.unit.constraints:
+            if constraint.id == constraint_id:
+                return constraint_regions(self.unit, constraint)
+        return ()
 
     def select(self, node_id: str | None) -> None:
         """Make ``node_id`` the single selection, or clear it for ``None``."""
@@ -467,10 +556,27 @@ class Session:
         single selection, as :meth:`select` makes it."""
         self._set_selection(tuple(dict.fromkeys(board_ids)))
 
+    def select_items(self, node_ids: Sequence[str]) -> None:
+        """Select the boards and openings ``node_ids`` names, each once, in
+        that order, dropping any constraint selection."""
+        self._set_selection(tuple(dict.fromkeys(node_ids)))
+
+    def select_constraints(self, constraint_ids: Sequence[ConstraintId]) -> None:
+        """Select the constraints ``constraint_ids`` names, each once, in
+        that order, dropping the board and opening selection. An id naming
+        no constraint of the unit is left out."""
+        known = {constraint.id for constraint in self.unit.constraints}
+        selection = tuple(c for c in dict.fromkeys(constraint_ids) if c in known)
+        if selection != self._constraint_selection or self._selection:
+            self.flagged = ()
+        self._selection = ()
+        self._constraint_selection = selection
+
     def _set_selection(self, selection: tuple[str, ...]) -> None:
-        if selection != self._selection:
+        if selection != self._selection or self._constraint_selection:
             self.flagged = ()
         self._selection = selection
+        self._constraint_selection = ()
 
     def can_split(self) -> bool:
         """Whether the current selection is a ``Bay``: the only region
@@ -516,8 +622,12 @@ class Session:
     def _apply(self, candidate: Unit, select: Sequence[str] = ()) -> EditFailure | None:
         """Adopt ``candidate`` as this session's state and write it to the
         document, selecting ``select``, or return an :class:`EditFailure`
-        when it fails to solve, leaving the session and document untouched."""
+        when it fails to solve, leaving the session and document untouched.
+        An active constraint ``candidate`` misses, as one the boards missed
+        within the clearance at open, is met first, so every edit leaves
+        the active constraints exact."""
         try:
+            candidate = settle_constraints(candidate)
             spaces: Mapping[str, Space] = solve(candidate)
             # write_container solves again before writing any board, so a
             # LayoutSolveError from either call means nothing was written.
@@ -540,11 +650,18 @@ class Session:
                 candidate,
                 root=renamed_board_ids(candidate.root, result.id_renames),
                 backs=renamed_back_boards(candidate.backs, result.id_renames),
+                constraints=renamed_constraint_boards(
+                    candidate.constraints, result.id_renames
+                ),
             )
             spaces = _renamed_spaces(spaces, result.id_renames)
         self.unit = candidate
         self.spaces = spaces
         self._selection = tuple(select)
+        known = {constraint.id for constraint in candidate.constraints}
+        self._constraint_selection = tuple(
+            c for c in self._constraint_selection if c in known and not select
+        )
         self.untagged = tuple(
             self._untagged(name) for name in sorted(result.left_alone + result.backs)
         )
@@ -663,6 +780,8 @@ class Session:
             candidate = split_region(self.unit, self.selected_id, axis)
         except EditError as err:
             return EditFailure(str(err), err.node_id)
+        except LayoutSolveError as err:
+            return _solve_failure(err)
         name = "Add Divider" if direction == "horizontal" else "Add Shelf"
         return self._step(name, lambda: self._apply(candidate))
 
@@ -679,6 +798,8 @@ class Session:
             candidate = remove_boards(self.unit, boards)
         except EditError as err:
             return EditFailure(str(err), err.node_id)
+        except LayoutSolveError as err:
+            return _solve_failure(err)
         return self._step("Delete Boards", lambda: self._apply(candidate))
 
     def stock_groups(self) -> Sequence[StockGroup]:
@@ -781,6 +902,8 @@ class Session:
             candidate = merge_at(self.unit, self.selected_id)
         except EditError as err:
             return EditFailure(str(err), err.node_id)
+        except LayoutSolveError as err:
+            return _solve_failure(err)
         return self._step("Delete Board", lambda: self._apply(candidate))
 
     def selected_measurement(self) -> Measurement | None:
@@ -847,12 +970,19 @@ class Session:
         """Unlock every region :meth:`held_by` names for ``board_id``, as one
         undo step that moves nothing and keeps the selection, so a drag may
         move the board. Returns an :class:`EditFailure`, changing nothing,
-        when no region holds the board or no unlock would free it."""
+        when no region holds the board, a constraint holds it, or no unlock
+        would free it."""
         self.settle()
-        holders = self.held_by(board_id)
-        if not holders:
+        held = self.held_by(board_id)
+        if held is None or not held.locks:
             return EditFailure("no locked opening holds this board", board_id)
-        return self._set_locks("Unlock Board", holders, False)
+        if held.constraints:
+            return EditFailure(
+                "a constraint holds this board, so no unlock frees it",
+                board_id,
+                constraint_ids=held.constraints,
+            )
+        return self._set_locks("Unlock Board", held.locks, False)
 
     def _set_locks(
         self, name: str, region_ids: Sequence[str], locked: bool
@@ -891,21 +1021,109 @@ class Session:
             if found and not _duplicated(before_unit, before_spaces, region_id):
                 duplicated.update(dict.fromkeys(found))
         if duplicated:
-            regions = _regions(self.unit.root)
-            order = {node.id: index for index, node in enumerate(regions)}
-            warning = EditWarning(
-                _REDUNDANT_LOCK, tuple(sorted(duplicated, key=order.__getitem__))
-            )
-            self.flagged = warning.region_ids
-            if self.on_warning is not None:
-                self.on_warning(warning)
+            self._warn(_REDUNDANT_LOCK, duplicated)
         return None
 
-    def held_by(self, board_id: str) -> tuple[str, ...] | None:
+    def _warn(self, message: str, ids: Collection[str]) -> None:
+        """Flag ``ids``, regions and constraints, and send the warning
+        ``message`` naming them through :attr:`on_warning`."""
+        regions = _regions(self.unit.root)
+        order = {node.id: index for index, node in enumerate(regions)}
+        constraint_order = {c.id: index for index, c in enumerate(self.constraints)}
+        warning = EditWarning(
+            message,
+            tuple(sorted((i for i in ids if i in order), key=order.__getitem__)),
+            tuple(
+                ConstraintId(i)
+                for i in sorted(
+                    (i for i in ids if i in constraint_order),
+                    key=constraint_order.__getitem__,
+                )
+            ),
+        )
+        self.flagged = (*warning.region_ids, *warning.constraint_ids)
+        if self.on_warning is not None:
+            self.on_warning(warning)
+
+    def held_by(self, board_id: str) -> Held | None:
         """:func:`~freecad.Shelving.core.edit.held_by` for this session's
-        unit: the locked regions to unlock so a drag may move ``board_id``,
-        empty when it may move, ``None`` when no unlock would free it."""
+        unit: the locked regions to unlock so a drag may move ``board_id``
+        and the constraints that hold it whatever is unlocked, free when it
+        may move, ``None`` when the boards alone hold it."""
         return held_by(self.unit, board_id)
+
+    @_edit
+    def constrain_equal(self) -> EditFailure | None:
+        """Make the selected openings equal, each with the next in selection
+        order, as one undo step that clears the selection. A new constraint
+        the locks and constraints already imply is kept, with a warning
+        through :attr:`on_warning` that flags what it repeats. Returns an
+        :class:`EditFailure`, changing nothing, for a selection
+        :func:`~freecad.Shelving.core.edit.add_equal` refuses or one that
+        conflicts."""
+        self.settle()
+        try:
+            candidate = add_equal(self.unit, self._selection)
+        except EditError as err:
+            return EditFailure(str(err), err.node_id)
+        except LayoutSolveError as err:
+            return _solve_failure(err)
+        return self._constraining_step("Constrain Equal", candidate)
+
+    @_edit
+    def constrain_even_spacing(self) -> EditFailure | None:
+        """Space evenly the openings between the two selected boards, or
+        from the first selected opening to the last, as one undo step that
+        clears the selection, warning as :meth:`constrain_equal` does.
+        Returns an :class:`EditFailure`, changing nothing, for a selection
+        :func:`~freecad.Shelving.core.edit.add_even_spacing` refuses or one
+        that conflicts."""
+        self.settle()
+        try:
+            candidate = add_even_spacing(self.unit, self._selection)
+        except EditError as err:
+            return EditFailure(str(err), err.node_id)
+        except LayoutSolveError as err:
+            return _solve_failure(err)
+        return self._constraining_step("Constrain Even Spacing", candidate)
+
+    def _constraining_step(self, name: str, candidate: Unit) -> EditFailure | None:
+        """Apply ``candidate``, which adds constraints, as the undo step
+        ``name``, then warn about each new one that is redundant."""
+        before = {constraint.id for constraint in self.unit.constraints}
+        failure = self._step(name, lambda: self._apply(candidate))
+        if failure is not None:
+            return failure
+        duplicated: dict[str, None] = {}
+        for constraint in self.unit.constraints:
+            if constraint.id in before:
+                continue
+            axis = constraint_axis(self.unit, constraint)
+            if axis is None:
+                continue
+            found = duplicated_constraint(self.unit, self.spaces, constraint.id, axis)
+            if found:
+                duplicated.update(dict.fromkeys(found))
+                duplicated[constraint.id] = None
+        if duplicated:
+            self._warn(_REDUNDANT_CONSTRAINT, duplicated)
+        return None
+
+    @_edit
+    def delete_constraints(self) -> EditFailure | None:
+        """Remove every selected constraint, active or deactivated, as one
+        undo step that moves no board and clears the selection. Returns an
+        :class:`EditFailure`, removing none, when no constraint is
+        selected."""
+        self.settle()
+        selected = self._constraint_selection
+        if not selected:
+            return EditFailure("select the constraints to delete", None)
+        try:
+            candidate = remove_constraints(self.unit, selected)
+        except EditError as err:
+            return EditFailure(str(err), err.node_id)
+        return self._step("Delete Constraints", lambda: self._apply(candidate))
 
     @_edit
     def begin_drag(self, board_id: str, grab_mm: Vec3) -> EditFailure | None:

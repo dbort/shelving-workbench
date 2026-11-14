@@ -462,3 +462,98 @@ workbenches show it, and QA Walnut is listed under your own library."""
   expected = """
 Every board turns dark brown, every face of each board alike. The Stock
 row reads QA Walnut beside a dark brown swatch."""
+
+[[case]]
+id = "editor.constraints"
+title = "Equal and even spacing, from icons to a hand-moved shelf"
+
+  [[case.step]]
+  id = "start"
+  action = "large_unit"
+  instruction = [
+    "Move FreeCAD to a HiDPI screen, such as a Mac's built-in display.",
+    "Select the container (ShelvingUnit).",
+    "Run Edit Unit.",
+  ]
+  expected = """
+A toolbar with Constrain Equal and Constrain Even Spacing appears. The
+Equal button shows an equals sign and the Even spacing button three evenly
+spaced uprights, both in the style of the Sketcher's constraint icons."""
+
+  [[case.step]]
+  id = "even"
+  instruction = [
+    "Click the bottom opening of the leftmost column.",
+    "Ctrl-click the top opening of the leftmost column.",
+    "Click Constrain Even Spacing on the toolbar.",
+  ]
+  expected = """
+The leftmost column's six openings become the same height. Each shows the
+even spacing icon just past its dimension's text, in the red of a
+Sketcher constraint icon on a small tile of the view's background like
+the padlock's, as sharp as the text and clear of it and of the padlock."""
+
+  [[case.step]]
+  id = "equal"
+  instruction = [
+    "Click the bottom opening of the second column.",
+    "Ctrl-click the bottom opening of the leftmost column.",
+    "Click Constrain Equal on the toolbar.",
+  ]
+  expected = """
+The second column's bottom opening takes the leftmost column's spacing.
+Both openings show the Equal icon, which reads at a glance as an equals
+sign; on the leftmost opening it sits in a row with the even spacing icon,
+neither covering the other."""
+
+  [[case.step]]
+  id = "display"
+  instruction = [
+    "Move the FreeCAD window to a display with a different scaling.",
+    "Move it back.",
+  ]
+  expected = """
+On each display, without a click, every icon stays just past its own text
+and as sharp as the text beside it."""
+
+  [[case.step]]
+  id = "grow"
+  instruction = ["Type a Height 300 mm larger in the panel and press Return."]
+  expected = """
+The leftmost column's openings grow alike and stay the same height, and
+the second column's bottom opening stays equal to them."""
+
+  [[case.step]]
+  id = "drag"
+  instruction = [
+    "Click a shelf near the top of the second column.",
+    "Drag its arrow up and down.",
+    "Click a shelf of the leftmost column.",
+  ]
+  expected = """
+During the drag both relations hold: the leftmost column stays evenly
+spaced and the second column's bottom opening keeps its size. The
+leftmost column's shelf shows no arrow and no padlock, and the column's
+openings are outlined as the openings holding it."""
+
+  [[case.step]]
+  id = "reopen"
+  instruction = [
+    "Click Close.",
+    "Click the highest shelf of the leftmost column in the 3D view.",
+    "Raise its Placement's z by 40 mm in the Property editor.",
+    "Select the container (ShelvingUnit).",
+    "Run Edit Unit.",
+  ]
+  expected = """
+One notification says constraints the boards no longer meet were
+deactivated. The leftmost column's even spacing icons are gray on their
+tiles and easy to spot against the openings, the Equal icons stay red,
+and the shelf you raised stays where you put it."""
+
+  [[case.step]]
+  id = "delete"
+  instruction = ["Click a gray icon.", "Press Delete."]
+  expected = """
+The even spacing's icons disappear, the Equal's stay, and no board
+moves."""

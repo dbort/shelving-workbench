@@ -17,8 +17,8 @@ one the boards no longer satisfy comes in deactivated, and one whose
 boards are gone is dropped, with one notification saying so.
 
 ## Must Have
-- [ ] `pixi run tests` green; `pyrefly check` clean over the changed code.
-- [ ] Core suite, on sh-046's column of 18 mm boards with fixed point `min`:
+- [x] `pixi run tests` green; `pyrefly check` clean over the changed code.
+- [x] Core suite, on sh-046's column of 18 mm boards with fixed point `min`:
       bottom, A 300, shelf s1, B 300, shelf s2, C 300, top (972 mm tall):
       - Equal on A and B, then typing 400 into C, gives A 250, B 250, C 400;
         without the Equal, the same typing gives A 300, B 200 (control);
@@ -42,14 +42,14 @@ boards are gone is dropped, with one notification saying so.
         run is refused;
       - with Even spacing on A, B and C, `held_by` (or what replaces it)
         names that Even spacing for s1 and offers no unlock.
-- [ ] `rules_to_json` emits `{"schema_version": 2, "locks": {...},
+- [x] `rules_to_json` emits `{"schema_version": 2, "locks": {...},
       "constraints": [...]}`, the locks exactly as sh-046 emits them. Each
       constraint entry has `"kind"` (`"equal"` or `"even_spacing"`),
       `"basis"` (`"clear"`), `"active"` (a bool), and the rescan-stable keys
       of its openings or of its run and ends. `rules_from_json` on a
       version 1 record, or on any other shape, gives no locks and no
       constraints, and raises nothing.
-- [ ] Headless (`tests/freecad/`), opening a container in `Session`:
+- [x] Headless (`tests/freecad/`), opening a container in `Session`:
       - an Equal whose openings now differ by more than the joint clearance
         comes in deactivated. A following edit leaves those openings'
         difference as it was, and the written record has `"active": false`;
@@ -64,25 +64,23 @@ boards are gone is dropped, with one notification saying so.
       - the session reports what was deactivated and dropped. Exactly one
         Notification Area message is posted at open when anything was, and
         none when nothing was or after an undo or redo inside the edit.
-- [ ] Headless: Delete with one or several constraints selected, active or
+- [x] Headless: Delete with one or several constraints selected, active or
       deactivated, removes them as one undo step that moves no board, and
       Undo brings them back.
-- [ ] GUI (`tests/freecad_gui/`): the commands `Shelving_ConstrainEqual`
+- [x] GUI (`tests/freecad_gui/`): the commands `Shelving_ConstrainEqual`
       and `Shelving_ConstrainEvenSpacing` sit on a toolbar that is visible
       in the main window exactly while an edit is open, in any workbench.
       Both are in the Shelving menu, and `IsActive` is false outside an
       edit. A selection either command cannot use is refused through the
       Notification Area with text saying what to select.
-- [ ] 3D view (`tests/freecad_view/`):
+- [x] 3D view (`tests/freecad_view/`):
       - Ctrl-click on an opening adds it to the selection, and the session
         keeps the selection order;
       - an Equal draws one icon at each of its two openings, and an Even
         spacing draws one at every opening of its group. No icon overlaps
         another icon, a dimension's text, or a padlock in device pixels;
-      - the Equal icon is rendered from
-        `:/icons/constraints/Constraint_EqualLength.svg`, and the Even
-        spacing icon from the workbench's own SVG under
-        `freecad/Shelving/resources/`;
+      - the Equal and Even spacing icons are rendered from the
+        workbench's own SVGs under `freecad/Shelving/resources/`;
       - a click on an icon selects its constraint alone, Ctrl-click on
         another icon adds it, and a click on a board or opening drops the
         constraint selection;
@@ -90,15 +88,19 @@ boards are gone is dropped, with one notification saying so.
       - with distinct values set for `ConstrainedIcoColor`,
         `DeactivatedConstrDimColor` and `SelectionColor`, an active,
         a deactivated and a selected icon are each drawn in their color;
+      - every constraint icon and every padlock sits on a rounded tile of
+        the 3D view's background color, read from the View preferences:
+        the plain color, or a gradient's middle;
       - selecting s1 inside an Even spacing group shows no drag arrow, and
         the group's openings carry the holding outline.
-- [ ] `README.md`'s glossary has entries **Equal**, **Even spacing** and
+- [x] `README.md`'s glossary has entries **Equal**, **Even spacing** and
       **Deactivated constraint**.
-- [ ] `freecad/Shelving/qa/cases/30-editor.toml` has a case with id
+- [x] `freecad/Shelving/qa/cases/30-editor.toml` has a case with id
       `editor.constraints`.
-- [ ] `.claude/docs/freecad-notes.md` says whether
+- [x] `.claude/docs/freecad-notes.md` says whether
       `:/icons/constraints/Constraint_EqualLength.svg` exists before
-      `SketcherGui` is imported, on FreeCAD 1.1.
+      `SketcherGui` is imported, on FreeCAD 1.1. No workbench code imports
+      `SketcherGui`.
 
 ## Advice
 - **Blocked on sh-047:** this needs the engine's general linear relations
@@ -151,16 +153,19 @@ boards are gone is dropped, with one notification saying so.
   them as the fixed-point cross is drawn (`PointMarker`, an image at device
   pixel size), and hit-test them in the press filter ahead of the
   dimension text. Plan their positions in `editor/elevation.py` so the
-  layout tests need no view. Equal uses Sketcher's
-  `Constraint_EqualLength` SVG, recolored as Sketcher's own constraint
-  icon drawing recolors it (read its source). Even spacing gets its own
-  SVG in the same style, in `freecad/Shelving/resources/`. Colors from
+  layout tests need no view. Equal and Even spacing each get the
+  workbench's own SVG in Sketcher's constraint icon style, in
+  `freecad/Shelving/resources/`, recolored as Sketcher's own constraint
+  icon drawing recolors it (read its source). Colors from
   the View preferences: `ConstrainedIcoColor` active,
   `DeactivatedConstrDimColor` deactivated, `SelectionColor` selected.
-- **Sketcher resources:** unverified whether they load before `SketcherGui`
-  is imported. Check first (Plan step 1). If they do not, the editor
-  imports `SketcherGui` before drawing or building the toolbar. Every
-  FreeCAD 1.1 build ships Sketcher, so do not write a fallback icon.
+- **Sketcher resources:** whether they load before `SketcherGui` is
+  imported is checked by Plan step 1 and recorded in
+  `.claude/docs/freecad-notes.md`.
+- **The workbench draws its own Equal icon** (user decision, 2026-11-13):
+  the Even spacing icon already copies Sketcher's style and must be kept
+  in step with it, so Equal is drawn the same way rather than borrowed.
+  That removes the `SketcherGui` import Sketcher's own icon needed.
 - **Deletes and splits drop silently**, in the same undo step: deleting a
   board drops every Equal on an opening beside it, since that opening
   merges away, and every Even spacing with it as an end. A split along an
@@ -217,56 +222,94 @@ boards are gone is dropped, with one notification saying so.
   both relations hold. Close, move one shelf by hand, reopen, and see
   that relation greyed and removable, with nothing moved. Add no setup
   action.
+- **A selection never mixes boards and openings** (user decision,
+  2026-11-12): a click on a board, Ctrl or not, replaces a selection of
+  openings; Ctrl-click on an opening toggles it in a selection of openings,
+  and with boards selected keeps them and adds nothing. No command takes a
+  mix, and under Inventor navigation Ctrl-click is the only way to select a
+  board, so it must be able to replace an opening.
+- **Icons and padlocks sit on tiles of the view background** (user
+  decision, 2026-11-13): under a dark theme the opening fill blends to a
+  mid gray that a deactivated icon's gray all but matches. A rounded tile
+  in the 3D view's background color puts every constraint icon and
+  padlock back on the background the theme picks those colors against,
+  as SolidWorks and Fusion set sketch relation glyphs on tiles. No
+  FreeCAD tool draws one; the Sketcher's icons sit on bare background.
 - **Out of scope:** Aligned faces (task 4), the constraint list and
   reactivation (task 3), a spacing basis in the UI, keyboard shortcuts for
   the commands, and bug-021 (a copy loses its constraints as it loses its
   locks).
 
 ## Plan
-- [ ] **Step 1** (`tests/freecad_view/`, `.claude/docs/freecad-notes.md`):
+- [x] **Step 1** (`tests/freecad_view/`, `.claude/docs/freecad-notes.md`):
       find whether Sketcher's constraint icon resources exist before
       `SketcherGui` is imported, record it, and keep the check as a test
       of whatever the editor relies on.
-- [ ] **Step 2** (`core/layout.py`, `core/tests/test_layout.py`): `Equal`
+- [x] **Step 2** (`core/layout.py`, `core/tests/test_layout.py`): `Equal`
       and `EvenSpacing` with id, basis and active flag. `Unit` carries
       them, and an Even spacing resolves its openings from the tree.
-- [ ] **Step 3** (`core/solver.py`, `core/tests/test_solver.py`): active
+- [x] **Step 3** (`core/solver.py`, `core/tests/test_solver.py`): active
       constraints become engine relations. Conflict, redundancy and
       freedom results carry constraint ids beside region ids.
-- [ ] **Step 4** (`core/edit.py`, `core/tests/test_edit.py`): creating
+- [x] **Step 4** (`core/edit.py`, `core/tests/test_edit.py`): creating
       Equal (chained) and Even spacing with their refusals, removing
       constraints, the drops in `split_region`, `merge_at` and board
       deletion, and `held_by` naming constraints.
-- [ ] **Step 5** (`core/record.py`, `core/scan.py` if needed,
+- [x] **Step 5** (`core/record.py`, `core/scan.py` if needed,
       `core/tests/test_record.py`): the version 2 record, version 1 and
       malformed read as none, and the open reconciliation (deactivate,
       drop) returning a report.
-- [ ] **Step 6** (`container.py`, `unit_ops.py`, `tests/freecad/test_write.py`,
+- [x] **Step 6** (`container.py`, `unit_ops.py`, `tests/freecad/test_write.py`,
       `tests/freecad/`): read and write constraints; resize and rescan
       honor active ones.
-- [ ] **Step 7** (`editor/session.py`, `tests/freecad/test_editor_session.py`,
+- [x] **Step 7** (`editor/session.py`, `tests/freecad/test_editor_session.py`,
       `tests/freecad/test_edit_history.py`): the ordered item selection,
       the constraint selection, the two creations, Delete of constraints,
       and the open report, posted once.
-- [ ] **Step 8** (`editor/elevation.py`, `tests/test_editor_elevation.py`):
+- [x] **Step 8** (`editor/elevation.py`, `tests/test_editor_elevation.py`):
       icon positions per opening, clear of text, padlocks and each other,
       and hit-testing; the selection and holding outlines for
       constraints.
-- [ ] **Step 9** (`editor/overlay.py`, `editor/view_editor.py`,
+- [x] **Step 9** (`editor/overlay.py`, `editor/view_editor.py`,
       `editor/panel.py`, `tests/freecad_view/test_constraints.py`,
       `tests/freecad_view/test_multi_selection.py`): draw and recolor the
       icons, Ctrl-click on openings, icon clicks, Delete routing, the held
       board's outline, and the panel's state with several openings or a
       constraint selected.
-- [ ] **Step 10** (`commands/constrain_equal.py`,
+- [x] **Step 10** (`commands/constrain_equal.py`,
       `commands/constrain_even_spacing.py`, `init_gui.py`,
       `resources/`, `refusals.py`, `tests/freecad_gui/`): the commands, the
       edit-only toolbar, the menu entries, the Even spacing SVG, and the
       open notification.
-- [ ] **Step 11** (`README.md`, `docs/scope-and-design.md`,
+- [x] **Step 11** (`README.md`, `docs/scope-and-design.md`,
       `.claude/docs/code-map.md`, `freecad/Shelving/qa/cases/30-editor.toml`):
       the three glossary entries; "What is stored" names the constraint
       record; the code map's `resources/` entry covers the new icon; the
       `editor.constraints` case.
 
 ## Review log
+
+### Round 1: REJECTED
+- **F1: The icon color test never sets `SelectionColor`** (`tests/freecad_view/test_constraints.py:352`, `tests/freecad_view/test_constraints.py:392`): the Must Have asks for distinct values set for `ConstrainedIcoColor`, `DeactivatedConstrDimColor` and `SelectionColor`; the fixture sets only the first two and compares the selected icon with `editor.style.selected_rgb`, the code's own reading, so a wrong parameter name in `view_style` (`freecad/Shelving/editor/overlay.py:119`) would pass. Meet it without writing FreeCAD's parameter (e.g. patch the editor's color read for `"SelectionColor"`), or record a user decision in `## Advice`.
+- **N1: Even spacing refusals that do not say what to select** (`freecad/Shelving/core/edit.py:1058`, `freecad/Shelving/core/edit.py:1048`): reword the one-opening and opening-beside-an-opening refusals as "Select ...".
+- **N2: Unit suffixes in the elevation layout test** (`tests/test_editor_elevation.py:570`): `x_px, y_px = label.text_at_mm` holds millimeters; `half_w`, `half_h`, `half` lack suffixes.
+- **N3: Odd line wraps in changed docstrings** (`freecad/Shelving/core/edit.py:23`, `freecad/Shelving/editor/view_editor.py:1449`): reflow both.
+- **N4: Delete of constraints can move boards** (`freecad/Shelving/editor/session.py`, `_apply`): every edit settles, so a Delete makes another active constraint left within the clearance exact; pin the intended behavior with a test or a sentence in Advice.
+
+### Round 2: APPROVED
+- **N1: N4's test docstring claims something it does not check** (`tests/freecad/test_constraint_session.py:358`): it says the deleted even spacing "moves nothing of its own" and cites "the Advice", but the test asserts only that A equals B and the Equal remains. Drop the clause and the pointer, or assert it.
+
+### Round 3: REJECTED
+- **F1: Nothing tests the new Must Have "No workbench code imports `SketcherGui`"** (`tasks/active/sh-048-equal-and-even-spacing.md:99`): only a grep confirms it, and `test_both_icons_are_the_workbenchs_own_svgs` pins the icon paths alone, so a reintroduced `import SketcherGui` passes every suite. Add a cheap core-level test that parses every `.py` under `freecad/Shelving/` with `ast` and asserts no `Import`/`ImportFrom` names `SketcherGui`.
+- **N1: Round 2's N1 is still open** (`tests/freecad/test_constraint_session.py:358`): the docstring still says the deleted constraint "moves nothing of its own" and cites "the Advice", asserting neither, and now reads oddly beside bug-023. Drop the clause and the pointer, or point to bug-023.
+- **N2: Stale Advice bullet** (`tasks/active/sh-048-equal-and-even-spacing.md:159`): "Sketcher resources: unverified ... Check first" reads as open though Plan step 1 answered it in `freecad-notes.md`. Optional: say the answer is recorded there.
+
+### Round 4: REJECTED
+- **F1: The tile Must Have's held padlock and rounded padlock corners are untested** (`tests/freecad_view/test_constraints.py:249`, `freecad/Shelving/editor/view_editor.py:304`): the test checks one pixel of each visible opening padlock in `editor.padlocks`, never `editor.board_padlock`, and never that a padlock's corners are rounded, so losing either passes every suite. Check `board_padlock`'s face for the patched tile color (`tests/freecad_view/test_padlocks.py` already shows it), and that a corner pixel of a padlock's `grab()` differs from the tile color.
+- **N1: Hard-to-parse `background_rgb` docstring** (`freecad/Shelving/editor/overlay.py:80`): chained appositives; split into short sentences naming `UseBackgroundColorMid`, `BackgroundColor2` and `BackgroundColor3`.
+- **N2: Short line wraps left by the edits** (`docs/scope-and-design.md:98`, `freecad/Shelving/qa/cases/30-editor.toml:551`): reflow both paragraphs.
+- **N3: Defaults when the gradient keys are unset** (`freecad/Shelving/editor/overlay.py:83`): a missing `Simple` reads as true and a missing `Gradient` as false; FreeCAD may read `Gradient` with a default of true and not read `Simple`. Low risk, since every bundled preference pack sets them; comment if deliberate.
+
+### Round 5: APPROVED
+- **N1: Missing noun in the new notes section** (`.claude/docs/freecad-notes.md:291`): "writes the FreeCAD Light pack's plain (247, 247, 247)" needs "plain color".
+- **N2: `Style.tile_rgb` default is out of step with the new background defaults** (`freecad/Shelving/editor/overlay.py:125`): the dataclass default is still FreeCAD Light's (247, 247, 247), unlike `_BACKGROUND_DEFAULT` and the gradient-middle default; `view_style` always sets it, so nothing draws with it. Optional: say why in the field's comment, or drop the default.

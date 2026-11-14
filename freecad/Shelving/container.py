@@ -48,6 +48,7 @@ from freecad.Shelving.core.layout import (
     Item,
     Region,
     Unit,
+    renamed_constraint_boards,
 )
 from freecad.Shelving.core.record import rules_to_json
 from freecad.Shelving.core.scan import Box, Skipped, elevation_axes
@@ -808,7 +809,11 @@ def write_container(container: FreeCAD.DocumentObject, unit: Unit) -> WriteResul
             properties.copy_stock(source, target)
 
     rules_unit = (
-        dataclasses.replace(unit, root=renamed_board_ids(unit.root, id_renames))
+        dataclasses.replace(
+            unit,
+            root=renamed_board_ids(unit.root, id_renames),
+            constraints=renamed_constraint_boards(unit.constraints, id_renames),
+        )
         if id_renames
         else unit
     )

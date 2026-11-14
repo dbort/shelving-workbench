@@ -56,10 +56,9 @@ measure spacing through the next board.
         shows with no rows on a unit with no locks or constraints;
       - rows list locks first, in tree order, then constraints in creation
         order. Each row shows its kind's icon (the view's closed padlock,
-        Sketcher's `Constraint_EqualLength`, the workbench's Even spacing
-        SVG) and text containing its kind name and FreeCAD's `UserString`
-        for its size; a deactivated row shows no size and its icon in
-        Qt's disabled mode;
+        the workbench's Equal and Even spacing SVGs) and text containing
+        its kind name and FreeCAD's `UserString` for its size; a
+        deactivated row shows no size and its icon in Qt's disabled mode;
       - a constraint row has a checkbox, checked exactly when the
         constraint is active; a lock row has none. Unchecking deactivates
         and checking activates, through the session; a refused activation
@@ -104,8 +103,8 @@ measure spacing through the next board.
   the joint clearance at open shows its first opening's size. Keep the
   text free of count-keyed grammar (UI text stays localizable). Icons:
   the view's closed padlock (`_padlock_icon` in `editor/view_editor.py`;
-  make it public if the panel needs it), Sketcher's `Constraint_EqualLength`
-  as sh-048 loads it, and the Even spacing SVG sh-048 adds. A deactivated
+  make it public if the panel needs it), and the Equal and Even spacing
+  SVGs sh-048 adds (`ICON_SOURCES` in `editor/overlay.py`). A deactivated
   row's icon is the normal icon rendered in `QIcon.Mode.Disabled`, as
   Sketcher's list greys a deactivated constraint's icon.
 - **Controls** (user decision): an active checkbox

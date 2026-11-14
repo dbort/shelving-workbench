@@ -230,6 +230,24 @@ widget editable again: the abort alone leaves it read-only.
 - It reports itself transparent, so Coin sorts it with other transparent
   shapes unless an `SoTransparencyType` of `BLEND` is in force.
 
+## The Sketcher's icons load with `SketcherGui`
+
+`:/icons/constraints/Constraint_EqualLength.svg` does not exist before
+`SketcherGui` is imported (FreeCAD 1.1.3, verified with `NoneWorkbench` as
+the start workbench). The Sketcher registers its icon resources when its
+GUI module loads, which PartDesign, FreeCAD 1.1's default start workbench,
+does at startup, so a check made after a PartDesign start passes by
+accident. The workbench draws its own constraint icons in the Sketcher's
+style, under `freecad/Shelving/resources/`, so it never imports
+`SketcherGui`.
+
+The Sketcher draws a constraint's in-view icon from its SVG at the
+`ConstraintSymbolSize` View preference (the application font's pixel size
+by default), then fills it with the constraint's color under
+`QPainter::CompositionMode_SourceIn`: `ConstrainedIcoColor` active,
+`DeactivatedConstrDimColor` deactivated, `SelectionColor` selected
+(`EditModeConstraintCoinManager::renderConstrIcon` and `constrColor`).
+
 ## FreeCAD 1.1 offers a settings migration at the first GUI start
 
 Settings live per version under the XDG directories
@@ -259,3 +277,18 @@ counts it in the Notification Area but leaves it out of the Report view,
 where `PrintError` text still appears. The stubs declare one argument, so
 `refusals.report_error` casts. An offscreen GUI records nothing in the
 Notification Area.
+
+## How the 3D view picks its background
+
+Probed on FreeCAD 1.1.3 under Xvfb, by sampling a new view's pixels with
+the View preferences' keys removed. `Gradient` defaults to on and wins;
+`RadialGradient` comes next; with both off the view shows
+`BackgroundColor`. The Preferences dialog's `Simple` choice is never read:
+`Simple` on with `Gradient` on still draws the gradient. Unset, the plain
+color is (234, 229, 220), and the linear gradient runs from
+`BackgroundColor2` (51, 51, 101) at the top to `BackgroundColor3`
+(171, 171, 193) at the bottom, its middle their average whether or not
+`UseBackgroundColorMid` is set. Every bundled preference pack sets these
+keys, and FreeCAD's first start writes the FreeCAD Light pack's plain
+(247, 247, 247). `freecad/Shelving/editor/overlay.py`'s `background_rgb`
+reads them the same way for the tiles under constraint icons and padlocks.

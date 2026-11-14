@@ -33,10 +33,11 @@ from shiboken6 import Shiboken
 
 from freecad.Shelving.compat import override
 from freecad.Shelving.core.edit import fixed_point_mm
-from freecad.Shelving.core.layout import Unit
+from freecad.Shelving.core.layout import ConstraintId, Unit
 from freecad.Shelving.editor.elevation import (
     LIFT_MM,
     Arrow,
+    ConstraintIcon,
     DimensionLabel,
     ElevationFrame,
     HeldPadlock,
@@ -47,6 +48,8 @@ from freecad.Shelving.editor.elevation import (
     dragged_to_mm,
     elevation_frame,
     held_padlock,
+    icon_at,
+    icon_center_px,
     label_at,
     label_size_pt,
     plan_overlay,
@@ -56,13 +59,20 @@ from freecad.Shelving.editor.elevation import (
 from freecad.Shelving.editor.fields import DimensionField
 from freecad.Shelving.editor.overlay import (
     RGB,
+    TILE_PAD_PX,
+    TILE_RADIUS_PX,
     Coin,
+    IconNode,
     PointMarker,
     Style,
+    Tile,
     arrow_geometry,
     coin_destroys_draggers_safely,
+    constraint_icon_image,
     drawing_node,
+    icon_side_px,
     label_string,
+    padded_icon_image,
     view_style,
 )
 from freecad.Shelving.editor.session import (
@@ -87,6 +97,9 @@ _PADLOCK_GAP_PX = 4
 _ROW_GAP_PX = 8
 # The fixed point marker's side, in logical pixels.
 _MARKER_PX = 16
+# The clear gap between a dimension's text and its first constraint icon,
+# and between icons in a row, in logical pixels.
+_ICON_GAP_PX = 3
 # Inkscape's rotation-center marker on its 8.81 mm square: a plus whose arms
 # meet in a chamfered hub, with a round hole at the center.
 _MARKER_SIDE_MM = 8.8134
@@ -289,13 +302,21 @@ def marker_image(ratio: float, rgb: RGB) -> QtGui.QImage:
 
 
 def _padlock_button(
-    parent: QtWidgets.QWidget | None, on_click: Callable[[], None]
+    parent: QtWidgets.QWidget | None, on_click: Callable[[], None], tile_rgb: RGB
 ) -> QtWidgets.QToolButton:
+    """A padlock button whose whole face is a tile in ``tile_rgb``, as a
+    constraint icon sits on one."""
     button = QtWidgets.QToolButton(parent)
     button.setAutoRaise(True)
     button.setIconSize(QtCore.QSize(_PADLOCK_PX, _PADLOCK_PX))
-    button.setFixedSize(_PADLOCK_PX + 4, _PADLOCK_PX + 4)
-    button.setStyleSheet("QToolButton { border: none; padding: 0; }")
+    side_px = _PADLOCK_PX + 2 * TILE_PAD_PX
+    button.setFixedSize(side_px, side_px)
+    red, green, blue = (round(255 * channel) for channel in tile_rgb)
+    button.setStyleSheet(
+        "QToolButton { border: none; padding: 0; "
+        f"background: rgb({red}, {green}, {blue}); "
+        f"border-radius: {TILE_RADIUS_PX}px; }}"
+    )
     # As the add buttons do: keyboard focus stays in the 3D view.
     button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
     button.clicked.connect(on_click)
@@ -493,15 +514,16 @@ _ADD_MODIFIER = QtCore.Qt.KeyboardModifier.ControlModifier
 
 class _ViewportClicks(QtCore.QObject):
     """Reads left clicks on the 3D view's viewport before navigation and
-    FreeCAD's selection see them. ``on_press`` sorts each press; a press
-    taken is consumed with its release, so no board beneath it is picked,
-    and a click is reported to ``on_click`` once FreeCAD has handled it,
-    with whether it carried FreeCAD's add-to-selection modifier."""
+    FreeCAD's selection see them. ``on_press`` sorts each press, told
+    whether it carries FreeCAD's add-to-selection modifier; a press taken
+    is consumed with its release, so no board beneath it is picked, and a
+    click is reported to ``on_click`` once FreeCAD has handled it, with
+    whether it carried that modifier."""
 
     def __init__(
         self,
         viewport: QtWidgets.QWidget,
-        on_press: Callable[[QtCore.QPointF], PressKind],
+        on_press: Callable[[QtCore.QPointF, bool], PressKind],
         on_click: Callable[[QtCore.QPointF, bool], None],
     ) -> None:
         super().__init__(viewport)
@@ -523,7 +545,9 @@ class _ViewportClicks(QtCore.QObject):
             return False
         position = mouse.position()
         if kind == QtCore.QEvent.Type.MouseButtonPress:
-            press_kind = self._on_press(position)
+            press_kind = self._on_press(
+                position, bool(mouse.modifiers() & _ADD_MODIFIER)
+            )
             self._consumed = press_kind == "take"
             self._press = position if press_kind == "click" else None
             return self._consumed
@@ -683,6 +707,9 @@ class ViewEditor:
         self.padlocks: list[QtWidgets.QToolButton] = []
         self._padlock_labels: list[DimensionLabel] = []
         self.held: HeldPadlock | None = None
+        # The drawn constraint icons, rebuilt with the drawing.
+        self.icon_nodes: list[IconNode] = []
+        self._icon_images: dict[tuple[str, RGB, Tile, int], QtGui.QImage] = {}
         self.saved_camera = view.getCamera()
         self._saved_orientation = view.getCameraOrientation()
         global _editors_opened
@@ -752,6 +779,8 @@ class ViewEditor:
         self.marker = PointMarker()
         self.root.addChild(self.marker.root)
         self._draw_marker(ratio)
+        self._icons: Coin = coin.SoSeparator()
+        self.root.addChild(self._icons)
         scene_graph = self.view.getSceneGraph()
         scene_graph.addChild(self.root)
         self._installed.append((lambda: scene_graph.removeChild(self.root), True))
@@ -762,7 +791,9 @@ class ViewEditor:
         )
         self._installed.append((self.add_bar.deleteLater, True))
         self._installed.append((self.add_bar.hide, True))
-        self.board_padlock = _padlock_button(parent, self._unlock_held)
+        self.board_padlock = _padlock_button(
+            parent, self._unlock_held, self.style.tile_rgb
+        )
         self.board_padlock.setIcon(self._padlock_icons[True])
         text = "Unlock the openings holding this board"
         self.board_padlock.setToolTip(text)
@@ -1080,6 +1111,8 @@ class ViewEditor:
             selected,
             self._outer_row_mm,
             session.flagged,
+            selected_items=session.selected_items,
+            selected_constraints=session.selected_constraints,
         )
         self._update_preview()
         self._drawing.removeAllChildren()
@@ -1088,12 +1121,74 @@ class ViewEditor:
                 self.overlay, self.frame, self.style, self._front_normal(), self.preview
             )
         )
+        self._draw_icons()
         self.marker.place(self.frame.from_unit(fixed_point_mm(unit)))
         if not self._dragging:
             self._place_arrow()
             self._place_add_bar()
         self._update_padlocks()
         self._place_widgets()
+
+    def _icon_metrics_px(self) -> tuple[int, int]:
+        """The constraint icon's side, its tile included, and the gap
+        around it, in device pixels at the view's ratio now."""
+        ratio = self._viewer.devicePixelRatioF()
+        side_px = round(icon_side_px() * ratio) + 2 * self.icon_tile().pad_px
+        return side_px, round(_ICON_GAP_PX * ratio)
+
+    def icon_tile(self) -> Tile:
+        """The tile under each constraint icon, in device pixels at the
+        view's ratio now."""
+        ratio = self._viewer.devicePixelRatioF()
+        return Tile(
+            self.style.tile_rgb, round(TILE_PAD_PX * ratio), TILE_RADIUS_PX * ratio
+        )
+
+    def _text_width_px(self, label: DimensionLabel) -> float:
+        """``label``'s text as drawn, padlock room included, in device
+        pixels."""
+        return float(
+            self._label_metrics.horizontalAdvance(label_string(label, self.style))
+        )
+
+    def _draw_icons(self) -> None:
+        """Draw each constraint icon the overlay plans, in its state's color,
+        past its dimension's text."""
+        side_px, gap_px = self._icon_metrics_px()
+        tile = self.icon_tile()
+        self._icons.removeAllChildren()
+        self.icon_nodes = []
+        for icon in self.overlay.icons:
+            rgb = self.style.icon_state_rgb(icon.state)
+            key = (icon.kind, rgb, tile, side_px)
+            image = self._icon_images.get(key)
+            if image is None:
+                image = constraint_icon_image(icon.kind, rgb, tile, side_px)
+                self._icon_images[key] = image
+            lead_px = round(
+                self._text_width_px(icon.label) / 2
+                + gap_px
+                + icon.slot * (side_px + gap_px)
+            )
+            node = IconNode(icon)
+            node.set_image(padded_icon_image(image, icon.label.horizontal, lead_px))
+            self._icons.addChild(node.root)
+            self.icon_nodes.append(node)
+
+    def icon_center(self, icon: ConstraintIcon) -> QtCore.QPointF:
+        """Where ``icon``'s center is drawn, in the viewport's logical
+        pixels."""
+        side_px, gap_px = self._icon_metrics_px()
+        x_px, y_px = icon_center_px(
+            icon,
+            self._project(*icon.label.text_at_mm),
+            self._text_width_px(icon.label),
+            side_px,
+            gap_px,
+        )
+        ratio = self._viewer.devicePixelRatioF()
+        height_px = self.view.getSize()[1]
+        return QtCore.QPointF(x_px / ratio, (height_px - y_px - 1) / ratio)
 
     def _update_preview(self) -> None:
         direction = self._preview_direction
@@ -1312,8 +1407,9 @@ class ViewEditor:
         A board held whole beside one of its own elements was Ctrl-clicked
         while selected: FreeCAD adds the element it does not find selected
         rather than removing the whole board, so that board leaves the
-        selection. An emptied selection drops a board selection; a region
-        selection stays, since FreeCAD's selection never holds a region.
+        selection. Boards replace a selection of openings, so the two never
+        mix. An emptied selection drops a board selection; an opening
+        selection stays, since FreeCAD's selection never holds an opening.
         """
         self._follow_queued = False
         if self._closed:
@@ -1340,7 +1436,7 @@ class ViewEditor:
             if boards[0] != session.selected_id:
                 self.select(boards[0])
             return
-        if tuple(boards) != session.selected_boards:
+        if tuple(boards) != session.selected_items:
             session.select_boards(boards)
             self._on_change()
 
@@ -1368,11 +1464,13 @@ class ViewEditor:
         FreeCAD's selection, so an add-to-selection gesture adds the board.
         Elsewhere, an ``adding`` click keeps a board selection, as FreeCAD
         keeps it for one on empty space, and only takes a part the unit sets
-        aside back out of FreeCAD's selection; any other click selects the
-        opening there, or nothing. FreeCAD knows no openings, so this is the
-        one place the editor reads a modifier: under Inventor navigation,
-        where FreeCAD selects only on Ctrl-click, a plain click is what
-        reaches an opening."""
+        aside back out of FreeCAD's selection; with no board selected it
+        adds the opening there to the selected openings, or takes it back
+        out. Any other click selects the opening there, or nothing. A
+        selection never mixes boards and openings, which no command takes.
+        FreeCAD knows no openings, so this is the one place the editor reads
+        a modifier: under Inventor navigation, where FreeCAD selects only on
+        Ctrl-click, a plain click is what reaches an opening."""
         if self._closed:
             return
         self._close_field()
@@ -1385,15 +1483,25 @@ class ViewEditor:
             if board is not None:
                 self._follow_freecad()
                 return
-        entries = self._freecad_entries()
-        if adding and any(entry.board is not None for entry in entries):
-            for entry in entries:
-                if entry.board is None:
-                    FreeCADGui.Selection.removeSelection(
-                        self._doc_name, entry.obj, entry.sub
-                    )
+        if not adding:
+            self.select(self._region_at(device))
             return
-        self.select(self._region_at(device))
+        entries = self._freecad_entries()
+        for entry in entries:
+            if entry.board is None:
+                FreeCADGui.Selection.removeSelection(
+                    self._doc_name, entry.obj, entry.sub
+                )
+        region = self._region_at(device)
+        if any(entry.board is not None for entry in entries) or region is None:
+            return
+        items = list(self.session.selected_items)
+        if region in items:
+            items.remove(region)
+        else:
+            items.append(region)
+        self.session.select_items(items)
+        self._on_change()
 
     def _region_at(self, device: tuple[int, int]) -> str | None:
         near_mm, far_mm = self.view.projectPointToLine(device)
@@ -1444,19 +1552,52 @@ class ViewEditor:
             <= _ARROW_HIT_PX
         )
 
-    def _sort_press(self, position: QtCore.QPointF) -> PressKind:
-        """A press on the drag arrow is the dragger's; one on a dimension's
-        text opens that dimension's field."""
+    def _sort_press(self, position: QtCore.QPointF, adding: bool) -> PressKind:
+        """A press on the drag arrow is the dragger's; one on a constraint's
+        icon selects the constraint, or adds it for an ``adding`` press;
+        one on a dimension's text opens that dimension's field."""
         if self._closed:
             return "leave"
         device = self._device_point(position)
         if self._on_arrow(device):
             return "leave"
+        side_px, gap_px = self._icon_metrics_px()
+        icon = icon_at(
+            self.overlay.icons,
+            self._project,
+            self._text_width_px,
+            side_px,
+            gap_px,
+            *device,
+        )
+        if icon is not None:
+            constraint_id = icon.constraint_id
+            QtCore.QTimer.singleShot(
+                0, lambda: self.click_constraint(constraint_id, adding)
+            )
+            return "take"
         label = label_at(self.overlay.labels, self._project, *device)
         if label is None:
             return "click"
         QtCore.QTimer.singleShot(0, lambda: self.open_field(label))
         return "take"
+
+    def click_constraint(self, constraint_id: ConstraintId, adding: bool) -> None:
+        """Select the constraint ``constraint_id`` alone, or, ``adding``, add
+        it to the selected constraints or take it back out, dropping any
+        board or opening selection, in FreeCAD's selection too."""
+        if self._closed:
+            return
+        self._close_field()
+        session = self.session
+        selected = list(session.selected_constraints) if adding else []
+        if constraint_id in selected:
+            selected.remove(constraint_id)
+        else:
+            selected.append(constraint_id)
+        session.select_constraints(selected)
+        select_in_freecad(self._doc_name, [])
+        self._on_change()
 
     # The floating size field
 
@@ -1574,6 +1715,7 @@ class ViewEditor:
             self.add_bar.draw_icons(ratio)
             self._update_padlocks()
             self._draw_marker(ratio)
+            self._draw_icons()
         self._place_widgets()
 
     def _update_padlocks(self) -> None:
@@ -1583,7 +1725,9 @@ class ViewEditor:
         parent = self._viewer.parentWidget()
         while len(self.padlocks) < len(labels):
             button = _padlock_button(
-                parent, _bind_index(self._toggle_lock, len(self.padlocks))
+                parent,
+                _bind_index(self._toggle_lock, len(self.padlocks)),
+                self.style.tile_rgb,
             )
             self.padlocks.append(button)
             self._installed.append((button.deleteLater, True))
@@ -1655,12 +1799,15 @@ class ViewEditor:
     # Delete
 
     def _delete_selected(self) -> None:
-        """Delete the selected board, or every one of several as one step,
-        refusing them all when any is refused, as ``Std_Delete`` does."""
+        """Delete the selected constraints as one step, else the selected
+        board, or every one of several as one step, refusing them all when
+        any is refused, as ``Std_Delete`` does."""
         if self._closed:
             return
         session = self.session
-        if len(session.selected_boards) > 1:
+        if session.selected_constraints:
+            failure = session.delete_constraints()
+        elif len(session.selected_boards) > 1:
             failure = session.delete_boards()
         elif session.can_merge():
             failure = session.merge()

@@ -14,8 +14,9 @@ from PySide6 import QtCore, QtGui, QtTest, QtWidgets
 from freecad.Shelving.core.edit import is_locked
 from freecad.Shelving.core.geometry import Space
 from freecad.Shelving.core.layout import Board, Division, Region
+from freecad.Shelving.editor import overlay
 from freecad.Shelving.editor.elevation import LIFT_MM, DimensionLabel
-from freecad.Shelving.editor.overlay import RGB, label_string
+from freecad.Shelving.editor.overlay import RGB, ViewParams, label_string
 from freecad.Shelving.editor.panel import EditUnitPanel
 from freecad.Shelving.editor.view_editor import ViewEditor, label_metrics
 from tests.freecad_view import overlay_nodes
@@ -682,6 +683,45 @@ def test_a_held_board_shows_a_padlock_that_unlocks_the_openings_holding_it(
         _close_rgb(outline.rgb, locked_rgb)
         for outline in overlay_nodes.outlines(editor.root)
     )
+    click_task_button("Close", driver)
+
+
+def test_every_padlock_sits_on_a_rounded_tile_of_the_view_background(
+    unit: FreeCAD.DocumentObject,
+    driver: ViewDriver,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def background(_params: ViewParams) -> RGB:
+        return (0.2, 0.4, 0.3)
+
+    # The editor's own reading, so FreeCAD's view keeps its background.
+    monkeypatch.setattr(overlay, "background_rgb", background)
+    panel = edit_unit(unit, driver)
+    editor = editor_of(panel)
+    lower_shelf, _upper_shelf = _three_bays(panel, driver)
+    bottom, _middle, _top = bay_ids(panel.session.unit.root)
+    _click(_padlock(editor, bottom), driver)
+    editor.select(lower_shelf)
+    driver.pump()
+    shown = [button for button in editor.padlocks if button.isVisible()]
+    assert shown and editor.board_padlock.isVisible()
+    for button in (*shown, editor.board_padlock):
+        # Rendered over black without the window background, which grab()
+        # would paint across the corners in the tile's own color.
+        face = QtGui.QImage(button.size(), QtGui.QImage.Format.Format_ARGB32)
+        face.fill(QtGui.QColor(0, 0, 0))
+        button.render(
+            face,
+            QtCore.QPoint(),
+            QtGui.QRegion(),
+            QtWidgets.QWidget.RenderFlag.DrawChildren,
+        )
+        edge = face.pixelColor(face.width() // 2, 1)
+        corner = face.pixelColor(0, 0)
+        assert _close_rgb((edge.redF(), edge.greenF(), edge.blueF()), (0.2, 0.4, 0.3))
+        assert not _close_rgb(
+            (corner.redF(), corner.greenF(), corner.blueF()), (0.2, 0.4, 0.3)
+        )
     click_task_button("Close", driver)
 
 

@@ -216,7 +216,7 @@ def ensure_container_properties(obj: FreeCAD.DocumentObject) -> ContainerObject:
             "App::PropertyString",
             RULES_PROP,
             GROUP_NAME,
-            "The locked regions, as freecad.Shelving.core."
+            "The locked regions and constraints, as freecad.Shelving.core."
             "record.rules_to_json emits them.",
         )
     for axis, name in FIXED_PROPS.items():

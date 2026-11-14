@@ -2,16 +2,18 @@
 pytest: ``elevation.py`` imports neither FreeCAD nor Qt."""
 
 import dataclasses
+from collections.abc import Collection
 
 import pytest
 
-from freecad.Shelving.core.edit import lock, set_unit_size
+from freecad.Shelving.core.edit import add_equal, add_even_spacing, lock, set_unit_size
 from freecad.Shelving.core.geometry import Vec3
 from freecad.Shelving.core.layout import (
     Axis,
     Basis,
     Bay,
     Board,
+    ConstraintId,
     Division,
     FixedSide,
     Unit,
@@ -21,6 +23,7 @@ from freecad.Shelving.core.solver import solve
 from freecad.Shelving.editor.elevation import (
     DimensionLabel,
     FixedChoice,
+    Overlay,
     Rect,
     Side,
     arrow_for,
@@ -29,6 +32,8 @@ from freecad.Shelving.editor.elevation import (
     elevation_frame,
     fixed_choices,
     held_padlock,
+    icon_at,
+    icon_center_px,
     label_at,
     label_size_pt,
     plan_overlay,
@@ -476,3 +481,165 @@ def test_label_size_follows_the_sketcher(
     font_px: int, ratio: float, dpi: float, expected: int
 ) -> None:
     assert label_size_pt(font_px, ratio, dpi) == expected
+
+
+# --- constraint icons and outlines (sh-048) ---------------------------------
+
+
+def _column(sizes_mm: tuple[float, ...] = (300.0, 300.0, 300.0)) -> Unit:
+    """A column of 18 mm boards: bottom, A, s1, B, s2, C, top."""
+    items: list[Board | Bay] = [Board(thickness_mm=_T_MM, id="bottom")]
+    for index, size_mm in enumerate(sizes_mm):
+        items.append(Bay(size_mm=size_mm, id="ABC"[index]))
+        last = index == len(sizes_mm) - 1
+        items.append(Board(thickness_mm=_T_MM, id="top" if last else f"s{index + 1}"))
+    return Unit(
+        size_mm=Vec3(600.0, 300.0, _T_MM * (len(sizes_mm) + 1) + sum(sizes_mm)),
+        root=Division(axis=Axis.Z, items=list(items), id="column"),
+        depth_axis=Axis.Y,
+    )
+
+
+def _overlay(
+    unit: Unit,
+    *,
+    selected_id: str | None = None,
+    flagged: Collection[str] = (),
+    selected_items: Collection[str] = (),
+    selected_constraints: Collection[ConstraintId] = (),
+) -> Overlay:
+    return plan_overlay(
+        unit,
+        solve(unit),
+        elevation_frame(unit),
+        selected_id,
+        _ROW_MM,
+        flagged,
+        selected_items=selected_items,
+        selected_constraints=selected_constraints,
+    )
+
+
+def test_an_equal_draws_an_icon_at_each_of_its_openings() -> None:
+    unit = add_equal(_column(), ["A", "C"])
+    (equal,) = unit.constraints
+    icons = _overlay(unit).icons
+    assert [(i.label.region_id, i.kind, i.slot, i.state) for i in icons] == [
+        ("A", "equal", 0, "active"),
+        ("C", "equal", 0, "active"),
+    ]
+    assert {i.constraint_id for i in icons} == {equal.id}
+
+
+def test_an_even_spacing_draws_an_icon_at_every_opening_of_its_group() -> None:
+    unit = add_even_spacing(add_equal(_column(), ["A", "B"]), ["A", "C"])
+    icons = _overlay(unit).icons
+    assert [(i.label.region_id, i.kind, i.slot) for i in icons] == [
+        ("A", "equal", 0),
+        ("B", "equal", 0),
+        ("A", "even_spacing", 1),
+        ("B", "even_spacing", 1),
+        ("C", "even_spacing", 0),
+    ]
+
+
+def test_an_icon_takes_the_deactivated_or_selected_state() -> None:
+    unit = add_equal(_column(), ["A", "B", "C"])
+    first, second = unit.constraints
+    off = dataclasses.replace(
+        unit, constraints=(first, dataclasses.replace(second, active=False))
+    )
+    states = {
+        (i.constraint_id, i.label.region_id): i.state
+        for i in _overlay(off, selected_constraints=[first.id]).icons
+    }
+    assert states == {
+        (first.id, "A"): "selected",
+        (first.id, "B"): "selected",
+        (second.id, "B"): "deactivated",
+        (second.id, "C"): "deactivated",
+    }
+
+
+def test_icons_sit_past_the_text_clear_of_it_and_of_each_other() -> None:
+    unit = add_even_spacing(add_equal(_column(), ["A", "B"]), ["A", "C"])
+    overlay = _overlay(unit)
+    # One pixel a millimeter, so the text's center doubles as its pixel
+    # position.
+    text_width_px, icon_px, gap_px = 60.0, 16.0, 3.0
+    boxes: list[tuple[float, float, float, float]] = []
+    for label in overlay.labels:
+        h_mm, v_mm = label.text_at_mm
+        half_w_px, half_h_px = (
+            (text_width_px / 2, 8.0) if label.horizontal else (8.0, text_width_px / 2)
+        )
+        boxes.append(
+            (h_mm - half_w_px, v_mm - half_h_px, h_mm + half_w_px, v_mm + half_h_px)
+        )
+    for icon in overlay.icons:
+        x_px, y_px = icon_center_px(
+            icon, icon.label.text_at_mm, text_width_px, icon_px, gap_px
+        )
+        half_px = icon_px / 2
+        boxes.append((x_px - half_px, y_px - half_px, x_px + half_px, y_px + half_px))
+    for index, a in enumerate(boxes):
+        for b in boxes[index + 1 :]:
+            assert a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1]
+
+
+def test_icon_at_finds_the_icon_under_a_point() -> None:
+    unit = add_equal(_column(), ["A", "B"])
+    overlay = _overlay(unit)
+    first = overlay.icons[0]
+
+    def project(h_mm: float, v_mm: float) -> tuple[float, float]:
+        return (h_mm, v_mm)
+
+    x_px, y_px = icon_center_px(first, first.label.text_at_mm, 40.0, 16.0, 3.0)
+    assert icon_at(overlay.icons, project, lambda _: 40.0, 16.0, 3.0, x_px, y_px) == (
+        first
+    )
+    x0_px, y0_px = first.label.text_at_mm
+    assert icon_at(overlay.icons, project, lambda _: 40.0, 16.0, 3.0, x0_px, y0_px) is (
+        None
+    )
+
+
+def _roles(overlay: Overlay, region_id: str, unit: Unit) -> list[str]:
+    frame = elevation_frame(unit)
+    rect = frame.rect(solve(unit)[region_id])
+    return [outline.role for outline in overlay.outlines if outline.rect == rect]
+
+
+def test_a_selected_constraint_outlines_its_openings_as_selected() -> None:
+    unit = add_equal(_column(), ["A", "C"])
+    (equal,) = unit.constraints
+    overlay = _overlay(unit, selected_constraints=[equal.id])
+    assert _roles(overlay, "A", unit) == ["selected"]
+    assert _roles(overlay, "C", unit) == ["selected"]
+    assert _roles(overlay, "B", unit) == ["region"]
+
+
+def test_several_selected_openings_are_each_outlined() -> None:
+    unit = _column()
+    overlay = _overlay(unit, selected_items=["A", "C"])
+    assert _roles(overlay, "A", unit) == ["selected"]
+    assert _roles(overlay, "C", unit) == ["selected"]
+
+
+def test_a_board_an_even_spacing_holds_shows_its_group_and_no_arrow() -> None:
+    unit = add_even_spacing(_column(), ["A", "C"])
+    overlay = _overlay(unit, selected_id="s1")
+    for region_id in "ABC":
+        assert _roles(overlay, region_id, unit) == ["holding"]
+    frame = elevation_frame(unit)
+    assert arrow_for(unit, solve(unit), frame, "s1") is None
+    assert held_padlock(unit, solve(unit), frame, "s1") is None
+
+
+def test_a_flagged_constraint_outlines_its_openings() -> None:
+    unit = add_equal(_column(), ["A", "C"])
+    (equal,) = unit.constraints
+    overlay = _overlay(unit, flagged=[equal.id])
+    assert _roles(overlay, "A", unit) == ["holding"]
+    assert _roles(overlay, "B", unit) == ["region"]

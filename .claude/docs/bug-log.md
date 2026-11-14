@@ -1,5 +1,5 @@
 ---
-next_id: bug-022
+next_id: bug-024
 ---
 
 # Bug log
@@ -100,3 +100,31 @@ log happens only when the user asks.
   qualify (Copy and Paste, a clone, a Link) and how a record maps onto
   them are design questions, and M18's constraint record keys the same
   way.
+- `bug-022` - **the editor's selection color can differ from FreeCAD's
+  highlight**: `editor/overlay.py`'s `view_style` reads `SelectionColor`
+  with FreeCAD 1.1's parameter default, green `#1CAD1C`, but with the
+  parameter unset the 3D-view tests' FreeCAD highlights selected boards in
+  a blue (`tests/freecad_view/test_scan_and_write.py` asserts it). So a
+  selected opening's outline, and a selected constraint's icon, may be
+  green beside blue board highlights. Found in sh-048, when a test that
+  wrote `SelectionColor` turned the view's highlight green for the rest of
+  the run. Root cause not traced: where FreeCAD 1.1 takes its effective
+  selection color when the parameter is unset (likely the theme). Fix:
+  `ad hoc`, reading the color the view itself uses, once that source is
+  found; not checked on a real install yet. Lead: FreeCAD 1.1's first
+  start writes parts of the FreeCAD Light preference pack into the View
+  preferences (the test FreeCAD's `BackgroundColor` and `HighlightColor`
+  carry its values), and that pack's `SelectionColor` is the blue
+  (59, 91, 219); the editor's default is FreeCAD Classic's green.
+- `bug-023` - **deleting a constraint can move boards**: when the boards
+  miss another active constraint by less than the joint clearance
+  (`DEFAULT_CLEARANCE_MM`, 3 mm) at open, deleting any constraint makes
+  that other one exact, so boards shift by up to 3 mm on a Delete.
+  sh-048's Must Have says Delete "moves no board", while its Advice says
+  the next edit after open makes such a constraint exact inside that
+  edit's undo step: `Session._apply` in `editor/session.py` runs
+  `settle_constraints` from `core/edit.py` on every edit, Delete
+  included. `test_delete_meets_another_constraint_left_within_the_clearance`
+  in `tests/freecad/test_constraint_session.py` pins the settling. Found
+  in sh-048's review round 1 (N4). Fix: `sh-XXX task`; exempting Delete
+  from settling or rewording the Must Have is a design decision.

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Equal, drawn on the 64 px grid in the fills and strokes of the
+     Sketcher's constraint icons, as Constraint_EvenSpacing.svg is: two
+     bars of one length, an equals sign. -->
+<svg
+   xmlns="http://www.w3.org/2000/svg"
+   width="64"
+   height="64"
+   viewBox="0 0 64 64"
+   version="1.1"
+   id="svg2816">
+  <g
+     id="layer1">
+    <rect
+       style="fill:#cc0000;fill-opacity:1;stroke:#280000;stroke-width:2;stroke-linecap:square;stroke-linejoin:round"
+       id="bar1"
+       width="42"
+       height="8"
+       x="11"
+       y="19" />
+    <rect
+       style="fill:#cc0000;fill-opacity:1;stroke:#280000;stroke-width:2;stroke-linecap:square;stroke-linejoin:round"
+       id="bar2"
+       width="42"
+       height="8"
+       x="11"
+       y="37" />
+    <path
+       style="fill:none;stroke:#ef2929;stroke-width:2;stroke-linecap:square;stroke-linejoin:round"
+       d="M 13,21 H 51 M 13,39 H 51"
+       id="highlights" />
+  </g>
+</svg>
