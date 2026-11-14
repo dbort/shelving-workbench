@@ -17,8 +17,8 @@ one the boards no longer satisfy comes in deactivated, and one whose
 boards are gone is dropped, with one notification saying so.
 
 ## Must Have
-- [ ] `pixi run tests` green; `pyrefly check` clean over the changed code.
-- [ ] Core suite, on sh-046's column of 18 mm boards with fixed point `min`:
+- [x] `pixi run tests` green; `pyrefly check` clean over the changed code.
+- [x] Core suite, on sh-046's column of 18 mm boards with fixed point `min`:
       bottom, A 300, shelf s1, B 300, shelf s2, C 300, top (972 mm tall):
       - Equal on A and B, then typing 400 into C, gives A 250, B 250, C 400;
         without the Equal, the same typing gives A 300, B 200 (control);
@@ -42,14 +42,14 @@ boards are gone is dropped, with one notification saying so.
         run is refused;
       - with Even spacing on A, B and C, `held_by` (or what replaces it)
         names that Even spacing for s1 and offers no unlock.
-- [ ] `rules_to_json` emits `{"schema_version": 2, "locks": {...},
+- [x] `rules_to_json` emits `{"schema_version": 2, "locks": {...},
       "constraints": [...]}`, the locks exactly as sh-046 emits them. Each
       constraint entry has `"kind"` (`"equal"` or `"even_spacing"`),
       `"basis"` (`"clear"`), `"active"` (a bool), and the rescan-stable keys
       of its openings or of its run and ends. `rules_from_json` on a
       version 1 record, or on any other shape, gives no locks and no
       constraints, and raises nothing.
-- [ ] Headless (`tests/freecad/`), opening a container in `Session`:
+- [x] Headless (`tests/freecad/`), opening a container in `Session`:
       - an Equal whose openings now differ by more than the joint clearance
         comes in deactivated. A following edit leaves those openings'
         difference as it was, and the written record has `"active": false`;
@@ -64,16 +64,16 @@ boards are gone is dropped, with one notification saying so.
       - the session reports what was deactivated and dropped. Exactly one
         Notification Area message is posted at open when anything was, and
         none when nothing was or after an undo or redo inside the edit.
-- [ ] Headless: Delete with one or several constraints selected, active or
+- [x] Headless: Delete with one or several constraints selected, active or
       deactivated, removes them as one undo step that moves no board, and
       Undo brings them back.
-- [ ] GUI (`tests/freecad_gui/`): the commands `Shelving_ConstrainEqual`
+- [x] GUI (`tests/freecad_gui/`): the commands `Shelving_ConstrainEqual`
       and `Shelving_ConstrainEvenSpacing` sit on a toolbar that is visible
       in the main window exactly while an edit is open, in any workbench.
       Both are in the Shelving menu, and `IsActive` is false outside an
       edit. A selection either command cannot use is refused through the
       Notification Area with text saying what to select.
-- [ ] 3D view (`tests/freecad_view/`):
+- [x] 3D view (`tests/freecad_view/`):
       - Ctrl-click on an opening adds it to the selection, and the session
         keeps the selection order;
       - an Equal draws one icon at each of its two openings, and an Even
@@ -93,11 +93,11 @@ boards are gone is dropped, with one notification saying so.
         the plain color, or a gradient's middle;
       - selecting s1 inside an Even spacing group shows no drag arrow, and
         the group's openings carry the holding outline.
-- [ ] `README.md`'s glossary has entries **Equal**, **Even spacing** and
+- [x] `README.md`'s glossary has entries **Equal**, **Even spacing** and
       **Deactivated constraint**.
-- [ ] `freecad/Shelving/qa/cases/30-editor.toml` has a case with id
+- [x] `freecad/Shelving/qa/cases/30-editor.toml` has a case with id
       `editor.constraints`.
-- [ ] `.claude/docs/freecad-notes.md` says whether
+- [x] `.claude/docs/freecad-notes.md` says whether
       `:/icons/constraints/Constraint_EqualLength.svg` exists before
       `SketcherGui` is imported, on FreeCAD 1.1. No workbench code imports
       `SketcherGui`.
