@@ -592,7 +592,7 @@ def plan_overlay(
 ) -> Overlay:
     """What to draw for ``unit`` solved as ``spaces`` on ``frame``'s face:
     a face per bay and void, an outline per opening and for each selected
-    node, a "holding" outline for each region holding a selected board, and
+    node, a "holding" outline for each region holding a selected board and
     for each region ``flagged`` names or a constraint it names holds, a
     dimension for every region in a run along an elevation axis, and an
     icon for each constraint beside each of its openings' dimensions.

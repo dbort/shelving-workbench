@@ -749,7 +749,7 @@ def measured_mm(
     unit: Unit, spaces: Mapping[str, Space], region_id: str, basis: Basis
 ) -> float | None:
     """The size of the region ``region_id`` along its run in ``basis``, read
-    from ``spaces``, the extent of a board after it added for
+    from ``spaces``, with the extent of the board just after it added for
     ``Basis.WITH_NEXT``; ``None`` when ``unit`` holds no such region in a
     run."""
     found = _parent_of(unit.root, region_id)
