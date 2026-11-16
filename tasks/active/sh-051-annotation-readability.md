@@ -182,3 +182,12 @@ on a text's tile opens its size field.
       failures until both are green.
 
 ## Review log
+
+### Round 1: APPROVED
+- **N1: The held padlock's placement check is fine as it stands** (`tests/freecad_view/test_padlocks.py:1157`): the scene-graph point, the drawn closed padlock on its tile, and the unlocking click at the projected `at_mm` together prove the image is centered on `HeldPadlock.at_mm`. The padlock winning the press where its tile touches a text tile matches the padlock-over-tile rule.
+- **N2: The 2.5 px tolerance discriminates enough** (`tests/freecad_view/test_padlocks.py:555`, `:606`): the box must be the icon side ±1 px square and slots sit over 20 px apart. A fill that runs into a neighboring tile makes the box too big and fails.
+- **N3: The along-line size of the drawn text tile is never checked** (`tests/freecad_view/test_padlocks.py:1308`, `:863`): the pixel test reads only across the line and the ratio test compares only the across size. A wrong along-line pad or width would go unnoticed.
+- **N4: Huge monkeypatched tiles get drawn** (`tests/freecad_view/test_padlocks.py:1055`): the 4000×4000 `text_tile_px` patch makes `_draw_text_tiles` build a 64 MB image per label on the rebuild after the toggle. Patching only the hit test, or using a smaller size, avoids that.
+- **N5: Stale parameter name** (`freecad/Shelving/editor/elevation.py:123`, `:149`): `icon_center_px` and `icon_at` still call the tile's along-line length `text_width_px`.
+- **N6: Test leftovers** (`tests/freecad_view/test_padlocks.py:1103`, `:1371`): a function-local `QtTest` import, and `assert shelf in editor._boards` existing only to use the `shelf` binding.
+- **N7: Unwrapped doc line** (`docs/scope-and-design.md:257`): one line runs to 94 columns.
