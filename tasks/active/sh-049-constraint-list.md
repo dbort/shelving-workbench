@@ -102,8 +102,8 @@ measure spacing through the next board.
   the kind alone, because its openings may differ. An active row within
   the joint clearance at open shows its first opening's size. Keep the
   text free of count-keyed grammar (UI text stays localizable). Icons:
-  the view's closed padlock (`_padlock_icon` in `editor/view_editor.py`;
-  make it public if the panel needs it), and the Equal and Even spacing
+  the view's closed padlock (`padlock_image` in `editor/overlay.py`,
+  wrapped in a `QIcon`), and the Equal and Even spacing
   SVGs sh-048 adds (`ICON_SOURCES` in `editor/overlay.py`). A deactivated
   row's icon is the normal icon rendered in `QIcon.Mode.Disabled`, as
   Sketcher's list greys a deactivated constraint's icon.

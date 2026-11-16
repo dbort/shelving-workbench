@@ -9,22 +9,21 @@ from typing import cast
 
 import FreeCAD
 import pytest
-from PySide6 import QtCore, QtGui, QtSvg, QtWidgets
+from PySide6 import QtCore, QtGui, QtSvg
 
 from freecad.Shelving.container import write_container
 from freecad.Shelving.core.layout import ConstraintId
 from freecad.Shelving.editor import overlay
-from freecad.Shelving.editor.elevation import ConstraintIcon, DimensionLabel
+from freecad.Shelving.editor.elevation import ConstraintIcon, RowIcon
 from freecad.Shelving.editor.overlay import (
     ICON_SOURCES,
     RGB,
     IconNode,
     ViewParams,
     background_rgb,
-    label_string,
 )
 from freecad.Shelving.editor.panel import EditUnitPanel
-from freecad.Shelving.editor.view_editor import ViewEditor, label_metrics
+from freecad.Shelving.editor.view_editor import ViewEditor
 from tests.freecad_view import overlay_nodes
 from tests.freecad_view.editor import (
     bay_ids,
@@ -68,7 +67,7 @@ def _icons(editor: ViewEditor) -> list[ConstraintIcon]:
     return [node.icon for node in editor.icon_nodes]
 
 
-def _icon_rect(editor: ViewEditor, icon: ConstraintIcon) -> QtCore.QRectF:
+def _icon_rect(editor: ViewEditor, icon: RowIcon) -> QtCore.QRectF:
     side_px, _gap_px = editor._icon_metrics_px()
     side_px /= editor.viewport.devicePixelRatioF()
     center = editor.icon_center(icon)
@@ -78,29 +77,7 @@ def _icon_rect(editor: ViewEditor, icon: ConstraintIcon) -> QtCore.QRectF:
     )
 
 
-def _text_rect(editor: ViewEditor, label: DimensionLabel) -> QtCore.QRectF:
-    """The dimension's text, padlock room included, in logical pixels."""
-    metrics = label_metrics(editor.style.label_size_pt)
-    ratio = editor.viewport.devicePixelRatioF()
-    width_px = metrics.horizontalAdvance(label_string(label, editor.style)) / ratio
-    height_px = metrics.height() / ratio
-    center = editor._logical_point(editor.to_document(*label.text_at_mm))
-    if not label.horizontal:
-        width_px, height_px = height_px, width_px
-    return QtCore.QRectF(
-        center - QtCore.QPointF(width_px / 2, height_px / 2),
-        QtCore.QSizeF(width_px, height_px),
-    )
-
-
-def _padlock_rect(editor: ViewEditor, button: QtWidgets.QWidget) -> QtCore.QRectF:
-    parent = button.parentWidget()
-    assert parent is not None
-    top_left = editor.viewport.mapFrom(parent, button.geometry().topLeft())
-    return QtCore.QRectF(QtCore.QPointF(top_left), QtCore.QSizeF(button.size()))
-
-
-def _icon_part(node: IconNode, side_px: int) -> QtGui.QImage:
+def _icon_part(node: IconNode[ConstraintIcon], side_px: int) -> QtGui.QImage:
     """The icon at the far end of ``node``'s padded image."""
     image = node.drawn
     if node.icon.label.horizontal:
@@ -109,7 +86,7 @@ def _icon_part(node: IconNode, side_px: int) -> QtGui.QImage:
 
 
 def _glyph_mismatches(
-    editor: ViewEditor, node: IconNode, rgb: tuple[int, int, int]
+    editor: ViewEditor, node: IconNode[ConstraintIcon], rgb: tuple[int, int, int]
 ) -> list[tuple[int, int]]:
     """The pixels of ``node``'s glyph that differ from its SVG drawn in
     ``rgb`` over the editor's tile, each pixel blended by the SVG's own
@@ -211,13 +188,8 @@ def test_icons_sit_at_each_constrained_opening_clear_of_text_padlocks_and_each_o
     assert sorted(
         i.label.region_id for i in icons if i.constraint_id == spacing.id
     ) == sorted([a, b, c])
-    rects = [_icon_rect(editor, icon) for icon in icons]
-    taken = [_text_rect(editor, label) for label in editor.overlay.labels]
-    taken += [
-        _padlock_rect(editor, button)
-        for button in editor.padlocks
-        if button.isVisible()
-    ]
+    rects = [_icon_rect(editor, icon) for icon in editor.overlay.row_icons]
+    taken = [editor.text_tile_rect(label) for label in editor.overlay.labels]
     for index, rect in enumerate(rects):
         for other in rects[index + 1 :] + taken:
             assert not rect.intersects(other), (rect, other)

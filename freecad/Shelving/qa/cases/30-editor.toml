@@ -242,9 +242,10 @@ title = "Padlocks on a HiDPI screen and on a busy unit"
     "Run Edit Unit.",
   ]
   expected = """
-A padlock sits just past the text of each bay's dimension, open and in the
-dimension's color. It is as sharp as the text beside it, covers none of
-the text, and reads as a padlock."""
+Each bay's dimension leads the row after its text with a padlock, open and
+in the dimension's color. It is as sharp as the text beside it, covers
+none of the text, and reads as a padlock. Each size reads plainly on its
+own tile over the opening fills."""
 
   [[case.step]]
   id = "zoom"
@@ -253,8 +254,8 @@ the text, and reads as a padlock."""
     "Zoom out until the whole unit is a few centimeters tall.",
   ]
   expected = """
-At every zoom each padlock stays just past its own text, covers no
-dimension's text, and stays legible."""
+At every zoom each padlock stays at the head of the row after its own
+text, covers no dimension's text, and stays legible."""
 
   [[case.step]]
   id = "lock"
@@ -278,9 +279,9 @@ openings' at a glance."""
     "Move it back.",
   ]
   expected = """
-On each display, without a click, every padlock stays just past its own
-text and the shelf's padlock stays where its arrow would be, each as sharp
-as the text beside it."""
+On each display, without a click, every padlock stays at the head of the
+row after its own text and the shelf's padlock stays where its arrow would
+be, each as sharp as the text beside it."""
 
   [[case.step]]
   id = "busy"
@@ -489,9 +490,10 @@ spaced uprights, both in the style of the Sketcher's constraint icons."""
   ]
   expected = """
 The leftmost column's six openings become the same height. Each shows the
-even spacing icon just past its dimension's text, in the red of a
-Sketcher constraint icon on a small tile of the view's background like
-the padlock's, as sharp as the text and clear of it and of the padlock."""
+even spacing icon after the padlock that follows its dimension's text, in
+the red of a Sketcher constraint icon on a small tile of the view's
+background like the padlock's, as sharp as the text and clear of the
+text's tile and of the padlock."""
 
   [[case.step]]
   id = "equal"

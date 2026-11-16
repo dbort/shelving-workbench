@@ -10,7 +10,12 @@ import FreeCADGui
 from PySide6 import QtCore, QtWidgets
 
 from freecad.Shelving.core.layout import Bay, Board, Division, Region
-from freecad.Shelving.editor.elevation import LABEL_HIT_PX, board_space, label_at
+from freecad.Shelving.editor.elevation import (
+    DimensionLabel,
+    board_space,
+    icon_center_px,
+    label_at,
+)
 from freecad.Shelving.editor.panel import EditUnitPanel
 from freecad.Shelving.editor.session import SplitDirection
 from freecad.Shelving.editor.view_editor import ViewEditor
@@ -155,11 +160,34 @@ def device_point(editor: ViewEditor, point: FreeCAD.Vector) -> tuple[int, int]:
     return editor.view.getPointOnViewport(point)
 
 
+# How far a point clear of the dimensions stays from every text tile and
+# row icon, in device pixels.
+_CLEAR_PX = 4
+
+
 def clear_of_labels(editor: ViewEditor, point: FreeCAD.Vector) -> bool:
+    """Whether a press at ``point`` lands clear of every dimension's text
+    tile, padlock and constraint icon, by a margin."""
     x_px, y_px = device_point(editor, point)
+
+    def grown_tile(label: DimensionLabel) -> tuple[float, float]:
+        along_px, across_px = editor.text_tile_px(label)
+        return (along_px + 2 * _CLEAR_PX, across_px + 2 * _CLEAR_PX)
+
+    side_px, gap_px = editor._icon_metrics_px()
+    reach_px = side_px / 2 + _CLEAR_PX
+    for icon in editor.overlay.row_icons:
+        center_x_px, center_y_px = icon_center_px(
+            icon,
+            editor._project(*icon.label.text_at_mm),
+            editor._tile_along_px(icon.label),
+            side_px,
+            gap_px,
+        )
+        if abs(x_px - center_x_px) <= reach_px and abs(y_px - center_y_px) <= reach_px:
+            return False
     return (
-        label_at(editor.overlay.labels, editor._project, x_px, y_px, LABEL_HIT_PX + 4)
-        is None
+        label_at(editor.overlay.labels, editor._project, grown_tile, x_px, y_px) is None
     )
 
 

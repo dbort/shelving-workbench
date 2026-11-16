@@ -127,7 +127,7 @@ on a text's tile opens its size field.
   goes to the log.
 
 ## Plan
-- [ ] **Step 1** (`freecad/Shelving/editor/elevation.py`,
+- [x] **Step 1** (`freecad/Shelving/editor/elevation.py`,
       `tests/test_editor_elevation.py`): plan a padlock row entry per
       label in slot 0 and shift constraint icon slots to start at 1. Make
       `icon_center_px` and `icon_at` cover both kinds, with docstrings
@@ -135,14 +135,14 @@ on a text's tile opens its size field.
       with a tile rectangle test that takes the label's tile size in
       device pixels, delete `LABEL_HIT_PX`, and update the elevation
       tests for slots, hits and the tile test.
-- [ ] **Step 2** (`freecad/Shelving/editor/overlay.py`): drop
+- [x] **Step 2** (`freecad/Shelving/editor/overlay.py`): drop
       `Style.padlock_spaces`, the `view_style` parameter and the leading
       spaces in `label_string`. Add the public padlock image function,
       moved from `view_editor._padlock_icon` and drawn on a `Tile` at a
       given side. Add a text tile image function. Make `IconNode` (or a
       sibling) carry a padlock row entry, and give text tiles their own
       layer drawn before the dimensions.
-- [ ] **Step 3** (`freecad/Shelving/editor/view_editor.py`): delete the
+- [x] **Step 3** (`freecad/Shelving/editor/view_editor.py`): delete the
       padlock button pool, `board_padlock`, `padlock_for`,
       `_padlock_button`, `_bind_index`, `padlock_spaces`, `_PADLOCK_*`,
       `_draw_padlock_icons` and the padlock part of `_place_widgets`.
@@ -153,7 +153,7 @@ on a text's tile opens its size field.
       constraint by kind, then text tiles. Expose whatever public reads
       the tests need, such as a padlock's or text tile's center or rect
       in logical pixels, in the shape `icon_center` has.
-- [ ] **Step 4** (`tests/freecad_view/test_padlocks.py`,
+- [x] **Step 4** (`tests/freecad_view/test_padlocks.py`,
       `tests/freecad_view/test_constraints.py`,
       `tests/freecad_view/test_editor_drawing.py`,
       `tests/freecad_view/test_multi_selection.py`,
@@ -167,7 +167,7 @@ on a text's tile opens its size field.
       held padlock through its image instead of `board_padlock.isVisible()`.
       Add the text tile pixel, short-dimension arrowhead and tile hit
       tests from the Must Haves.
-- [ ] **Step 5** (`docs/scope-and-design.md`,
+- [x] **Step 5** (`docs/scope-and-design.md`,
       `freecad/Shelving/qa/cases/30-editor.toml`,
       `.claude/docs/freecad-notes.md`,
       `tasks/active/sh-049-constraint-list.md`): describe the padlock as
@@ -178,7 +178,7 @@ on a text's tile opens its size field.
       it and of the padlock" wording to the icon following the padlock.
       Make the background note name the text tiles too, and point sh-049
       at the public padlock image function.
-- [ ] **Step 6**: run `pyrefly check` and `pixi run tests`, and fix
+- [x] **Step 6**: run `pyrefly check` and `pixi run tests`, and fix
       failures until both are green.
 
 ## Review log

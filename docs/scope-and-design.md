@@ -243,15 +243,21 @@ never in the way of a click. The header carries the same cross in the same
 color before its text, as tall as a capital letter, tying the column to
 the mark in the view.
 
-Each opening's dimension carries a padlock just past its text, closed for a
-locked opening and open for an unlocked one, in the dimension's own color
-on the same tile as a constraint's icon. The tile puts each glyph back on
-the background its theme chose those colors against, where an opening's
-translucent fill would wash out a gray deactivated icon.
-Clicking it locks or unlocks the opening, and typing a size locks it. A
-selected board held in place shows a closed padlock where its arrow
+Each opening's dimension carries a padlock at the head of the row of icons
+after its text, closed for a locked opening and open for an unlocked one,
+in the dimension's own color on the same tile as a constraint's icon, and
+the opening's constraint icons follow it. Each dimension's text sits on a
+tile of its own, drawn under every dimension's lines and arrowheads, and a
+click anywhere on that tile opens the size field. The tiles put each
+glyph and size back on the background its theme chose those colors
+against, where an opening's translucent fill would wash out a gray
+deactivated icon or a size's digits. The Sketcher draws its dimension text
+with no tile; the workbench's openings carry fills a sketch does not.
+Clicking a padlock locks or unlocks the opening, and typing a size locks
+it. A selected board held in place shows a closed padlock where its arrow
 would be and outlines the locked openings holding it; clicking that padlock
-unlocks them, and the arrow takes its place. The padlock is the only way to
+unlocks them, and the arrow takes its place. Like the Sketcher's constraint
+icons, the padlocks are drawn in the view and carry no tooltip. The padlock is the only way to
 unlock. A refused edit's or a redundant lock's outline uses the same
 color, and lasts until the next edit or selection change.
 

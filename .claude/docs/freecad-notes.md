@@ -291,4 +291,5 @@ color is (234, 229, 220), and the linear gradient runs from
 `UseBackgroundColorMid` is set. Every bundled preference pack sets these
 keys, and FreeCAD's first start writes the FreeCAD Light pack's plain
 (247, 247, 247). `freecad/Shelving/editor/overlay.py`'s `background_rgb`
-reads them the same way for the tiles under constraint icons and padlocks.
+reads them the same way for the tiles under dimension text, constraint
+icons and padlocks.
