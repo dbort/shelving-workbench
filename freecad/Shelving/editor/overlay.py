@@ -252,7 +252,7 @@ def constraint_icon_image(
     return _on_tile(glyph, tile, side_px)
 
 
-# The padlock glyph's proportions on its square, drawn first at 14 pixels:
+# The padlock glyph's proportions on its square, designed at 14 pixels:
 # the body's inset from the left and right edges and its top and height,
 # the stroke, the shackle's box, and how far an open shackle swings.
 _PADLOCK_DESIGN_PX = 14.0

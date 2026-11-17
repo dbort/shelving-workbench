@@ -257,9 +257,9 @@ Clicking a padlock locks or unlocks the opening, and typing a size locks
 it. A selected board held in place shows a closed padlock where its arrow
 would be and outlines the locked openings holding it; clicking that padlock
 unlocks them, and the arrow takes its place. Like the Sketcher's constraint
-icons, the padlocks are drawn in the view and carry no tooltip. The padlock is the only way to
-unlock. A refused edit's or a redundant lock's outline uses the same
-color, and lasts until the next edit or selection change.
+icons, the padlocks are drawn in the view and carry no tooltip. The padlock
+is the only way to unlock. A refused edit's or a redundant lock's outline
+uses the same color, and lasts until the next edit or selection change.
 
 The unit's container cannot enter FreeCAD's edit mode without workbench
 state in the document, so the editor adds its drawing and input handling
