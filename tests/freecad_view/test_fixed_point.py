@@ -52,7 +52,7 @@ def _expected(panel: EditUnitPanel) -> FreeCAD.Vector:
 
 
 def _marker(editor: ViewEditor) -> FreeCAD.Vector:
-    (at,) = overlay_nodes.markers(editor.root)
+    (at,) = overlay_nodes.markers(editor.root, editor.marker.root)
     return at
 
 

@@ -22,9 +22,8 @@ from freecad.Shelving.editor.elevation import (
     elevation_frame,
     label_size_pt,
 )
-from freecad.Shelving.editor.overlay import label_string, length_text
+from freecad.Shelving.editor.overlay import length_text
 from freecad.Shelving.editor.panel import EditUnitPanel
-from freecad.Shelving.editor.view_editor import label_metrics
 from freecad.Shelving.qa import actions as qa_actions
 from tests.freecad_view import overlay_nodes
 from tests.freecad_view.editor import (
@@ -418,8 +417,7 @@ def test_each_region_in_a_run_has_a_sketcher_dimension(
         assert len(drawn) == len(wanted)
         for text, rgb in wanted:
             assert any(
-                label.text.strip() == text and _close_rgb(label.rgb, rgb)
-                for label in drawn
+                label.text == text and _close_rgb(label.rgb, rgb) for label in drawn
             ), (text, rgb, drawn)
         for label in drawn:
             assert label.size == size_pt
@@ -545,13 +543,11 @@ def _layered(placed_unit: FreeCAD.DocumentObject, driver: ViewDriver) -> EditUni
 def test_rows_of_dimensions_outside_the_unit_clear_it_and_each_other(
     placed_unit: FreeCAD.DocumentObject, driver: ViewDriver, dimension_style: None
 ) -> None:
-    """Each outer dimension's text, its padlock's room included, measured as
+    """Each outer dimension's text tile, sized from the text as
     SoDatumLabel lays it out, at the view the editor opens to."""
     panel = _layered(placed_unit, driver)
     editor = editor_of(panel)
     session = panel.session
-    metrics = label_metrics(editor.style.label_size_pt)
-    ratio = editor._label_ratio
 
     def screen_rect(
         h0_mm: float, v0_mm: float, h1_mm: float, v1_mm: float
@@ -566,15 +562,7 @@ def test_rows_of_dimensions_outside_the_unit_clear_it_and_each_other(
         center = driver.qt_point(editor.to_document(*label.text_at_mm))
         if outer.contains(center):
             continue
-        long_px = metrics.horizontalAdvance(label_string(label, editor.style)) / ratio
-        short_px = metrics.height() / ratio
-        w_px, h_px = (long_px, short_px) if label.horizontal else (short_px, long_px)
-        texts.append(
-            (
-                label.region_id,
-                QtCore.QRectF(center.x() - w_px / 2, center.y() - h_px / 2, w_px, h_px),
-            )
-        )
+        texts.append((label.region_id, editor.text_tile_rect(label)))
     left = [rect for _id, rect in texts if rect.right() < outer.left()]
     below = [rect for _id, rect in texts if rect.top() > outer.bottom()]
     assert len(left) >= 2 and len(below) >= 2, texts

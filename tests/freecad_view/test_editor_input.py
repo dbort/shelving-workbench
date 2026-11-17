@@ -329,15 +329,15 @@ def test_the_field_follows_its_dimension_when_the_camera_moves(
 def test_a_dimension_over_a_board_opens_its_field_rather_than_the_board(
     unit: FreeCAD.DocumentObject, driver: ViewDriver
 ) -> None:
-    """A click on a board within reach of a dimension's text opens that
+    """A click on a board under a dimension's text tile opens that
     dimension's field and picks no board."""
     panel = edit_unit(unit, driver)
     editor = editor_of(panel)
     session = panel.session
-    # Far enough out that the dimension left of the unit lies within reach
-    # of the side board.
+    # Far enough out that the text tile of the dimension left of the unit
+    # reaches over the side board.
     height_px = editor.view.getSize()[1]
-    zoom_at(editor, (300.0, 450.0), 4.0 * height_px, driver)
+    zoom_at(editor, (300.0, 450.0), 12.0 * height_px, driver)
     found: tuple[DimensionLabel, FreeCAD.Vector] | None = None
     boards = [
         space
@@ -353,7 +353,13 @@ def test_a_dimension_over_a_board_opens_its_field_rather_than_the_board(
                     rect.v0_mm + (v_step + 0.5) / 5 * (rect.v1_mm - rect.v0_mm),
                 )
                 x_px, y_px = device_point(editor, point)
-                label = label_at(editor.overlay.labels, editor._project, x_px, y_px)
+                label = label_at(
+                    editor.overlay.labels,
+                    editor._project,
+                    editor.text_tile_px,
+                    x_px,
+                    y_px,
+                )
                 if label is not None and picked(editor, point)[0] is not None:
                     found = (label, point)
                     break

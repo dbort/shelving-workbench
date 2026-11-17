@@ -125,11 +125,14 @@ def labels(root: _Coin) -> list[Label]:
     return found
 
 
-def markers(root: _Coin) -> list[FreeCAD.Vector]:
-    """The document point each image under ``root`` is drawn at."""
+def markers(root: _Coin, within: _Coin | None = None) -> list[FreeCAD.Vector]:
+    """The document point each image under ``root`` is drawn at, or only
+    each image under its descendant ``within``; ``root`` holds the
+    transforms that place them."""
     return [
         _to_document(path, (0.0, 0.0, 0.0))
         for path in _paths(root, coin.SoImage.getClassTypeId())
+        if within is None or path.containsNode(within)
     ]
 
 

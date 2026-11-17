@@ -57,8 +57,6 @@ IconState = Literal["active", "deactivated", "selected"]
 # z-fight with the board faces they lie on. Opening faces sit on the face
 # itself: the fronts of the boards around an opening never overlap it.
 LIFT_MM = 0.5
-# How far a click may land from a dimension's text and still open its field.
-LABEL_HIT_PX = 24.0
 # The drag arrow's length, as a fraction of the unit's longer elevation side.
 _ARROW_FRACTION = 0.08
 # How far past the dimension line of the opening it resizes the arrow sits,
@@ -359,6 +357,12 @@ class DimensionLabel:
         return (self.text_fraction - 0.5) * self.length_mm
 
 
+# The row after a dimension's text: every opening has a padlock, so it
+# leads, and the constraint icons follow it in the order they were made.
+PADLOCK_SLOT = 0
+FIRST_CONSTRAINT_SLOT = PADLOCK_SLOT + 1
+
+
 @dataclass(frozen=True)
 class ConstraintIcon:
     """One constraint's icon beside one of its openings' dimension text."""
@@ -367,36 +371,61 @@ class ConstraintIcon:
     kind: ConstraintKind
     # The opening's dimension, whose text the icon sits after.
     label: DimensionLabel
-    # The icon's place in the row after that text, counted from 0.
+    # The icon's place in the row after that text, from
+    # FIRST_CONSTRAINT_SLOT.
     slot: int
     state: IconState
 
 
 @dataclass(frozen=True)
+class PadlockIcon:
+    """An opening's padlock, at the head of the row after its dimension's
+    text: closed for a locked opening, open for an unlocked one."""
+
+    label: DimensionLabel
+    slot: int = PADLOCK_SLOT
+
+    @property
+    def locked(self) -> bool:
+        return self.label.color == "locked"
+
+
+RowIcon = ConstraintIcon | PadlockIcon
+
+
+@dataclass(frozen=True)
 class Overlay:
     """Everything drawn over the unit, in the order Coin draws it: faces,
-    then outlines, then dimensions, then constraint icons."""
+    then outlines, then dimensions, then each dimension's row of padlock
+    and constraint icons."""
 
     faces: Sequence[Face] = ()
     outlines: Sequence[Outline] = ()
     labels: Sequence[DimensionLabel] = ()
+    padlocks: Sequence[PadlockIcon] = ()
     icons: Sequence[ConstraintIcon] = ()
+
+    @property
+    def row_icons(self) -> tuple[RowIcon, ...]:
+        """Every padlock, then every constraint icon: the order they are
+        drawn in."""
+        return (*self.padlocks, *self.icons)
 
 
 def icon_center_px(
-    icon: ConstraintIcon,
+    icon: RowIcon,
     text_at_px: tuple[float, float],
-    text_width_px: float,
+    tile_along_px: float,
     icon_px: float,
     gap_px: float,
 ) -> tuple[float, float]:
     """Where ``icon``'s center goes in device pixels with y up, given where
-    its dimension's text is centered and how wide that text is, padlock room
-    included: past the text's end, which a padlock never sits beside, after
-    ``slot`` icons before it, ``gap_px`` clear of the text and of each
-    other. Along the dimension's line: rightward for a horizontal one,
-    upward for a vertical one, which the text reads toward."""
-    along_px = text_width_px / 2 + gap_px + icon_px / 2 + icon.slot * (icon_px + gap_px)
+    its dimension's text is centered and how wide the text's tile is along
+    the line: past the tile's end, after ``slot`` icons before it,
+    ``gap_px`` clear of the tile and of each other. Along the dimension's
+    line: rightward for a horizontal one, upward for a vertical one, which
+    the text reads toward."""
+    along_px = tile_along_px / 2 + gap_px + icon_px / 2 + icon.slot * (icon_px + gap_px)
     x_px, y_px = text_at_px
     if icon.label.horizontal:
         return (x_px + along_px, y_px)
@@ -404,24 +433,24 @@ def icon_center_px(
 
 
 def icon_at(
-    icons: Sequence[ConstraintIcon],
+    icons: Sequence[RowIcon],
     project: Callable[[float, float], tuple[float, float]],
-    text_width_px: Callable[[DimensionLabel], float],
+    tile_along_px: Callable[[DimensionLabel], float],
     icon_px: float,
     gap_px: float,
     x_px: float,
     y_px: float,
-) -> ConstraintIcon | None:
+) -> RowIcon | None:
     """The icon whose square, placed as :func:`icon_center_px` places it,
     holds the device point ``(x_px, y_px)``; ``project`` takes an elevation
     point to device pixels with y up. Of two, the one drawn later."""
-    found: ConstraintIcon | None = None
+    found: RowIcon | None = None
     half_px = icon_px / 2
     for icon in icons:
         center_x_px, center_y_px = icon_center_px(
             icon,
             project(*icon.label.text_at_mm),
-            text_width_px(icon.label),
+            tile_along_px(icon.label),
             icon_px,
             gap_px,
         )
@@ -594,8 +623,9 @@ def plan_overlay(
     a face per bay and void, an outline per opening and for each selected
     node, a "holding" outline for each region holding a selected board and
     for each region ``flagged`` names or a constraint it names holds, a
-    dimension for every region in a run along an elevation axis, and an
-    icon for each constraint beside each of its openings' dimensions.
+    dimension and a padlock for every region in a run along an elevation
+    axis, and an icon for each constraint beside each of its openings'
+    dimensions.
 
     ``selected_id`` is the single selection, ``selected_items`` every
     selected board and opening, and ``selected_constraints`` the selected
@@ -607,8 +637,8 @@ def plan_overlay(
     ``spaces`` must hold every node of ``unit``. A dimension outside the
     unit sits a whole number of ``outer_row_mm`` rows out from its outer
     face, so resizing the unit moves only the rows past the faces that
-    move. Icons at one opening sit in a row in the order the constraints
-    were made."""
+    move. Icons at one opening sit in a row after its padlock in the order
+    the constraints were made."""
     planner = _Planner(unit, spaces, frame, outer_row_mm)
     held: Held | None = None
     if selected_id is not None:
@@ -653,6 +683,7 @@ def plan_overlay(
         if isinstance(node, Division):
             labels.extend(planner.labels(node))
     label_of = {label.region_id: label for label in labels}
+    padlocks = [PadlockIcon(label) for label in labels]
     slots: dict[str, int] = {}
     icons: list[ConstraintIcon] = []
     for constraint in unit.constraints:
@@ -670,10 +701,12 @@ def plan_overlay(
             label = label_of.get(region_id)
             if label is None:
                 continue
-            slot = slots.get(region_id, 0)
+            slot = slots.get(region_id, FIRST_CONSTRAINT_SLOT)
             slots[region_id] = slot + 1
             icons.append(ConstraintIcon(constraint.id, kind_name, label, slot, state))
-    return Overlay(faces=faces, outlines=outlines, labels=labels, icons=icons)
+    return Overlay(
+        faces=faces, outlines=outlines, labels=labels, padlocks=padlocks, icons=icons
+    )
 
 
 def region_at(
@@ -705,20 +738,27 @@ def region_at(
 def label_at(
     labels: Sequence[DimensionLabel],
     project: Callable[[float, float], tuple[float, float]],
+    tile_px: Callable[[DimensionLabel], tuple[float, float]],
     x_px: float,
     y_px: float,
-    radius_px: float = LABEL_HIT_PX,
 ) -> DimensionLabel | None:
-    """The label whose text center ``project`` puts nearest ``(x_px, y_px)``
-    and within ``radius_px`` of it; of two equally near, the one drawn
-    later, since it is drawn on top."""
-    best: tuple[float, DimensionLabel] | None = None
+    """The label whose text tile holds the device point ``(x_px, y_px)``,
+    edges included; of two, the one drawn later. ``tile_px`` gives a
+    label's tile as its length along the line and its height across it,
+    and the tile is centered where ``project`` puts the label's text: a
+    vertical dimension's text, and so its tile, stands upright."""
+    found: DimensionLabel | None = None
     for label in labels:
         at_x_px, at_y_px = project(*label.text_at_mm)
-        distance_px = math.hypot(at_x_px - x_px, at_y_px - y_px)
-        if distance_px <= radius_px and (best is None or distance_px <= best[0]):
-            best = (distance_px, label)
-    return best[1] if best is not None else None
+        along_px, across_px = tile_px(label)
+        half_x_px, half_y_px = (
+            (along_px / 2, across_px / 2)
+            if label.horizontal
+            else (across_px / 2, along_px / 2)
+        )
+        if abs(x_px - at_x_px) <= half_x_px and abs(y_px - at_y_px) <= half_y_px:
+            found = label
+    return found
 
 
 def split_preview(

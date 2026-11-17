@@ -1,8 +1,10 @@
-"""The padlocks of Edit Unit's 3D view: one past each opening's dimension,
-which locks or unlocks that opening, and one in place of a held board's
-arrow, which unlocks the openings holding it."""
+"""The padlocks of Edit Unit's 3D view: one at the head of the icon row
+after each opening's dimension, which locks or unlocks that opening, and
+one in place of a held board's arrow, which unlocks the openings holding
+it. Also the tile under each dimension's text, which opens its size
+field."""
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import cast
 
@@ -15,10 +17,20 @@ from freecad.Shelving.core.edit import is_locked
 from freecad.Shelving.core.geometry import Space
 from freecad.Shelving.core.layout import Board, Division, Region
 from freecad.Shelving.editor import overlay
-from freecad.Shelving.editor.elevation import LIFT_MM, DimensionLabel
-from freecad.Shelving.editor.overlay import RGB, ViewParams, label_string
+from freecad.Shelving.editor import view_editor as view_editor_module
+from freecad.Shelving.editor.elevation import (
+    FIRST_CONSTRAINT_SLOT,
+    LIFT_MM,
+    PADLOCK_SLOT,
+    DimensionLabel,
+    PadlockIcon,
+    RowIcon,
+    icon_center_px,
+)
+from freecad.Shelving.editor.overlay import RGB, TILE_PAD_PX, IconNode, ViewParams
 from freecad.Shelving.editor.panel import EditUnitPanel
-from freecad.Shelving.editor.view_editor import ViewEditor, label_metrics
+from freecad.Shelving.editor.session import EditFailure
+from freecad.Shelving.editor.view_editor import ViewEditor
 from tests.freecad_view import overlay_nodes
 from tests.freecad_view.editor import (
     add_board,
@@ -28,17 +40,15 @@ from tests.freecad_view.editor import (
     editor_of,
     gui_step,
     notification_count,
+    selection,
 )
 from tests.freecad_view.view import ViewDriver
 
 _VIEW_PARAMS = "User parameter:BaseApp/Preferences/View"
-_PLACE_TOL_PX = 2.0
-# The gap between a padlock's icon edge and its dimension's text.
-_GAP_PX = 4
 _TOL_MM = 1e-6
-_LOCK = "Lock this opening"
-_UNLOCK = "Unlock this opening"
-_UNLOCK_BOARD = "Unlock the openings holding this board"
+# The tile color the tests give the view's background reading: far from
+# every fill, board and dimension color, so a pixel of it is a tile's.
+_TILE_RGB: RGB = (0.2, 0.4, 0.3)
 
 
 def _rgb(name: str) -> tuple[float, float, float]:
@@ -54,104 +64,84 @@ def _close_rgb(a: tuple[float, float, float], b: tuple[float, float, float]) -> 
     return all(abs(x - y) < 2.5 / 255 for x, y in zip(a, b, strict=True))
 
 
+def _color_rgb(color: QtGui.QColor) -> RGB:
+    return (color.redF(), color.greenF(), color.blueF())
+
+
+@pytest.fixture
+def tile_background(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The editor reads :data:`_TILE_RGB` as the view's background; FreeCAD's
+    view keeps its own."""
+
+    def background(_params: ViewParams) -> RGB:
+        return _TILE_RGB
+
+    monkeypatch.setattr(overlay, "background_rgb", background)
+
+
 def _label_of(editor: ViewEditor, region_id: str) -> DimensionLabel:
     (label,) = [x for x in editor.overlay.labels if x.region_id == region_id]
     return label
 
 
-def _padlock(editor: ViewEditor, region_id: str) -> QtWidgets.QToolButton:
-    button = editor.padlock_for(region_id)
-    assert button is not None, region_id
-    return button
+def _padlock(editor: ViewEditor, region_id: str) -> PadlockIcon:
+    (padlock,) = [p for p in editor.overlay.padlocks if p.label.region_id == region_id]
+    return padlock
 
 
-def _geometry(editor: ViewEditor, button: QtWidgets.QWidget) -> QtCore.QRectF:
-    """``button``'s rectangle in the viewport's logical pixels."""
-    parent = button.parentWidget()
-    assert parent is not None
-    top_left = editor.viewport.mapFrom(parent, button.geometry().topLeft())
-    return QtCore.QRectF(QtCore.QPointF(top_left), QtCore.QSizeF(button.size()))
+def _node(editor: ViewEditor, region_id: str) -> IconNode[PadlockIcon]:
+    (node,) = [n for n in editor.padlock_nodes if n.icon.label.region_id == region_id]
+    return node
 
 
-def _anchor(
-    driver: ViewDriver, editor: ViewEditor, at_mm: tuple[float, float]
-) -> QtCore.QPointF:
-    return driver.qt_point(editor.to_document(*at_mm))
+def _press(editor: ViewEditor, region_id: str, driver: ViewDriver) -> None:
+    """Press ``region_id``'s padlock where the view draws it."""
+    driver.click(editor.icon_center(_padlock(editor, region_id)))
 
 
-def _lead_px(editor: ViewEditor, label: DimensionLabel) -> tuple[float, float]:
-    """``label``'s drawn text's width, and how far into it the first
-    digit's ink starts, in logical pixels."""
-    metrics = label_metrics(editor.style.label_size_pt)
-    ratio = editor._label_ratio
-    text = label_string(label, editor.style)
-    width_px = metrics.horizontalAdvance(text)
-    lead_px = metrics.horizontalAdvance(" " * editor.style.padlock_spaces)
-    lead_px += metrics.leftBearing(text.lstrip()[0])
-    return width_px / ratio, lead_px / ratio
+def _glyph(editor: ViewEditor, image: QtGui.QImage) -> QtGui.QImage:
+    """The padlock at the far end of a row icon's padded ``image``, or all
+    of a held padlock's."""
+    side_px, _gap_px = editor._icon_metrics_px()
+    if image.width() > side_px:
+        return image.copy(image.width() - side_px, 0, side_px, side_px)
+    # A vertical dimension's padding runs below the icon.
+    return image.copy(0, 0, side_px, side_px)
 
 
-def _misplaced(
-    driver: ViewDriver, editor: ViewEditor, label: DimensionLabel
-) -> str | None:
-    """Why ``label``'s padlock is not where it belongs, on its line a gap
-    before the first digit, in the blank its leading spaces leave, or
-    ``None`` when it is. The text reads left to right, or upward along a
-    vertical line."""
-    button = editor.padlock_for(label.region_id)
-    if button is None or not button.isVisible():
-        return f"{label.region_id}: no padlock shown"
-    rect = _geometry(editor, button)
-    anchor = _anchor(driver, editor, label.text_at_mm)
-    width_px, lead_px = _lead_px(editor, label)
-    before_px = width_px / 2 - lead_px + _GAP_PX + 7.0
-    expected = anchor + (
-        QtCore.QPointF(-before_px, 0.0)
-        if label.horizontal
-        else QtCore.QPointF(0.0, before_px)
-    )
-    if (rect.center() - expected).manhattanLength() > _PLACE_TOL_PX:
-        return f"{label.region_id}: at {rect.center()}, expected {expected}"
-    return None
+def _assert_drawn(editor: ViewEditor, image: QtGui.QImage, locked: bool) -> None:
+    """``image`` shows a closed padlock in the locked dimension color, or an
+    open one in the unlocked color, on a rounded tile of the view's
+    background."""
+    glyph = _glyph(editor, image)
+    side_px = glyph.width()
+    pad_px = editor.icon_tile().pad_px
+    inner_px = side_px - 2 * pad_px
+    ink = editor.style.label_rgb("locked" if locked else "unlocked")
 
+    def at(x: float, y: float) -> QtGui.QColor:
+        """The pixel holding ``(x, y)`` in the glyph's own 0-to-1 square."""
+        return glyph.pixelColor(pad_px + int(x * inner_px), pad_px + int(y * inner_px))
 
-def _icon_pixel_alpha(button: QtWidgets.QToolButton, x_px: float, y_px: float) -> int:
-    pixmap = button.icon().pixmap(QtCore.QSize(14, 14), button.devicePixelRatioF())
-    ratio = pixmap.devicePixelRatio()
-    return pixmap.toImage().pixelColor(round(x_px * ratio), round(y_px * ratio)).alpha()
-
-
-def _icon_rgb(button: QtWidgets.QToolButton) -> tuple[float, float, float]:
-    """The color of the padlock's body."""
-    pixmap = button.icon().pixmap(QtCore.QSize(14, 14), button.devicePixelRatioF())
-    ratio = pixmap.devicePixelRatio()
-    color = pixmap.toImage().pixelColor(round(7 * ratio), round(10 * ratio))
-    return (color.redF(), color.greenF(), color.blueF())
-
-
-def _assert_shows(button: QtWidgets.QToolButton, locked: bool) -> None:
-    """``button`` is an opening's padlock whose tooltip and drawing, as
-    :func:`_assert_drawn` checks it, match ``locked``."""
-    text = _UNLOCK if locked else _LOCK
-    assert button.toolTip() == text
-    assert button.accessibleName() == text
-    _assert_drawn(button, locked)
-
-
-def _assert_drawn(button: QtWidgets.QToolButton, locked: bool) -> None:
-    """``button`` shows a closed padlock in the locked dimension color, or
-    an open one in the unlocked color."""
-    assert button.isVisible()
-    name = "ConstrainedDimColor" if locked else "NonDrivingConstrDimColor"
-    assert _close_rgb(_icon_rgb(button), _rgb(name)), _icon_rgb(button)
+    body = at(0.5, 0.72)
+    assert _close_rgb(_color_rgb(body), ink), _color_rgb(body)
     # The shackle closes over the body's left side; open, it swings clear.
-    left_leg_alpha = _icon_pixel_alpha(button, 4.1, 4.5)
-    assert (left_leg_alpha > 100) == locked, left_leg_alpha
+    inked = _inked_share(_color_rgb(at(4.1 / 14, 4.5 / 14)), ink, editor)
+    assert inked > 0.5 if locked else inked < 0.2, inked
+    edge = glyph.pixelColor(side_px // 2, 0)
+    assert edge.alpha() == 255 and _close_rgb(_color_rgb(edge), editor.style.tile_rgb)
+    assert glyph.pixelColor(0, 0).alpha() < 255
 
 
-def _click(button: QtWidgets.QToolButton, driver: ViewDriver) -> None:
-    QtTest.QTest.mouseClick(button, QtCore.Qt.MouseButton.LeftButton)
-    driver.pump()
+def _inked_share(drawn: RGB, ink: RGB, editor: ViewEditor) -> float:
+    """How far ``drawn`` lies from the tile color toward ``ink``: a pixel's
+    ink coverage."""
+    tile = editor.style.tile_rgb
+    return max(
+        abs(d - t) / abs(i - t)
+        for d, i, t in zip(drawn, ink, tile, strict=True)
+        if abs(i - t) > 0.1
+    )
 
 
 def _same_spaces(a: Mapping[str, Space], b: Mapping[str, Space]) -> bool:
@@ -225,25 +215,130 @@ def _three_bays(panel: EditUnitPanel, driver: ViewDriver) -> tuple[str, str]:
     return low, high
 
 
+def _slot_center(editor: ViewEditor, icon: RowIcon) -> QtCore.QPointF:
+    """Where :func:`icon_center_px` puts ``icon``, in logical pixels."""
+    side_px, gap_px = editor._icon_metrics_px()
+    x_px, y_px = icon_center_px(
+        icon,
+        editor._project(*icon.label.text_at_mm),
+        editor.text_tile_px(icon.label)[0],
+        side_px,
+        gap_px,
+    )
+    ratio = editor.viewport.devicePixelRatioF()
+    height_px = editor.view.getSize()[1]
+    return QtCore.QPointF(x_px / ratio, (height_px - y_px - 1) / ratio)
+
+
+def _on_tile(image: QtGui.QImage, point: QtCore.QPointF) -> bool:
+    ratio = image.devicePixelRatio()
+    color = image.pixelColor(round(point.x() * ratio), round(point.y() * ratio))
+    return _close_rgb(_color_rgb(color), _TILE_RGB)
+
+
+# How far a drawn image may sit from where its center is computed: Coin
+# rounds an image's anchor to whole pixels, and aligns it by a pixel or so.
+_PLACE_TOL_PX = 2.5
+
+
+def _tile_box(
+    image: QtGui.QImage, center: QtCore.QPointF, half_px: float
+) -> QtCore.QRect | None:
+    """The device-pixel box of the tile-colored pixels joined to the pad of
+    a row icon's tile expected at ``center``, ``half_px`` device pixels
+    from each edge; ``None`` when no pad pixel is found."""
+    ratio = image.devicePixelRatio()
+    cx, cy = center.x() * ratio, center.y() * ratio
+    reach = round(2 * half_px)
+    seeds = [
+        (round(cx + dx * (half_px - 1.5)), round(cy + dy * (half_px - 1.5)))
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))
+    ]
+
+    def tiled(x: int, y: int) -> bool:
+        return (
+            abs(x - cx) <= reach
+            and abs(y - cy) <= reach
+            and _close_rgb(_color_rgb(image.pixelColor(x, y)), _TILE_RGB)
+        )
+
+    todo = [seed for seed in seeds if tiled(*seed)]
+    seen = set(todo)
+    while todo:
+        x, y = todo.pop()
+        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if (nx, ny) not in seen and tiled(nx, ny):
+                seen.add((nx, ny))
+                todo.append((nx, ny))
+    if not seen:
+        return None
+    xs = [x for x, _y in seen]
+    ys = [y for _x, y in seen]
+    return QtCore.QRect(
+        QtCore.QPoint(min(xs), min(ys)), QtCore.QPoint(max(xs), max(ys))
+    )
+
+
+def _tile_misplaced(
+    editor: ViewEditor, image: QtGui.QImage, center: QtCore.QPointF
+) -> str | None:
+    """Why the view, grabbed as ``image``, shows no row icon's tile, a
+    square of the row icons' side, centered on ``center``; ``None`` when it
+    does."""
+    side_px, _gap_px = editor._icon_metrics_px()
+    box = _tile_box(image, center, side_px / 2)
+    if box is None:
+        return f"no tile near {center}"
+    if abs(box.width() - side_px) > 1 or abs(box.height() - side_px) > 1:
+        return f"tile {box} near {center} is not {side_px} square"
+    ratio = image.devicePixelRatio()
+    # The box's pixel indices run to its last pixel, not past it.
+    found = QtCore.QPointF(
+        (box.left() + box.right() + 1) / 2, (box.top() + box.bottom() + 1) / 2
+    )
+    if (found - center * ratio).manhattanLength() > 2 * _PLACE_TOL_PX * ratio:
+        return f"tile centered on {found}, expected {center}"
+    return None
+
+
+def _visible(editor: ViewEditor, point: QtCore.QPointF) -> bool:
+    return editor.viewport.rect().adjusted(20, 20, -20, -20).contains(point.toPoint())
+
+
+def _padlocks_misplaced(driver: ViewDriver, editor: ViewEditor) -> list[str]:
+    """Why each padlock on the viewport is not drawn at slot 0 of its row."""
+    image = driver.grab()
+    problems: list[str] = []
+    assert [node.icon for node in editor.padlock_nodes] == list(editor.overlay.padlocks)
+    for padlock in editor.overlay.padlocks:
+        center = _slot_center(editor, padlock)
+        if _visible(editor, center):
+            problem = _tile_misplaced(editor, image, center)
+            if problem is not None:
+                problems.append(f"{padlock.label.region_id}: {problem}")
+    return problems
+
+
 @pytest.mark.parametrize(
     "unit_system", ["Standard (mm, kg, s, °)", "Building US (ft-in, sqft, cft)"]
 )
-def test_every_dimension_shows_its_padlock_beside_its_text(
+def test_every_dimension_shows_its_padlock_after_its_text(
     unit: FreeCAD.DocumentObject,
     driver: ViewDriver,
     dimension_style: None,
+    tile_background: None,
     unit_system: str,
 ) -> None:
     """Building US writes the longest labels, such as ``8" + 5/8"``."""
     schema = FreeCAD.Units.getSchema()
     unit.Document.UnitSystem = unit_system
     try:
-        _check_padlocks_beside_their_text(unit, driver)
+        _check_padlocks_after_their_text(unit, driver)
     finally:
         FreeCAD.Units.setSchema(schema)
 
 
-def _check_padlocks_beside_their_text(
+def _check_padlocks_after_their_text(
     unit: FreeCAD.DocumentObject, driver: ViewDriver
 ) -> None:
     panel = edit_unit(unit, driver)
@@ -258,107 +353,54 @@ def _check_padlocks_beside_their_text(
     # still shows a padlock.
     lone = _lone_regions(session.unit.root)
     assert lone & {x.region_id for x in editor.overlay.labels}
+    assert len(editor.padlock_nodes) == len(editor.overlay.labels)
     for label in editor.overlay.labels:
-        _assert_shows(_padlock(editor, label.region_id), label.color == "locked")
-        assert _misplaced(driver, editor, label) is None
-    shown = [b for b in editor.padlocks if b.isVisible()]
-    assert len(shown) == len(editor.overlay.labels)
+        node = _node(editor, label.region_id)
+        _assert_drawn(editor, node.drawn, label.color == "locked")
+    assert _padlocks_misplaced(driver, editor) == []
     # The padlocks follow their labels when the camera pans and zooms.
     camera = editor.view.getCameraNode()
     x_mm, y_mm, z_mm = camera.position.getValue().getValue()
     camera.position.setValue(x_mm + 40.0, y_mm, z_mm + 30.0)
     camera.height.setValue(float(camera.height.getValue()) * 0.8)
     driver.pump()
-    # A padlock the pan carries off the viewport hides.
-    viewport = editor.viewport.rect()
-    on_view = [
-        label
-        for label in editor.overlay.labels
-        if viewport.contains(_anchor(driver, editor, label.text_at_mm).toPoint())
-    ]
-    assert on_view
-    for label in on_view:
-        assert _misplaced(driver, editor, label) is None
+    assert _padlocks_misplaced(driver, editor) == []
     click_task_button("Close", driver)
 
 
-def _inked(image: QtGui.QImage, point: QtCore.QPointF, rgb: RGB) -> bool:
-    ratio = image.devicePixelRatio()
-    color = image.pixelColor(round(point.x() * ratio), round(point.y() * ratio))
-    drawn = (color.redF(), color.greenF(), color.blueF())
-    return all(abs(a - b) < 0.35 for a, b in zip(drawn, rgb, strict=True))
-
-
-def test_a_padlock_sits_in_a_blank_of_its_line_just_before_the_first_digit(
-    unit: FreeCAD.DocumentObject, driver: ViewDriver, dimension_style: None
+def test_the_padlock_leads_the_row_and_the_constraint_icons_follow_it(
+    unit: FreeCAD.DocumentObject,
+    driver: ViewDriver,
+    dimension_style: None,
+    tile_background: None,
 ) -> None:
-    """Under each padlock the view draws nothing, neither line nor text,
-    and the first digit's ink starts a small gap past the padlock's. The
-    text lands on whole pixels from wherever the camera puts its center, so
-    the gap varies by a pixel or so. A dimension too short to hold its text
-    clear of its arrowheads draws them under the text as the Sketcher does,
-    so only dimensions with room are read."""
-    # Wide enough that the width dimensions have room too, and reopened so
-    # the view fits the wider unit.
-    panel = edit_unit(unit, driver)
-    assert panel.session.resize("width", 1500.0) is None
-    click_task_button("Close", driver)
+    """One placement places both kinds: the padlock's tile where it puts
+    slot 0, the first constraint icon's where it puts slot 1."""
     panel = edit_unit(unit, driver)
     editor = editor_of(panel)
-    for direction in ("horizontal", "vertical", "horizontal", "vertical"):
-        add_board(panel, direction, driver)
+    _three_bays(panel, driver)
+    session = panel.session
+    bottom, _middle, top = bay_ids(session.unit.root)
+    session.select_items([bottom, top])
+    panel.constrain("equal")
     editor.select(None)
-    panel._refresh()
     driver.pump()
     image = driver.grab()
-    read = []
-    for label in editor.overlay.labels:
-        anchor = _anchor(driver, editor, label.text_at_mm)
-        start = _anchor(driver, editor, label.start_mm)
-        width_px, _lead = _lead_px(editor, label)
-        # Half the text, then SoDatumLabel's margin and arrowhead, each a
-        # fraction of the text's height.
-        if (anchor - start).manhattanLength() < width_px / 2 + 24:
-            continue
-        read.append(label.horizontal)
-        rgb = editor.style.label_rgb(label.color)
-        icon = _geometry(editor, _padlock(editor, label.region_id)).adjusted(
-            2, 2, -2, -2
-        )
-        for x in range(round(icon.left()), round(icon.right())):
-            for y in range(round(icon.top()), round(icon.bottom())):
-                assert not _inked(image, QtCore.QPointF(x, y), rgb), (
-                    label.region_id,
-                    x,
-                    y,
-                )
-        # Toward the digits along the line, across the text's height.
-        toward = (
-            QtCore.QPointF(1.0, 0.0) if label.horizontal else QtCore.QPointF(0.0, -1.0)
-        )
-        across = (
-            QtCore.QPointF(0.0, 1.0) if label.horizontal else QtCore.QPointF(1.0, 0.0)
-        )
-        edge = (
-            QtCore.QPointF(icon.right(), anchor.y())
-            if label.horizontal
-            else QtCore.QPointF(anchor.x(), icon.top())
-        )
-        gap_px = next(
-            step
-            for step in range(1, 20)
-            if any(
-                _inked(image, edge + toward * step + across * d, rgb)
-                for d in range(-6, 7)
-            )
-        )
-        assert _GAP_PX - 2 <= gap_px <= _GAP_PX + 2, (label.region_id, gap_px)
-    assert set(read) == {True, False}
+    for region_id in (bottom, top):
+        padlock = _padlock(editor, region_id)
+        (icon,) = [i for i in editor.overlay.icons if i.label.region_id == region_id]
+        assert (padlock.slot, icon.slot) == (PADLOCK_SLOT, FIRST_CONSTRAINT_SLOT)
+        for entry in (padlock, icon):
+            center = _slot_center(editor, entry)
+            assert _tile_misplaced(editor, image, center) is None, entry
     click_task_button("Close", driver)
 
 
 def test_padlocks_follow_their_labels_when_the_view_resizes(
-    unit: FreeCAD.DocumentObject, driver: ViewDriver, dimension_style: None
+    unit: FreeCAD.DocumentObject,
+    driver: ViewDriver,
+    dimension_style: None,
+    tile_background: None,
 ) -> None:
     """A resize moves every projected point without moving the camera, as
     moving the window to another display can."""
@@ -372,17 +414,15 @@ def test_padlocks_follow_their_labels_when_the_view_resizes(
         window.resize(size.width() - 300, size.height() - 200)
         driver.pump()
         assert editor.viewport.size() != viewport_size
-        labels = list(editor.overlay.labels)
-        assert labels
-        problems = [_misplaced(driver, editor, label) for label in labels]
+        problems = _padlocks_misplaced(driver, editor)
     finally:
         window.resize(size)
         driver.pump()
-    assert problems == [None] * len(labels)
+    assert problems == []
     click_task_button("Close", driver)
 
 
-def test_icons_redraw_for_a_screen_of_another_pixel_ratio(
+def test_images_redraw_for_a_screen_of_another_pixel_ratio(
     unit: FreeCAD.DocumentObject,
     driver: ViewDriver,
     dimension_style: None,
@@ -390,22 +430,41 @@ def test_icons_redraw_for_a_screen_of_another_pixel_ratio(
 ) -> None:
     panel = edit_unit(unit, driver)
     editor = editor_of(panel)
-    add_board(panel, "vertical", driver)
-    shown = [b for b in editor.padlocks if b.isVisible()]
-    assert shown
+    lower_shelf, _upper_shelf = _three_bays(panel, driver)
+    bottom = bay_ids(panel.session.unit.root)[0]
+    session = panel.session
+    session.select_items([bottom, bay_ids(session.unit.root)[2]])
+    panel.constrain("equal")
+    _press(editor, bottom, driver)
+    _press(editor, bay_ids(session.unit.root)[1], driver)
+    editor.select(lower_shelf)
+    driver.pump()
+    assert editor.held_marker.shown
     viewer = editor._viewer
     ratio = 2 * viewer.devicePixelRatioF()
+    side_px, _gap_px = editor._icon_metrics_px()
     monkeypatch.setattr(viewer, "devicePixelRatioF", lambda: ratio)
     QtCore.QCoreApplication.sendEvent(
         editor.viewport, QtCore.QEvent(QtCore.QEvent.Type.DevicePixelRatioChange)
     )
     driver.pump()
-    icons = [
-        *((button, 14) for button in (*shown, editor.board_padlock)),
-        *((button, 24) for button in editor.add_bar.buttons.values()),
-    ]
-    for button, side_px in icons:
-        device_px = round(side_px * ratio)
+    new_side_px, _gap_px = editor._icon_metrics_px()
+    assert new_side_px > side_px
+    assert editor.padlock_nodes and editor.icon_nodes
+    for node in (*editor.padlock_nodes, *editor.icon_nodes):
+        across_px = (
+            node.drawn.height() if node.icon.label.horizontal else node.drawn.width()
+        )
+        assert across_px == new_side_px, node.icon
+    assert editor.held_marker.drawn.size() == QtCore.QSize(new_side_px, new_side_px)
+    pad_px = round(TILE_PAD_PX * ratio)
+    metrics = editor._label_metrics
+    assert editor.text_tiles
+    for tile in editor.text_tiles:
+        across_px = tile.drawn.height() if tile.label.horizontal else tile.drawn.width()
+        assert across_px == metrics.height() + 2 * pad_px
+    for button in editor.add_bar.buttons.values():
+        device_px = round(24 * ratio)
         assert QtCore.QSize(device_px, device_px) in button.icon().availableSizes()
     monkeypatch.undo()
     click_task_button("Close", driver)
@@ -413,46 +472,39 @@ def test_icons_redraw_for_a_screen_of_another_pixel_ratio(
 
 @dataclass
 class _DragWatch:
-    """What every placement of the in-view widgets during a drag left."""
+    """What every redraw during a drag left."""
 
-    driver: ViewDriver
     editor: ViewEditor
-    most_labels: int = 0
-    most_padlocks: int = 0
     steps: int = 0
     problems: list[str] = field(default_factory=list)
-    # Every padlock button seen, held so no id is reused for a new one.
-    seen: dict[int, QtWidgets.QToolButton] = field(default_factory=dict)
 
-    def wrap(self, place: Callable[[], None]) -> Callable[[], None]:
-        def placed() -> None:
-            place()
+    def wrap(self, rebuild: Callable[[], None]) -> Callable[[], None]:
+        def rebuilt() -> None:
+            rebuild()
             editor = self.editor
             self.steps += 1
-            self.most_labels = max(self.most_labels, len(editor.overlay.labels))
-            self.most_padlocks = max(self.most_padlocks, len(editor.padlocks))
-            for button in editor.padlocks:
-                self.seen.setdefault(id(button), button)
-            for label in editor.overlay.labels:
-                problem = _misplaced(self.driver, editor, label)
-                if problem is not None:
-                    self.problems.append(problem)
+            labels = list(editor.overlay.labels)
+            if [node.icon.label for node in editor.padlock_nodes] != labels:
+                self.problems.append(f"step {self.steps}: padlocks")
+            if [tile.label for tile in editor.text_tiles] != labels:
+                self.problems.append(f"step {self.steps}: text tiles")
 
-        return placed
+        return rebuilt
 
 
-def test_padlocks_follow_a_drag_from_a_pool_that_never_outgrows_the_labels(
+def test_padlocks_and_text_tiles_follow_a_drag(
     unit: FreeCAD.DocumentObject,
     driver: ViewDriver,
     dimension_style: None,
+    tile_background: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     panel = edit_unit(unit, driver)
     editor = editor_of(panel)
     shelf = add_board(panel, "vertical", driver)
     session = panel.session
-    watch = _DragWatch(driver, editor)
-    monkeypatch.setattr(editor, "_place_widgets", watch.wrap(editor._place_widgets))
+    watch = _DragWatch(editor)
+    monkeypatch.setattr(editor, "rebuild", watch.wrap(editor.rebuild))
     arrow = editor.arrow
     assert arrow is not None and arrow.board_id == shelf
     z_before_mm = session.spaces[shelf].origin.z_mm
@@ -462,18 +514,7 @@ def test_padlocks_follow_a_drag_from_a_pool_that_never_outgrows_the_labels(
     assert session.spaces[shelf].origin.z_mm > z_before_mm + 5.0
     assert watch.steps >= 16
     assert watch.problems == []
-    assert 0 < watch.most_padlocks <= watch.most_labels
-    # Distinct buttons over the whole drag, so a pool rebuilt with fresh
-    # buttons at each step fails even when the list keeps its length.
-    assert len(watch.seen) <= watch.most_labels
-    parent = editor.padlocks[0].parentWidget()
-    assert parent is not None
-    made = [
-        button
-        for button in parent.findChildren(QtWidgets.QToolButton)
-        if button.toolTip() in (_LOCK, _UNLOCK)
-    ]
-    assert len(made) == len(editor.padlocks)
+    assert _padlocks_misplaced(driver, editor) == []
     click_task_button("Close", driver)
 
 
@@ -485,31 +526,35 @@ def test_a_padlock_locks_and_unlocks_its_opening_moving_nothing(
 ) -> None:
     panel = edit_unit(unit, driver)
     editor = editor_of(panel)
-    add_board(panel, "vertical", driver)
+    shelf = add_board(panel, "vertical", driver)
     session = panel.session
     doc = unit.Document
     lower, upper = bay_ids(session.unit.root)
     spaces = dict(session.spaces)
     names = list(doc.UndoNames)
-    _click(_padlock(editor, lower), driver)
+    picked = selection()
+    _press(editor, lower, driver)
     assert _locked(session.unit.root, lower)
     assert list(doc.UndoNames) == ["Lock Opening", *names]
     assert _same_spaces(session.spaces, spaces)
-    _assert_shows(_padlock(editor, lower), locked=True)
+    assert session.selected_id == shelf
+    assert selection() == picked
+    assert editor.field is None
+    _assert_drawn(editor, _node(editor, lower).drawn, locked=True)
     assert _label_of(editor, lower).color == "locked"
 
     # The column's last unlocked bay locks too, with no report, and makes
     # the unit's height a reference.
     count = notification_count()
-    _click(_padlock(editor, upper), driver)
+    _press(editor, upper, driver)
     assert reported == []
     assert notification_count() == count
     assert _locked(session.unit.root, upper)
     assert list(doc.UndoNames) == ["Lock Opening", "Lock Opening", *names]
     assert _same_spaces(session.spaces, spaces)
-    _assert_shows(_padlock(editor, upper), locked=True)
+    _assert_drawn(editor, _node(editor, upper).drawn, locked=True)
     assert panel.unit_fields["height"].read_only
-    _click(_padlock(editor, upper), driver)
+    _press(editor, upper, driver)
     assert not _locked(session.unit.root, upper)
     assert not panel.unit_fields["height"].read_only
     assert list(doc.UndoNames) == [
@@ -520,17 +565,77 @@ def test_a_padlock_locks_and_unlocks_its_opening_moving_nothing(
     ]
     names = list(doc.UndoNames)
 
-    _click(_padlock(editor, lower), driver)
+    _press(editor, lower, driver)
     assert not _locked(session.unit.root, lower)
     assert list(doc.UndoNames) == ["Unlock Opening", *names]
     assert _same_spaces(session.spaces, spaces)
-    _assert_shows(_padlock(editor, lower), locked=False)
+    assert editor.field is None
+    _assert_drawn(editor, _node(editor, lower).drawn, locked=False)
 
     gui_step("Std_Undo", driver)
     # Undo rescans the unit, which names its regions afresh.
     lower = bay_ids(session.unit.root)[0]
     assert _locked(session.unit.root, lower)
-    _assert_shows(_padlock(editor, lower), locked=True)
+    _assert_drawn(editor, _node(editor, lower).drawn, locked=True)
+    click_task_button("Close", driver)
+
+
+def test_a_refused_lock_reaches_the_notification_area(
+    unit: FreeCAD.DocumentObject,
+    driver: ViewDriver,
+    reported: list[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    panel = edit_unit(unit, driver)
+    editor = editor_of(panel)
+    add_board(panel, "vertical", driver)
+    lower = bay_ids(panel.session.unit.root)[0]
+
+    def refuse(region_id: str, _locked: bool) -> EditFailure:
+        return EditFailure("refused for the test", region_id)
+
+    monkeypatch.setattr(panel.session, "set_lock", refuse)
+    count = notification_count()
+    _press(editor, lower, driver)
+    assert reported == ["refused for the test"]
+    assert notification_count() == count + 1
+    monkeypatch.undo()
+    click_task_button("Close", driver)
+
+
+def test_a_padlock_wins_a_press_over_a_text_tile(
+    unit: FreeCAD.DocumentObject,
+    driver: ViewDriver,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Text tiles grown over every padlock, for the press's hit test alone,
+    still leave a press on a padlock to it."""
+    panel = edit_unit(unit, driver)
+    editor = editor_of(panel)
+    add_board(panel, "vertical", driver)
+    lower = bay_ids(panel.session.unit.root)[0]
+    center = editor.icon_center(_padlock(editor, lower))
+    real_label_at = view_editor_module.label_at
+
+    def huge(_label: DimensionLabel) -> tuple[float, float]:
+        return (4000.0, 4000.0)
+
+    def label_on_huge_tiles(
+        labels: Sequence[DimensionLabel],
+        project: Callable[[float, float], tuple[float, float]],
+        _tile_px: Callable[[DimensionLabel], tuple[float, float]],
+        x_px: float,
+        y_px: float,
+    ) -> DimensionLabel | None:
+        return real_label_at(labels, project, huge, x_px, y_px)
+
+    x_px, y_px = editor._device_point(center)
+    assert label_on_huge_tiles(editor.overlay.labels, editor._project, huge, x_px, y_px)
+    monkeypatch.setattr(view_editor_module, "label_at", label_on_huge_tiles)
+    driver.click(center)
+    assert _locked(panel.session.unit.root, lower)
+    assert editor.field is None
+    monkeypatch.undo()
     click_task_button("Close", driver)
 
 
@@ -545,8 +650,8 @@ def test_a_refused_edit_outlines_its_locks_until_the_next_edit_or_selection(
     add_board(panel, "vertical", driver)
     session = panel.session
     lower, upper = bay_ids(session.unit.root)
-    _click(_padlock(editor, lower), driver)
-    _click(_padlock(editor, upper), driver)
+    _press(editor, lower, driver)
+    _press(editor, upper, driver)
     editor.select(None)
     driver.pump()
     assert _holding_outlines(editor) == set()
@@ -584,15 +689,15 @@ def test_a_redundant_lock_warns_and_outlines_the_locks_it_repeats(
     add_board(panel, "vertical", driver)
     session = panel.session
     lower, upper = bay_ids(session.unit.root)
-    _click(_padlock(editor, lower), driver)
-    _click(_padlock(editor, upper), driver)
+    _press(editor, lower, driver)
+    _press(editor, upper, driver)
     editor.select(None)
     driver.pump()
     root = session.unit.root
     assert isinstance(root, Division)
     row = next(item for item in root.items if isinstance(item, Division))
     count = notification_count()
-    _click(_padlock(editor, row.id), driver)
+    _press(editor, row.id, driver)
     assert _locked(session.unit.root, row.id)
     assert notification_count() == count + 1
     assert session.flagged == (lower, upper)
@@ -611,7 +716,7 @@ def test_typing_a_size_closes_the_padlock(
     add_board(panel, "vertical", driver)
     session = panel.session
     upper = bay_ids(session.unit.root)[1]
-    _assert_shows(_padlock(editor, upper), locked=False)
+    _assert_drawn(editor, _node(editor, upper).drawn, locked=False)
     editor.open_field(_label_of(editor, upper))
     field_ = editor.field
     assert field_ is not None
@@ -620,12 +725,15 @@ def test_typing_a_size_closes_the_padlock(
     QtTest.QTest.keyClick(field_.line_edit, QtCore.Qt.Key.Key_Return)
     driver.pump()
     assert _locked(session.unit.root, upper)
-    _assert_shows(_padlock(editor, upper), locked=True)
+    _assert_drawn(editor, _node(editor, upper).drawn, locked=True)
     click_task_button("Close", driver)
 
 
 def test_a_held_board_shows_a_padlock_that_unlocks_the_openings_holding_it(
-    unit: FreeCAD.DocumentObject, driver: ViewDriver, dimension_style: None
+    unit: FreeCAD.DocumentObject,
+    driver: ViewDriver,
+    dimension_style: None,
+    tile_background: None,
 ) -> None:
     panel = edit_unit(unit, driver)
     editor = editor_of(panel)
@@ -633,22 +741,18 @@ def test_a_held_board_shows_a_padlock_that_unlocks_the_openings_holding_it(
     session = panel.session
     doc = unit.Document
     bottom, middle, _top = bay_ids(session.unit.root)
-    _click(_padlock(editor, bottom), driver)
-    _click(_padlock(editor, middle), driver)
+    _press(editor, bottom, driver)
+    _press(editor, middle, driver)
     editor.select(lower_shelf)
     driver.pump()
     assert editor.arrow is None
     held = editor.held
     assert held is not None and held.holders == (bottom,)
-    padlock = editor.board_padlock
-    assert padlock.isVisible()
-    assert padlock.toolTip() == _UNLOCK_BOARD
-    assert padlock.accessibleName() == _UNLOCK_BOARD
-    _assert_drawn(padlock, locked=True)
-    rect = _geometry(editor, padlock)
-    assert (
-        rect.center() - _anchor(driver, editor, held.at_mm)
-    ).manhattanLength() <= _PLACE_TOL_PX
+    assert editor.held_marker.shown
+    _assert_drawn(editor, editor.held_marker.drawn, locked=True)
+    (at,) = overlay_nodes.markers(editor.root, editor.held_marker.root)
+    assert (at - editor.to_document(*held.at_mm)).Length < 1e-3
+    center = driver.qt_point(editor.to_document(*held.at_mm))
     # The holder's outline in the locked dimension color, and no other.
     locked_rgb = _rgb("ConstrainedDimColor")
     holding = [
@@ -657,28 +761,23 @@ def test_a_held_board_shows_a_padlock_that_unlocks_the_openings_holding_it(
         if _close_rgb(outline.rgb, locked_rgb)
     ]
     assert len(holding) == 1
-    bottom_rect = editor.frame.rect(session.spaces[bottom])
-    corners = {
-        _rounded(editor.to_document(h_mm, v_mm, 0.0))
-        for h_mm in (bottom_rect.h0_mm, bottom_rect.h1_mm)
-        for v_mm in (bottom_rect.v0_mm, bottom_rect.v1_mm)
-    }
     lift_mm = editor.to_document(
         0, 0, editor.frame.z_sign * LIFT_MM
     ) - editor.to_document(0, 0, 0)
-    drawn = {_rounded(point - lift_mm) for point in holding[0].points}
-    assert drawn == corners
+    drawn = frozenset(_rounded(point - lift_mm) for point in holding[0].points)
+    assert drawn == _corners(editor, bottom)
 
     spaces = dict(session.spaces)
     names = list(doc.UndoNames)
-    _click(padlock, driver)
+    driver.click(center)
     assert list(doc.UndoNames) == ["Unlock Board", *names]
     assert not _locked(session.unit.root, bottom)
     assert _locked(session.unit.root, middle)
     assert _same_spaces(session.spaces, spaces)
     assert session.selected_id == lower_shelf
     assert editor.arrow is not None and editor.arrow.board_id == lower_shelf
-    assert not padlock.isVisible()
+    assert not editor.held_marker.shown
+    assert overlay_nodes.markers(editor.root, editor.held_marker.root) == []
     assert not any(
         _close_rgb(outline.rgb, locked_rgb)
         for outline in overlay_nodes.outlines(editor.root)
@@ -687,41 +786,20 @@ def test_a_held_board_shows_a_padlock_that_unlocks_the_openings_holding_it(
 
 
 def test_every_padlock_sits_on_a_rounded_tile_of_the_view_background(
-    unit: FreeCAD.DocumentObject,
-    driver: ViewDriver,
-    monkeypatch: pytest.MonkeyPatch,
+    unit: FreeCAD.DocumentObject, driver: ViewDriver, tile_background: None
 ) -> None:
-    def background(_params: ViewParams) -> RGB:
-        return (0.2, 0.4, 0.3)
-
-    # The editor's own reading, so FreeCAD's view keeps its background.
-    monkeypatch.setattr(overlay, "background_rgb", background)
     panel = edit_unit(unit, driver)
     editor = editor_of(panel)
     lower_shelf, _upper_shelf = _three_bays(panel, driver)
     bottom, _middle, _top = bay_ids(panel.session.unit.root)
-    _click(_padlock(editor, bottom), driver)
+    _press(editor, bottom, driver)
     editor.select(lower_shelf)
     driver.pump()
-    shown = [button for button in editor.padlocks if button.isVisible()]
-    assert shown and editor.board_padlock.isVisible()
-    for button in (*shown, editor.board_padlock):
-        # Rendered over black without the window background, which grab()
-        # would paint across the corners in the tile's own color.
-        face = QtGui.QImage(button.size(), QtGui.QImage.Format.Format_ARGB32)
-        face.fill(QtGui.QColor(0, 0, 0))
-        button.render(
-            face,
-            QtCore.QPoint(),
-            QtGui.QRegion(),
-            QtWidgets.QWidget.RenderFlag.DrawChildren,
-        )
-        edge = face.pixelColor(face.width() // 2, 1)
-        corner = face.pixelColor(0, 0)
-        assert _close_rgb((edge.redF(), edge.greenF(), edge.blueF()), (0.2, 0.4, 0.3))
-        assert not _close_rgb(
-            (corner.redF(), corner.greenF(), corner.blueF()), (0.2, 0.4, 0.3)
-        )
+    assert _close_rgb(editor.style.tile_rgb, _TILE_RGB)
+    assert editor.padlock_nodes and editor.held_marker.shown
+    for node in editor.padlock_nodes:
+        _assert_drawn(editor, node.drawn, node.icon.locked)
+    _assert_drawn(editor, editor.held_marker.drawn, locked=True)
     click_task_button("Close", driver)
 
 
@@ -738,7 +816,7 @@ def test_a_carcass_board_shows_neither_arrow_nor_padlock(
         driver.pump()
         assert editor.arrow is None
         assert editor.held is None
-        assert not editor.board_padlock.isVisible()
+        assert not editor.held_marker.shown
     click_task_button("Close", driver)
 
 
@@ -753,7 +831,7 @@ def test_a_drag_carries_both_shelves_around_a_locked_opening(
     shelves = _three_bays(panel, driver)
     session = panel.session
     middle = bay_ids(session.unit.root)[1]
-    _click(_padlock(editor, middle), driver)
+    _press(editor, middle, driver)
     assert _locked(session.unit.root, middle)
     middle_mm = session.spaces[middle].size.z_mm
     before_mm = [session.spaces[shelf].origin.z_mm for shelf in shelves]
@@ -774,4 +852,147 @@ def test_a_drag_carries_both_shelves_around_a_locked_opening(
     assert moved_mm[0] == pytest.approx(moved_mm[1], abs=_TOL_MM)
     assert session.spaces[middle].size.z_mm == pytest.approx(middle_mm, abs=_TOL_MM)
     assert _locked(session.unit.root, middle)
+    click_task_button("Close", driver)
+
+
+# --- text tiles ----------------------------------------------------------
+
+
+def _wide(unit: FreeCAD.DocumentObject, driver: ViewDriver) -> EditUnitPanel:
+    """Edit Unit on ``unit`` widened so its width dimensions have room too,
+    reopened so the view fits it, and split four ways."""
+    panel = edit_unit(unit, driver)
+    assert panel.session.resize("width", 1500.0) is None
+    click_task_button("Close", driver)
+    panel = edit_unit(unit, driver)
+    for direction in ("horizontal", "vertical", "horizontal", "vertical"):
+        add_board(panel, direction, driver)
+    editor_of(panel).select(None)
+    panel._refresh()
+    driver.pump()
+    return panel
+
+
+def test_every_dimensions_text_sits_on_a_rounded_tile_of_the_view_background(
+    unit: FreeCAD.DocumentObject,
+    driver: ViewDriver,
+    dimension_style: None,
+    tile_background: None,
+) -> None:
+    """In the pad across the text from its line, the tile's color; just
+    past the tile, another."""
+    panel = _wide(unit, driver)
+    editor = editor_of(panel)
+    image = driver.grab()
+    read = []
+    for label in editor.overlay.labels:
+        rect = editor.text_tile_rect(label)
+        if not _visible(editor, rect.center()):
+            continue
+        read.append(label.horizontal)
+        # Past the pad into the font's height, which the digits leave blank,
+        # and as far out: a drawn image sits within a pixel or two of where
+        # its center is computed.
+        if label.horizontal:
+            pad = QtCore.QPointF(rect.center().x(), rect.top() + 3.0)
+            past = QtCore.QPointF(rect.center().x(), rect.top() - 3.0)
+        else:
+            pad = QtCore.QPointF(rect.left() + 3.0, rect.center().y())
+            past = QtCore.QPointF(rect.left() - 3.0, rect.center().y())
+        assert _on_tile(image, pad), (label.region_id, pad)
+        assert not _on_tile(image, past), (label.region_id, past)
+    assert set(read) == {True, False}
+    for tile in editor.text_tiles:
+        drawn = tile.drawn
+        # The rounded corners leave the corner pixels off the tile.
+        assert drawn.pixelColor(0, 0).alpha() < 255
+        middle = drawn.pixelColor(drawn.width() // 2, 0)
+        assert middle.alpha() == 255 and _close_rgb(_color_rgb(middle), _TILE_RGB)
+    click_task_button("Close", driver)
+
+
+def _ink(image: QtGui.QImage, point: QtCore.QPointF, rgb: RGB) -> bool:
+    ratio = image.devicePixelRatio()
+    color = image.pixelColor(round(point.x() * ratio), round(point.y() * ratio))
+    return all(abs(a - b) < 0.35 for a, b in zip(_color_rgb(color), rgb, strict=True))
+
+
+def test_a_short_dimension_shows_its_arrowheads_over_its_text_tile(
+    unit: FreeCAD.DocumentObject,
+    driver: ViewDriver,
+    dimension_style: None,
+    tile_background: None,
+) -> None:
+    """A dimension too short to hold its text clear of its arrowheads draws
+    them under the text, as the Sketcher does, and over the tile."""
+    panel = edit_unit(unit, driver)
+    editor = editor_of(panel)
+    add_board(panel, "vertical", driver)
+    session = panel.session
+    lower = bay_ids(session.unit.root)[0]
+    session.select(lower)
+    assert session.set_size(30.0) is None
+    session.select(None)
+    panel._refresh()
+    driver.pump()
+    label = _label_of(editor, lower)
+    rect = editor.text_tile_rect(label)
+    tips = [
+        driver.qt_point(editor.to_document(*end))
+        for end in (label.start_mm, label.end_mm)
+    ]
+    assert all(rect.contains(tip) for tip in tips), (rect, tips)
+    image = driver.grab()
+    rgb = editor.style.label_rgb(label.color)
+    middle = (tips[0] + tips[1]) * 0.5
+    for tip in tips:
+        # Two pixels in from the tip toward the line's middle, where the
+        # arrowhead is a few pixels across.
+        toward = middle - tip
+        length = (toward.x() ** 2 + toward.y() ** 2) ** 0.5
+        inward = tip + toward * (2.0 / length)
+        across = QtCore.QPointF(-toward.y(), toward.x()) * (1.0 / length)
+        assert any(_ink(image, inward + across * d, rgb) for d in (-1.0, 0.0, 1.0)), (
+            tip,
+            inward,
+        )
+    click_task_button("Close", driver)
+
+
+def _longest(editor: ViewEditor) -> DimensionLabel:
+    return max(editor.overlay.labels, key=lambda x: editor.text_tile_px(x)[0])
+
+
+@pytest.fixture
+def us_units(unit: FreeCAD.DocumentObject) -> Iterator[None]:
+    """Building US, which writes the longest labels."""
+    schema = FreeCAD.Units.getSchema()
+    unit.Document.UnitSystem = "Building US (ft-in, sqft, cft)"
+    yield
+    FreeCAD.Units.setSchema(schema)
+
+
+def test_a_press_anywhere_on_a_text_tile_opens_its_field_and_nowhere_else(
+    unit: FreeCAD.DocumentObject,
+    driver: ViewDriver,
+    dimension_style: None,
+    us_units: None,
+) -> None:
+    panel = edit_unit(unit, driver)
+    editor = editor_of(panel)
+    add_board(panel, "vertical", driver)
+    editor.select(None)
+    driver.pump()
+    label = _longest(editor)
+    rect = editor.text_tile_rect(label)
+    # Clear of the padlock, which follows the text's end.
+    if label.horizontal:
+        corner, out = rect.topLeft(), QtCore.QPointF(-1.0, -1.0)
+    else:
+        corner, out = rect.bottomLeft(), QtCore.QPointF(-1.0, 1.0)
+    driver.click(corner + out * 2.0)
+    assert editor.field is None
+    driver.click(corner - out * 1.0)
+    assert editor.field is not None
+    assert panel.session.selected_id == label.region_id
     click_task_button("Close", driver)

@@ -42,7 +42,9 @@ from freecad.Shelving.editor.elevation import (
     ElevationFrame,
     HeldPadlock,
     Overlay,
+    PadlockIcon,
     Rect,
+    RowIcon,
     arrow_for,
     board_ids,
     dragged_to_mm,
@@ -65,14 +67,17 @@ from freecad.Shelving.editor.overlay import (
     IconNode,
     PointMarker,
     Style,
+    TextTileNode,
     Tile,
     arrow_geometry,
     coin_destroys_draggers_safely,
     constraint_icon_image,
     drawing_node,
     icon_side_px,
-    label_string,
+    length_text,
     padded_icon_image,
+    padlock_image,
+    text_tile_image,
     view_style,
 )
 from freecad.Shelving.editor.session import (
@@ -84,21 +89,14 @@ from freecad.Shelving.refusals import report_error
 
 # The add buttons' icon side, in logical pixels.
 _ICON_PX = 24
-# A padlock's icon side, its body's inset from the icon's left and right
-# edges, and the gap between the icon's edge and its dimension's text, in
-# logical pixels. The shackle reaches the icon's top edge, and the right
-# edge too when open.
-_PADLOCK_PX = 14
-_PADLOCK_INSET_PX = 2
-_PADLOCK_GAP_PX = 4
 # The clear gap between the text of neighboring rows of dimensions outside
 # the unit, and between the first row's text and the unit, in logical
 # pixels at the fitted view.
 _ROW_GAP_PX = 8
 # The fixed point marker's side, in logical pixels.
 _MARKER_PX = 16
-# The clear gap between a dimension's text and its first constraint icon,
-# and between icons in a row, in logical pixels.
+# The clear gap between a dimension's text tile and its padlock, and
+# between the tiles of the row after it, in logical pixels.
 _ICON_GAP_PX = 3
 # Inkscape's rotation-center marker on its 8.81 mm square: a plus whose arms
 # meet in a chamfered hub, with a round hole at the center.
@@ -231,43 +229,6 @@ def _board_icon(
     return QtGui.QIcon(pixmap)
 
 
-def _padlock_icon(locked: bool, ratio: float, rgb: RGB) -> QtGui.QIcon:
-    """A padlock in ``rgb``: a filled body under a shackle, closed when
-    ``locked``, swung open off the body's left side otherwise."""
-    side_px = _PADLOCK_PX
-    pixmap = QtGui.QPixmap(round(side_px * ratio), round(side_px * ratio))
-    pixmap.setDevicePixelRatio(ratio)
-    pixmap.fill(QtCore.Qt.GlobalColor.transparent)
-    painter = QtGui.QPainter(pixmap)
-    painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
-    color = QtGui.QColor.fromRgbF(*rgb)
-    pen = QtGui.QPen(color)
-    pen.setWidthF(1.6)
-    painter.setPen(pen)
-    body = QtCore.QRectF(
-        _PADLOCK_INSET_PX,
-        side_px * 0.45,
-        side_px - 2 * _PADLOCK_INSET_PX,
-        side_px * 0.5,
-    )
-    shackle = QtCore.QRectF(4, 1.5, side_px - 8, side_px * 0.6)
-    if not locked:
-        shackle.translate(side_px * 0.18, -1)
-    painter.drawArc(shackle, 0, 180 * 16)
-    painter.drawLine(
-        QtCore.QPointF(shackle.right(), shackle.center().y()),
-        QtCore.QPointF(shackle.right(), body.top()),
-    )
-    if locked:
-        painter.drawLine(
-            QtCore.QPointF(shackle.left(), shackle.center().y()),
-            QtCore.QPointF(shackle.left(), body.top()),
-        )
-    painter.fillRect(body, color)
-    painter.end()
-    return QtGui.QIcon(pixmap)
-
-
 def marker_path(side_px: float) -> QtGui.QPainterPath:
     """The fixed point marker's outline and hole, filling the square from
     the origin to ``side_px`` on each axis; its odd-even fill leaves the
@@ -299,34 +260,6 @@ def marker_image(ratio: float, rgb: RGB) -> QtGui.QImage:
     painter.fillPath(marker_path(side_px), QtGui.QColor.fromRgbF(*rgb))
     painter.end()
     return image
-
-
-def _padlock_button(
-    parent: QtWidgets.QWidget | None, on_click: Callable[[], None], tile_rgb: RGB
-) -> QtWidgets.QToolButton:
-    """A padlock button whose whole face is a tile in ``tile_rgb``, as a
-    constraint icon sits on one."""
-    button = QtWidgets.QToolButton(parent)
-    button.setAutoRaise(True)
-    button.setIconSize(QtCore.QSize(_PADLOCK_PX, _PADLOCK_PX))
-    side_px = _PADLOCK_PX + 2 * TILE_PAD_PX
-    button.setFixedSize(side_px, side_px)
-    red, green, blue = (round(255 * channel) for channel in tile_rgb)
-    button.setStyleSheet(
-        "QToolButton { border: none; padding: 0; "
-        f"background: rgb({red}, {green}, {blue}); "
-        f"border-radius: {TILE_RADIUS_PX}px; }}"
-    )
-    # As the add buttons do: keyboard focus stays in the 3D view.
-    button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
-    button.clicked.connect(on_click)
-    button.hide()
-    return button
-
-
-def _bind_index(on_click: Callable[[int], None], index: int) -> Callable[[], None]:
-    """:func:`_bind` for a padlock's place in the pool."""
-    return lambda: on_click(index)
 
 
 class AddBar(QtWidgets.QFrame):
@@ -466,13 +399,6 @@ def label_metrics(size_pt: int) -> QtGui.QFontMetrics:
     """The metrics SoDatumLabel lays out a ``size_pt`` label with, in
     device pixels (FreeCAD 1.1's ``SoDatumLabel::drawImage``)."""
     return QtGui.QFontMetrics(QtGui.QFont(_LABEL_FONT, size_pt))
-
-
-def padlock_spaces(size_pt: int, ratio: float) -> int:
-    """How many spaces leave room in a ``size_pt`` label, drawn at device
-    pixel ratio ``ratio``, for a padlock with a gap on each side."""
-    space_px = max(1, label_metrics(size_pt).horizontalAdvance(" "))
-    return math.ceil((_PADLOCK_PX + 2 * _PADLOCK_GAP_PX) * ratio / space_px)
 
 
 class _ViewportGeometry(QtCore.QObject):
@@ -701,15 +627,14 @@ class ViewEditor:
         self._field_region: str | None = None
         self._field_applied = False
         self._add_anchor: tuple[float, float] | None = None
-        # One padlock per dimension, reused across rebuilds, which a
-        # drag runs at every step; never shrunk, so it holds as many as were
-        # ever shown at once. Button i is the padlock of _padlock_labels[i].
-        self.padlocks: list[QtWidgets.QToolButton] = []
-        self._padlock_labels: list[DimensionLabel] = []
         self.held: HeldPadlock | None = None
-        # The drawn constraint icons, rebuilt with the drawing.
-        self.icon_nodes: list[IconNode] = []
+        # The drawn padlocks, constraint icons and text tiles, rebuilt with
+        # the drawing.
+        self.padlock_nodes: list[IconNode[PadlockIcon]] = []
+        self.icon_nodes: list[IconNode[ConstraintIcon]] = []
+        self.text_tiles: list[TextTileNode] = []
         self._icon_images: dict[tuple[str, RGB, Tile, int], QtGui.QImage] = {}
+        self._tile_images: dict[tuple[Tile, int, int], QtGui.QImage] = {}
         self.saved_camera = view.getCamera()
         self._saved_orientation = view.getCameraOrientation()
         global _editors_opened
@@ -763,13 +688,14 @@ class ViewEditor:
         size_pt = label_size_pt(
             font_px, ratio, self._viewer.screen().logicalDotsPerInchX()
         )
-        self.style: Style = view_style(size_pt, padlock_spaces(size_pt, ratio))
+        self.style: Style = view_style(size_pt)
         self._label_metrics = label_metrics(size_pt)
         # The ratio the labels were sized for, which their measured text
         # divides back out.
         self._label_ratio = ratio
+        # The ratio the images and add buttons' icons were drawn at.
+        self._drawn_ratio = ratio
         self._outer_row_mm = self._outer_row_spacing_mm()
-        self._padlock_icons = self._draw_padlock_icons(ratio)
         self.root: Coin = coin.SoSeparator()
         self._frame_transform: Coin = coin.SoTransform()
         self._drawing: Coin = coin.SoSeparator()
@@ -781,6 +707,10 @@ class ViewEditor:
         self._draw_marker(ratio)
         self._icons: Coin = coin.SoSeparator()
         self.root.addChild(self._icons)
+        self.held_marker = PointMarker()
+        self.held_marker.show(False)
+        self.root.addChild(self.held_marker.root)
+        self._draw_held()
         scene_graph = self.view.getSceneGraph()
         scene_graph.addChild(self.root)
         self._installed.append((lambda: scene_graph.removeChild(self.root), True))
@@ -791,15 +721,6 @@ class ViewEditor:
         )
         self._installed.append((self.add_bar.deleteLater, True))
         self._installed.append((self.add_bar.hide, True))
-        self.board_padlock = _padlock_button(
-            parent, self._unlock_held, self.style.tile_rgb
-        )
-        self.board_padlock.setIcon(self._padlock_icons[True])
-        text = "Unlock the openings holding this board"
-        self.board_padlock.setToolTip(text)
-        self.board_padlock.setAccessibleName(text)
-        self._installed.append((self.board_padlock.deleteLater, True))
-        self._installed.append((self.board_padlock.hide, True))
 
         viewport = self.viewport
         clicks = _ViewportClicks(viewport, self._sort_press, self._click)
@@ -1115,10 +1036,16 @@ class ViewEditor:
             selected_constraints=session.selected_constraints,
         )
         self._update_preview()
+        self._draw_text_tiles()
         self._drawing.removeAllChildren()
         self._drawing.addChild(
             drawing_node(
-                self.overlay, self.frame, self.style, self._front_normal(), self.preview
+                self.overlay,
+                self.frame,
+                self.style,
+                self._front_normal(),
+                self.preview,
+                self.text_tiles,
             )
         )
         self._draw_icons()
@@ -1126,69 +1053,137 @@ class ViewEditor:
         if not self._dragging:
             self._place_arrow()
             self._place_add_bar()
-        self._update_padlocks()
         self._place_widgets()
 
     def _icon_metrics_px(self) -> tuple[int, int]:
-        """The constraint icon's side, its tile included, and the gap
+        """The side of a padlock's or constraint icon's tile, and the gap
         around it, in device pixels at the view's ratio now."""
         ratio = self._viewer.devicePixelRatioF()
         side_px = round(icon_side_px() * ratio) + 2 * self.icon_tile().pad_px
         return side_px, round(_ICON_GAP_PX * ratio)
 
     def icon_tile(self) -> Tile:
-        """The tile under each constraint icon, in device pixels at the
-        view's ratio now."""
+        """The tile under each padlock, constraint icon and dimension text,
+        in device pixels at the view's ratio now."""
         ratio = self._viewer.devicePixelRatioF()
         return Tile(
             self.style.tile_rgb, round(TILE_PAD_PX * ratio), TILE_RADIUS_PX * ratio
         )
 
-    def _text_width_px(self, label: DimensionLabel) -> float:
-        """``label``'s text as drawn, padlock room included, in device
-        pixels."""
-        return float(
-            self._label_metrics.horizontalAdvance(label_string(label, self.style))
+    def text_tile_px(self, label: DimensionLabel) -> tuple[float, float]:
+        """The tile under ``label``'s text, as its length along the line and
+        its height across it, in device pixels: the text's advance and the
+        label font's height, each with the tile's pad on both sides."""
+        pad_px = self.icon_tile().pad_px
+        metrics = self._label_metrics
+        return (
+            float(metrics.horizontalAdvance(length_text(label.size_mm)) + 2 * pad_px),
+            float(metrics.height() + 2 * pad_px),
         )
 
+    def _tile_along_px(self, label: DimensionLabel) -> float:
+        return self.text_tile_px(label)[0]
+
+    def _draw_text_tiles(self) -> None:
+        """Make a tile for each dimension's text, for :func:`drawing_node`
+        to draw under every dimension."""
+        tile = self.icon_tile()
+        z_mm = self.frame.z_sign * 2 * LIFT_MM
+        self.text_tiles = []
+        for label in self.overlay.labels:
+            along_px, across_px = (round(x) for x in self.text_tile_px(label))
+            width_px, height_px = (
+                (along_px, across_px) if label.horizontal else (across_px, along_px)
+            )
+            key = (tile, width_px, height_px)
+            image = self._tile_images.get(key)
+            if image is None:
+                image = text_tile_image(tile, width_px, height_px)
+                self._tile_images[key] = image
+            self.text_tiles.append(TextTileNode(label, z_mm, image))
+
+    def _row_image(self, icon: RowIcon, tile: Tile, side_px: int) -> QtGui.QImage:
+        """``icon``'s image: a padlock in its dimension's color, a
+        constraint's icon in its state's."""
+        if isinstance(icon, PadlockIcon):
+            rgb = self.style.label_rgb(icon.label.color)
+            key = (icon.label.color, rgb, tile, side_px)
+        else:
+            rgb = self.style.icon_state_rgb(icon.state)
+            key = (icon.kind, rgb, tile, side_px)
+        image = self._icon_images.get(key)
+        if image is not None:
+            return image
+        if isinstance(icon, PadlockIcon):
+            image = padlock_image(icon.locked, rgb, tile, side_px)
+        else:
+            image = constraint_icon_image(icon.kind, rgb, tile, side_px)
+        self._icon_images[key] = image
+        return image
+
     def _draw_icons(self) -> None:
-        """Draw each constraint icon the overlay plans, in its state's color,
-        past its dimension's text."""
+        """Draw each dimension's padlock and each constraint icon the
+        overlay plans, in the row past its dimension's text tile."""
         side_px, gap_px = self._icon_metrics_px()
         tile = self.icon_tile()
         self._icons.removeAllChildren()
-        self.icon_nodes = []
-        for icon in self.overlay.icons:
-            rgb = self.style.icon_state_rgb(icon.state)
-            key = (icon.kind, rgb, tile, side_px)
-            image = self._icon_images.get(key)
-            if image is None:
-                image = constraint_icon_image(icon.kind, rgb, tile, side_px)
-                self._icon_images[key] = image
+        self.padlock_nodes = [IconNode(padlock) for padlock in self.overlay.padlocks]
+        self.icon_nodes = [IconNode(icon) for icon in self.overlay.icons]
+        nodes: list[IconNode[PadlockIcon] | IconNode[ConstraintIcon]] = [
+            *self.padlock_nodes,
+            *self.icon_nodes,
+        ]
+        for node in nodes:
+            icon = node.icon
             lead_px = round(
-                self._text_width_px(icon.label) / 2
+                self._tile_along_px(icon.label) / 2
                 + gap_px
                 + icon.slot * (side_px + gap_px)
             )
-            node = IconNode(icon)
+            image = self._row_image(icon, tile, side_px)
             node.set_image(padded_icon_image(image, icon.label.horizontal, lead_px))
             self._icons.addChild(node.root)
-            self.icon_nodes.append(node)
 
-    def icon_center(self, icon: ConstraintIcon) -> QtCore.QPointF:
+    def _draw_held(self) -> None:
+        """Give the held board's padlock its image, closed and in the locked
+        dimension color on the row icons' tile, at the view's ratio now."""
+        side_px, _gap_px = self._icon_metrics_px()
+        self.held_marker.set_image(
+            padlock_image(True, self.style.locked_rgb, self.icon_tile(), side_px)
+        )
+
+    def _logical_from_device(self, x_px: float, y_px: float) -> QtCore.QPointF:
+        """A device point, y up, in the viewport's logical pixels."""
+        ratio = self._viewer.devicePixelRatioF()
+        height_px = self.view.getSize()[1]
+        return QtCore.QPointF(x_px / ratio, (height_px - y_px - 1) / ratio)
+
+    def icon_center(self, icon: RowIcon) -> QtCore.QPointF:
         """Where ``icon``'s center is drawn, in the viewport's logical
         pixels."""
         side_px, gap_px = self._icon_metrics_px()
         x_px, y_px = icon_center_px(
             icon,
             self._project(*icon.label.text_at_mm),
-            self._text_width_px(icon.label),
+            self._tile_along_px(icon.label),
             side_px,
             gap_px,
         )
+        return self._logical_from_device(x_px, y_px)
+
+    def text_tile_rect(self, label: DimensionLabel) -> QtCore.QRectF:
+        """Where ``label``'s text tile is drawn, in the viewport's logical
+        pixels: standing upright for a vertical dimension."""
         ratio = self._viewer.devicePixelRatioF()
-        height_px = self.view.getSize()[1]
-        return QtCore.QPointF(x_px / ratio, (height_px - y_px - 1) / ratio)
+        along_px, across_px = (x / ratio for x in self.text_tile_px(label))
+        width_px, height_px = (
+            (along_px, across_px) if label.horizontal else (across_px, along_px)
+        )
+        center = self._logical_from_device(*self._project(*label.text_at_mm))
+        return QtCore.QRectF(
+            center - QtCore.QPointF(width_px / 2, height_px / 2),
+            QtCore.QSizeF(width_px, height_px),
+        )
 
     def _update_preview(self) -> None:
         direction = self._preview_direction
@@ -1215,11 +1210,9 @@ class ViewEditor:
             if selected is not None and session.can_merge()
             else None
         )
-        if self.held is None:
-            self.board_padlock.hide()
-        else:
-            self.board_padlock.show()
-            self.board_padlock.raise_()
+        if self.held is not None:
+            self.held_marker.place((*self.held.at_mm, 0.0))
+        self.held_marker.show(self.held is not None)
         if arrow is None:
             self._dragger_switch.whichChild.setValue(coin.SO_SWITCH_NONE)
             return
@@ -1253,46 +1246,14 @@ class ViewEditor:
         if self._field_host is not None and self._field_anchor is not None:
             if Shiboken.isValid(self._field_host):
                 self._move_to(self._field_host, self._field_anchor)
-        metrics = self._label_metrics
-        lead_px = metrics.horizontalAdvance(" " * self.style.padlock_spaces)
-        for button, label in zip(self.padlocks, self._padlock_labels, strict=False):
-            text = label_string(label, self.style)
-            width_px = metrics.horizontalAdvance(text)
-            # From the first digit's ink rather than its origin: a "1" stands
-            # well clear of its own.
-            bearing_px = metrics.leftBearing(text.lstrip()[:1] or " ")
-            # The text reads left to right, or upward along a vertical line,
-            # so its first digit faces the padlock's right edge or its top.
-            before_px = (
-                (width_px / 2 - lead_px - bearing_px) / self._label_ratio
-                + _PADLOCK_GAP_PX
-                + _PADLOCK_PX / 2
-            )
-            shift_px = (
-                QtCore.QPointF(-before_px, 0.0)
-                if label.horizontal
-                else QtCore.QPointF(0.0, before_px)
-            )
-            # A padlock off the viewport hides rather than float over the
-            # panels around the view.
-            button.setVisible(self._move_to(button, label.text_at_mm, shift_px))
-        if self.held is not None:
-            self.board_padlock.setVisible(
-                self._move_to(self.board_padlock, self.held.at_mm)
-            )
 
     def _move_to(
-        self,
-        widget: QtWidgets.QWidget,
-        anchor_mm: tuple[float, float],
-        shift_px: QtCore.QPointF | None = None,
+        self, widget: QtWidgets.QWidget, anchor_mm: tuple[float, float]
     ) -> bool:
         """Center ``widget``, a child of the view's parent, on the elevation
-        point ``anchor_mm``, moved by ``shift_px`` logical pixels. Returns
-        whether that center lies on the viewport."""
+        point ``anchor_mm``. Returns whether that center lies on the
+        viewport."""
         point = self._logical_point(self.to_document(*anchor_mm))
-        if shift_px is not None:
-            point += shift_px
         local = point.toPoint()
         parent = widget.parentWidget()
         # From the viewport, whose coordinates _logical_point gives: the
@@ -1552,31 +1513,53 @@ class ViewEditor:
             <= _ARROW_HIT_PX
         )
 
+    def _on_held(self, device: tuple[int, int]) -> bool:
+        """Whether the device point lies on the held board's padlock."""
+        held = self.held
+        if held is None:
+            return False
+        side_px, _gap_px = self._icon_metrics_px()
+        x_px, y_px = self._project(*held.at_mm)
+        return (
+            abs(device[0] - x_px) <= side_px / 2
+            and abs(device[1] - y_px) <= side_px / 2
+        )
+
     def _sort_press(self, position: QtCore.QPointF, adding: bool) -> PressKind:
-        """A press on the drag arrow is the dragger's; one on a constraint's
-        icon selects the constraint, or adds it for an ``adding`` press;
-        one on a dimension's text opens that dimension's field."""
+        """A press on the drag arrow is the dragger's; one on the held
+        board's padlock unlocks the openings holding it; one on a
+        dimension's padlock locks or unlocks its opening; one on a
+        constraint's icon selects the constraint, or adds it for an
+        ``adding`` press; one on a dimension's text tile opens that
+        dimension's field."""
         if self._closed:
             return "leave"
         device = self._device_point(position)
         if self._on_arrow(device):
             return "leave"
+        if self._on_held(device):
+            QtCore.QTimer.singleShot(0, self._unlock_held)
+            return "take"
         side_px, gap_px = self._icon_metrics_px()
         icon = icon_at(
-            self.overlay.icons,
+            self.overlay.row_icons,
             self._project,
-            self._text_width_px,
+            self._tile_along_px,
             side_px,
             gap_px,
             *device,
         )
+        if isinstance(icon, PadlockIcon):
+            padlock = icon
+            QtCore.QTimer.singleShot(0, lambda: self._toggle_lock(padlock))
+            return "take"
         if icon is not None:
             constraint_id = icon.constraint_id
             QtCore.QTimer.singleShot(
                 0, lambda: self.click_constraint(constraint_id, adding)
             )
             return "take"
-        label = label_at(self.overlay.labels, self._project, *device)
+        label = label_at(self.overlay.labels, self._project, self.text_tile_px, *device)
         if label is None:
             return "click"
         QtCore.QTimer.singleShot(0, lambda: self.open_field(label))
@@ -1669,33 +1652,14 @@ class ViewEditor:
     def field_host(self) -> QtWidgets.QFrame | None:
         return self._field_host
 
-    # Padlocks
-
-    def _draw_padlock_icons(self, ratio: float) -> dict[bool, QtGui.QIcon]:
-        """The closed and open padlock icons, keyed by locked, drawn at the
-        device pixel ratio ``ratio``."""
-        self._icon_ratio = ratio
-        return {
-            locked: _padlock_icon(
-                locked,
-                ratio,
-                self.style.label_rgb("locked" if locked else "unlocked"),
-            )
-            for locked in (True, False)
-        }
+    # Padlocks and the fixed point marker
 
     def _draw_marker(self, ratio: float) -> None:
         """Give the fixed point marker its image drawn at the device pixel
         ratio ``ratio``: Coin draws an image's pixels one to one."""
         image = marker_image(ratio, self.style.marker_rgb)
         self.marker_image = image
-        pixels = bytes(image.constBits())
-        stride = image.bytesPerLine()
-        # Coin's rows run bottom to top, Qt's top to bottom.
-        rows = [
-            pixels[start : start + stride] for start in range(0, len(pixels), stride)
-        ]
-        self.marker.set_image(image.width(), image.height(), b"".join(reversed(rows)))
+        self.marker.set_image(image)
 
     def _units_changed(self) -> None:
         if self._closed or self._stood_down():
@@ -1704,63 +1668,26 @@ class ViewEditor:
 
     def _refit(self) -> None:
         """Place the widgets over the view again, after its viewport resized
-        or moved to another screen, redrawing their icons when the device
-        pixel ratio they were drawn at is no longer the view's."""
+        or moved to another screen, redrawing every image and icon when the
+        device pixel ratio they were drawn at is no longer the view's."""
         if self._closed or self._stood_down():
             return
         ratio = self._viewer.devicePixelRatioF()
-        if ratio != self._icon_ratio:
-            self._padlock_icons = self._draw_padlock_icons(ratio)
-            self.board_padlock.setIcon(self._padlock_icons[True])
+        if ratio != self._drawn_ratio:
+            self._drawn_ratio = ratio
             self.add_bar.draw_icons(ratio)
-            self._update_padlocks()
             self._draw_marker(ratio)
-            self._draw_icons()
+            self._draw_held()
+            # Redraws the padlocks, constraint icons and text tiles.
+            self.rebuild()
         self._place_widgets()
 
-    def _update_padlocks(self) -> None:
-        """Give each dimension a padlock from the pool, growing it only when
-        more are shown at once than ever before, and hide the rest."""
-        labels = list(self.overlay.labels)
-        parent = self._viewer.parentWidget()
-        while len(self.padlocks) < len(labels):
-            button = _padlock_button(
-                parent,
-                _bind_index(self._toggle_lock, len(self.padlocks)),
-                self.style.tile_rgb,
-            )
-            self.padlocks.append(button)
-            self._installed.append((button.deleteLater, True))
-            self._installed.append((button.hide, True))
-        self._padlock_labels = labels
-        for button, label in zip(self.padlocks, labels, strict=False):
-            locked = label.color == "locked"
-            text = "Unlock this opening" if locked else "Lock this opening"
-            icon = self._padlock_icons[locked]
-            if button.icon().cacheKey() != icon.cacheKey():
-                button.setIcon(icon)
-            if button.toolTip() != text:
-                button.setToolTip(text)
-                button.setAccessibleName(text)
-            button.show()
-            button.raise_()
-        for button in self.padlocks[len(labels) :]:
-            button.hide()
-
-    def padlock_for(self, region_id: str) -> QtWidgets.QToolButton | None:
-        """The padlock on ``region_id``'s dimension, or ``None`` when its
-        dimension is not drawn."""
-        for button, label in zip(self.padlocks, self._padlock_labels, strict=False):
-            if label.region_id == region_id:
-                return button
-        return None
-
-    def _toggle_lock(self, index: int) -> None:
-        if self._closed or index >= len(self._padlock_labels):
+    def _toggle_lock(self, padlock: PadlockIcon) -> None:
+        """Lock ``padlock``'s opening, or unlock it when it is locked."""
+        if self._closed:
             return
-        label = self._padlock_labels[index]
         self._close_field()
-        failure = self.session.set_lock(label.region_id, label.color == "unlocked")
+        failure = self.session.set_lock(padlock.label.region_id, not padlock.locked)
         if failure is not None:
             report_error(failure.message)
         self._on_change()

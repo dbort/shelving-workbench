@@ -180,7 +180,7 @@ def test_several_boards_show_no_arrow_and_no_add_buttons(
     _assert_mirrored(panel, ("Shelf", "Floor"))
     assert editor.arrow is None
     assert not editor.add_bar.isVisible()
-    assert not editor.board_padlock.isVisible()
+    assert not editor.held_marker.shown
     click_task_button("Close", driver)
 
 

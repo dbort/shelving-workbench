@@ -21,6 +21,7 @@ from freecad.Shelving.core.layout import (
 )
 from freecad.Shelving.core.solver import solve
 from freecad.Shelving.editor.elevation import (
+    PADLOCK_SLOT,
     DimensionLabel,
     FixedChoice,
     Overlay,
@@ -363,19 +364,37 @@ def _label(region_id: str, at_mm: tuple[float, float]) -> DimensionLabel:
     return DimensionLabel(region_id, at_mm, at_mm, 1.0, "unlocked", 0.5)
 
 
-def test_label_at_takes_the_nearest_within_reach_and_the_later_on_a_tie() -> None:
+def _upright_label(region_id: str, at_mm: tuple[float, float]) -> DimensionLabel:
+    h_mm, v_mm = at_mm
+    return DimensionLabel(
+        region_id, (h_mm, v_mm - 1.0), (h_mm, v_mm + 1.0), 2.0, "unlocked", 0.5
+    )
+
+
+def test_label_at_takes_a_point_on_a_text_tile_and_the_later_of_two() -> None:
     labels = [
         _label("a", (0.0, 0.0)),
-        _label("b", (10.0, 0.0)),
+        _label("b", (100.0, 0.0)),
         _label("c", (0.0, 0.0)),
+        _upright_label("d", (0.0, 100.0)),
     ]
 
     def project(h_mm: float, v_mm: float) -> tuple[float, float]:
         return (h_mm, v_mm)
 
-    assert label_at(labels, project, 9.0, 0.0) == labels[1]
-    assert label_at(labels, project, 1.0, 0.0) == labels[2]
-    assert label_at(labels, project, 100.0, 0.0) is None
+    def tile_px(_label: DimensionLabel) -> tuple[float, float]:
+        return (40.0, 10.0)
+
+    # Just inside a long tile's corner, and on its edge.
+    assert label_at(labels, project, tile_px, 119.0, 4.0) == labels[1]
+    assert label_at(labels, project, tile_px, 120.0, -5.0) == labels[1]
+    assert label_at(labels, project, tile_px, 1.0, 0.0) == labels[2]
+    # Past the tile's end, and past its height.
+    assert label_at(labels, project, tile_px, 122.0, 0.0) is None
+    assert label_at(labels, project, tile_px, 100.0, 7.0) is None
+    # A vertical dimension's tile stands upright.
+    assert label_at(labels, project, tile_px, 4.0, 119.0) == labels[3]
+    assert label_at(labels, project, tile_px, 19.0, 100.0) is None
 
 
 def test_split_preview_is_where_the_new_board_goes() -> None:
@@ -525,8 +544,8 @@ def test_an_equal_draws_an_icon_at_each_of_its_openings() -> None:
     (equal,) = unit.constraints
     icons = _overlay(unit).icons
     assert [(i.label.region_id, i.kind, i.slot, i.state) for i in icons] == [
-        ("A", "equal", 0, "active"),
-        ("C", "equal", 0, "active"),
+        ("A", "equal", 1, "active"),
+        ("C", "equal", 1, "active"),
     ]
     assert {i.constraint_id for i in icons} == {equal.id}
 
@@ -535,12 +554,27 @@ def test_an_even_spacing_draws_an_icon_at_every_opening_of_its_group() -> None:
     unit = add_even_spacing(add_equal(_column(), ["A", "B"]), ["A", "C"])
     icons = _overlay(unit).icons
     assert [(i.label.region_id, i.kind, i.slot) for i in icons] == [
-        ("A", "equal", 0),
-        ("B", "equal", 0),
-        ("A", "even_spacing", 1),
-        ("B", "even_spacing", 1),
-        ("C", "even_spacing", 0),
+        ("A", "equal", 1),
+        ("B", "equal", 1),
+        ("A", "even_spacing", 2),
+        ("B", "even_spacing", 2),
+        ("C", "even_spacing", 1),
     ]
+
+
+def test_every_dimension_leads_its_row_with_its_padlock() -> None:
+    unit = add_equal(_column(), ["A", "C"])
+    unit = lock(unit, "B")
+    overlay = _overlay(unit)
+    assert [p.label for p in overlay.padlocks] == list(overlay.labels)
+    assert {p.slot for p in overlay.padlocks} == {PADLOCK_SLOT}
+    assert {i.slot for i in overlay.icons} == {PADLOCK_SLOT + 1}
+    assert {p.label.region_id: p.locked for p in overlay.padlocks} == {
+        "A": False,
+        "B": True,
+        "C": False,
+    }
+    assert overlay.row_icons == (*overlay.padlocks, *overlay.icons)
 
 
 def test_an_icon_takes_the_deactivated_or_selected_state() -> None:
@@ -576,7 +610,7 @@ def test_icons_sit_past_the_text_clear_of_it_and_of_each_other() -> None:
         boxes.append(
             (h_mm - half_w_px, v_mm - half_h_px, h_mm + half_w_px, v_mm + half_h_px)
         )
-    for icon in overlay.icons:
+    for icon in overlay.row_icons:
         x_px, y_px = icon_center_px(
             icon, icon.label.text_at_mm, text_width_px, icon_px, gap_px
         )
@@ -587,22 +621,24 @@ def test_icons_sit_past_the_text_clear_of_it_and_of_each_other() -> None:
             assert a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1]
 
 
-def test_icon_at_finds_the_icon_under_a_point() -> None:
+def test_icon_at_finds_the_padlock_or_icon_under_a_point() -> None:
     unit = add_equal(_column(), ["A", "B"])
     overlay = _overlay(unit)
-    first = overlay.icons[0]
+    row = overlay.row_icons
 
     def project(h_mm: float, v_mm: float) -> tuple[float, float]:
         return (h_mm, v_mm)
 
-    x_px, y_px = icon_center_px(first, first.label.text_at_mm, 40.0, 16.0, 3.0)
-    assert icon_at(overlay.icons, project, lambda _: 40.0, 16.0, 3.0, x_px, y_px) == (
-        first
-    )
-    x0_px, y0_px = first.label.text_at_mm
-    assert icon_at(overlay.icons, project, lambda _: 40.0, 16.0, 3.0, x0_px, y0_px) is (
-        None
-    )
+    for entry in (overlay.padlocks[0], overlay.icons[0]):
+        x_px, y_px = icon_center_px(entry, entry.label.text_at_mm, 40.0, 16.0, 3.0)
+        assert icon_at(row, project, lambda _: 40.0, 16.0, 3.0, x_px, y_px) == entry
+    padlock = overlay.padlocks[0]
+    x0_px, y0_px = padlock.label.text_at_mm
+    assert icon_at(row, project, lambda _: 40.0, 16.0, 3.0, x0_px, y0_px) is None
+    # The padlock sits right after the text, the first icon one place on.
+    for entry, along_px in ((padlock, 31.0), (overlay.icons[0], 50.0)):
+        x_px, y_px = icon_center_px(entry, (0.0, 0.0), 40.0, 16.0, 3.0)
+        assert x_px + y_px == pytest.approx(along_px)
 
 
 def _roles(overlay: Overlay, region_id: str, unit: Unit) -> list[str]:

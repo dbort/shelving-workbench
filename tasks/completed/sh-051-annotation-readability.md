@@ -16,56 +16,56 @@ held board's padlock becomes the same kind of image, and a click anywhere
 on a text's tile opens its size field.
 
 ## Must Have
-- [ ] Each opening's dimension draws its padlock as a Coin image in the
+- [x] Each opening's dimension draws its padlock as a Coin image in the
       row after its text, in slot 0, with that opening's constraint icons
       after it from slot 1. The padlock's tile has the same side as a
       constraint icon's tile and the same `_ICON_GAP_PX` gap, and one
       placement function (`icon_center_px` or its successor) places both:
       a view test finds the padlock's tile centered where that function
       puts slot 0, and the first constraint icon where it puts slot 1.
-- [ ] The padlock is closed for a locked opening and open for an
+- [x] The padlock is closed for a locked opening and open for an
       unlocked one, in the dimension's color, on a tile of
       `Style.tile_rgb` with `TILE_RADIUS_PX` corners (pixel test with the
       background monkeypatched, as `test_every_padlock_sits_on_a_rounded_tile_of_the_view_background`
       does today).
-- [ ] A press on a dimension's padlock toggles that opening's lock, moves
+- [x] A press on a dimension's padlock toggles that opening's lock, moves
       no board, changes no selection, and opens no size field. A press on a
       constraint icon selects the constraint as it does today. Refusals
       still go through `report_error`.
-- [ ] A selected held board draws a closed padlock image centered on
+- [x] A selected held board draws a closed padlock image centered on
       `HeldPadlock.at_mm`, facing the camera and unpickable, and a press on
       it unlocks the openings holding the board, as the button does today.
-- [ ] No padlock is a Qt widget: `ViewEditor` has no `padlocks`,
+- [x] No padlock is a Qt widget: `ViewEditor` has no `padlocks`,
       `board_padlock` or `padlock_for`, and `view_editor.py` and
       `overlay.py` define none of `_padlock_button`, `_bind_index`,
       `padlock_spaces`, `Style.padlock_spaces` or `_PADLOCK_GAP_PX`.
-- [ ] A dimension's drawn string is `length_text(size_mm)` with no leading
+- [x] A dimension's drawn string is `length_text(size_mm)` with no leading
       spaces.
-- [ ] Each dimension's text sits on a rounded tile of `Style.tile_rgb`.
+- [x] Each dimension's text sits on a rounded tile of `Style.tile_rgb`.
       The tile spans the text's advance width and the label font's height
       (swapped for a vertical dimension), plus `TILE_PAD_PX` (scaled by
       the device pixel ratio) on every side, with `TILE_RADIUS_PX` corners.
       A pixel test with the background monkeypatched reads the tile color
       in the pad beside the text and a different color just outside it.
-- [ ] Every dimension's lines, arrowheads and text draw over every text
+- [x] Every dimension's lines, arrowheads and text draw over every text
       tile: a dimension too short to hold its text clear of its arrowheads
       still shows those arrowheads under its text.
-- [ ] A press anywhere on a dimension's text tile, and nowhere else,
+- [x] A press anywhere on a dimension's text tile, and nowhere else,
       opens that dimension's size field: a press just inside a long text's
       tile corner opens it, and a press 2 px outside the tile opens none.
       `LABEL_HIT_PX` is gone. A padlock or icon wins a press over a tile.
-- [ ] Padlocks, the held padlock, icons and text tiles are redrawn for a
+- [x] Padlocks, the held padlock, icons and text tiles are redrawn for a
       screen of another device pixel ratio and follow a view resize, zoom
       and drag (the existing `test_padlocks.py` and `test_constraints.py`
       cases, rewritten for images).
-- [ ] Neighboring rows of dimensions outside the unit keep their text
+- [x] Neighboring rows of dimensions outside the unit keep their text
       tiles clear of each other and of the unit
       (`test_rows_of_dimensions_outside_the_unit_clear_it_and_each_other`
       measures tiles).
-- [ ] An overlay padlock image function in `editor/overlay.py` is public,
+- [x] An overlay padlock image function in `editor/overlay.py` is public,
       and `tasks/active/sh-049-constraint-list.md` points at it in place
       of `_padlock_icon`.
-- [ ] `pyrefly check` passes over the changed code and `pixi run tests`
+- [x] `pyrefly check` passes over the changed code and `pixi run tests`
       is green.
 
 ## Advice
@@ -122,12 +122,17 @@ on a text's tile opens its size field.
   dimension text draws on a transparent background. It is built anyway
   (user decision) for the reason the icon tiles exist: the openings'
   translucent fills wash out text drawn straight on them.
+- **A row may cover a neighbor's text (user decision, 2026-11-16, manual
+  QA):** zoomed out, a dimension's padlock and icon row can run over a
+  neighboring dimension's text. That is accepted; a row never covers its
+  own dimension's text. How much of a busy unit reads at the fitted zoom
+  depends on the window's size, so the QA case says so.
 - **Users never read the log:** satisfied. A lock toggle's refusal still
   reaches the Notification Area through `report_error`, and nothing new
   goes to the log.
 
 ## Plan
-- [ ] **Step 1** (`freecad/Shelving/editor/elevation.py`,
+- [x] **Step 1** (`freecad/Shelving/editor/elevation.py`,
       `tests/test_editor_elevation.py`): plan a padlock row entry per
       label in slot 0 and shift constraint icon slots to start at 1. Make
       `icon_center_px` and `icon_at` cover both kinds, with docstrings
@@ -135,14 +140,14 @@ on a text's tile opens its size field.
       with a tile rectangle test that takes the label's tile size in
       device pixels, delete `LABEL_HIT_PX`, and update the elevation
       tests for slots, hits and the tile test.
-- [ ] **Step 2** (`freecad/Shelving/editor/overlay.py`): drop
+- [x] **Step 2** (`freecad/Shelving/editor/overlay.py`): drop
       `Style.padlock_spaces`, the `view_style` parameter and the leading
       spaces in `label_string`. Add the public padlock image function,
       moved from `view_editor._padlock_icon` and drawn on a `Tile` at a
       given side. Add a text tile image function. Make `IconNode` (or a
       sibling) carry a padlock row entry, and give text tiles their own
       layer drawn before the dimensions.
-- [ ] **Step 3** (`freecad/Shelving/editor/view_editor.py`): delete the
+- [x] **Step 3** (`freecad/Shelving/editor/view_editor.py`): delete the
       padlock button pool, `board_padlock`, `padlock_for`,
       `_padlock_button`, `_bind_index`, `padlock_spaces`, `_PADLOCK_*`,
       `_draw_padlock_icons` and the padlock part of `_place_widgets`.
@@ -153,7 +158,7 @@ on a text's tile opens its size field.
       constraint by kind, then text tiles. Expose whatever public reads
       the tests need, such as a padlock's or text tile's center or rect
       in logical pixels, in the shape `icon_center` has.
-- [ ] **Step 4** (`tests/freecad_view/test_padlocks.py`,
+- [x] **Step 4** (`tests/freecad_view/test_padlocks.py`,
       `tests/freecad_view/test_constraints.py`,
       `tests/freecad_view/test_editor_drawing.py`,
       `tests/freecad_view/test_multi_selection.py`,
@@ -167,7 +172,7 @@ on a text's tile opens its size field.
       held padlock through its image instead of `board_padlock.isVisible()`.
       Add the text tile pixel, short-dimension arrowhead and tile hit
       tests from the Must Haves.
-- [ ] **Step 5** (`docs/scope-and-design.md`,
+- [x] **Step 5** (`docs/scope-and-design.md`,
       `freecad/Shelving/qa/cases/30-editor.toml`,
       `.claude/docs/freecad-notes.md`,
       `tasks/active/sh-049-constraint-list.md`): describe the padlock as
@@ -178,7 +183,16 @@ on a text's tile opens its size field.
       it and of the padlock" wording to the icon following the padlock.
       Make the background note name the text tiles too, and point sh-049
       at the public padlock image function.
-- [ ] **Step 6**: run `pyrefly check` and `pixi run tests`, and fix
+- [x] **Step 6**: run `pyrefly check` and `pixi run tests`, and fix
       failures until both are green.
 
 ## Review log
+
+### Round 1: APPROVED
+- **N1: The held padlock's placement check is fine as it stands** (`tests/freecad_view/test_padlocks.py:1157`): the scene-graph point, the drawn closed padlock on its tile, and the unlocking click at the projected `at_mm` together prove the image is centered on `HeldPadlock.at_mm`. The padlock winning the press where its tile touches a text tile matches the padlock-over-tile rule.
+- **N2: The 2.5 px tolerance discriminates enough** (`tests/freecad_view/test_padlocks.py:555`, `:606`): the box must be the icon side ±1 px square and slots sit over 20 px apart. A fill that runs into a neighboring tile makes the box too big and fails.
+- **N3: The along-line size of the drawn text tile is never checked** (`tests/freecad_view/test_padlocks.py:1308`, `:863`): the pixel test reads only across the line and the ratio test compares only the across size. A wrong along-line pad or width would go unnoticed.
+- **N4: Huge monkeypatched tiles get drawn** (`tests/freecad_view/test_padlocks.py:1055`): the 4000×4000 `text_tile_px` patch makes `_draw_text_tiles` build a 64 MB image per label on the rebuild after the toggle. Patching only the hit test, or using a smaller size, avoids that.
+- **N5: Stale parameter name** (`freecad/Shelving/editor/elevation.py:123`, `:149`): `icon_center_px` and `icon_at` still call the tile's along-line length `text_width_px`.
+- **N6: Test leftovers** (`tests/freecad_view/test_padlocks.py:1103`, `:1371`): a function-local `QtTest` import, and `assert shelf in editor._boards` existing only to use the `shelf` binding.
+- **N7: Unwrapped doc line** (`docs/scope-and-design.md:257`): one line runs to 94 columns.
