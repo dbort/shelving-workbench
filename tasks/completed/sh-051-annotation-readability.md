@@ -16,56 +16,56 @@ held board's padlock becomes the same kind of image, and a click anywhere
 on a text's tile opens its size field.
 
 ## Must Have
-- [ ] Each opening's dimension draws its padlock as a Coin image in the
+- [x] Each opening's dimension draws its padlock as a Coin image in the
       row after its text, in slot 0, with that opening's constraint icons
       after it from slot 1. The padlock's tile has the same side as a
       constraint icon's tile and the same `_ICON_GAP_PX` gap, and one
       placement function (`icon_center_px` or its successor) places both:
       a view test finds the padlock's tile centered where that function
       puts slot 0, and the first constraint icon where it puts slot 1.
-- [ ] The padlock is closed for a locked opening and open for an
+- [x] The padlock is closed for a locked opening and open for an
       unlocked one, in the dimension's color, on a tile of
       `Style.tile_rgb` with `TILE_RADIUS_PX` corners (pixel test with the
       background monkeypatched, as `test_every_padlock_sits_on_a_rounded_tile_of_the_view_background`
       does today).
-- [ ] A press on a dimension's padlock toggles that opening's lock, moves
+- [x] A press on a dimension's padlock toggles that opening's lock, moves
       no board, changes no selection, and opens no size field. A press on a
       constraint icon selects the constraint as it does today. Refusals
       still go through `report_error`.
-- [ ] A selected held board draws a closed padlock image centered on
+- [x] A selected held board draws a closed padlock image centered on
       `HeldPadlock.at_mm`, facing the camera and unpickable, and a press on
       it unlocks the openings holding the board, as the button does today.
-- [ ] No padlock is a Qt widget: `ViewEditor` has no `padlocks`,
+- [x] No padlock is a Qt widget: `ViewEditor` has no `padlocks`,
       `board_padlock` or `padlock_for`, and `view_editor.py` and
       `overlay.py` define none of `_padlock_button`, `_bind_index`,
       `padlock_spaces`, `Style.padlock_spaces` or `_PADLOCK_GAP_PX`.
-- [ ] A dimension's drawn string is `length_text(size_mm)` with no leading
+- [x] A dimension's drawn string is `length_text(size_mm)` with no leading
       spaces.
-- [ ] Each dimension's text sits on a rounded tile of `Style.tile_rgb`.
+- [x] Each dimension's text sits on a rounded tile of `Style.tile_rgb`.
       The tile spans the text's advance width and the label font's height
       (swapped for a vertical dimension), plus `TILE_PAD_PX` (scaled by
       the device pixel ratio) on every side, with `TILE_RADIUS_PX` corners.
       A pixel test with the background monkeypatched reads the tile color
       in the pad beside the text and a different color just outside it.
-- [ ] Every dimension's lines, arrowheads and text draw over every text
+- [x] Every dimension's lines, arrowheads and text draw over every text
       tile: a dimension too short to hold its text clear of its arrowheads
       still shows those arrowheads under its text.
-- [ ] A press anywhere on a dimension's text tile, and nowhere else,
+- [x] A press anywhere on a dimension's text tile, and nowhere else,
       opens that dimension's size field: a press just inside a long text's
       tile corner opens it, and a press 2 px outside the tile opens none.
       `LABEL_HIT_PX` is gone. A padlock or icon wins a press over a tile.
-- [ ] Padlocks, the held padlock, icons and text tiles are redrawn for a
+- [x] Padlocks, the held padlock, icons and text tiles are redrawn for a
       screen of another device pixel ratio and follow a view resize, zoom
       and drag (the existing `test_padlocks.py` and `test_constraints.py`
       cases, rewritten for images).
-- [ ] Neighboring rows of dimensions outside the unit keep their text
+- [x] Neighboring rows of dimensions outside the unit keep their text
       tiles clear of each other and of the unit
       (`test_rows_of_dimensions_outside_the_unit_clear_it_and_each_other`
       measures tiles).
-- [ ] An overlay padlock image function in `editor/overlay.py` is public,
+- [x] An overlay padlock image function in `editor/overlay.py` is public,
       and `tasks/active/sh-049-constraint-list.md` points at it in place
       of `_padlock_icon`.
-- [ ] `pyrefly check` passes over the changed code and `pixi run tests`
+- [x] `pyrefly check` passes over the changed code and `pixi run tests`
       is green.
 
 ## Advice
