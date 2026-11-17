@@ -415,7 +415,7 @@ class Overlay:
 def icon_center_px(
     icon: RowIcon,
     text_at_px: tuple[float, float],
-    text_width_px: float,
+    tile_along_px: float,
     icon_px: float,
     gap_px: float,
 ) -> tuple[float, float]:
@@ -425,7 +425,7 @@ def icon_center_px(
     ``gap_px`` clear of the tile and of each other. Along the dimension's
     line: rightward for a horizontal one, upward for a vertical one, which
     the text reads toward."""
-    along_px = text_width_px / 2 + gap_px + icon_px / 2 + icon.slot * (icon_px + gap_px)
+    along_px = tile_along_px / 2 + gap_px + icon_px / 2 + icon.slot * (icon_px + gap_px)
     x_px, y_px = text_at_px
     if icon.label.horizontal:
         return (x_px + along_px, y_px)
@@ -435,7 +435,7 @@ def icon_center_px(
 def icon_at(
     icons: Sequence[RowIcon],
     project: Callable[[float, float], tuple[float, float]],
-    text_width_px: Callable[[DimensionLabel], float],
+    tile_along_px: Callable[[DimensionLabel], float],
     icon_px: float,
     gap_px: float,
     x_px: float,
@@ -450,7 +450,7 @@ def icon_at(
         center_x_px, center_y_px = icon_center_px(
             icon,
             project(*icon.label.text_at_mm),
-            text_width_px(icon.label),
+            tile_along_px(icon.label),
             icon_px,
             gap_px,
         )

@@ -255,7 +255,8 @@ own tile over the opening fills."""
   ]
   expected = """
 At every zoom each padlock stays at the head of the row after its own
-text, covers no dimension's text, and stays legible."""
+text, covers none of its own dimension's text, and stays legible. Zoomed
+out, a row may run over a neighboring dimension's text."""
 
   [[case.step]]
   id = "lock"
@@ -288,9 +289,10 @@ be, each as sharp as the text beside it."""
   action = "large_unit"
   instruction = ["Select the container (ShelvingUnit).", "Run Edit Unit."]
   expected = """
-Every opening's dimension has its padlock, and the drawing still reads at
-the fitted zoom: each padlock is plainly its own dimension's, and the
-openings and their sizes can be read without zooming in."""
+Every opening's dimension has its padlock, and each padlock is plainly its
+own dimension's. On a large monitor the openings and their sizes read at
+the fitted zoom; on a small laptop screen reading them may take zooming
+in."""
 
 [[case]]
 id = "editor.fixed_point"

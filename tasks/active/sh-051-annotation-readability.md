@@ -122,6 +122,11 @@ on a text's tile opens its size field.
   dimension text draws on a transparent background. It is built anyway
   (user decision) for the reason the icon tiles exist: the openings'
   translucent fills wash out text drawn straight on them.
+- **A row may cover a neighbor's text (user decision, 2026-11-16, manual
+  QA):** zoomed out, a dimension's padlock and icon row can run over a
+  neighboring dimension's text. That is accepted; a row never covers its
+  own dimension's text. How much of a busy unit reads at the fitted zoom
+  depends on the window's size, so the QA case says so.
 - **Users never read the log:** satisfied. A lock toggle's refusal still
   reaches the Notification Area through `report_error`, and nothing new
   goes to the log.

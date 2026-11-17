@@ -4,19 +4,20 @@ one in place of a held board's arrow, which unlocks the openings holding
 it. Also the tile under each dimension's text, which opens its size
 field."""
 
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import cast
 
 import FreeCAD
 import FreeCADGui
 import pytest
-from PySide6 import QtCore, QtGui, QtWidgets
+from PySide6 import QtCore, QtGui, QtTest, QtWidgets
 
 from freecad.Shelving.core.edit import is_locked
 from freecad.Shelving.core.geometry import Space
 from freecad.Shelving.core.layout import Board, Division, Region
 from freecad.Shelving.editor import overlay
+from freecad.Shelving.editor import view_editor as view_editor_module
 from freecad.Shelving.editor.elevation import (
     FIRST_CONSTRAINT_SLOT,
     LIFT_MM,
@@ -607,25 +608,30 @@ def test_a_padlock_wins_a_press_over_a_text_tile(
     driver: ViewDriver,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Text tiles grown over every padlock still leave a press on a padlock
-    to it."""
+    """Text tiles grown over every padlock, for the press's hit test alone,
+    still leave a press on a padlock to it."""
     panel = edit_unit(unit, driver)
     editor = editor_of(panel)
     add_board(panel, "vertical", driver)
     lower = bay_ids(panel.session.unit.root)[0]
     center = editor.icon_center(_padlock(editor, lower))
-    real = editor.text_tile_px
+    real_label_at = view_editor_module.label_at
 
     def huge(_label: DimensionLabel) -> tuple[float, float]:
         return (4000.0, 4000.0)
 
-    monkeypatch.setattr(editor, "text_tile_px", huge)
+    def label_on_huge_tiles(
+        labels: Sequence[DimensionLabel],
+        project: Callable[[float, float], tuple[float, float]],
+        _tile_px: Callable[[DimensionLabel], tuple[float, float]],
+        x_px: float,
+        y_px: float,
+    ) -> DimensionLabel | None:
+        return real_label_at(labels, project, huge, x_px, y_px)
 
-    # Kept on the drawn row: the icons are placed from the real tiles.
-    def along(label: DimensionLabel) -> float:
-        return real(label)[0]
-
-    monkeypatch.setattr(editor, "_tile_along_px", along)
+    x_px, y_px = editor._device_point(center)
+    assert label_on_huge_tiles(editor.overlay.labels, editor._project, huge, x_px, y_px)
+    monkeypatch.setattr(view_editor_module, "label_at", label_on_huge_tiles)
     driver.click(center)
     assert _locked(panel.session.unit.root, lower)
     assert editor.field is None
@@ -705,8 +711,6 @@ def test_a_redundant_lock_warns_and_outlines_the_locks_it_repeats(
 def test_typing_a_size_closes_the_padlock(
     unit: FreeCAD.DocumentObject, driver: ViewDriver, dimension_style: None
 ) -> None:
-    from PySide6 import QtTest
-
     panel = edit_unit(unit, driver)
     editor = editor_of(panel)
     add_board(panel, "vertical", driver)
@@ -923,7 +927,7 @@ def test_a_short_dimension_shows_its_arrowheads_over_its_text_tile(
     them under the text, as the Sketcher does, and over the tile."""
     panel = edit_unit(unit, driver)
     editor = editor_of(panel)
-    shelf = add_board(panel, "vertical", driver)
+    add_board(panel, "vertical", driver)
     session = panel.session
     lower = bay_ids(session.unit.root)[0]
     session.select(lower)
@@ -952,7 +956,6 @@ def test_a_short_dimension_shows_its_arrowheads_over_its_text_tile(
             tip,
             inward,
         )
-    assert shelf in editor._boards
     click_task_button("Close", driver)
 
 
