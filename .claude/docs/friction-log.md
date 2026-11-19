@@ -1,5 +1,5 @@
 ---
-next_id: friction-029
+next_id: friction-030
 ---
 
 # Friction log
@@ -70,3 +70,11 @@ the papercut and its fix in its message.
   `_settle` in `tests/freecad_view/view.py` and summed their time by
   caller. Simpler if: the view driver could report its waits by call site
   behind an opt-in environment variable.
+- `friction-029` - **`tools/install-deps.sh` installing pixi on a fresh
+  VM**: the script downloads the bare `pixi-<arch>-unknown-linux-musl`
+  binary and then `<asset>.sha256`, but pixi v0.78.0 publishes a `.sha256`
+  only for the `.tar.gz`, so the checksum fetch 404s and the script exits
+  22 on both `x86_64` and `aarch64`. Found migrating to an x86_64 VM; the
+  workaround downloaded the `.tar.gz` and its `.sha256` by hand, verified,
+  extracted `pixi` into `~/.local/bin`, then reran the script. Simpler if:
+  the script fetched and verified the `.tar.gz` and extracted the binary.
