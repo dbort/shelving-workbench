@@ -36,6 +36,13 @@ the deadlock are corrected to match.
       asserts that the Report view gained no `This plugin does not support`
       text, then calls `QtCore.qWarning` with a unique marker and asserts
       the marker reaches the Report view.
+- [ ] A GUI-tier test sets up the deadlock situation: the main window
+      activated, popups off as the test settings leave them, and the same
+      warning sent twice in a row through `FreeCAD.Console.PrintWarning`,
+      with Qt events processed after each. It asserts that the calls return
+      and that the Report view gained no `This plugin does not support`
+      text. It asserts nothing about whether a popup appeared, so it
+      passes when this machine's timing never reaches the popup.
 - [ ] `tests/freecad_gui/test_qa_wizard.py` prints its Report view marker
       through `FreeCAD.Console`, with no direct `append` to the Report view
       widget and no comment about a deadlock.
@@ -94,10 +101,20 @@ the deadlock are corrected to match.
 - `freecad-notes.md`: drop "On this aarch64 VM". The dev VM is x86_64 now.
   Keep the `eu-stack` tip only if it still holds there; check that `gdb`
   can attach before stating either.
-- The regression test is the `raise_()` GUI test, not a reproduction of
-  the hang. It deterministically catches the most likely regression, a Qt
-  upgrade that rewords the warning, without risking a hung suite. The user
-  declined a hang reproduction test.
+- Two GUI regression tests, each with its own job. The `raise_()` test is
+  deterministic: it catches the most likely regression, a Qt upgrade that
+  rewords the warning. The repeated-warning test exercises the filter on
+  the path that deadlocked (FreeCAD 1.1.3 shows a popup for a message
+  identical to the last one, but only while its main window is active).
+  The user wants that path covered without the test depending on
+  reproducing the hang. Never assert that the popup was shown, and never
+  skip or fail when it wasn't. During `/work`, find out once whether the
+  test reaches the popup on this VM: check for a visible popup widget, or
+  remove the filter and run the test under `timeout`. Record the answer in
+  a comment on the test. Keep the test whichever way the check comes out;
+  if it never reaches the popup here, say so in the comment. Activate the
+  main window with `activateWindow()` and `raise_()` on
+  `FreeCADGui.getMainWindow()`, then process events.
 - Standing obligations: Shell stays simple holds with no shell. Opted out
   of Follow FreeCAD's own tools, because this is test harness plumbing with
   no FreeCAD-facing behavior; the only precedent that applies is FreeCAD's
@@ -116,7 +133,8 @@ the deadlock are corrected to match.
       docstring to explain the filter and why popups-off alone does not
       prevent the deadlock.
 - [ ] **Step 3** (`tests/freecad_gui/`): add the `raise_()` and `qWarning`
-      Report view test. Switch `test_qa_wizard.py`'s marker to
+      Report view test and the repeated-warning test. For the second, do the
+      one-time check Advice describes. Switch `test_qa_wizard.py`'s marker to
       `FreeCAD.Console.PrintMessage` and delete its workaround comment.
 - [ ] **Step 4** (`tests/freecad/test_temp_dirs.py`,
       `tools/freecad-test-user.cfg`): reword the docstring and the cfg
