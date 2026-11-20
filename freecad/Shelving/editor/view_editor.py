@@ -1420,6 +1420,27 @@ class ViewEditor:
         select_in_freecad(self._doc_name, list(dict.fromkeys(board_ids)))
         self._on_change()
 
+    def select_items(self, node_ids: Sequence[str]) -> None:
+        """Select exactly the openings ``node_ids``, as the constraint list
+        picks lock rows, clearing FreeCAD's selection, which holds no
+        opening."""
+        if self._closed:
+            return
+        self._close_field()
+        self.session.select_items(node_ids)
+        select_in_freecad(self._doc_name, [])
+        self._on_change()
+
+    def select_constraints(self, constraint_ids: Sequence[ConstraintId]) -> None:
+        """Select exactly the constraints ``constraint_ids``, as the
+        constraint list picks rows, clearing FreeCAD's selection."""
+        if self._closed:
+            return
+        self._close_field()
+        self.session.select_constraints(constraint_ids)
+        select_in_freecad(self._doc_name, [])
+        self._on_change()
+
     def _click(self, position: QtCore.QPointF, adding: bool) -> None:
         """A click FreeCAD has handled. On a board the session takes
         FreeCAD's selection, so an add-to-selection gesture adds the board.

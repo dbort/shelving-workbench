@@ -4,9 +4,10 @@ in-view editor working on it.
 ``EditUnitPanel`` satisfies the duck-typed protocol
 ``FreeCADGui.Control.showDialog`` expects: a ``form`` attribute (the
 ``QWidget`` shown in the task panel), ``getStandardButtons``, ``accept``,
-``reject``. The unit's own size and fixed point, its boards' stock and
-the selected opening's basis are edited here; everything else is edited in
-the 3D view (:mod:`freecad.Shelving.editor.view_editor`). ``FreeCADGui.Control`` does
+``reject``. The unit's own size and fixed point, its constraint list,
+its boards' stock and the selected opening's or constraint's basis are
+edited here; everything else is edited in the 3D view
+(:mod:`freecad.Shelving.editor.view_editor`). ``FreeCADGui.Control`` does
 not exist under ``freecadcmd``, so :mod:`tests.freecad_gui.test_panel`
 exercises this module under the offscreen GUI instead.
 """
@@ -22,15 +23,18 @@ import FreeCAD
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from freecad.Shelving.compat import override
-from freecad.Shelving.core.layout import Basis
+from freecad.Shelving.core.layout import Basis, ConstraintId
 from freecad.Shelving.core.stock import Color, StockGroup
 from freecad.Shelving.debug_log import Stopwatch
+from freecad.Shelving.editor.constraint_list import ConstraintList, ListActions
 from freecad.Shelving.editor.fields import DimensionField, WheelFilter
 from freecad.Shelving.editor.overlay import RGB, marker_rgb
 from freecad.Shelving.editor.session import (
     FIELD_PROPERTIES,
+    ConstraintRow,
     EditFailure,
     EditWarning,
+    ListRow,
     Session,
     UnitDimension,
 )
@@ -141,9 +145,10 @@ class ConstraintToolBar:
 STOCK_COLUMNS = ("Thickness", "Material", "Color", "Boards")
 _SWATCH_PX = 16
 
+_SPACING_CHOICE = ("Spacing (through the next board)", Basis.WITH_NEXT)
 _BASIS_CHOICES: tuple[tuple[str, Basis], ...] = (
     ("Clear opening", Basis.CLEAR),
-    ("Spacing (through the next board)", Basis.WITH_NEXT),
+    _SPACING_CHOICE,
 )
 
 
@@ -434,6 +439,16 @@ class EditUnitPanel:
             self.unit_fields[dimension] = field
             self.fixed_combos[dimension] = combo
         layout.addWidget(self.unit_box)
+        self.constraint_list = ConstraintList(
+            ListActions(
+                set_active=self._set_constraint_active,
+                delete_row=self._delete_row,
+                delete_deactivated=self._delete_deactivated,
+                select_constraints=self._select_constraints,
+                select_openings=self._select_openings,
+            )
+        )
+        layout.addWidget(self.constraint_list.box)
         # The step press whose refusal was last reported: holding an arrow
         # past a limit re-solves on every repeat, and one report per press
         # is enough.
@@ -520,6 +535,34 @@ class EditUnitPanel:
 
     def _set_basis(self, index: int) -> None:
         self._show_result(self.session.set_basis(_BASIS_CHOICES[index][1]))
+
+    def _set_constraint_active(self, constraint_id: ConstraintId, active: bool) -> None:
+        self._show_result(self.session.set_constraint_active(constraint_id, active))
+
+    def _delete_row(self, row: ListRow) -> None:
+        if isinstance(row, ConstraintRow):
+            failure = self.session.delete_constraint(row.constraint_id)
+        else:
+            failure = self.session.set_lock(row.region_id, False)
+        self._show_result(failure)
+
+    def _delete_deactivated(self) -> None:
+        self._show_result(self.session.delete_deactivated())
+
+    def _select_constraints(self, constraint_ids: Sequence[ConstraintId]) -> None:
+        if self.editor is not None:
+            # The editor's change callback is this panel's refresh.
+            self.editor.select_constraints(constraint_ids)
+            return
+        self.session.select_constraints(constraint_ids)
+        self._refresh()
+
+    def _select_openings(self, region_ids: Sequence[str]) -> None:
+        if self.editor is not None:
+            self.editor.select_items(region_ids)
+            return
+        self.session.select_items(region_ids)
+        self._refresh()
 
     def _stock_clicked(self, item: QtWidgets.QTreeWidgetItem, _column: int) -> None:
         index = self.stock_list.indexOfTopLevelItem(item)
@@ -677,21 +720,41 @@ class EditUnitPanel:
                 next(i for i, choice in enumerate(choices) if choice.side == side)
             )
             combo.blockSignals(False)
-        measurement = self.session.selected_measurement()
-        self.basis_combo.blockSignals(True)
-        if measurement is None:
-            self.basis_combo.setEnabled(False)
-        else:
-            bases = [basis for _text, basis in _BASIS_CHOICES]
-            self.basis_combo.setCurrentIndex(bases.index(measurement.basis))
-            # With no board after the region there is no spacing to measure.
-            self.basis_combo.setEnabled(measurement.spacing_mm is not None)
-        self.basis_combo.blockSignals(False)
+        self._refresh_basis()
+        self.constraint_list.show(
+            self.session.constraint_rows(),
+            self.session.selected_constraints,
+            self.session.selected_items,
+        )
         self._refresh_stock()
         self._rebuild_untagged_rows()
         self.untagged_box.setVisible(bool(self.session.untagged))
         if self.editor is not None:
             self.editor.rebuild()
+
+    def _refresh_basis(self) -> None:
+        """Show the selected opening's or lone constraint's basis. With no
+        board after an opening there is no spacing to measure: the combo is
+        disabled for an opening, and for a constraint only its spacing
+        choice is, so the constraint can still go back to clear sizes."""
+        measurement = self.session.selected_measurement()
+        model = cast("QtGui.QStandardItemModel", self.basis_combo.model())
+        spacing_item = model.item(_BASIS_CHOICES.index(_SPACING_CHOICE))
+        self.basis_combo.blockSignals(True)
+        if measurement is None:
+            self.basis_combo.setEnabled(False)
+            spacing_item.setEnabled(True)
+        else:
+            bases = [basis for _text, basis in _BASIS_CHOICES]
+            self.basis_combo.setCurrentIndex(bases.index(measurement.basis))
+            spaced = measurement.spacing_mm is not None
+            if self.session.selected_constraints:
+                self.basis_combo.setEnabled(True)
+                spacing_item.setEnabled(spaced)
+            else:
+                self.basis_combo.setEnabled(spaced)
+                spacing_item.setEnabled(True)
+        self.basis_combo.blockSignals(False)
 
     def constrain(self, command: ConstraintCommand) -> None:
         """Make the constraint ``command`` names from the selection,

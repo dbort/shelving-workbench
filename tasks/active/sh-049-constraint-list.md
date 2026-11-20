@@ -221,7 +221,7 @@ measure spacing through the next board.
       with redundancy; the four constraint actions as undo steps; selecting
       by row; `selected_measurement` and `set_basis` covering a lone
       selected constraint; the reworded open notification.
-- [ ] **Step 4** (`editor/constraint_list.py`, `editor/panel.py`,
+- [x] **Step 4** (`editor/constraint_list.py`, `editor/panel.py`,
       `editor/view_editor.py`, `tests/freecad_gui/test_constraint_list.py`,
       `tests/freecad_view/test_constraint_list.py`): the Constraints
       group, its rows and buttons, refresh after every edit and history
