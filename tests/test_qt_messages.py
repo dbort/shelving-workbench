@@ -71,10 +71,10 @@ def test_each_message_type_reaches_freecads_level(
         ("qt.qpa.fonts", "(qt.qpa.fonts) text\n"),
         ("default", "text\n"),
         (None, "text\n"),
-        ("", "text\n"),
+        ("", "() text\n"),
     ],
 )
-def test_a_non_default_category_prefixes_the_line(
+def test_any_category_but_default_prefixes_the_line(
     category: str | None, line: str
 ) -> None:
     console = _Console()

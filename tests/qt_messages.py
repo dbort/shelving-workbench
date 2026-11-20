@@ -37,7 +37,8 @@ def forward(
     with :data:`UNSUPPORTED_PLUGIN_PREFIX`.
 
     The written line is ``text`` plus a newline, prefixed by ``(category) ``
-    when ``category`` is set and is not ``"default"``. Debug and info go to
+    when ``category`` is not ``None`` and not ``"default"``, an empty one
+    included. Debug and info go to
     ``PrintLog``, warning to ``PrintWarning``, critical and fatal to
     ``PrintError``: a release build of FreeCAD 1.1.3's
     ``Gui::messageHandler``. It never aborts on a fatal message; Qt aborts
@@ -45,7 +46,7 @@ def forward(
     """
     if text.startswith(UNSUPPORTED_PLUGIN_PREFIX):
         return
-    prefix = f"({category}) " if category and category != "default" else ""
+    prefix = f"({category}) " if category is not None and category != "default" else ""
     line = f"{prefix}{text}\n"
     if msg_type == QtCore.QtMsgType.QtWarningMsg:
         console.PrintWarning(line)

@@ -8,6 +8,8 @@ import FreeCAD
 import FreeCADGui
 from PySide6 import QtCore, QtTest, QtWidgets
 
+from tests.qt_messages import UNSUPPORTED_PLUGIN_PREFIX, message_handler
+
 _PLUGIN_WARNING = "This plugin does not support"
 # FreeCAD 1.1.3's Notification Area shows its popup when a 250 ms timer,
 # restarted by every notification, runs out.
@@ -37,9 +39,25 @@ def test_raise_warns_nothing_and_other_qt_warnings_still_reach_the_report_view()
 ):
     before = len(_report_text())
     widget = QtWidgets.QWidget()
+    seen: list[str] = []
+
+    def record(
+        msg_type: QtCore.QtMsgType, context: QtCore.QMessageLogContext, text: str
+    ) -> None:
+        seen.append(text)
+
     try:
         widget.show()
         QtWidgets.QApplication.processEvents()
+        # Pins the wording the filter matches: a Qt that rewords the warning
+        # fails here instead of leaking it past the filter.
+        QtCore.qInstallMessageHandler(record)
+        try:
+            widget.raise_()
+            QtWidgets.QApplication.processEvents()
+        finally:
+            QtCore.qInstallMessageHandler(message_handler(FreeCAD.Console))
+        assert any(text.startswith(UNSUPPORTED_PLUGIN_PREFIX) for text in seen), seen
         widget.raise_()
     finally:
         widget.deleteLater()
