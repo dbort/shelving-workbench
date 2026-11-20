@@ -37,12 +37,11 @@ def forward(
     with :data:`UNSUPPORTED_PLUGIN_PREFIX`.
 
     The written line is ``text`` plus a newline, prefixed by ``(category) ``
-    when ``category`` is not ``None`` and not ``"default"``, an empty one
-    included. Debug and info go to
-    ``PrintLog``, warning to ``PrintWarning``, critical and fatal to
-    ``PrintError``: a release build of FreeCAD 1.1.3's
-    ``Gui::messageHandler``. It never aborts on a fatal message; Qt aborts
-    once the handler returns.
+    when ``category`` is not ``None`` and not ``"default"``, including an
+    empty string. Debug and info go to ``PrintLog``, warning to
+    ``PrintWarning``, critical and fatal to ``PrintError``, matching a
+    release build of FreeCAD 1.1.3's ``Gui::messageHandler``. It never
+    aborts on a fatal message; Qt aborts once the handler returns.
     """
     if text.startswith(UNSUPPORTED_PLUGIN_PREFIX):
         return
