@@ -18,8 +18,8 @@ basis choice also applies to a selected Equal or Even spacing, so it can
 measure spacing through the next board.
 
 ## Must Have
-- [ ] `pixi run tests` green; `pyrefly check` clean over the changed code.
-- [ ] Core suite, on sh-046's column of 18 mm boards with fixed point `min`:
+- [x] `pixi run tests` green; `pyrefly check` clean over the changed code.
+- [x] Core suite, on sh-046's column of 18 mm boards with fixed point `min`:
       bottom, A 300, shelf s1, B 300, shelf s2, C 300, top (972 mm tall):
       - with A locked, B locked and an Equal on A and B, the redundant set
         is exactly A's lock, B's lock and the Equal; after unlocking B it
@@ -30,7 +30,7 @@ measure spacing through the next board.
       - deactivating an active Equal on A and B moves no board, and typing
         400 into A then gives A 400, B 200, C 300, as with no Equal;
       - with a deactivated Equal on A 280, B 300, C 320, reactivating it
-        gives A 290, B 290, C 320;
+        gives A 288, B 288, C 324;
       - with A locked at 300, C locked at 200 and a deactivated Equal on A
         and C, reactivating the Equal raises the conflict naming A, C and
         the Equal, and the unit is unchanged;
@@ -38,10 +38,10 @@ measure spacing through the next board.
         keeping active ones and every lock, and moves no board;
       - with s2 36 mm thick (column 990 mm tall), setting an Equal on A and
         B to the spacing basis gives A + 18 = B + 36 within 1e-6 mm.
-- [ ] `rules_to_json` writes `"basis": "with_next"` for a constraint in the
+- [x] `rules_to_json` writes `"basis": "with_next"` for a constraint in the
       spacing basis, and `rules_from_json` reads it back; an unknown basis
       string drops that constraint and raises nothing.
-- [ ] Headless (`tests/freecad/`), through `Session` on the same column:
+- [x] Headless (`tests/freecad/`), through `Session` on the same column:
       - deactivating, activating, deleting a constraint, deleting the
         deactivated constraints, and changing a constraint's basis are
         each one undo step with a distinct name, and Undo restores the
@@ -50,8 +50,9 @@ measure spacing through the next board.
         conflict's ids and leaves the document untouched;
       - a reactivation that is redundant is accepted with sh-047's warning;
       - deleting a lock's row unlocks that opening as the padlock does,
-        under the same undo step name.
-- [ ] GUI (`tests/freecad_gui/test_constraint_list.py`):
+        under the same undo step name (covered by the GUI delete-button
+        test, which presses the row's button).
+- [x] GUI (`tests/freecad_gui/test_constraint_list.py`):
       - a group titled "Constraints" sits directly after the Unit group and
         shows with no rows on a unit with no locks or constraints;
       - rows list locks first, in tree order, then constraints in creation
@@ -77,7 +78,7 @@ measure spacing through the next board.
         Equal or Even spacing selected, shows its basis, and changing it
         changes the constraint's basis; the spacing choice is disabled
         when any opening the constraint names has no board after it.
-- [ ] 3D view (`tests/freecad_view/test_constraint_list.py`):
+- [x] 3D view (`tests/freecad_view/test_constraint_list.py`):
       - clicking a constraint row selects that constraint in the view, and
         Ctrl-clicking another constraint row adds it;
       - clicking a lock row selects its opening and drops any constraint
@@ -85,13 +86,13 @@ measure spacing through the next board.
       - clicking an icon in the view selects its row alone, and selecting a
         locked opening in the view selects its lock row; selecting a board
         clears the list's selection.
-- [ ] `README.md`'s glossary has entries **Constraint list** and
+- [x] `README.md`'s glossary has entries **Constraint list** and
       **Redundant constraint**.
-- [ ] `freecad/Shelving/qa/cases/30-editor.toml` has a case with id
+- [x] `freecad/Shelving/qa/cases/30-editor.toml` has a case with id
       `editor.constraint_list`.
-- [ ] In `30-editor.toml`'s `editor.constraints` case, the step ids run
+- [x] In `30-editor.toml`'s `editor.constraints` case, the step ids run
       `reopen`, `activate`, `undo`, `delete`, in that order.
-- [ ] `open_message` for a report with a deactivated constraint, and the
+- [x] `open_message` for a report with a deactivated constraint, and the
       README glossary's **Deactivated constraint** entry, both say a
       deactivated constraint can be turned back on in the Constraints list
       as well as deleted; neither says Delete is the only way out.
@@ -201,28 +202,38 @@ measure spacing through the next board.
   to say they can be turned back on or deleted in the Constraints list,
   still with no count-keyed grammar, and update the README glossary's
   **Deactivated constraint** entry to match.
+- **Reactivation solves as a new constraint does** (user decision,
+  2026-11-19): least motion over every free board, so the Equal case gives
+  A 288, B 288, C 324 (s1 up 8, s2 down 4), matching
+  `test_equal_makes_unequal_openings_equal_moving_the_boards_least`.
+- **After manual QA** (user decisions, 2026-11-20): pressing a row's
+  checkbox keeps selecting the row, as plain Qt does, and a selected
+  constraint's icon keeps the selection color alone; how selection and
+  the deactivated state should both show is bug-024, planned as a
+  follow-up task, not done here. The QA steps that toggle a box add a
+  click on empty view space before judging the icons' red or gray.
 - **Out of scope:** renaming constraints, a filter, editing a lock's size
   from its row (Sketcher's double-click edit), Aligned faces (task 4), and
   a Delete key inside the list.
 
 ## Plan
-- [ ] **Step 1** (`core/solver.py`, `core/edit.py`, their tests): the
+- [x] **Step 1** (`core/solver.py`, `core/edit.py`, their tests): the
       redundant-set query; activate, deactivate, delete-deactivated and
       constraint-basis edits, with conflicts raised as sh-047's.
-- [ ] **Step 2** (`core/record.py`, `core/tests/test_record.py`): the
+- [x] **Step 2** (`core/record.py`, `core/tests/test_record.py`): the
       spacing basis on constraints round-trips; an unknown basis drops
       the constraint.
-- [ ] **Step 3** (`editor/session.py`, `tests/freecad/test_editor_session.py`,
+- [x] **Step 3** (`editor/session.py`, `tests/freecad/test_editor_session.py`,
       `tests/freecad/test_edit_history.py`): the row snapshot in list order
       with redundancy; the four constraint actions as undo steps; selecting
       by row; `selected_measurement` and `set_basis` covering a lone
       selected constraint; the reworded open notification.
-- [ ] **Step 4** (`editor/constraint_list.py`, `editor/panel.py`,
+- [x] **Step 4** (`editor/constraint_list.py`, `editor/panel.py`,
       `editor/view_editor.py`, `tests/freecad_gui/test_constraint_list.py`,
       `tests/freecad_view/test_constraint_list.py`): the Constraints
       group, its rows and buttons, refresh after every edit and history
       move, and two-way selection with the view.
-- [ ] **Step 5** (`README.md`, `docs/scope-and-design.md`,
+- [x] **Step 5** (`README.md`, `docs/scope-and-design.md`,
       `.claude/docs/code-map.md`, `freecad/Shelving/qa/cases/30-editor.toml`):
       the two glossary entries and the reworded **Deactivated constraint**
       entry; the Editing section describes the list; the code map names
@@ -230,3 +241,12 @@ measure spacing through the next board.
       `activate` and `undo` steps in the `editor.constraints` case.
 
 ## Review log
+
+### Round 1: APPROVED
+- **N1: The row icon check compares the widget against itself** (`tests/freecad_gui/test_constraint_list.py:224`): each item's icon is compared to `ConstraintList.row_icon(row)`, the function `show` uses to set it, so a kind mapped to the wrong image would still pass. Comparing against `padlock_image(...)` and `constraint_icon_image(kind, ...)`, or at least asserting the three kinds' icons differ, would test what the Must Have asks for. The implementation is correct.
+- **N2: The GUI row-order test checks types only** (`tests/freecad_gui/test_constraint_list.py:212`): it locks C then A but never checks the lock rows come out A then C. `tests/freecad/test_constraint_session.py` covers tree order at the session level.
+- **N3: The headless lock-row test never goes through the list** (`tests/freecad/test_constraint_session.py:724`): it calls `session.set_lock` directly. The GUI delete-button test covers the Must Have; the headless test could be dropped or renamed to say what it checks.
+
+### Round 2: APPROVED
+- **N1: A headless Must Have no longer has a headless test** (`tasks/active/sh-049-constraint-list.md:52`): removing `test_a_lock_row_deletes_as_the_padlock_unlocks` leaves nothing under `tests/freecad/` for a lock row's delete. The behavior is covered: the panel's delete-row handler calls `Session.set_lock` (`freecad/Shelving/editor/panel.py:546`), and the GUI test checks the unlock and the "Unlock Opening" undo name (`tests/freecad_gui/test_constraint_list.py:316`). When ticking the boxes, mark that bullet as covered by the GUI test.
+- **N2: The activate step's action is a little loose** (`freecad/Shelving/qa/cases/30-editor.toml:562`): "Check the Even spacing row" could read as selecting the row; "Check the Even spacing row's box" is unambiguous, and likewise "Uncheck" in `editor.constraint_list`'s `deactivate` step.

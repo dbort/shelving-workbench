@@ -1,5 +1,5 @@
 ---
-next_id: friction-031
+next_id: friction-032
 ---
 
 # Friction log
@@ -78,3 +78,13 @@ the papercut and its fix in its message.
   workaround downloaded the `.tar.gz` and its `.sha256` by hand, verified,
   extracted `pixi` into `~/.local/bin`, then reran the script. Simpler if:
   the script fetched and verified the `.tar.gz` and extracted the binary.
+- `friction-031` - **one way to close an Edit Unit panel in a GUI test**:
+  in sh-049, `tests/freecad_gui/test_constraint_list.py` processed Qt
+  events after `panel.reject()`, as `test_constraint_commands.py` does. Once
+  the panel had refreshed more than once, that aborted the whole process
+  with an uncaught `Base::RuntimeError`, apparently from the shown form's
+  size fields, which still name the container properties the session
+  removed at close. Finding it took several isolated runs. The workaround
+  closes the document straight after `reject()`, as `test_panel.py` does.
+  Simpler if: the GUI tests shared one fixture helper that closes a panel
+  the way `FreeCADGui.Control.closeDialog` does, deleting its form.

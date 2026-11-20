@@ -322,6 +322,15 @@ def _parse_end(raw: object) -> SpacingEnd | None:
     return raw
 
 
+def _unknown_basis(raw: object) -> bool:
+    """Whether ``raw`` is a constraint entry whose ``"basis"`` is a string
+    naming no :class:`~freecad.Shelving.core.layout.Basis`."""
+    if not isinstance(raw, dict):
+        return False
+    basis: object = raw.get("basis")
+    return isinstance(basis, str) and _parse_basis(basis) is None
+
+
 def _parse_constraint(raw: object) -> StoredConstraint | None:
     if not isinstance(raw, dict):
         return None
@@ -361,7 +370,8 @@ def parse_rules(text: str) -> StoredRules | None:
     """The locks and constraints in the record :func:`rules_to_json`
     emitted; ``None`` for a record in any other shape, a version 1 record
     included, or text that is not JSON, which an empty record never gives.
-    Never raises."""
+    A constraint entry whose basis is a string naming no basis is left out
+    and the rest of the record read. Never raises."""
     try:
         parsed: object = json.loads(text)
     except ValueError:
@@ -391,6 +401,10 @@ def parse_rules(text: str) -> StoredRules | None:
         locks[key] = basis
     constraints: list[StoredConstraint] = []
     for raw in raw_constraints:
+        if _unknown_basis(raw):
+            # A basis this workbench does not know costs that constraint
+            # alone, not every lock and constraint beside it.
+            continue
         constraint = _parse_constraint(raw)
         if constraint is None:
             return None

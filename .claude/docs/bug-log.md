@@ -1,5 +1,5 @@
 ---
-next_id: bug-024
+next_id: bug-025
 ---
 
 # Bug log
@@ -128,3 +128,17 @@ log happens only when the user asks.
   in `tests/freecad/test_constraint_session.py` pins the settling. Found
   in sh-048's review round 1 (N4). Fix: `sh-XXX task`; exempting Delete
   from settling or rewording the Must Have is a design decision.
+- `bug-024` - **a selected constraint's icon hides whether it is active**:
+  in Edit Unit's 3D view a selected Equal or Even spacing icon takes
+  FreeCAD's selection color alone, so it no longer shows red for active or
+  gray for deactivated, and with a blue selection color it also reads like
+  an unlocked dimension's blue. Pressing a row's checkbox in the
+  constraint list selects that row, so turning a constraint on or off
+  shows only the selection color until the user deselects. Found in
+  sh-049's manual QA. The icons copy the Sketcher's `constrColor`, which
+  has the same flaw for its own deactivated constraints. Fix: `sh-XXX
+  task`, because how a selected deactivated constraint should look is a
+  design decision. Candidates: an outline in the selection color around
+  the icon's tile that keeps the glyph's state color, or a mark on a
+  deactivated icon (such as a corner X) in place of the gray; and whether
+  the checkbox should stop selecting its row.

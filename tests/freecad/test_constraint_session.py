@@ -3,7 +3,7 @@ FreeCAD document: what opening a unit does with its stored constraints and
 what it reports, creating them, and deleting them as undo steps."""
 
 import json
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import Protocol, cast
 
 import FreeCAD
@@ -14,6 +14,7 @@ from freecad.Shelving.container import write_container
 from freecad.Shelving.core.geometry import Vec3
 from freecad.Shelving.core.layout import (
     Axis,
+    Basis,
     Bay,
     Board,
     Constraint,
@@ -24,7 +25,13 @@ from freecad.Shelving.core.layout import (
     Unit,
     constraint_regions,
 )
-from freecad.Shelving.editor.session import EditFailure, EditWarning, Session
+from freecad.Shelving.editor.session import (
+    ConstraintRow,
+    EditFailure,
+    EditWarning,
+    LockRow,
+    Session,
+)
 
 _T_MM = 18.0
 _BAY_MM = 288.0
@@ -527,5 +534,202 @@ def test_selecting_constraints_and_items_exclude_each_other(
         session.select(a)
         assert session.selected_constraints == ()
         assert session.selected_items == (a,)
+    finally:
+        session.close()
+
+
+# --- the constraint list's actions -----------------------------------------
+
+
+def test_the_open_message_points_to_the_constraints_list(
+    doc: FreeCAD.Document, notified: list[str]
+) -> None:
+    container = _written(doc, _equal(_COLUMN.a, _COLUMN.b))
+    _move_up(doc, "shelf_a", 20.0)
+    session = _opened(container)
+    try:
+        (message,) = notified
+        assert "turned back on or deleted in the Constraints list" in message
+    finally:
+        session.close()
+
+
+def test_rows_list_locks_in_tree_order_then_constraints_as_made(
+    doc: FreeCAD.Document,
+) -> None:
+    column = _COLUMN.column.id
+    container = _written(
+        doc,
+        EvenSpacing(run_id=column, start=RunEnd.START, end=RunEnd.END, active=False),
+        _equal(_COLUMN.a, _COLUMN.b),
+    )
+    session = _opened(container)
+    try:
+        a, b, c = _bays(session)
+        assert session.set_lock(c, locked=True) is None
+        assert session.set_lock(a, locked=True) is None
+        rows = session.constraint_rows()
+        assert [type(row) for row in rows] == [
+            LockRow,
+            LockRow,
+            ConstraintRow,
+            ConstraintRow,
+        ]
+        lock_a, lock_c, spacing, equal = rows
+        assert isinstance(lock_a, LockRow) and isinstance(lock_c, LockRow)
+        assert (lock_a.region_id, lock_c.region_id) == (a, c)
+        assert lock_a.size_mm == pytest.approx(_BAY_MM)
+        assert isinstance(spacing, ConstraintRow) and isinstance(equal, ConstraintRow)
+        assert (spacing.kind, spacing.active, spacing.size_mm) == (
+            "even_spacing",
+            False,
+            None,
+        )
+        assert (equal.kind, equal.active) == ("equal", True)
+        assert equal.size_mm == pytest.approx(_BAY_MM)
+        assert not any(row.redundant for row in rows)
+        # C's lock alone fixes the column's height, so only A's, B's and
+        # the Equal on them repeat each other.
+        assert session.set_lock(b, locked=True) is None
+        marked = [row.redundant for row in session.constraint_rows()]
+        assert marked == [True, True, False, False, True]
+    finally:
+        session.close()
+
+
+def test_each_constraint_action_is_one_named_step_that_undo_reverts(
+    doc: FreeCAD.Document,
+) -> None:
+    container = _written(
+        doc,
+        _equal(_COLUMN.a, _COLUMN.b),
+        _equal(_COLUMN.b, _COLUMN.c, active=False),
+    )
+    session = _opened(container)
+    try:
+        _first, second = session.constraints
+        a, _b, _c = _bays(session)
+        session.select(a)
+        assert session.set_size(200.0) is None
+        assert session.set_lock(a, locked=False) is None
+        doc.recompute()
+
+        def check(action: Callable[[], EditFailure | None], name: str) -> None:
+            record = _stored(container)
+            placements = _snapshot(doc)
+            steps = doc.UndoCount
+            assert action() is None
+            doc.recompute()
+            assert doc.UndoCount == steps + 1
+            assert doc.UndoNames[0] == name
+            doc.undo()
+            session.settle()
+            doc.recompute()
+            assert _stored(container) == record
+            assert _snapshot(doc) == pytest.approx(placements)
+            doc.redo()
+            session.settle()
+            doc.recompute()
+
+        check(
+            lambda: session.set_constraint_active(second.id, True),
+            "Activate Constraint",
+        )
+        assert [c.active for c in session.constraints] == [True, True]
+        assert _heights_mm(doc) == pytest.approx((_BAY_MM, _BAY_MM, _BAY_MM))
+        # Undo and Redo rescan, minting fresh constraint ids.
+        second_id = session.constraints[1].id
+        check(
+            lambda: session.set_constraint_active(second_id, False),
+            "Deactivate Constraint",
+        )
+        assert [c.active for c in session.constraints] == [True, False]
+        check(lambda: session.delete_deactivated(), "Delete Deactivated Constraints")
+        assert [c.active for c in session.constraints] == [True]
+        (left,) = session.constraints
+        session.select_constraints([left.id])
+        check(lambda: session.set_basis(Basis.WITH_NEXT), "Change What a Size Measures")
+        assert [entry["basis"] for entry in _stored(container)] == ["with_next"]
+        (left,) = session.constraints
+        check(lambda: session.delete_constraint(left.id), "Delete Constraint")
+        assert session.constraints == ()
+    finally:
+        session.close()
+
+
+def test_turning_on_or_off_what_already_is_adds_no_step(doc: FreeCAD.Document) -> None:
+    session = _opened(_written(doc, _equal(_COLUMN.a, _COLUMN.b)))
+    try:
+        (equal,) = session.constraints
+        steps = doc.UndoCount
+        assert session.set_constraint_active(equal.id, True) is None
+        assert doc.UndoCount == steps
+        assert isinstance(session.delete_deactivated(), EditFailure)
+        assert doc.UndoCount == steps
+    finally:
+        session.close()
+
+
+def test_a_refused_reactivation_names_the_conflict_and_changes_nothing(
+    doc: FreeCAD.Document,
+) -> None:
+    container = _written(doc, _equal(_COLUMN.a, _COLUMN.c, active=False))
+    session = _opened(container)
+    try:
+        a, _b, c = _bays(session)
+        session.select(c)
+        assert session.set_size(200.0) is None
+        assert session.set_lock(a, locked=True) is None
+        doc.recompute()
+        (equal,) = session.constraints
+        snapshot = _snapshot(doc)
+        record = _stored(container)
+        steps = doc.UndoCount
+        refused = session.set_constraint_active(equal.id, True)
+        assert isinstance(refused, EditFailure)
+        assert set(refused.region_ids) == {a, c}
+        assert refused.constraint_ids == (equal.id,)
+        assert {a, c, equal.id} <= set(session.flagged)
+        doc.recompute()
+        assert doc.UndoCount == steps
+        assert _snapshot(doc) == snapshot
+        assert _stored(container) == record
+        assert [c.active for c in session.constraints] == [False]
+    finally:
+        session.close()
+
+
+def test_a_redundant_reactivation_is_kept_with_a_warning(
+    doc: FreeCAD.Document,
+) -> None:
+    container = _written(doc, _equal(_COLUMN.a, _COLUMN.b, active=False))
+    session = _opened(container)
+    warnings: list[EditWarning] = []
+    session.on_warning = warnings.append
+    try:
+        a, b, _c = _bays(session)
+        assert session.set_lock(a, locked=True) is None
+        assert session.set_lock(b, locked=True) is None
+        (equal,) = session.constraints
+        assert session.set_constraint_active(equal.id, True) is None
+        assert [c.active for c in session.constraints] == [True]
+        (warning,) = warnings
+        assert "redundant" in warning.message
+        assert warning.region_ids == (a, b)
+        assert warning.constraint_ids == (equal.id,)
+    finally:
+        session.close()
+
+
+def test_a_lone_selected_constraint_reports_its_basis(doc: FreeCAD.Document) -> None:
+    session = _opened(_written(doc, _equal(_COLUMN.a, _COLUMN.b)))
+    try:
+        (equal,) = session.constraints
+        session.select_constraints([equal.id])
+        measured = session.selected_measurement()
+        assert measured is not None
+        assert measured.basis is Basis.CLEAR
+        assert measured.clear_mm == pytest.approx(_BAY_MM)
+        assert measured.spacing_mm == pytest.approx(_BAY_MM + _T_MM)
     finally:
         session.close()

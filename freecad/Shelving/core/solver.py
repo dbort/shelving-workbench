@@ -682,6 +682,54 @@ def duplicated_constraint(
     return _duplicates(system, relations, own)
 
 
+def _at_current(system: _System, relation: Relation) -> Relation:
+    """``relation`` with its constant replaced by its value at the system's
+    current positions. Rank does not depend on the constants, and a layout
+    an active constraint misses within the joint clearance would otherwise
+    read as a conflict."""
+    constant_mm = sum(
+        coefficient * system.current_mm[position]
+        for position, coefficient in relation.coefficients.items()
+    )
+    return dataclasses.replace(relation, constant_mm=constant_mm)
+
+
+def redundant_rules(unit: Unit, spaces: Mapping[str, Space]) -> frozenset[str]:
+    """The locked regions and active constraints of ``unit`` each of which,
+    removed alone, leaves its axis's freedom unchanged: every member of an
+    overlapping group, so a person can pick which to remove.
+
+    ``spaces`` is ``unit`` laid out, and the unit's size counts as free, so
+    a lock that only makes the size a reference is not redundant. A
+    deactivated constraint is never in the set. Holds region ids and
+    constraint ids in one set; the two never collide.
+    """
+    found: set[str] = set()
+    for axis in Axis:
+        system = _build(unit, spaces, axis)
+        base = [
+            _at_current(system, relation)
+            for relation in (*system.structural, _fixed_relation(unit, system))
+        ]
+        locks = {relation.id: relation for relation in system.lock_relations()}
+        members: list[tuple[str, list[Relation]]] = [
+            (region.id, [locks[system.lock_id(region.id)]])
+            for region in system.regions
+            if region.lock is not None
+        ]
+        members += system.constraint_relations
+        current = [
+            (member_id, [_at_current(system, r) for r in relations])
+            for member_id, relations in members
+        ]
+        for index, (member_id, own) in enumerate(current):
+            others = [r for i, (_, rs) in enumerate(current) if i != index for r in rs]
+            result = axis_solver.solve(system.current_mm, [*base, *others, *own], [])
+            if all(relation.id in result.redundant for relation in own):
+                found.add(member_id)
+    return frozenset(found)
+
+
 def fixing_locks(
     unit: Unit,
     spaces: Mapping[str, Space],

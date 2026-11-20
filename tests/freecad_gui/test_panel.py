@@ -160,7 +160,12 @@ def test_the_panel_holds_only_the_units_size_the_basis_and_its_lists(
         key=id,
     )
     buttons = [button.text() for button in form.findChildren(QtWidgets.QAbstractButton)]
-    assert sorted(buttons) == ["Change stock…", "Delete Selected", "Hide other objects"]
+    assert sorted(buttons) == [
+        "Change stock…",
+        "Delete Deactivated",
+        "Delete Selected",
+        "Hide other objects",
+    ]
     assert not unit_panel.panel.hide_others_check.isChecked()
     # The unit has nothing this workbench did not create.
     assert not unit_panel.panel.untagged_box.isVisible()
@@ -390,6 +395,21 @@ def test_the_field_is_freecads_quantity_widget(size_field: _SizeField) -> None:
     widget = size_field.field.quantity_widget
     assert widget is not None
     assert widget.inherits("Gui::QuantitySpinBox")
+
+
+def test_a_read_only_field_stays_so_through_a_resize(size_field: _SizeField) -> None:
+    """The quantity widget resets its read-only state from its expression
+    binding on every move or resize."""
+    field = size_field.field
+    field.set_read_only(True, "fixed")
+    size_field.window.resize(size_field.window.width() + 80, 200)
+    _process_events()
+    assert field.read_only
+    assert field.line_edit.isReadOnly()
+    field.set_read_only(False)
+    size_field.window.resize(size_field.window.width() - 40, 200)
+    _process_events()
+    assert not field.read_only
 
 
 def test_a_typed_size_and_a_varset_expression(size_field: _SizeField) -> None:

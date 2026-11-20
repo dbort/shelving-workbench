@@ -46,9 +46,12 @@ from freecad.Shelving.core.edit import (
     move_board,
     remove_boards,
     remove_constraints,
+    remove_deactivated,
     require_movable,
     run_axis,
     set_basis,
+    set_constraint_active,
+    set_constraint_basis,
     set_size,
     set_thickness,
     set_unit_size,
@@ -65,6 +68,7 @@ from freecad.Shelving.core.layout import (
     Constraint,
     ConstraintId,
     Division,
+    Equal,
     FixedSide,
     Region,
     Unit,
@@ -84,12 +88,14 @@ from freecad.Shelving.core.solver import (
     describe_solve_error,
     duplicated_constraint,
     duplicated_locks,
+    measured_mm,
+    redundant_rules,
     size_fixed_by,
     solve,
 )
 from freecad.Shelving.core.stock import BoardStock, Color, StockGroup, group_stocks
 from freecad.Shelving.debug_log import Stopwatch
-from freecad.Shelving.editor.elevation import FixedChoice, fixed_choices
+from freecad.Shelving.editor.elevation import ConstraintKind, FixedChoice, fixed_choices
 from freecad.Shelving.editor.history import EditHistory, Schedule
 
 SplitDirection = Literal["horizontal", "vertical"]
@@ -168,11 +174,16 @@ _REDUNDANT_CONSTRAINT = (
     "The outlined locks and constraints already fix these sizes, so the new "
     "constraint is redundant."
 )
+_REDUNDANT_ACTIVATED = (
+    "The outlined locks and constraints already fix these sizes, so the "
+    "constraint turned on is redundant."
+)
 # Worded without a count, so the text reads the same for one constraint as
 # for several and stays one string to translate.
 _DEACTIVATED_AT_OPEN = (
     "Constraints the boards no longer meet were deactivated. They are drawn "
-    "grayed, hold nothing, and can be removed with Delete."
+    "grayed, hold nothing, and can be turned back on or deleted in the "
+    "Constraints list."
 )
 _DROPPED_AT_OPEN = (
     "Constraints whose openings or boards are gone were removed from this unit."
@@ -188,6 +199,52 @@ def open_message(report: OpenReport) -> str | None:
     if report.dropped:
         lines.append(_DROPPED_AT_OPEN)
     return "\n".join(lines) if lines else None
+
+
+@dataclasses.dataclass(frozen=True)
+class LockRow:
+    """A locked opening's row in the constraint list."""
+
+    region_id: str
+    # The opening's size in its lock's basis.
+    size_mm: float
+    # Whether removing the lock alone would leave the layout's freedom as
+    # it is: redundant_rules in freecad.Shelving.core.solver.
+    redundant: bool
+
+
+@dataclasses.dataclass(frozen=True)
+class ConstraintRow:
+    """An Equal's or an even spacing's row in the constraint list."""
+
+    constraint_id: ConstraintId
+    kind: ConstraintKind
+    active: bool
+    # The first opening's size in the constraint's basis; None while the
+    # constraint is deactivated, since its openings may differ.
+    size_mm: float | None
+    # As LockRow.redundant; a deactivated constraint never is.
+    redundant: bool
+
+
+ListRow = LockRow | ConstraintRow
+
+
+def _structure_key(region: Region) -> tuple[object, ...]:
+    """What the redundant set depends on in ``region``'s subtree: ids,
+    nesting, axes and locks, leaving out every size, so a drag that only
+    moves boards keeps the key."""
+    if isinstance(region, Division):
+        return (
+            region.id,
+            region.lock,
+            region.axis,
+            tuple(
+                item.id if isinstance(item, Board) else _structure_key(item)
+                for item in region.items
+            ),
+        )
+    return (region.id, region.lock)
 
 
 def _solve_failure(err: LayoutSolveError) -> EditFailure:
@@ -395,6 +452,12 @@ class Session:
         # names, which the view outlines until the next edit, Undo, Redo or
         # selection change.
         self.flagged: tuple[str, ...] = ()
+        # The last redundant set, keyed by what it depends on. A drag
+        # refreshes the panel at every step, and the query solves once per
+        # lock and constraint on each axis: measured at about 50 ms on a unit
+        # of four columns of six openings with 8 locks and 5 constraints,
+        # three frames at 60 Hz added to every step without the cache.
+        self._redundant: tuple[tuple[object, ...], frozenset[str]] | None = None
 
     def open(self, schedule: Schedule | None = None) -> None:
         """Add the size fields' properties to the container and start
@@ -538,6 +601,49 @@ class Session:
         """The unit's constraints, active and deactivated, in the order they
         were made."""
         return self.unit.constraints
+
+    def constraint_rows(self) -> tuple[ListRow, ...]:
+        """The constraint list's rows: every lock, in tree order, then every
+        constraint, active or deactivated, in the order they were made."""
+        redundant = self._redundant_rules()
+        rows: list[ListRow] = []
+        for region in _regions(self.unit.root):
+            if region.lock is None or region.id == self.unit.root.id:
+                continue
+            rows.append(
+                LockRow(
+                    region_id=region.id,
+                    size_mm=measure(self.unit, region.id, self.spaces).size_mm,
+                    redundant=region.id in redundant,
+                )
+            )
+        for constraint in self.unit.constraints:
+            regions = constraint_regions(self.unit, constraint)
+            size_mm = None
+            if constraint.active and regions:
+                size_mm = measured_mm(
+                    self.unit, self.spaces, regions[0], constraint.basis
+                )
+            rows.append(
+                ConstraintRow(
+                    constraint_id=constraint.id,
+                    kind="equal" if isinstance(constraint, Equal) else "even_spacing",
+                    active=constraint.active,
+                    size_mm=size_mm,
+                    redundant=constraint.id in redundant,
+                )
+            )
+        return tuple(rows)
+
+    def _redundant_rules(self) -> frozenset[str]:
+        key = (
+            _structure_key(self.unit.root),
+            self.unit.constraints,
+            self.unit.fixed_point,
+        )
+        if self._redundant is None or self._redundant[0] != key:
+            self._redundant = (key, redundant_rules(self.unit, self.spaces))
+        return self._redundant[1]
 
     def constraint_regions(self, constraint_id: ConstraintId) -> tuple[str, ...]:
         """The openings the constraint ``constraint_id`` holds, empty when
@@ -908,14 +1014,40 @@ class Session:
 
     def selected_measurement(self) -> Measurement | None:
         """The selected region's :class:`~freecad.Shelving.core.edit.Measurement`,
-        or ``None`` when the selection is nothing, a board, or the whole
-        unit: nothing a size applies to."""
+        or for a lone selected constraint its first opening's, in the
+        constraint's basis and with ``spacing_mm`` ``None`` unless every
+        opening it names has a board after it. ``None`` when the selection
+        is nothing, a board, the whole unit, several constraints, or a
+        constraint holding no opening: nothing a size applies to."""
+        constraint = self._selected_constraint()
+        if constraint is not None:
+            return self._constraint_measurement(constraint)
         if self.selected_id is None:
             return None
         try:
             return measure(self.unit, self.selected_id, self.spaces)
         except EditError:
             return None
+
+    def _selected_constraint(self) -> Constraint | None:
+        """The one selected constraint; ``None`` for any other selection."""
+        if len(self._constraint_selection) != 1:
+            return None
+        (selected,) = self._constraint_selection
+        return next((c for c in self.unit.constraints if c.id == selected), None)
+
+    def _constraint_measurement(self, constraint: Constraint) -> Measurement | None:
+        regions = constraint_regions(self.unit, constraint)
+        if not regions:
+            return None
+        measurements = [measure(self.unit, r, self.spaces) for r in regions]
+        first = measurements[0]
+        spaced = all(m.spacing_mm is not None for m in measurements)
+        return dataclasses.replace(
+            first,
+            basis=constraint.basis,
+            spacing_mm=first.spacing_mm if spaced else None,
+        )
 
     @_edit
     def set_size(self, size_mm: float) -> EditFailure | None:
@@ -940,10 +1072,25 @@ class Session:
 
     @_edit
     def set_basis(self, basis: Basis) -> EditFailure | None:
-        """Change what the selected region's size measures, moving nothing.
-        The selection is kept. Returns ``None`` on success or an
-        :class:`EditFailure` on refusal, which changes nothing."""
+        """Change what the selected region's size measures, moving nothing,
+        or what a lone selected constraint's sizes measure, solving it again
+        when it is active. One undo step that keeps the selection. Returns
+        ``None`` on success or an :class:`EditFailure` on refusal, which
+        changes nothing, a constraint's conflict included."""
         self.settle()
+        constraint = self._selected_constraint()
+        if constraint is not None:
+            try:
+                candidate = set_constraint_basis(self.unit, constraint.id, basis)
+            except EditError as err:
+                return EditFailure(str(err), err.node_id)
+            except LayoutSolveError as err:
+                return _solve_failure(err)
+            if candidate is self.unit:
+                return None
+            return self._step(
+                "Change What a Size Measures", lambda: self._apply(candidate)
+            )
         if self.selected_id is None:
             return EditFailure("select a region to measure", None)
         region_id = self.selected_id
@@ -1108,6 +1255,66 @@ class Session:
         if duplicated:
             self._warn(_REDUNDANT_CONSTRAINT, duplicated)
         return None
+
+    @_edit
+    def set_constraint_active(
+        self, constraint_id: ConstraintId, active: bool
+    ) -> EditFailure | None:
+        """Activate or deactivate the constraint ``constraint_id`` as one
+        undo step that keeps the selection; adds no step when it already is.
+        Deactivating moves nothing; activating solves it in, and warns
+        through :attr:`on_warning` when it is redundant. Returns an
+        :class:`EditFailure`, changing nothing, for an unknown id or an
+        activation that conflicts, naming the conflict's regions and
+        constraints."""
+        self.settle()
+        try:
+            candidate = set_constraint_active(self.unit, constraint_id, active)
+        except EditError as err:
+            return EditFailure(str(err), err.node_id)
+        except LayoutSolveError as err:
+            return _solve_failure(err)
+        if candidate is self.unit:
+            return None
+        name = "Activate Constraint" if active else "Deactivate Constraint"
+        failure = self._step(name, lambda: self._apply(candidate))
+        if failure is not None or not active:
+            return failure
+        constraint = next(c for c in self.unit.constraints if c.id == constraint_id)
+        axis = constraint_axis(self.unit, constraint)
+        found = (
+            None
+            if axis is None
+            else duplicated_constraint(self.unit, self.spaces, constraint_id, axis)
+        )
+        if found:
+            self._warn(_REDUNDANT_ACTIVATED, (*found, constraint_id))
+        return None
+
+    @_edit
+    def delete_constraint(self, constraint_id: ConstraintId) -> EditFailure | None:
+        """Remove the constraint ``constraint_id``, active or deactivated, as
+        one undo step that moves no board. Returns an :class:`EditFailure`,
+        changing nothing, when it names no constraint of the unit."""
+        self.settle()
+        try:
+            candidate = remove_constraints(self.unit, (constraint_id,))
+        except EditError as err:
+            return EditFailure(str(err), err.node_id)
+        return self._step("Delete Constraint", lambda: self._apply(candidate))
+
+    @_edit
+    def delete_deactivated(self) -> EditFailure | None:
+        """Remove every deactivated constraint as one undo step that moves no
+        board. Returns an :class:`EditFailure`, adding no step, when none is
+        deactivated."""
+        self.settle()
+        if all(constraint.active for constraint in self.unit.constraints):
+            return EditFailure("no constraint is deactivated", None)
+        candidate = remove_deactivated(self.unit)
+        return self._step(
+            "Delete Deactivated Constraints", lambda: self._apply(candidate)
+        )
 
     @_edit
     def delete_constraints(self) -> EditFailure | None:

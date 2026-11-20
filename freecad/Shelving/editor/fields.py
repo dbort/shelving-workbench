@@ -93,6 +93,25 @@ class _FieldEventFilter(QtCore.QObject):
         return True
 
 
+class _ReadOnlyKeeper(QtCore.QObject):
+    """Calls ``on_drift`` once the event loop is free whenever the widget it
+    is installed on changes its read-only state. ``Gui::QuantitySpinBox``
+    resets that state from its expression binding each time it is moved or
+    resized, as any relayout of the task panel does, which would make a
+    reference size editable again."""
+
+    def __init__(self, parent: QtCore.QObject, on_drift: Callable[[], None]) -> None:
+        super().__init__(parent)
+        self._on_drift = on_drift
+
+    @override
+    def eventFilter(self, watched: QtCore.QObject, event: QtCore.QEvent) -> bool:
+        if event.type() == QtCore.QEvent.Type.ReadOnlyChange:
+            # Deferred: the spin box is still inside its own resize.
+            QtCore.QTimer.singleShot(0, self._on_drift)
+        return False
+
+
 class _StepWatch(QtCore.QObject):
     """Notes, before the spin box sees it, every event that steps its value
     rather than editing its text: a spin arrow pressed, an arrow or page key,
@@ -221,6 +240,10 @@ class DimensionField:
         self.widget.installEventFilter(self._event_filter)
         if self.line_edit is not self.widget:
             self.line_edit.installEventFilter(self._event_filter)
+        # What set_read_only last asked for.
+        self._read_only = False
+        self._read_only_keeper = _ReadOnlyKeeper(self.widget, self._keep_read_only)
+        self.line_edit.installEventFilter(self._read_only_keeper)
         # What show_mm last displayed. editingFinished also fires when the
         # field merely loses focus, and reporting an unchanged value would
         # quietly lock an unlocked region.
@@ -351,11 +374,20 @@ class DimensionField:
         """Show the value without taking typed text, steps or the wheel when
         ``read_only``, with ``tip`` as the field's tooltip, as the Sketcher
         shows a reference dimension it computes; editable again otherwise,
-        with no tooltip."""
-        if isinstance(self.widget, QtWidgets.QAbstractSpinBox):
-            self.widget.setReadOnly(read_only)
-        self.line_edit.setReadOnly(read_only)
+        with no tooltip. The state holds until the next call, whatever the
+        quantity widget does on its own."""
+        self._read_only = read_only
+        self._apply_read_only()
         self.widget.setToolTip(tip if read_only else "")
+
+    def _apply_read_only(self) -> None:
+        if isinstance(self.widget, QtWidgets.QAbstractSpinBox):
+            self.widget.setReadOnly(self._read_only)
+        self.line_edit.setReadOnly(self._read_only)
+
+    def _keep_read_only(self) -> None:
+        if self._alive() and self.read_only != self._read_only:
+            self._apply_read_only()
 
     def show_mm(self, value_mm: float | None) -> None:
         """Display ``value_mm``, or clear the field for ``None``; never
