@@ -234,3 +234,8 @@ measure spacing through the next board.
       `activate` and `undo` steps in the `editor.constraints` case.
 
 ## Review log
+
+### Round 1: APPROVED
+- **N1: The row icon check compares the widget against itself** (`tests/freecad_gui/test_constraint_list.py:224`): each item's icon is compared to `ConstraintList.row_icon(row)`, the function `show` uses to set it, so a kind mapped to the wrong image would still pass. Comparing against `padlock_image(...)` and `constraint_icon_image(kind, ...)`, or at least asserting the three kinds' icons differ, would test what the Must Have asks for. The implementation is correct.
+- **N2: The GUI row-order test checks types only** (`tests/freecad_gui/test_constraint_list.py:212`): it locks C then A but never checks the lock rows come out A then C. `tests/freecad/test_constraint_session.py` covers tree order at the session level.
+- **N3: The headless lock-row test never goes through the list** (`tests/freecad/test_constraint_session.py:724`): it calls `session.set_lock` directly. The GUI delete-button test covers the Must Have; the headless test could be dropped or renamed to say what it checks.
