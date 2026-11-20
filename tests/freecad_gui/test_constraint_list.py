@@ -3,7 +3,6 @@ their checkboxes, delete buttons and redundancy marks, and the basis menu
 for a selected constraint. Selection shared with the 3D view is
 ``tests/freecad_view/test_constraint_list.py``'s."""
 
-import dataclasses
 from collections.abc import Iterator
 from typing import cast
 
@@ -34,8 +33,16 @@ from freecad.Shelving.editor.constraint_list import (
     ConstraintList,
     disabled_icon,
 )
+from freecad.Shelving.editor.elevation import ConstraintKind
+from freecad.Shelving.editor.overlay import (
+    TILE_PAD_PX,
+    Tile,
+    constraint_icon_image,
+    padlock_image,
+    view_style,
+)
 from freecad.Shelving.editor.panel import EditUnitPanel
-from freecad.Shelving.editor.session import ConstraintRow, LockRow
+from freecad.Shelving.editor.session import ConstraintRow
 
 _T_MM = 18.0
 _BAY_MM = 288.0
@@ -200,39 +207,51 @@ def test_the_group_follows_the_unit_group_and_shows_with_no_rows(
     assert not bare.rows.delete_deactivated_button.isEnabled()
 
 
-def test_rows_list_locks_then_constraints_with_icon_and_size(
-    editing: _Editing,
-) -> None:
-    a, _b, c = editing.bays()
-    session = editing.panel.session
-    assert session.set_lock(c, locked=True) is None
-    assert session.set_lock(a, locked=True) is None
-    editing.panel._refresh()
-    rows = editing.rows.rows
-    assert [type(row) for row in rows] == [
-        LockRow,
-        LockRow,
-        ConstraintRow,
-        ConstraintRow,
-    ]
-    size = FreeCAD.Units.Quantity(_BAY_MM, FreeCAD.Units.Length).UserString
-    texts = [editing.item(i).text(TEXT_COLUMN) for i in range(4)]
-    assert "Lock" in texts[0] and size in texts[0]
-    assert "Lock" in texts[1] and size in texts[1]
-    assert "Equal" in texts[2] and size in texts[2]
-    assert texts[3] == "Even spacing"
-    for index, row in enumerate(rows):
-        assert _image(editing.item(index).icon(TEXT_COLUMN)) == _image(
-            editing.rows.row_icon(row)
-        )
-    spacing = rows[3]
-    assert isinstance(spacing, ConstraintRow)
-    tree = editing.rows.tree
+def _drawn_icon(
+    tree: QtWidgets.QTreeWidget, kind: ConstraintKind | None
+) -> QtGui.QIcon:
+    """The 3D view's own image for ``kind``, the closed padlock for a lock
+    (``None``), at the list's icon size on a tile of its background."""
     side_px = tree.style().pixelMetric(QtWidgets.QStyle.PixelMetric.PM_SmallIconSize)
-    on = editing.rows.row_icon(dataclasses.replace(spacing, active=True))
-    grayed = disabled_icon(on, side_px, tree.devicePixelRatioF())
-    assert _image(editing.item(3).icon(TEXT_COLUMN)) == _image(grayed)
-    assert _image(editing.item(3).icon(TEXT_COLUMN)) != _image(on)
+    ratio = tree.devicePixelRatioF()
+    base = tree.palette().color(QtGui.QPalette.ColorRole.Base)
+    tile = Tile(
+        (base.redF(), base.greenF(), base.blueF()), round(TILE_PAD_PX * ratio), 0.0
+    )
+    style = view_style(0)
+    device_px = round(side_px * ratio)
+    if kind is None:
+        image = padlock_image(True, style.locked_rgb, tile, device_px)
+    else:
+        image = constraint_icon_image(kind, style.icon_rgb, tile, device_px)
+    pixmap = QtGui.QPixmap.fromImage(image)
+    pixmap.setDevicePixelRatio(ratio)
+    return QtGui.QIcon(pixmap)
+
+
+def test_rows_show_their_kind_size_and_the_views_icons(editing: _Editing) -> None:
+    a, _b, _c = editing.bays()
+    assert editing.panel.session.set_lock(a, locked=True) is None
+    editing.panel._refresh()
+    tree = editing.rows.tree
+    size = FreeCAD.Units.Quantity(_BAY_MM, FreeCAD.Units.Length).UserString
+    lock, equal, spacing = (editing.item(i) for i in range(3))
+    assert "Lock" in lock.text(TEXT_COLUMN) and size in lock.text(TEXT_COLUMN)
+    assert "Equal" in equal.text(TEXT_COLUMN) and size in equal.text(TEXT_COLUMN)
+    assert spacing.text(TEXT_COLUMN) == "Even spacing"
+    padlock = _drawn_icon(tree, None)
+    equals = _drawn_icon(tree, "equal")
+    spaced = _drawn_icon(tree, "even_spacing")
+    assert _image(padlock) != _image(equals)
+    assert _image(padlock) != _image(spaced)
+    assert _image(equals) != _image(spaced)
+    assert _image(lock.icon(TEXT_COLUMN)) == _image(padlock)
+    assert _image(equal.icon(TEXT_COLUMN)) == _image(equals)
+    # The deactivated even spacing's icon, as Qt grays a disabled icon.
+    side_px = tree.style().pixelMetric(QtWidgets.QStyle.PixelMetric.PM_SmallIconSize)
+    grayed = disabled_icon(spaced, side_px, tree.devicePixelRatioF())
+    assert _image(spacing.icon(TEXT_COLUMN)) == _image(grayed)
+    assert _image(grayed) != _image(spaced)
 
 
 def test_a_constraint_row_has_a_checkbox_a_lock_row_none(editing: _Editing) -> None:

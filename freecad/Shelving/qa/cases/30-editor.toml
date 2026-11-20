@@ -559,7 +559,8 @@ and the shelf you raised stays where you put it."""
   [[case.step]]
   id = "activate"
   instruction = [
-    "In the task panel's Constraints group, check the Even spacing row's box.",
+    "Check the Even spacing row in the task panel's Constraints list.",
+    "Click an empty part of the 3D view outside the unit.",
   ]
   expected = """
 The leftmost column is evenly spaced again: the shelf you raised drops back
@@ -619,7 +620,8 @@ sharp as the text beside it and easy to recognize."""
     "Click the bottom opening of the second column.",
     "Ctrl-click the top opening of the second column.",
     "Click Constrain Even Spacing on the toolbar.",
-    "Clear the Even spacing row's box.",
+    "Uncheck the Even spacing row in the Constraints list.",
+    "Click an empty part of the 3D view outside the unit.",
   ]
   expected = """
 The Even spacing row reads as off at a glance: its icon is grayed and it

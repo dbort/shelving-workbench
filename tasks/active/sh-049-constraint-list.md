@@ -205,6 +205,12 @@ measure spacing through the next board.
   2026-11-19): least motion over every free board, so the Equal case gives
   A 288, B 288, C 324 (s1 up 8, s2 down 4), matching
   `test_equal_makes_unequal_openings_equal_moving_the_boards_least`.
+- **After manual QA** (user decisions, 2026-11-20): pressing a row's
+  checkbox keeps selecting the row, as plain Qt does, and a selected
+  constraint's icon keeps the selection color alone; how selection and
+  the deactivated state should both show is bug-024, planned as a
+  follow-up task, not done here. The QA steps that toggle a box add a
+  click on empty view space before judging the icons' red or gray.
 - **Out of scope:** renaming constraints, a filter, editing a lock's size
   from its row (Sketcher's double-click edit), Aligned faces (task 4), and
   a Delete key inside the list.

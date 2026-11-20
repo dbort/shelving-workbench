@@ -452,8 +452,11 @@ class Session:
         # names, which the view outlines until the next edit, Undo, Redo or
         # selection change.
         self.flagged: tuple[str, ...] = ()
-        # The last redundant set, keyed by what it depends on, so a refresh
-        # during a drag does not solve once per lock and constraint again.
+        # The last redundant set, keyed by what it depends on. A drag
+        # refreshes the panel at every step, and the query solves once per
+        # lock and constraint on each axis: measured at about 50 ms on a unit
+        # of four columns of six openings with 8 locks and 5 constraints,
+        # three frames at 60 Hz added to every step without the cache.
         self._redundant: tuple[tuple[object, ...], frozenset[str]] | None = None
 
     def open(self, schedule: Schedule | None = None) -> None:

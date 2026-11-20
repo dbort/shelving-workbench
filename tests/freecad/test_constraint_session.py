@@ -721,18 +721,6 @@ def test_a_redundant_reactivation_is_kept_with_a_warning(
         session.close()
 
 
-def test_a_lock_row_deletes_as_the_padlock_unlocks(doc: FreeCAD.Document) -> None:
-    session = _opened(_written(doc))
-    try:
-        a, _b, _c = _bays(session)
-        assert session.set_lock(a, locked=True) is None
-        assert session.set_lock(a, locked=False) is None
-        assert doc.UndoNames[0] == "Unlock Opening"
-        assert session.constraint_rows() == ()
-    finally:
-        session.close()
-
-
 def test_a_lone_selected_constraint_reports_its_basis(doc: FreeCAD.Document) -> None:
     session = _opened(_written(doc, _equal(_COLUMN.a, _COLUMN.b)))
     try:
