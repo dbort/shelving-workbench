@@ -1,7 +1,6 @@
 [workspace]
 name = "shelving-workbench"
 channels = ["conda-forge"]
-# CI runners are x86_64; the dev VM is aarch64. The lock must resolve for both.
 platforms = ["linux-64", "linux-aarch64"]
 
 [dependencies]
