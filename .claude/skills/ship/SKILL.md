@@ -27,7 +27,8 @@ Invoking `/ship sh-XXX` is the user's sign-off. Pipeline rules:
    `git mv` moves the index's blob, not the file on disk.
 4. **Merge.** `git checkout main`, then `git merge --no-commit --no-ff
    sh-XXX`. On conflicts, stop and leave them for the user. Run `pixi run
-   tests` on the merged tree.
+   tests` on the merged tree, or `pixi run tests -- --smoke` when `main`
+   had not moved since the branch was cut (`pipeline.md` § Checks).
    - Green: commit `Merge sh-XXX: <title>`, then `git branch -d sh-XXX`
      (never `-D`).
    - Red: `git merge --abort`, report the failing check, and stop. The

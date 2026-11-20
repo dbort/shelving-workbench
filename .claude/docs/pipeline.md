@@ -31,8 +31,14 @@ suite, the repository-consistency checks, the workflow lint, a
 It must be green before every review and on the merged result before
 `/ship` commits the merge. `pixi run tests -- --smoke` leaves out the
 `full_only` tests and suits iteration between those points; it never
-stands in for the full run at one. A check that needs live infrastructure becomes
-a durable test inside `pixi run tests`, never a one-off command. A check
+stands in for the full run at one, with one exception. When `main` has
+not moved since the branch was cut (`git merge-base --is-ancestor main
+sh-XXX` succeeds), the merged tree is the branch's tree, and since the
+branch's last full run only its task file has changed: `/work` runs the
+full suite before each review, and `doc-hygiene` runs it after its edits.
+`/ship` then runs the smoke suite on the merged result instead. A check
+that needs live infrastructure becomes a durable test inside `pixi run
+tests`, never a one-off command. A check
 that needs the network follows the `SHELVING_OFFLINE` contract in
 `tools/check_action_pins.py`: skip on `1`, run when unset or empty, treat
 any other value as a usage error, and fail on any network error.
