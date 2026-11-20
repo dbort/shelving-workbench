@@ -225,9 +225,10 @@ face the camera sees. A click on a board selects the whole board through
 FreeCAD's own selection; a click on a dimension types its size on the spot;
 buttons over a selected opening add a shelf or a divider; an arrow drags
 the selected board; Delete removes it. The task panel holds only what has
-no place on the drawing: the unit's size, what a selected opening's size
-measures, and the objects the workbench did not create, each saying
-whether it follows the boards as a back or is left alone.
+no place on the drawing: the unit's size, the constraint list, what a
+selected opening's or constraint's sizes measure, and the objects the
+workbench did not create, each saying whether it follows the boards as a
+back or is left alone.
 
 Beside each of the unit's Width, Height and Depth fields, under a Fixed
 point column header, a choice names the fixed side as the editor's view
@@ -257,9 +258,32 @@ Clicking a padlock locks or unlocks the opening, and typing a size locks
 it. A selected board held in place shows a closed padlock where its arrow
 would be and outlines the locked openings holding it; clicking that padlock
 unlocks them, and the arrow takes its place. Like the Sketcher's constraint
-icons, the padlocks are drawn in the view and carry no tooltip. The padlock
-is the only way to unlock. A refused edit's or a redundant lock's outline
-uses the same color, and lasts until the next edit or selection change.
+icons, the padlocks are drawn in the view and carry no tooltip. Besides the
+padlock, only a lock's row in the constraint list unlocks. A refused
+edit's or a redundant lock's outline uses the same color, and lasts until
+the next edit or selection change.
+
+The constraint list follows the Sketcher's: one list holding every lock
+and every Equal and Even spacing, locks first in tree order and then
+constraints in the order they were made, each with its kind's icon and its
+size in the user's unit system, the icon grayed in Qt's disabled mode for
+a deactivated constraint, and selection shared with the 3D view in both
+directions. It departs from the Sketcher in three places. A constraint's
+checkbox means active, since the editor has no virtual space for the
+Sketcher's visibility box to choose. Each row has a delete button and one
+button deletes every deactivated constraint, because opening a unit can
+deactivate several at once, which the Sketcher never does. A redundant
+lock or constraint is marked on its row, with a warning icon and a
+tooltip, for as long as it stays redundant, in place of the Sketcher's
+message box citing constraint numbers. A lock or constraint is redundant
+when removing it alone leaves its axis's freedom unchanged, so every
+member of an overlapping group is marked. Turning a constraint on solves
+it in as making it new would, moving the boards least, and is refused,
+leaving it off, when locks and constraints rule it out; turning one off
+moves nothing. With one Equal or Even spacing selected, Opening size
+measures switches it between clear sizes and spacings through the next
+board, and re-solves it, since the relation itself changes; the spacing
+choice is offered only when every opening it names has a board after it.
 
 The unit's container cannot enter FreeCAD's edit mode without workbench
 state in the document, so the editor adds its drawing and input handling

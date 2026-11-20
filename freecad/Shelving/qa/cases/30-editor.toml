@@ -362,8 +362,9 @@ title = "Selecting several boards by stock, in the view and in the tree"
   action = "two_shelf_unit"
   instruction = ["Select the container (ShelvingUnit).", "Run Edit Unit."]
   expected = """
-Below the Unit group, the Stock group lists one row: the boards' thickness,
-their material, a swatch in their color and 6. Change stock… is disabled."""
+Below the Constraints group, the Stock group lists one row: the boards'
+thickness, their material, a swatch in their color and 6. Change stock… is
+disabled."""
 
   [[case.step]]
   id = "row"
@@ -556,8 +557,83 @@ tiles and easy to spot against the openings, the Equal icons stay red,
 and the shelf you raised stays where you put it."""
 
   [[case.step]]
+  id = "activate"
+  instruction = [
+    "In the task panel's Constraints group, check the Even spacing row's box.",
+  ]
+  expected = """
+The leftmost column is evenly spaced again: the shelf you raised drops back
+to its even place, and the second column's bottom opening stays equal to
+the leftmost column's. The even spacing's icons turn red in the view, and
+its row's icon turns from gray to red with its size beside it."""
+
+  [[case.step]]
+  id = "undo"
+  instruction = ["Press Ctrl+Z."]
+  expected = """
+The even spacing's icons are gray again, its box is cleared and its row
+shows no size, and the shelf you raised is back where you put it."""
+
+  [[case.step]]
   id = "delete"
   instruction = ["Click a gray icon.", "Press Delete."]
   expected = """
 The even spacing's icons disappear, the Equal's stay, and no board
 moves."""
+
+[[case]]
+id = "editor.constraint_list"
+title = "The constraint list: rows, redundancy marks and deactivated rows"
+
+  [[case.step]]
+  id = "start"
+  action = "large_unit"
+  instruction = [
+    "Move FreeCAD to a HiDPI screen, such as a Mac's built-in display.",
+    "Select the container (ShelvingUnit).",
+    "Run Edit Unit.",
+  ]
+  expected = """
+The task panel shows a Constraints group directly under the Unit group,
+holding no rows and a grayed Delete Deactivated button."""
+
+  [[case.step]]
+  id = "redundant"
+  instruction = [
+    "Click the bottom opening of the leftmost column.",
+    "Ctrl-click the opening above it.",
+    "Click Constrain Equal on the toolbar.",
+    "Click the padlock on the bottom opening's dimension.",
+    "Click the padlock on the dimension of the opening above it.",
+  ]
+  expected = """
+One notification says the lock is redundant. The list shows two Lock rows,
+then an Equal row, each with its icon and its size. All three carry a
+warning icon, and hovering one says it is redundant. The rows fit the panel
+at its default width with no horizontal scroll bar, and every icon is as
+sharp as the text beside it and easy to recognize."""
+
+  [[case.step]]
+  id = "deactivate"
+  instruction = [
+    "Click the bottom opening of the second column.",
+    "Ctrl-click the top opening of the second column.",
+    "Click Constrain Even Spacing on the toolbar.",
+    "Clear the Even spacing row's box.",
+  ]
+  expected = """
+The Even spacing row reads as off at a glance: its icon is grayed and it
+shows no size, while the other rows keep their colors. The second column's
+even spacing icons turn gray in the view, and no board moves. Delete
+Deactivated is now enabled."""
+
+  [[case.step]]
+  id = "delete"
+  instruction = [
+    "Click the delete button on the Equal row.",
+    "Click Delete Deactivated.",
+  ]
+  expected = """
+The Equal row goes, and with it the warning icons on the two Lock rows.
+Then the Even spacing row goes. Only the two Lock rows remain, no board
+moved, and Delete Deactivated is grayed again."""

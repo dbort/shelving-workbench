@@ -101,12 +101,14 @@ def _swap(panel: EditUnitPanel, board_ids: list[str], thickness_mm: float) -> No
     panel._refresh()
 
 
-def test_the_stock_group_lists_each_stock_below_the_unit(
+def test_the_stock_group_lists_each_stock_below_the_constraints(
     panel: EditUnitPanel,
 ) -> None:
     layout = panel.form.layout()
     assert layout is not None
-    assert layout.indexOf(panel.stock_box) == layout.indexOf(panel.unit_box) + 1
+    unit_index = layout.indexOf(panel.unit_box)
+    assert layout.indexOf(panel.constraint_list.box) == unit_index + 1
+    assert layout.indexOf(panel.stock_box) == unit_index + 2
     header = panel.stock_list.headerItem()
     assert header is not None
     assert [header.text(i) for i in range(len(STOCK_COLUMNS))] == list(STOCK_COLUMNS)

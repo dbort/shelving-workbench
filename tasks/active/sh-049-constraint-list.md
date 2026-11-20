@@ -226,7 +226,7 @@ measure spacing through the next board.
       `tests/freecad_view/test_constraint_list.py`): the Constraints
       group, its rows and buttons, refresh after every edit and history
       move, and two-way selection with the view.
-- [ ] **Step 5** (`README.md`, `docs/scope-and-design.md`,
+- [x] **Step 5** (`README.md`, `docs/scope-and-design.md`,
       `.claude/docs/code-map.md`, `freecad/Shelving/qa/cases/30-editor.toml`):
       the two glossary entries and the reworded **Deactivated constraint**
       entry; the Editing section describes the list; the code map names

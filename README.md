@@ -120,11 +120,28 @@ The vocabulary the documentation and the code share.
   toolbar shown only while Edit Unit is open, and in the Shelving menu.
 - **Deactivated constraint**: one the boards no longer meet when a unit is
   opened, as after a shelf was moved by hand: nothing moves, the
-  constraint stays, drawn grayed, holds nothing, and can be removed with
-  Delete. One the boards miss by no more than the joint clearance stays
-  active, and the next edit makes it exact. A constraint whose openings or
-  end boards are gone is removed. A notification says so once, when Edit
-  Unit opens.
+  constraint stays, drawn grayed, and holds nothing. Check its box in the
+  constraint list to turn it back on, which moves the boards to meet it
+  again, or delete it there or with Delete. One the boards miss by no
+  more than the joint clearance stays active, and the next edit makes it
+  exact. A constraint whose openings or end boards are gone is removed. A
+  notification says so once, when Edit Unit opens.
+- **Constraint list**: the Constraints group in the Edit Unit panel. It
+  lists every locked opening, then every Equal and Even spacing in the
+  order they were made, each with its icon, its name and its size. A
+  constraint's box turns it on or off: turning one off moves nothing, and
+  turning one on moves the boards to meet it, or is refused when locks or
+  other constraints rule it out. Each row's delete button removes the
+  constraint, or unlocks the opening, and Delete Deactivated removes every
+  deactivated constraint at once. Selecting a row selects its constraint
+  or opening in the 3D view, and the reverse. With one Equal or Even
+  spacing selected, Opening size measures chooses whether its sizes are
+  clear openings or spacings through the next board.
+- **Redundant constraint**: a lock or constraint that the others already
+  imply, such as an Equal between two openings that are both locked at
+  the same size. It is kept, and its row in the constraint list carries a
+  warning icon for as long as it stays redundant; every member of the
+  group is marked, so you can choose which to remove.
 - **Local frame**: origin at the unit's front-bottom-left corner, +X right,
   +Y back, +Z up, in millimeters. A container's own placement is excluded,
   so a unit reads the same wherever it sits.
