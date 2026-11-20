@@ -89,6 +89,12 @@ measure spacing through the next board.
       **Redundant constraint**.
 - [ ] `freecad/Shelving/qa/cases/30-editor.toml` has a case with id
       `editor.constraint_list`.
+- [ ] In `30-editor.toml`'s `editor.constraints` case, the step ids run
+      `reopen`, `activate`, `undo`, `delete`, in that order.
+- [ ] `open_message` for a report with a deactivated constraint, and the
+      README glossary's **Deactivated constraint** entry, both say a
+      deactivated constraint can be turned back on in the Constraints list
+      as well as deleted; neither says Delete is the only way out.
 
 ## Advice
 - **Blocked on sh-048:** this needs its Equal and Even spacing, their
@@ -175,6 +181,26 @@ measure spacing through the next board.
   one column and make an Equal between them (a redundant group), make an
   Even spacing elsewhere, then deactivate and delete rows. Add no setup
   action.
+- **Re-enabling in the hand-moved-shelf case** (user decision): the
+  `editor.constraints` case ("Equal and even spacing, from icons to a
+  hand-moved shelf") shows re-enabling a gray constraint before deleting
+  one. After `reopen`, which leaves the leftmost column's even spacing
+  gray and the Equal red, add step `activate`: check the even spacing's
+  box in the Constraints list; expected: the column is evenly spaced
+  again, the raised shelf drops back to its even position, the second
+  column's bottom opening stays equal to the leftmost's, and the even
+  spacing icons turn red in the view and in the list. Then step `undo`:
+  Ctrl+Z restores the gray icons, the unchecked box and the raised shelf,
+  so the existing `delete` step still finds a gray icon to delete. Keep
+  `delete`'s instruction and expected as they are. Follow
+  `.claude/docs/qa-wizard.md` § How a step reads: one action per line,
+  and the case gains no setup action.
+- **Open notification** (user decision): the text posted at open today
+  says deactivated constraints "can be removed with Delete", which hides
+  the new way back. Reword `_DEACTIVATED_AT_OPEN` in `editor/session.py`
+  to say they can be turned back on or deleted in the Constraints list,
+  still with no count-keyed grammar, and update the README glossary's
+  **Deactivated constraint** entry to match.
 - **Out of scope:** renaming constraints, a filter, editing a lock's size
   from its row (Sketcher's double-click edit), Aligned faces (task 4), and
   a Delete key inside the list.
@@ -190,7 +216,7 @@ measure spacing through the next board.
       `tests/freecad/test_edit_history.py`): the row snapshot in list order
       with redundancy; the four constraint actions as undo steps; selecting
       by row; `selected_measurement` and `set_basis` covering a lone
-      selected constraint.
+      selected constraint; the reworded open notification.
 - [ ] **Step 4** (`editor/constraint_list.py`, `editor/panel.py`,
       `editor/view_editor.py`, `tests/freecad_gui/test_constraint_list.py`,
       `tests/freecad_view/test_constraint_list.py`): the Constraints
@@ -198,8 +224,9 @@ measure spacing through the next board.
       move, and two-way selection with the view.
 - [ ] **Step 5** (`README.md`, `docs/scope-and-design.md`,
       `.claude/docs/code-map.md`, `freecad/Shelving/qa/cases/30-editor.toml`):
-      the two glossary entries; the Editing section describes the list;
-      the code map names `constraint_list.py`; the `editor.constraint_list`
-      case.
+      the two glossary entries and the reworded **Deactivated constraint**
+      entry; the Editing section describes the list; the code map names
+      `constraint_list.py`; the `editor.constraint_list` case; the
+      `activate` and `undo` steps in the `editor.constraints` case.
 
 ## Review log
