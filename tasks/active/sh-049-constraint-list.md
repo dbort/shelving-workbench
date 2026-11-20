@@ -216,7 +216,7 @@ measure spacing through the next board.
 - [x] **Step 2** (`core/record.py`, `core/tests/test_record.py`): the
       spacing basis on constraints round-trips; an unknown basis drops
       the constraint.
-- [ ] **Step 3** (`editor/session.py`, `tests/freecad/test_editor_session.py`,
+- [x] **Step 3** (`editor/session.py`, `tests/freecad/test_editor_session.py`,
       `tests/freecad/test_edit_history.py`): the row snapshot in list order
       with redundancy; the four constraint actions as undo steps; selecting
       by row; `selected_measurement` and `set_basis` covering a lone
