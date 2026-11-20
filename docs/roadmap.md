@@ -90,7 +90,7 @@ size changes, and scans back as the same treatment.
 
 ## M18: Constraints
 
-**Status:** Tasks sh-045, sh-046, sh-047, sh-048, sh-051, sh-049, sh-050
+**Status:** Tasks sh-045, sh-046, sh-047, sh-048, sh-051, sh-049, sh-050, sh-054, sh-055
 
 - [x] sh-045: the constraint engine for one axis
 - [x] sh-046: lay units out with the engine (blocked on sh-045)
@@ -99,12 +99,17 @@ size changes, and scans back as the same treatment.
 - [x] sh-051: padlocks join the icon row, and dimension text sits on a tile
 - [x] sh-049: the constraint list in the task panel (blocked on sh-048)
 - [ ] sh-050: Aligned faces, picked by a board's face edges (blocked on sh-049)
+- [ ] sh-054: a lock is a constraint you can turn off
+- [ ] sh-055: locks drawn as dimensions, made with Lock Width and Lock Height (blocked on sh-053, sh-054)
 
 Relations between the openings and boards of one unit, in the Sketcher's
 manner. Locks become dimensions in a solver that moves boards as little as
 possible, and Equal, Even spacing and Aligned faces join them as geometric
 constraints, made from an edit-only toolbar, kept across sessions and
-listed in the task panel. Each task file holds its part of the design.
+listed in the task panel. A lock then becomes one more constraint, drawn
+as the Sketcher draws a driving dimension, with unlocked sizes shown as
+reference dimensions only where they are needed. Each task file holds its
+part of the design.
 Alignment across units belongs to named values (Later).
 
 *Verify in FreeCAD:* the `editor.aligned_faces` manual QA case (sh-050).
@@ -166,5 +171,14 @@ Each of these is its own task when it comes up.
   the other side.
 - **A "generate bug report" command** that absorbs Export Boxes: the boxes
   JSON plus whatever else a report needs, in one file to attach.
+- **Equal and Even spacing choose their axis**, as Lock Width and Lock
+  Height do: a pick resolves to the region owning its size along the chosen
+  axis, so equalizing two columns' widths no longer needs the columns
+  themselves selected.
+- **Fully constrained boards in color**, as the Sketcher draws fully
+  constrained geometry in its own color: a board whose position the locks
+  and constraints fix takes that color. Needs a rule for when the unit's
+  size is free, and one for how it meets the selection and holding
+  outlines.
 - **Parametric joinery** with promote-to-Body, the cut-list spreadsheet,
   the TechDraw elevation, and assembly joints.
