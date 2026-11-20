@@ -122,30 +122,30 @@ the deadlock are corrected to match.
   never read the log, because no user-facing path changes.
 
 ## Plan
-- [ ] **Step 1** (`tests/qt_messages.py`, `tests/test_qt_messages.py`):
+- [x] **Step 1** (`tests/qt_messages.py`, `tests/test_qt_messages.py`):
       a typed function taking a `QtMsgType`, a `QMessageLogContext`
       category and text, and a console `Protocol`. It drops the
       plugin-warning family and forwards the rest at FreeCAD's level and
       prefix. Plus a factory returning the handler to install. Unit tests
       cover the drop and keep cases and the level mapping.
-- [ ] **Step 2** (`tests/freecad_gui/conftest.py`): install the handler
+- [x] **Step 2** (`tests/freecad_gui/conftest.py`): install the handler
       after `showMainWindow()`, passing `FreeCAD.Console`. Rewrite the module
       docstring to explain the filter and why popups-off alone does not
       prevent the deadlock.
-- [ ] **Step 3** (`tests/freecad_gui/`): add the `raise_()` and `qWarning`
+- [x] **Step 3** (`tests/freecad_gui/`): add the `raise_()` and `qWarning`
       Report view test and the repeated-warning test. For the second, do the
       one-time check Advice describes. Switch `test_qa_wizard.py`'s marker to
       `FreeCAD.Console.PrintMessage` and delete its workaround comment.
-- [ ] **Step 4** (`tests/freecad/test_temp_dirs.py`,
+- [x] **Step 4** (`tests/freecad/test_temp_dirs.py`,
       `tools/freecad-test-user.cfg`): reword the docstring and the cfg
       comment as Advice says.
-- [ ] **Step 5** (`.claude/docs/freecad-notes.md`,
+- [x] **Step 5** (`.claude/docs/freecad-notes.md`,
       `.claude/docs/xvfb-gui-testing.md`): correct the deadlock section and
       the "Notification popups stay off" bullet.
-- [ ] **Step 6** (`.claude/docs/friction-log.md`): delete `friction-030`
+- [x] **Step 6** (`.claude/docs/friction-log.md`): delete `friction-030`
       in the commit that lands Step 2, recording the papercut and fix in
       that commit's message.
-- [ ] **Step 7**: run `pixi run tests` on this VM, save the output and exit
+- [x] **Step 7**: run `pixi run tests` on this VM, save the output and exit
       status to a file, and confirm the GUI suite finishes.
 
 ## Review log

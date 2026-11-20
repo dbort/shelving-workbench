@@ -78,19 +78,3 @@ the papercut and its fix in its message.
   workaround downloaded the `.tar.gz` and its `.sha256` by hand, verified,
   extracted `pixi` into `~/.local/bin`, then reran the script. Simpler if:
   the script fetched and verified the `.tar.gz` and extracted the binary.
-- `friction-030` - **`pixi run tests` finishing on the x86_64 dev VM**:
-  `tests/freecad_gui/test_constraint_commands.py` hangs every time in
-  `test_the_toolbar_shows_exactly_while_an_edit_is_open_in_any_workbench`
-  when the whole file runs; alone, the test passes, and CI was green at the
-  same commit. A native stack shows the deadlock in `freecad-notes.md`,
-  reached despite `NonIntrusiveNotificationsEnabled=0`: offscreen Qt has no
-  OpenGL, so FreeCAD logs `No valid GL context found!` several times in a
-  row, and FreeCAD 1.1.3's `pushNotification` skips its popups-disabled
-  return for a message identical to the previous one. The popup's
-  `raise()` then warns and re-enters `pushNotification` under its own
-  mutex. Why CI and the old aarch64 VM escape is unconfirmed; FreeCAD shows
-  the popup only while its main window is active, so timing is the likely
-  difference. No workaround yet; the merge gate cannot pass on this VM.
-  Simpler if: the GUI and view test setup dropped offscreen Qt's "This
-  plugin does not support ..." warnings before FreeCAD's message handler
-  sees them, which removes the re-entry.
