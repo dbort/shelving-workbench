@@ -18,44 +18,44 @@ tests and docs only, never the shipped workbench. The docs that describe
 the deadlock are corrected to match.
 
 ## Must Have
-- [ ] `pixi run tests` exits 0 on the x86_64 dev VM; `pyrefly check` clean
+- [x] `pixi run tests` exits 0 on the x86_64 dev VM; `pyrefly check` clean
       over the changed code.
-- [ ] No file under `freecad/` changes (`git diff --stat main -- freecad/`
+- [x] No file under `freecad/` changes (`git diff --stat main -- freecad/`
       is empty).
-- [ ] An importable, FreeCAD-free function decides a Qt message's fate. A
+- [x] An importable, FreeCAD-free function decides a Qt message's fate. A
       plain-tier unit test (under `tests/`, outside the FreeCAD tiers)
       asserts that it drops `This plugin does not support raise()` and
       `This plugin does not support propagateSizeHints()`, and forwards
       `probe` and `QWidget::repaint: Recursive repaint detected`.
-- [ ] The same unit test asserts the forwarding level for each Qt message
+- [x] The same unit test asserts the forwarding level for each Qt message
       type: warning → `PrintWarning`, critical and fatal → `PrintError`,
       info and debug → `PrintLog`, each with the text followed by a newline.
       Use FreeCAD 1.1.3's mapping instead if its source differs (see
       Advice).
-- [ ] A GUI-tier test calls `raise_()` on a shown offscreen `QWidget` and
+- [x] A GUI-tier test calls `raise_()` on a shown offscreen `QWidget` and
       asserts that the Report view gained no `This plugin does not support`
       text, then calls `QtCore.qWarning` with a unique marker and asserts
       the marker reaches the Report view.
-- [ ] A GUI-tier test sets up the deadlock situation: the main window
+- [x] A GUI-tier test sets up the deadlock situation: the main window
       activated, popups off as the test settings leave them, and the same
       warning sent twice in a row through `FreeCAD.Console.PrintWarning`,
       with Qt events processed after each. It asserts that the calls return
       and that the Report view gained no `This plugin does not support`
       text. It asserts nothing about whether a popup appeared, so it
       passes when this machine's timing never reaches the popup.
-- [ ] `tests/freecad_gui/test_qa_wizard.py` prints its Report view marker
+- [x] `tests/freecad_gui/test_qa_wizard.py` prints its Report view marker
       through `FreeCAD.Console`, with no direct `append` to the Report view
       widget and no comment about a deadlock.
-- [ ] `grep -rn -i deadlock tests/ tools/` finds no claim that a popup
+- [x] `grep -rn -i deadlock tests/ tools/` finds no claim that a popup
       deadlocks the suite outside `tests/freecad_gui/conftest.py`'s
       explanation of the filter.
-- [ ] `.claude/docs/freecad-notes.md` § "A headless notification popup
+- [x] `.claude/docs/freecad-notes.md` § "A headless notification popup
       deadlocks FreeCAD 1.1" names the repeated-message path that ignores
       `NonIntrusiveNotificationsEnabled`, names the GUI tier's warning
       filter as the remedy, and states that Xvfb's `raise()` does not warn.
-- [ ] `.claude/docs/xvfb-gui-testing.md` no longer says a popup deadlocks
+- [x] `.claude/docs/xvfb-gui-testing.md` no longer says a popup deadlocks
       FreeCAD under Xvfb.
-- [ ] `friction-030` is gone from `.claude/docs/friction-log.md`, removed
+- [x] `friction-030` is gone from `.claude/docs/friction-log.md`, removed
       in the same commit as the filter, and that commit's message records
       the papercut and its fix; `next_id` stays `friction-031`.
 
