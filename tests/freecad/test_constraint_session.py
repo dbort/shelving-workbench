@@ -538,7 +538,7 @@ def test_selecting_constraints_and_items_exclude_each_other(
         session.close()
 
 
-# --- the constraint list's actions (sh-049) -------------------------------
+# --- the constraint list's actions -----------------------------------------
 
 
 def test_the_open_message_points_to_the_constraints_list(

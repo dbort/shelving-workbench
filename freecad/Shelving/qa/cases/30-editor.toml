@@ -559,7 +559,7 @@ and the shelf you raised stays where you put it."""
   [[case.step]]
   id = "activate"
   instruction = [
-    "Check the Even spacing row in the task panel's Constraints list.",
+    "Check the Even spacing row's box in the task panel's Constraints list.",
     "Click an empty part of the 3D view outside the unit.",
   ]
   expected = """
@@ -620,7 +620,7 @@ sharp as the text beside it and easy to recognize."""
     "Click the bottom opening of the second column.",
     "Ctrl-click the top opening of the second column.",
     "Click Constrain Even Spacing on the toolbar.",
-    "Uncheck the Even spacing row in the Constraints list.",
+    "Uncheck the Even spacing row's box in the Constraints list.",
     "Click an empty part of the 3D view outside the unit.",
   ]
   expected = """
