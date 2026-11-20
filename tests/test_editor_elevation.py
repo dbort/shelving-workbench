@@ -543,9 +543,11 @@ def test_an_equal_draws_an_icon_at_each_of_its_openings() -> None:
     unit = add_equal(_column(), ["A", "C"])
     (equal,) = unit.constraints
     icons = _overlay(unit).icons
-    assert [(i.label.region_id, i.kind, i.slot, i.state) for i in icons] == [
-        ("A", "equal", 1, "active"),
-        ("C", "equal", 1, "active"),
+    assert [
+        (i.label.region_id, i.kind, i.slot, i.active, i.selected) for i in icons
+    ] == [
+        ("A", "equal", 1, True, False),
+        ("C", "equal", 1, True, False),
     ]
     assert {i.constraint_id for i in icons} == {equal.id}
 
@@ -577,21 +579,33 @@ def test_every_dimension_leads_its_row_with_its_padlock() -> None:
     assert overlay.row_icons == (*overlay.padlocks, *overlay.icons)
 
 
-def test_an_icon_takes_the_deactivated_or_selected_state() -> None:
+def test_an_icon_reports_selection_and_activation_independently() -> None:
     unit = add_equal(_column(), ["A", "B", "C"])
     first, second = unit.constraints
     off = dataclasses.replace(
         unit, constraints=(first, dataclasses.replace(second, active=False))
     )
-    states = {
-        (i.constraint_id, i.label.region_id): i.state
-        for i in _overlay(off, selected_constraints=[first.id]).icons
+
+    def flags(
+        selected: Collection[ConstraintId],
+    ) -> dict[tuple[ConstraintId, str], tuple[bool, bool]]:
+        return {
+            (i.constraint_id, i.label.region_id): (i.selected, i.active)
+            for i in _overlay(off, selected_constraints=selected).icons
+        }
+
+    assert flags([first.id]) == {
+        (first.id, "A"): (True, True),
+        (first.id, "B"): (True, True),
+        (second.id, "B"): (False, False),
+        (second.id, "C"): (False, False),
     }
-    assert states == {
-        (first.id, "A"): "selected",
-        (first.id, "B"): "selected",
-        (second.id, "B"): "deactivated",
-        (second.id, "C"): "deactivated",
+    # A selected deactivated constraint stays deactivated.
+    assert flags([second.id]) == {
+        (first.id, "A"): (False, True),
+        (first.id, "B"): (False, True),
+        (second.id, "B"): (True, False),
+        (second.id, "C"): (True, False),
     }
 
 

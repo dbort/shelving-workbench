@@ -181,9 +181,9 @@ _REDUNDANT_ACTIVATED = (
 # Worded without a count, so the text reads the same for one constraint as
 # for several and stays one string to translate.
 _DEACTIVATED_AT_OPEN = (
-    "Constraints the boards no longer meet were deactivated. They are drawn "
-    "grayed, hold nothing, and can be turned back on or deleted in the "
-    "Constraints list."
+    "Constraints the boards no longer meet were deactivated. Their icons in "
+    "the 3D view carry an X in the corner. They hold nothing, and can be "
+    "turned back on or deleted in the Constraints list."
 )
 _DROPPED_AT_OPEN = (
     "Constraints whose openings or boards are gone were removed from this unit."

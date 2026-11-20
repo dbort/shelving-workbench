@@ -27,7 +27,6 @@ from freecad.Shelving.editor.elevation import (
     ConstraintKind,
     DimensionLabel,
     ElevationFrame,
-    IconState,
     LabelColor,
     OutlineRole,
     Overlay,
@@ -112,9 +111,9 @@ class Style:
     unlocked_rgb: RGB
     marker_rgb: RGB
     label_size_pt: int
-    # An active constraint's icon, and a deactivated one's.
+    # A constraint's icon, whether it is active or deactivated: a
+    # deactivated one carries a corner X instead of another color.
     icon_rgb: RGB = (1.0, 38 / 255, 0.0)
-    deactivated_rgb: RGB = (127 / 255, 127 / 255, 127 / 255)
     # The tile under each dimension's text, padlock and constraint icon:
     # the view's own background, which the theme picks the dimension and
     # icon colors to stand out against, where an opening's fill would blur
@@ -124,14 +123,12 @@ class Style:
     def label_rgb(self, color: LabelColor) -> RGB:
         return self.locked_rgb if color == "locked" else self.unlocked_rgb
 
-    def icon_state_rgb(self, state: IconState) -> RGB:
-        """The color a constraint's icon takes in ``state``, as the
-        Sketcher's ``constrColor`` picks it."""
-        if state == "selected":
-            return self.selected_rgb
-        if state == "deactivated":
-            return self.deactivated_rgb
-        return self.icon_rgb
+    def constraint_icon_rgb(self, selected: bool) -> RGB:
+        """The selection color for a selected constraint's icon, the icon
+        color otherwise, whatever the constraint's activation. The Sketcher's
+        ``constrColor`` grays a deactivated icon, which its selection color
+        then hides; the corner X carries activation here instead."""
+        return self.selected_rgb if selected else self.icon_rgb
 
     def outline_rgb(self, role: OutlineRole) -> RGB:
         """The selection color for "selected", the locked dimension color
@@ -155,9 +152,9 @@ def view_style(label_size_pt: int) -> Style:
     constraint icon colors, read from the View preferences now: red for a
     size that drives (a locked opening), blue for one that only reports,
     and the fixed point's marker in the color of the Sketcher's own
-    billboard icons. A constraint's icon takes the Sketcher's icon color,
-    or its deactivated color, and sits with each padlock and dimension text
-    on a tile of the view's background. Defaults from FreeCAD 1.1."""
+    billboard icons. A constraint's icon takes the Sketcher's icon color
+    and sits with each padlock and dimension text on a tile of the view's
+    background. Defaults from FreeCAD 1.1."""
     return Style(
         selected_rgb=_view_color("SelectionColor", 0x1CAD1CFF),
         locked_rgb=_view_color("ConstrainedDimColor", 0xFF2600FF),
@@ -165,7 +162,6 @@ def view_style(label_size_pt: int) -> Style:
         marker_rgb=marker_rgb(),
         label_size_pt=label_size_pt,
         icon_rgb=_view_color("ConstrainedIcoColor", 0xFF2600FF),
-        deactivated_rgb=_view_color("DeactivatedConstrDimColor", 0x7F7F7FFF),
         tile_rgb=background_rgb(FreeCAD.ParamGet(_VIEW_PARAMS)),
     )
 
@@ -233,19 +229,79 @@ def _on_tile(glyph: QtGui.QImage, tile: Tile, side_px: int) -> QtGui.QImage:
     return image
 
 
+# The deactivated mark: an X in the glyph square's top-right corner, where
+# both SVGs leave the most room, spanning this fraction of the glyph's
+# side. A gap cleared around its strokes parts it from any glyph shape it
+# crosses. The stroke and gap have a one-pixel floor so the X stays legible
+# at the smallest ConstraintSymbolSize.
+_CORNER_X_SIDE = 0.45
+_CORNER_X_STROKE = 0.1
+_CORNER_X_GAP = 0.04
+
+
+def _corner_x_widths_px(glyph_px: int) -> tuple[float, float]:
+    """The X's stroke width and the width of the gap cleared along it."""
+    stroke_px = max(1.0, _CORNER_X_STROKE * glyph_px)
+    return stroke_px, stroke_px + 2 * max(1.0, _CORNER_X_GAP * glyph_px)
+
+
+def corner_x_extent_px(glyph_px: int) -> float:
+    """The side of the square in a ``glyph_px`` glyph's top-right corner
+    that holds every pixel the deactivated mark changes, before
+    antialiasing spreads its edge by up to a pixel."""
+    stroke_px, gap_px = _corner_x_widths_px(glyph_px)
+    return _CORNER_X_SIDE * glyph_px - stroke_px / 2 + gap_px / 2
+
+
+def _draw_corner_x(painter: QtGui.QPainter, glyph_px: int) -> None:
+    """Paint the deactivated mark onto the ``glyph_px`` glyph ``painter``
+    draws, opaque on a cleared gap."""
+    stroke_px, gap_px = _corner_x_widths_px(glyph_px)
+    side_px = _CORNER_X_SIDE * glyph_px
+    # The stroke's own half width keeps its round caps inside the glyph
+    # square; the gap may run off it, where nothing is drawn.
+    inset_px = stroke_px / 2
+    left_px = glyph_px - side_px + inset_px
+    right_px = glyph_px - inset_px
+    top_px = inset_px
+    bottom_px = side_px - inset_px
+    strokes = [
+        QtCore.QLineF(left_px, top_px, right_px, bottom_px),
+        QtCore.QLineF(left_px, bottom_px, right_px, top_px),
+    ]
+    painter.save()
+    painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+    pen = QtGui.QPen(QtCore.Qt.GlobalColor.black)
+    pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
+    pen.setWidthF(gap_px)
+    painter.setPen(pen)
+    painter.setCompositionMode(QtGui.QPainter.CompositionMode.CompositionMode_Clear)
+    painter.drawLines(strokes)
+    pen.setWidthF(stroke_px)
+    painter.setPen(pen)
+    painter.setCompositionMode(
+        QtGui.QPainter.CompositionMode.CompositionMode_SourceOver
+    )
+    painter.drawLines(strokes)
+    painter.restore()
+
+
 def constraint_icon_image(
-    kind: ConstraintKind, rgb: RGB, tile: Tile, side_px: int
+    kind: ConstraintKind, rgb: RGB, tile: Tile, side_px: int, active: bool = True
 ) -> QtGui.QImage:
-    """``kind``'s icon on ``tile``, ``side_px`` device pixels square. The
-    glyph, ``tile.pad_px`` in from each edge, fills every painted pixel with
-    ``rgb`` at its own coverage, as the Sketcher's ``renderConstrIcon``
-    recolors its icons with a source-in fill; the tile's rounded corners
-    stay transparent."""
+    """``kind``'s icon on ``tile``, ``side_px`` device pixels square, with a
+    corner X unless ``active``. The glyph, ``tile.pad_px`` in from each
+    edge, fills every painted pixel with ``rgb`` at its own coverage, as the
+    Sketcher's ``renderConstrIcon`` recolors its icons with a source-in
+    fill, so the X takes ``rgb`` as well; the tile's rounded corners stay
+    transparent."""
     glyph_px = side_px - 2 * tile.pad_px
     glyph = QtGui.QImage(glyph_px, glyph_px, QtGui.QImage.Format.Format_RGBA8888)
     glyph.fill(QtCore.Qt.GlobalColor.transparent)
     painter = QtGui.QPainter(glyph)
     QtSvg.QSvgRenderer(ICON_SOURCES[kind]).render(painter)
+    if not active:
+        _draw_corner_x(painter, glyph_px)
     painter.setCompositionMode(QtGui.QPainter.CompositionMode.CompositionMode_SourceIn)
     painter.fillRect(glyph.rect(), QtGui.QColor.fromRgbF(*rgb))
     painter.end()

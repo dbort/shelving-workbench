@@ -120,9 +120,10 @@ The vocabulary the documentation and the code share.
   toolbar shown only while Edit Unit is open, and in the Shelving menu.
 - **Deactivated constraint**: one the boards no longer meet when a unit is
   opened, as after a shelf was moved by hand: nothing moves, the
-  constraint stays, drawn grayed, and holds nothing. Check its box in the
-  constraint list to turn it back on, which moves the boards to meet it
-  again, or delete it there or with Delete. One the boards miss by no
+  constraint stays, its icons in the view marked with an X in the corner,
+  and holds nothing. Check its box in the constraint list to turn it back
+  on, which moves the boards to meet it again, or delete it there or with
+  Delete. One the boards miss by no
   more than the joint clearance stays active, and the next edit makes it
   exact. A constraint whose openings or end boards are gone is removed. A
   notification says so once, when Edit Unit opens.

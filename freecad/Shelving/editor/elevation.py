@@ -49,9 +49,6 @@ FaceKind = Literal["bay", "void"]
 OutlineRole = Literal["region", "selected", "holding"]
 LabelColor = Literal["locked", "unlocked"]
 ConstraintKind = Literal["equal", "even_spacing"]
-# The color an icon takes, as the Sketcher colors its own: a selected one
-# in the selection color, a deactivated one grayed.
-IconState = Literal["active", "deactivated", "selected"]
 
 # How far in front of the face outlines and dimensions sit, so they do not
 # z-fight with the board faces they lie on. Opening faces sit on the face
@@ -374,7 +371,12 @@ class ConstraintIcon:
     # The icon's place in the row after that text, from
     # FIRST_CONSTRAINT_SLOT.
     slot: int
-    state: IconState
+    # Whether the constraint is enforced; a deactivated one's icon carries
+    # a corner X.
+    active: bool
+    # Whether the constraint is selected; its icon takes the selection
+    # color, whatever its activation.
+    selected: bool
 
 
 @dataclass(frozen=True)
@@ -630,7 +632,7 @@ def plan_overlay(
     ``selected_id`` is the single selection, ``selected_items`` every
     selected board and opening, and ``selected_constraints`` the selected
     constraints, whose openings take the selected outline and whose icons
-    the "selected" state. A board is held by the locked regions
+    are marked selected. A board is held by the locked regions
     :func:`held_padlock` gives a padlock, or by constraints, whose openings
     then take the holding outline. The selected outline wins over a holding
     one, and an id in ``flagged`` that names nothing draws nothing.
@@ -687,13 +689,7 @@ def plan_overlay(
     slots: dict[str, int] = {}
     icons: list[ConstraintIcon] = []
     for constraint in unit.constraints:
-        state: IconState = (
-            "selected"
-            if constraint.id in selected_constraints
-            else "active"
-            if constraint.active
-            else "deactivated"
-        )
+        constraint_selected = constraint.id in selected_constraints
         kind_name: ConstraintKind = (
             "equal" if isinstance(constraint, Equal) else "even_spacing"
         )
@@ -703,7 +699,16 @@ def plan_overlay(
                 continue
             slot = slots.get(region_id, FIRST_CONSTRAINT_SLOT)
             slots[region_id] = slot + 1
-            icons.append(ConstraintIcon(constraint.id, kind_name, label, slot, state))
+            icons.append(
+                ConstraintIcon(
+                    constraint.id,
+                    kind_name,
+                    label,
+                    slot,
+                    active=constraint.active,
+                    selected=constraint_selected,
+                )
+            )
     return Overlay(
         faces=faces, outlines=outlines, labels=labels, padlocks=padlocks, icons=icons
     )
