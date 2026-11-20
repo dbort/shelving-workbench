@@ -153,3 +153,7 @@ the deadlock are corrected to match.
 ### Round 1: REJECTED
 - **F1: The `raise_()` test passes when Qt rewords the warning, which is the regression Advice says it exists to catch** (`tests/freecad_gui/test_qt_messages.py:35-50`): it only asserts the old prefix is absent from the Report view, so a reworded warning reaches the Report view and the test still passes, as it does if `raise_()` stops warning. Fix: record the Qt messages around `widget.raise_()` with a temporary handler, assert one starts with `UNSUPPORTED_PLUGIN_PREFIX`, and reinstall `message_handler(FreeCAD.Console)` in a `finally`; keep the Report view and `qWarning` assertions.
 - **N1: An empty category differs from FreeCAD** (`tests/qt_messages.py:48`, `tests/test_qt_messages.py:72`): FreeCAD prefixes any non-null category other than `"default"`, so `""` gives `"() text"`; `forward` and its test treat `""` as no prefix. Match FreeCAD or note the deviation.
+
+### Round 2: APPROVED
+- **N1: The test name contradicts what the test now pins** (`tests/freecad_gui/test_qt_messages.py:37`): `test_raise_warns_nothing_and_other_qt_warnings_still_reach_the_report_view` now asserts that `raise_()` does warn; a name like `test_raise_warns_but_only_other_qt_warnings_reach_the_report_view` would match.
+- **N2: Odd line wrap in the `forward` docstring** (`tests/qt_messages.py:39-42`): "an empty one included." sits as a short line mid-paragraph and reads awkwardly; "including an empty string" would be clearer.
