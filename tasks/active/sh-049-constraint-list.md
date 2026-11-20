@@ -30,7 +30,7 @@ measure spacing through the next board.
       - deactivating an active Equal on A and B moves no board, and typing
         400 into A then gives A 400, B 200, C 300, as with no Equal;
       - with a deactivated Equal on A 280, B 300, C 320, reactivating it
-        gives A 290, B 290, C 320;
+        gives A 288, B 288, C 324;
       - with A locked at 300, C locked at 200 and a deactivated Equal on A
         and C, reactivating the Equal raises the conflict naming A, C and
         the Equal, and the unit is unchanged;
@@ -201,15 +201,19 @@ measure spacing through the next board.
   to say they can be turned back on or deleted in the Constraints list,
   still with no count-keyed grammar, and update the README glossary's
   **Deactivated constraint** entry to match.
+- **Reactivation solves as a new constraint does** (user decision,
+  2026-11-19): least motion over every free board, so the Equal case gives
+  A 288, B 288, C 324 (s1 up 8, s2 down 4), matching
+  `test_equal_makes_unequal_openings_equal_moving_the_boards_least`.
 - **Out of scope:** renaming constraints, a filter, editing a lock's size
   from its row (Sketcher's double-click edit), Aligned faces (task 4), and
   a Delete key inside the list.
 
 ## Plan
-- [ ] **Step 1** (`core/solver.py`, `core/edit.py`, their tests): the
+- [x] **Step 1** (`core/solver.py`, `core/edit.py`, their tests): the
       redundant-set query; activate, deactivate, delete-deactivated and
       constraint-basis edits, with conflicts raised as sh-047's.
-- [ ] **Step 2** (`core/record.py`, `core/tests/test_record.py`): the
+- [x] **Step 2** (`core/record.py`, `core/tests/test_record.py`): the
       spacing basis on constraints round-trips; an unknown basis drops
       the constraint.
 - [ ] **Step 3** (`editor/session.py`, `tests/freecad/test_editor_session.py`,

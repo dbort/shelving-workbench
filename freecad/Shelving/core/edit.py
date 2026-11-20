@@ -1,7 +1,8 @@
 """Tree-rewriting edits for the elevation editor: split a bay, merge a board,
 remove several boards, size a region, change what a size measures, lock or
-unlock a region, drag a board, change boards' thickness, and make or remove
-Equal and even spacing constraints.
+unlock a region, drag a board, change boards' thickness, and make, remove,
+activate or deactivate Equal and even spacing constraints or change what
+they measure.
 
 A region with a ``lock`` holds its size through edits; an unlocked one
 takes whatever size the boards around it leave. Any region may lock. Where
@@ -49,6 +50,7 @@ from freecad.Shelving.core.layout import (
     RunEnd,
     SpacingEnd,
     Unit,
+    constraint_regions,
     find_division,
     spacing_group,
 )
@@ -1072,3 +1074,84 @@ def remove_constraints(unit: Unit, constraint_ids: Collection[ConstraintId]) -> 
         unit,
         constraints=tuple(c for c in unit.constraints if c.id not in constraint_ids),
     )
+
+
+def _constraint(unit: Unit, constraint_id: ConstraintId) -> Constraint:
+    """The constraint of ``unit`` named ``constraint_id``. Raises
+    :class:`EditError` naming it when ``unit`` has none."""
+    for constraint in unit.constraints:
+        if constraint.id == constraint_id:
+            return constraint
+    raise EditError(constraint_id, "That constraint is not part of this unit.")
+
+
+def _with_constraint(unit: Unit, replacement: Constraint) -> Unit:
+    """``unit`` with the constraint sharing ``replacement``'s id replaced by
+    it, in place."""
+    return dataclasses.replace(
+        unit,
+        constraints=tuple(
+            replacement if c.id == replacement.id else c for c in unit.constraints
+        ),
+    )
+
+
+def _solved_constraint(unit: Unit, edited: Unit, constraint: Constraint) -> Unit:
+    """``edited``, ``unit`` with ``constraint`` changed, solved along its
+    axis from where ``unit``'s boards stand; ``edited`` itself when the
+    constraint holds no region."""
+    axis = constraint_axis(edited, constraint)
+    if axis is None:
+        return edited
+    return solve_axis(edited, solve(unit), axis, MIN_DRAG_GAP_MM)
+
+
+def set_constraint_active(
+    unit: Unit, constraint_id: ConstraintId, active: bool
+) -> Unit:
+    """``unit`` with the constraint ``constraint_id`` activated or
+    deactivated; ``unit`` itself when it already is. Deactivating moves
+    nothing. Activating solves it in, moving the boards as little as
+    possible, as adding it new would.
+
+    Raises :class:`EditError` naming ``constraint_id`` when ``unit`` has no
+    such constraint, and a ``"conflict"``
+    :class:`~freecad.Shelving.core.solver.LayoutSolveError` naming the
+    locks and constraints, this one included, that rule an activation out.
+    """
+    constraint = _constraint(unit, constraint_id)
+    if constraint.active is active:
+        return unit
+    changed = dataclasses.replace(constraint, active=active)
+    edited = _with_constraint(unit, changed)
+    return _solved_constraint(unit, edited, changed) if active else edited
+
+
+def remove_deactivated(unit: Unit) -> Unit:
+    """``unit`` without its deactivated constraints, moving nothing; the
+    active ones keep their order."""
+    return dataclasses.replace(
+        unit, constraints=tuple(c for c in unit.constraints if c.active)
+    )
+
+
+def set_constraint_basis(unit: Unit, constraint_id: ConstraintId, basis: Basis) -> Unit:
+    """``unit`` with the constraint ``constraint_id`` measuring its openings
+    in ``basis``; ``unit`` itself when it already does. An active
+    constraint is solved again in its new basis, moving the boards as
+    little as possible; a deactivated one moves nothing.
+
+    Raises :class:`EditError` naming ``constraint_id`` when ``unit`` has no
+    such constraint, and naming an opening for ``Basis.WITH_NEXT`` when no
+    board follows that opening in its run. Raises a ``"conflict"``
+    :class:`~freecad.Shelving.core.solver.LayoutSolveError` as
+    :func:`set_constraint_active` does.
+    """
+    constraint = _constraint(unit, constraint_id)
+    if constraint.basis is basis:
+        return unit
+    for region_id in constraint_regions(unit, constraint):
+        _next_board(*_locate_region(unit, region_id), basis)
+    changed = dataclasses.replace(constraint, basis=basis)
+    edited = _with_constraint(unit, changed)
+    return _solved_constraint(unit, edited, changed) if changed.active else edited

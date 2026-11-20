@@ -28,6 +28,7 @@ from freecad.Shelving.core.layout import (
 from freecad.Shelving.core.record import (
     RULE_RECORD_VERSION,
     OpenReport,
+    StoredEqual,
     StoredRules,
     parse_rules,
     region_keys,
@@ -609,6 +610,38 @@ def test_constraints_survive_a_rescan_through_the_record() -> None:
     assert _keyed(restored) == _keyed(original)
     assert [c.active for c in restored.constraints] == [True, True]
     _assert_same_spaces(restored, original)
+
+
+def test_a_constraint_in_the_spacing_basis_round_trips() -> None:
+    box = _closed_box_unit()
+    equal = dataclasses.replace(_equal(box, 0, 2), basis=Basis.WITH_NEXT)
+    spacing = EvenSpacing(
+        run_id=_inner_column(box).id,
+        start="shelf1",
+        end=RunEnd.END,
+        basis=Basis.WITH_NEXT,
+    )
+    text = rules_to_json(_constrained(box, equal, spacing))
+    assert [c["basis"] for c in json.loads(text)["constraints"]] == [
+        "with_next",
+        "with_next",
+    ]
+    rules = rules_from_json(text)
+    assert [c.basis for c in rules.constraints] == [Basis.WITH_NEXT, Basis.WITH_NEXT]
+
+
+def test_a_constraint_with_an_unknown_basis_is_dropped_alone() -> None:
+    box = _closed_box_unit()
+    doc = json.loads(
+        rules_to_json(_constrained(box, _equal(box, 0, 2), _equal(box, 1, 3)))
+    )
+    doc["locks"] = {rule_key(None, "shelf1"): {"basis": "clear"}}
+    doc["constraints"][0]["basis"] = "through_two_boards"
+    rules = rules_from_json(json.dumps(doc))
+    assert rules.locks == {rule_key(None, "shelf1"): Basis.CLEAR}
+    assert [c.keys for c in rules.constraints if isinstance(c, StoredEqual)] == [
+        (rule_key("shelf1", "shelf2"), rule_key("shelf3", None)),
+    ]
 
 
 def test_a_version_1_record_gives_no_constraints() -> None:

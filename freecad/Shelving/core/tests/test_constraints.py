@@ -19,6 +19,9 @@ from freecad.Shelving.core.edit import (
     move_board,
     remove_boards,
     remove_constraints,
+    remove_deactivated,
+    set_constraint_active,
+    set_constraint_basis,
     set_size,
     split_region,
     unlock,
@@ -46,6 +49,7 @@ from freecad.Shelving.core.solver import (
     constraint_spread_mm,
     duplicated_constraint,
     duplicated_locks,
+    redundant_rules,
     size_fixed_by,
     solve,
 )
@@ -398,3 +402,132 @@ def test_constraint_spread_reads_the_boards() -> None:
 def test_carry_keeps_constraints_through_an_edit_that_changes_no_structure() -> None:
     unit = add_even_spacing(add_equal(_column(), ["A", "B"]), ["A", "C"])
     assert carry_constraints(unit, unit).constraints == unit.constraints
+
+
+# --- the constraint list's queries and edits ------------------------------
+
+
+def _with_equal(unit: Unit, first: str, second: str, active: bool = True) -> Unit:
+    """``unit`` with an Equal on ``first`` and ``second`` appended as it is,
+    solving nothing."""
+    equal = Equal(region_ids=(first, second), active=active)
+    return dataclasses.replace(unit, constraints=(*unit.constraints, equal))
+
+
+def test_two_locks_and_an_equal_on_them_are_all_redundant() -> None:
+    unit = add_equal(lock(lock(_column(), "A"), "B"), ["A", "B"])
+    (equal,) = unit.constraints
+    assert redundant_rules(unit, solve(unit)) == {"A", "B", equal.id}
+    freed = unlock(unit, "B")
+    assert redundant_rules(freed, solve(freed)) == frozenset()
+
+
+def test_locks_that_only_fix_the_height_are_not_redundant() -> None:
+    unit = lock(lock(_column(), "A"), "B")
+    assert redundant_rules(unit, solve(unit)) == frozenset()
+
+
+def test_a_deactivated_constraint_is_never_redundant() -> None:
+    unit = _with_equal(lock(lock(_column(), "A"), "B"), "A", "B", active=False)
+    assert redundant_rules(unit, solve(unit)) == frozenset()
+
+
+def test_deactivating_an_equal_moves_nothing_and_frees_its_openings() -> None:
+    unit = add_equal(_column(), ["A", "B"])
+    (equal,) = unit.constraints
+    off = set_constraint_active(unit, equal.id, False)
+    assert [c.active for c in off.constraints] == [False]
+    assert solve(off) == solve(unit)
+    assert set_constraint_active(off, equal.id, False) is off
+    assert _bay_mm(set_size(off, "A", 400.0, Basis.CLEAR)) == pytest.approx(
+        {"A": 400.0, "B": 200.0, "C": 300.0}
+    )
+
+
+def test_reactivating_an_equal_moves_the_boards_least() -> None:
+    unit = _with_equal(_column((280.0, 300.0, 320.0)), "A", "B", active=False)
+    (equal,) = unit.constraints
+    on = set_constraint_active(unit, equal.id, True)
+    assert [c.active for c in on.constraints] == [True]
+    assert _bay_mm(on) == pytest.approx({"A": 288.0, "B": 288.0, "C": 324.0})
+
+
+def test_reactivating_against_two_locks_is_a_conflict() -> None:
+    locked = lock(set_size(_column(), "C", 200.0, Basis.CLEAR), "A")
+    unit = _with_equal(locked, "A", "C", active=False)
+    (equal,) = unit.constraints
+    with pytest.raises(LayoutSolveError) as caught:
+        set_constraint_active(unit, equal.id, True)
+    assert caught.value.reason == "conflict"
+    assert set(caught.value.region_ids) == {"A", "C"}
+    assert caught.value.constraint_ids == (equal.id,)
+    assert [c.active for c in unit.constraints] == [False]
+
+
+def test_activating_an_unknown_constraint_is_refused() -> None:
+    with pytest.raises(EditError):
+        set_constraint_active(_column(), ConstraintId("nothing"), True)
+
+
+def test_removing_the_deactivated_keeps_the_active_and_every_lock() -> None:
+    unit = add_even_spacing(add_equal(lock(_column(), "A"), ["A", "B"]), ["A", "C"])
+    equal, spacing = unit.constraints
+    unit = set_constraint_active(unit, equal.id, False)
+    cleared = remove_deactivated(unit)
+    assert cleared.constraints == (spacing,)
+    assert solve(cleared) == solve(unit)
+    root = cleared.root
+    assert isinstance(root, Division)
+    assert [item.id for item in root.items if getattr(item, "lock", None)] == ["A"]
+
+
+def _thick_s2_column() -> Unit:
+    """The column with ``s2`` 36 mm thick: 990 mm tall."""
+    unit = _column()
+    root = unit.root
+    assert isinstance(root, Division)
+    items = [
+        dataclasses.replace(item, thickness_mm=36.0)
+        if isinstance(item, Board) and item.id == "s2"
+        else item
+        for item in root.items
+    ]
+    return dataclasses.replace(
+        unit,
+        root=dataclasses.replace(root, items=items),
+        size_mm=Vec3(600.0, 300.0, 990.0),
+    )
+
+
+def test_an_equal_in_the_spacing_basis_counts_each_next_board() -> None:
+    unit = add_equal(_thick_s2_column(), ["A", "B"])
+    (equal,) = unit.constraints
+    spaced = set_constraint_basis(unit, equal.id, Basis.WITH_NEXT)
+    assert [c.basis for c in spaced.constraints] == [Basis.WITH_NEXT]
+    heights = _bay_mm(spaced)
+    assert abs(heights["A"] + 18.0 - (heights["B"] + 36.0)) <= 1e-6
+
+
+def test_the_spacing_basis_needs_a_board_after_every_opening() -> None:
+    unit = _column()
+    root = unit.root
+    assert isinstance(root, Division)
+    # C's run ends in a bay, so nothing follows it.
+    open_top = dataclasses.replace(
+        unit,
+        root=dataclasses.replace(root, items=root.items[:-1]),
+        size_mm=Vec3(600.0, 300.0, 954.0),
+    )
+    unit = add_equal(open_top, ["A", "C"])
+    (equal,) = unit.constraints
+    with pytest.raises(EditError) as caught:
+        set_constraint_basis(unit, equal.id, Basis.WITH_NEXT)
+    assert caught.value.node_id == "C"
+
+
+def test_a_deactivated_constraint_changes_basis_without_moving() -> None:
+    unit = _with_equal(_column((280.0, 300.0, 320.0)), "A", "B", active=False)
+    (equal,) = unit.constraints
+    spaced = set_constraint_basis(unit, equal.id, Basis.WITH_NEXT)
+    assert [c.basis for c in spaced.constraints] == [Basis.WITH_NEXT]
+    assert solve(spaced) == solve(unit)
