@@ -97,7 +97,7 @@ size changes, and scans back as the same treatment.
 - [x] sh-047: any opening locks, with reference sizes and constraint feedback (blocked on sh-046)
 - [x] sh-048: Equal and Even spacing constraints (blocked on sh-047)
 - [x] sh-051: padlocks join the icon row, and dimension text sits on a tile
-- [ ] sh-049: the constraint list in the task panel (blocked on sh-048)
+- [x] sh-049: the constraint list in the task panel (blocked on sh-048)
 - [ ] sh-050: Aligned faces, picked by a board's face edges (blocked on sh-049)
 
 Relations between the openings and boards of one unit, in the Sketcher's
