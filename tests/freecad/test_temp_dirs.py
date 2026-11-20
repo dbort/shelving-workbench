@@ -63,8 +63,7 @@ def test_export_boxes_writes_an_unsaved_unit_to_the_exports_folder(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Driven headless, with the selection the command reads from the GUI
-    supplied directly: a GUI selection here leaves the offscreen GUI suite
-    deadlocked on a notification popup (.claude/docs/freecad-notes.md)."""
+    supplied directly: this tier has no GUI to select in."""
     doc = FreeCAD.newDocument("Export_Unsaved")
     try:
         container = create_unit(doc)

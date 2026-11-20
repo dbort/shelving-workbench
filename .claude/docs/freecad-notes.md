@@ -258,14 +258,32 @@ startup never finishes. Empty `XDG_CONFIG_HOME`, `XDG_DATA_HOME` and
 
 ## A headless notification popup deadlocks FreeCAD 1.1
 
-Under the offscreen platform (or Xvfb), a Qt warning becomes a
-notification whose popup calls `QWidget::raise()`, which warns again and
-re-enters `NotificationArea::pushNotification` while it holds its own
-mutex. Setting
+FreeCAD's Qt message handler turns every Qt warning into a console
+warning, and the Notification Area turns that into a notification. Under
+the offscreen platform, showing the notification popup makes Qt warn "This
+plugin does not support raise()" (or `propagateSizeHints()`), and that
+warning re-enters `NotificationArea::pushNotification` while
+`showInNotificationArea` holds the same mutex, so the process hangs.
+
+Setting
 `BaseApp/Preferences/NotificationArea/NonIntrusiveNotificationsEnabled`
-to false avoids it; `tools/freecad-test-user.cfg` does, and every test
-run installs that file. (On this aarch64 VM, `gdb` cannot attach; use
-`eu-stack`.)
+to false does not close the path. FreeCAD 1.1.3's `pushNotification`
+returns early for disabled popups only for a new message: a message
+identical to the previous one restarts the 250 ms popup timer, and the
+popup appears when it runs out if the main window is active. A repeated
+"No valid GL context found!" reached it during the GUI tests.
+
+The GUI tier's `pytest_sessionstart` (`tests/freecad_gui/conftest.py`)
+replaces FreeCAD's handler with one from `tests/qt_messages.py` that drops
+every "This plugin does not support " warning and forwards the rest to
+`FreeCAD.Console` at FreeCAD's own levels. `tools/freecad-test-user.cfg`
+keeps popups off for every other message. Under Xvfb, xcb implements
+`raise()` and it does not warn, so the view tier needs no filter.
+
+On the dev VM, `gdb` and `eu-stack` cannot attach to a running process
+(Yama `ptrace_scope` is 1). Start the hanging command under
+`gdb -batch -ex run -ex 'thread apply all bt' --args ...`, then send the
+inferior `SIGINT` once it hangs.
 
 ## User-facing errors: the Notification Area
 

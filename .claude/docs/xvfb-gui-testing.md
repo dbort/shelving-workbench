@@ -91,11 +91,11 @@ its `driver` fixture gives each test a new document with an active 3D view.
   `click()`.
 - **Commands register when the workbench first activates.** Activate
   `ShelvingWorkbench` before `FreeCADGui.runCommand("Shelving_...")`.
-- **Notification popups stay off.** A popup deadlocks FreeCAD 1.1 under
-  Xvfb as it does offscreen (`freecad-notes.md`), and the test settings
-  turn them off. The Notification Area's status-bar button still counts
-  each notification. The status bar's own message is gone again by the
-  time a test reads it, so it is not asserted. Under conda-forge's FreeCAD
+- **Notification popups stay off.** The test settings turn them off so
+  runs stay stable (`freecad-notes.md` § A headless notification popup
+  deadlocks FreeCAD 1.1). The Notification Area's status-bar button still
+  counts each notification. The status bar's own message is gone again by
+  the time a test reads it, so it is not asserted. Under conda-forge's FreeCAD
   1.1.3 with popups off, `PrintTranslatedUserError` text does not reach the
   Report view while `PrintError` text does, so the Report view is not
   asserted either; the `scan.refusal` manual step checks it in a desktop

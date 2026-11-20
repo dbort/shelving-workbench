@@ -54,14 +54,9 @@ def test_a_recorded_step_reaches_the_report(
     assert FreeCAD.ActiveDocument is not None
     assert FreeCAD.ActiveDocument.getObject("ShelvingUnit") is not None
 
-    # Appended to the widget directly: printing through FreeCAD's console
-    # here deadlocks the offscreen GUI on a notification popup
-    # (.claude/docs/freecad-notes.md).
-    report_view = FreeCADGui.getMainWindow().findChild(
-        QtWidgets.QTextEdit, "Report view"
-    )
-    assert isinstance(report_view, QtWidgets.QTextEdit)
-    report_view.append("qa-wizard-log-marker")
+    FreeCAD.Console.PrintMessage("qa-wizard-log-marker\n")
+    # The Report view takes console output through queued events.
+    QtWidgets.QApplication.processEvents()
     wizard.comment_edit.setPlainText("Four boards, as expected.")
     wizard.verdict_buttons["pass"].click()
     assert wizard.position_label.text() == "Step 2 of 2"
