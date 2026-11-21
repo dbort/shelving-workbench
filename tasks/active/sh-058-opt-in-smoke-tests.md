@@ -37,8 +37,9 @@ as features come and go.
       - `test_editor_input.py::test_a_selected_board_drags_by_its_arrow_under_each_navigation_style[Gui::CADNavigationStyle]`
       - `test_undo_in_the_editor.py::test_undo_and_redo_step_one_edit_and_the_panel_follows`
       - `test_scan_and_write.py::test_edit_unit_reads_a_hand_built_unit_and_close_changes_nothing`
-- [ ] A smoke run's output ends with the list of smoke tests that ran,
-      each with its user path.
+- [ ] In a smoke run, the `tests/freecad_gui/` and `tests/freecad_view/`
+      pytest output each ends with the list of smoke tests that ran, each
+      with its user path.
 - [ ] `CLAUDE.md` § Standing task-planning obligations has a **Smoke set
       stays representative** entry per the Advice.
 - [ ] The full run (`pixi run tests` without `--smoke`) runs every test,
