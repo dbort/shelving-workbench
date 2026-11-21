@@ -138,6 +138,15 @@ def test_a_magic_start_back_follows_a_resize(
     _assert_bound(_bound(doc, "Back"), back)
 
 
+def _delete_locks_holding(session: Session, board_id: str) -> None:
+    """Delete the Locks holding ``board_id``, as selecting their dimensions
+    and pressing Delete does."""
+    held = session.held_by(board_id)
+    assert held is not None and held.locks and not held.constraints
+    session.select_constraints(held.locks)
+    assert session.delete_constraints() is None
+
+
 def test_moving_the_floor_moves_the_backs_bottom_edge_only(
     magic_start: FreeCAD.DocumentObject,
 ) -> None:
@@ -147,7 +156,7 @@ def test_moving_the_floor_moves_the_backs_bottom_edge_only(
     session.open()
     try:
         # The plinth below the floor reads as locked.
-        assert session.unlock_holders("Floor") is None
+        _delete_locks_holding(session, "Floor")
         assert session.begin_drag("Floor", Vec3(250.0, 100.0, 105.0)) is None
         assert session.drag_to(Vec3(250.0, 100.0, 125.0)) is None
         session.end_drag()
@@ -562,7 +571,7 @@ def test_an_irregular_backs_low_corner_follows_the_floor(
     session = Session(magic_start)
     session.open()
     try:
-        assert session.unlock_holders("Floor") is None
+        _delete_locks_holding(session, "Floor")
         assert session.begin_drag("Floor", Vec3(250.0, 100.0, 105.0)) is None
         assert session.drag_to(Vec3(250.0, 100.0, 125.0)) is None
         session.end_drag()

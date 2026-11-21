@@ -39,6 +39,8 @@ TOOLBAR_COMMANDS = (
 # as the Sketcher's edit-mode toolbars are, and grayed in the menu outside
 # it.
 CONSTRAINT_COMMANDS = (
+    "Shelving_LockWidth",
+    "Shelving_LockHeight",
     "Shelving_ConstrainEqual",
     "Shelving_ConstrainEvenSpacing",
 )
@@ -74,6 +76,8 @@ class ShelvingWorkbench(_WorkbenchBase):
             create_unit,
             edit_unit,
             export_boxes,
+            lock_height,
+            lock_width,
             qa_wizard,
         )
 

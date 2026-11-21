@@ -112,9 +112,14 @@ def dimension_style() -> Iterator[None]:
     params = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/View")
     params.SetUnsigned("ConstrainedDimColor", 0xC01020FF)
     params.SetUnsigned("NonDrivingConstrDimColor", 0x1020C0FF)
+    params.SetUnsigned("DeactivatedConstrDimColor", 0x60A060FF)
     params.SetInt("EditSketcherFontSize", 21)
     yield
-    for name in ("ConstrainedDimColor", "NonDrivingConstrDimColor"):
+    for name in (
+        "ConstrainedDimColor",
+        "NonDrivingConstrDimColor",
+        "DeactivatedConstrDimColor",
+    ):
         params.RemUnsigned(name)
     params.RemInt("EditSketcherFontSize")
 

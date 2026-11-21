@@ -154,29 +154,44 @@ types a size.
   reference one, the parentheses read plainly, a double-click opens the
   field reliably, and Lock Width on a bay visibly locks its column. Start
   from an existing setup action; add none.
+- **Rows keep their places** (user decision, 2026-11-20): a region's
+  dimension outside the unit takes the row it would have with every
+  dimension drawn, so one appearing or disappearing moves no other. A gap
+  can show only where nested rows both reach an edge.
+- **A Lock through the depth** (user decision, 2026-11-20: handle it in
+  the least complex way): a scan locks a void in a run along the depth
+  axis when that run holds a compartment, as in a unit stepped front to
+  back. The view draws no dimension for it, no command makes it, and its
+  list row reads "Lock" with an empty icon tile.
+- **The unit's own size** (implementer reading of the Must Have,
+  2026-11-20): a size is the unit's own when no enclosing region's run
+  lies along that axis, or when the region found is alone among boards in
+  a run spanning the unit, as a column between the two sides is. That is
+  what makes Lock Width on a bay with no divider refuse, and it also keeps
+  a selected column from drawing the interior's height.
 
 ## Plan
-- [ ] **Step 1** (`editor/elevation.py`, `tests/test_editor_elevation.py`):
+- [x] **Step 1** (`editor/elevation.py`, `tests/test_editor_elevation.py`):
       the dimension visibility rule, the label role and selection, the
       other-axis owner of a selected opening, the axis resolution for Lock
       Width and Lock Height as a pure function, and icon slots without the
       padlock.
-- [ ] **Step 2** (`editor/session.py`, `tests/freecad/test_editor_session.py`,
+- [x] **Step 2** (`editor/session.py`, `tests/freecad/test_editor_session.py`,
       `tests/freecad/test_constraint_session.py`): `lock_axis(axis)` over
       the selection with its refusals, one undo step; remove
       `unlock_holders`.
-- [ ] **Step 3** (`editor/overlay.py`, `editor/view_editor.py`,
+- [x] **Step 3** (`editor/overlay.py`, `editor/view_editor.py`,
       `tests/freecad_view/editor.py`, `test_editor_drawing.py`,
       `test_editor_input.py`, `test_constraints.py`,
       `test_constraint_list.py`; delete `test_padlocks.py` and move what
       still applies into a `test_dimensions.py`): colors and parenthesized
       text, click and double-click on text tiles, removal of the padlocks
       and the held padlock.
-- [ ] **Step 4** (`commands/lock_width.py`, `commands/lock_height.py`,
+- [x] **Step 4** (`commands/lock_width.py`, `commands/lock_height.py`,
       `resources/`, `init_gui.py`, `editor/constraint_list.py`,
       `tests/freecad_gui/`): the two commands on the edit toolbar and in
       the menu, their icons, and Lock rows showing them.
-- [ ] **Step 5** (`README.md`, `docs/scope-and-design.md`,
+- [x] **Step 5** (`README.md`, `docs/scope-and-design.md`,
       `.claude/docs/freecad-notes.md`, `freecad/Shelving/qa/cases/30-editor.toml`):
       glossary entries for the commands and reference dimensions, and the
       Size rule, Even spacing and Constraint list entries without padlocks;

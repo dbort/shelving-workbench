@@ -80,7 +80,8 @@ unsolvable layout has no panels to write.
 The refusal outlines the locks it names, and any opening held at the
 minimum, as the Sketcher highlights the constraints in a conflict.
 
-Any region may lock. When the locks fix the unit's size along an axis,
+Any region may lock but the unit itself, whose size the panel's Width,
+Height and Depth fields set. When the locks fix the unit's size along an axis,
 that size is a reference, as a Sketcher reference dimension is: a resize
 along it is refused naming those locks, the panel shows its field
 read-only, and every other edit lets it follow the locks with the fixed
@@ -104,8 +105,8 @@ those locks and itself. Each draws the Sketcher's style of icon beside
 each of its openings' dimensions, in the
 Sketcher's constraint icon color on a small tile of the 3D view's
 background color; clicking an icon selects the constraint, and Delete
-removes it. A board a constraint holds shows no arrow and no padlock,
-since no unlock frees it, and outlines the openings holding it.
+removes it. A board any constraint holds, a lock included, shows no arrow
+and outlines the openings holding it.
 A board deleted beside an Equal's opening, or added along its row through
 it, drops the Equal, as the Sketcher's Split and Trim drop an Equal on the
 line they cut; an even spacing is dropped only with an end. Geometry wins
@@ -237,7 +238,8 @@ stays as it is, and on Close the camera returns when the Sketcher's
 "Restore camera position after editing" preference asks it to. The
 openings and their dimensions are drawn over the real boards, on whichever
 face the camera sees. A click on a board selects the whole board through
-FreeCAD's own selection; a click on a dimension types its size on the spot;
+FreeCAD's own selection; a double-click on a dimension types its size on
+the spot;
 buttons over a selected opening add a shelf or a divider; an arrow drags
 the selected board; Delete removes it. The task panel holds only what has
 no place on the drawing: the unit's size, the constraint list, what a
@@ -259,12 +261,51 @@ never in the way of a click. The header carries the same cross in the same
 color before its text, as tall as a capital letter, tying the column to
 the mark in the view.
 
-Each opening's dimension carries a padlock at the head of the row of icons
-after its text, closed for a locked opening and open for an unlocked one,
-in the dimension's own color on the same tile as a constraint's icon, and
-the opening's constraint icons follow it. Each dimension's text sits on a
-tile of its own, drawn under every dimension's lines and arrowheads, and a
-click anywhere on that tile opens the size field. The tiles put each
+Dimensions follow the Sketcher's. A lock is drawn as its dimension, a
+driving one in the Sketcher's `ConstrainedDimColor`, and gray in its
+`DeactivatedConstrDimColor` while the lock is off, since it holds nothing
+then. A region nothing locks shows a dimension only while it is selected
+or an Equal or Even spacing holds it, active or not, as a reference
+dimension in `NonDrivingConstrDimColor` with its value in parentheses, the
+way the Sketcher writes a reference value. So a constraint's icon always
+sits on a line whose arrowheads say which way it holds, and an unlocked
+size the user is not looking at draws nothing. A selected opening also
+draws the dimension of the region whose size it shares along the other
+elevation axis, unless that is the unit's own size, which shows what Lock
+Width and Lock Height would lock and gives both sizes a click target. A
+dimension whose lock is selected takes the selection color, which hides a
+deactivated one's gray as the Sketcher's does; selecting a region recolors
+none, as selecting Sketcher geometry leaves its dimensions' colors alone.
+Each region keeps its dimension's place whether it is drawn or not, so
+one appearing moves no other.
+
+Lock Width and Lock Height make locks as the Sketcher's horizontal and
+vertical distance constraints fix distances: each selected opening locks
+the nearest region, itself or one around it, whose row runs along that
+direction, so locking a bay's width locks the column that holds it.
+Openings that resolve to one region make one lock; a region already locked
+is left alone, and a deactivated lock is turned back on. A selected board,
+an empty selection, or a size that is the unit's own refuses the whole
+command, as `Std_Delete` refuses all when one is refused. Each command
+locks at the current size, opens no field, and is one undo step that
+moves nothing. Their icons are drawn in the Sketcher's style of its
+distance constraints under the workbench's resources, since the Sketcher's
+own exist only once its GUI module loads.
+
+A click on a driving or deactivated dimension's text selects its lock as a
+constraint, and Ctrl-click adds it, as a click on a constraint's icon
+does; Delete then removes the selected locks. A click on a reference
+dimension's text selects its region, and Ctrl-click adds it to the
+selected openings. A double-click on any dimension's text opens its size
+field, and typing a size locks the region, turning its lock back on when
+it is off. The editor takes both presses of a double-click, so FreeCAD's
+selection never picks the board behind the text. A selected board held in
+place shows no arrow, and nothing takes the arrow's place: it outlines the
+regions holding it, whose dimensions say what to remove.
+
+Each dimension's text sits on a tile of its own, drawn under every
+dimension's lines and arrowheads, and the region's constraint icons
+follow the text in the row after it, on the same tile. The tiles put each
 glyph and size back on the background its theme chose those colors
 against, where an opening's translucent fill would wash out a thin glyph
 or a size's digits. The Sketcher draws its dimension text with no tile;
@@ -276,30 +317,23 @@ departs from the Sketcher, which draws a deactivated icon in its
 deactivated color: that color gives way to the selection color, so a
 selected Sketcher icon cannot show whether its constraint is on. The X
 keeps activation in the glyph's shape, visible selected or not, and
-leaves the icon's color rules the Sketcher's.
-Clicking a closed padlock deletes the opening's lock; clicking an open one
-locks the opening, turning its deactivated lock back on when it has one,
-and typing a size locks it. A deactivated lock shows an open padlock and
-an unlocked dimension, since it holds nothing. A selected board held in
-place shows a closed padlock where its arrow would be and outlines the
-locked openings holding it; clicking that padlock deletes their locks,
-and the arrow takes its place. Like the Sketcher's constraint icons, the
-padlocks are drawn in the view and carry no tooltip. Besides the padlock,
-only a lock's row in the constraint list unlocks. A refused edit's or a
-redundant lock's outline uses the same color, and lasts until the next
-edit or selection change.
+leaves the icon's color rules the Sketcher's. Like the Sketcher's
+constraint icons, the icons and dimensions carry no tooltip. A refused
+edit's or a redundant lock's outline takes the driving dimension color,
+and lasts until the next edit or selection change.
 
 The constraint list follows the Sketcher's: one list holding every
 constraint, locks included, in the order they were made, each with its
 kind's icon, its checkbox and its size in the user's unit system, and
 selection shared with the 3D view in both directions; selecting a lock's
-row selects that lock. A deactivated lock's icon is grayed in Qt's
-disabled mode, as the Sketcher's list grays a deactivated constraint. It
-departs from the Sketcher in four places. A deactivated Equal's or even
-spacing's icon carries the 3D view's corner X where the Sketcher's list
-grays it, so the list and the view mark it the same way; the view has no
-padlock with an X, since its open padlock already marks a deactivated
-lock. A constraint's checkbox means active, since the editor has no
+row selects that lock. A lock's row is named Lock Width or Lock Height and
+shows the icon of the command that makes it, and a deactivated lock's icon
+is grayed in Qt's disabled mode, as the Sketcher's list grays a
+deactivated constraint. It departs from the Sketcher in four places. A
+deactivated Equal's or even spacing's icon carries the 3D view's corner X
+where the Sketcher's list grays it, so the list and the view mark it the
+same way; a lock has no icon in the view to match, since its gray
+dimension already marks it. A constraint's checkbox means active, since the editor has no
 virtual space for the Sketcher's visibility box to choose.
 Each row has a delete button and one button deletes every deactivated
 constraint, because opening a unit can deactivate several at once, which

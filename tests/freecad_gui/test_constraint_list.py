@@ -38,7 +38,7 @@ from freecad.Shelving.editor.overlay import (
     TILE_PAD_PX,
     Tile,
     constraint_icon_image,
-    padlock_image,
+    lock_icon_image,
     view_style,
 )
 from freecad.Shelving.editor.panel import EditUnitPanel
@@ -211,8 +211,8 @@ def _drawn_icon(
     tree: QtWidgets.QTreeWidget, kind: RowKind, active: bool = True
 ) -> QtGui.QIcon:
     """The 3D view's own image for ``kind``, with its corner X unless
-    ``active``, or the closed padlock for a lock, at the list's icon size on
-    a tile of its background."""
+    ``active``, or for a Lock the icon of the command that makes it, at the
+    list's icon size on a tile of its background."""
     side_px = tree.style().pixelMetric(QtWidgets.QStyle.PixelMetric.PM_SmallIconSize)
     ratio = tree.devicePixelRatioF()
     base = tree.palette().color(QtGui.QPalette.ColorRole.Base)
@@ -221,9 +221,12 @@ def _drawn_icon(
     )
     style = view_style(0)
     device_px = round(side_px * ratio)
-    if kind == "lock":
-        image = padlock_image(True, style.locked_rgb, tile, device_px)
+    if kind == "lock_width":
+        image = lock_icon_image("horizontal", style.icon_rgb, tile, device_px)
+    elif kind == "lock_height":
+        image = lock_icon_image("vertical", style.icon_rgb, tile, device_px)
     else:
+        assert kind != "lock"
         image = constraint_icon_image(kind, style.icon_rgb, tile, device_px, active)
     pixmap = QtGui.QPixmap.fromImage(image)
     pixmap.setDevicePixelRatio(ratio)
@@ -239,21 +242,43 @@ def test_rows_show_their_kind_size_and_the_views_icons(editing: _Editing) -> Non
     # The lock was made after the Equal and the even spacing, so it comes
     # after them.
     equal, spacing, lock = (editing.item(i) for i in range(3))
-    assert "Lock" in lock.text(TEXT_COLUMN) and size in lock.text(TEXT_COLUMN)
+    assert lock.text(TEXT_COLUMN).startswith("Lock Height")
+    assert size in lock.text(TEXT_COLUMN)
     assert "Equal" in equal.text(TEXT_COLUMN) and size in equal.text(TEXT_COLUMN)
     assert spacing.text(TEXT_COLUMN) == "Even spacing"
-    padlock = _drawn_icon(tree, "lock")
+    height = _drawn_icon(tree, "lock_height")
     equals = _drawn_icon(tree, "equal")
     spaced = _drawn_icon(tree, "even_spacing")
-    assert _image(padlock) != _image(equals)
-    assert _image(padlock) != _image(spaced)
+    assert _image(height) != _image(equals)
+    assert _image(height) != _image(spaced)
     assert _image(equals) != _image(spaced)
-    assert _image(lock.icon(TEXT_COLUMN)) == _image(padlock)
+    assert _image(lock.icon(TEXT_COLUMN)) == _image(height)
     assert _image(equal.icon(TEXT_COLUMN)) == _image(equals)
     # The deactivated even spacing's icon is the view's, red with its X.
     marked = _drawn_icon(tree, "even_spacing", active=False)
     assert _image(spacing.icon(TEXT_COLUMN)) == _image(marked)
     assert _image(marked) != _image(spaced)
+
+
+def test_a_lock_row_names_and_draws_the_command_that_makes_its_axis_lock(
+    editing: _Editing,
+) -> None:
+    session = editing.panel.session
+    (_bottom, row, _top) = cast("Division", session.unit.root).items
+    column = cast("Division", row).items[1]
+    a, _b, _c = editing.bays()
+    assert session.set_lock(column.id, locked=True) is None
+    assert session.set_lock(a, locked=True) is None
+    editing.panel._refresh()
+    tree = editing.rows.tree
+    width, height = editing.item(2), editing.item(3)
+    assert width.text(TEXT_COLUMN).startswith("Lock Width")
+    assert height.text(TEXT_COLUMN).startswith("Lock Height")
+    width_icon = _drawn_icon(tree, "lock_width")
+    height_icon = _drawn_icon(tree, "lock_height")
+    assert _image(width_icon) != _image(height_icon)
+    assert _image(width.icon(TEXT_COLUMN)) == _image(width_icon)
+    assert _image(height.icon(TEXT_COLUMN)) == _image(height_icon)
 
 
 def test_a_selected_rows_icon_keeps_its_colors(editing: _Editing) -> None:
@@ -305,12 +330,12 @@ def test_a_deactivated_lock_rows_icon_is_grayed_in_qts_disabled_mode(
     side_px = tree.style().pixelMetric(QtWidgets.QStyle.PixelMetric.PM_SmallIconSize)
     size = QtCore.QSize(side_px, side_px)
     ratio = tree.devicePixelRatioF()
-    padlock = _drawn_icon(tree, "lock")
-    grayed = padlock.pixmap(size, ratio, QtGui.QIcon.Mode.Disabled).toImage()
+    height = _drawn_icon(tree, "lock_height")
+    grayed = height.pixmap(size, ratio, QtGui.QIcon.Mode.Disabled).toImage()
     icon = editing.item(2).icon(TEXT_COLUMN)
     for mode in (QtGui.QIcon.Mode.Normal, QtGui.QIcon.Mode.Selected):
         assert icon.pixmap(size, ratio, mode).toImage() == grayed
-    assert grayed != padlock.pixmap(size, ratio).toImage()
+    assert grayed != height.pixmap(size, ratio).toImage()
 
 
 def test_selecting_a_lock_row_selects_the_lock_and_its_basis_moves_nothing(

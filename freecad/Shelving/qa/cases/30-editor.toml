@@ -67,14 +67,16 @@ title = "The size field and dimension text on a HiDPI screen"
     "Move FreeCAD to a HiDPI screen, such as a Mac's built-in display.",
     "Select the container (ShelvingUnit).",
     "Run Edit Unit.",
+    "Click the lower bay.",
   ]
   expected = """
-The dimension text is as large and as sharp as a sketch's dimensions on the
+The lower bay's height shows as a dimension, its value in parentheses. The
+dimension text is as large and as sharp as a sketch's dimensions on the
 same screen."""
 
   [[case.step]]
   id = "field"
-  instruction = ["Click the lower bay's dimension text."]
+  instruction = ["Double-click the lower bay's dimension text."]
   expected = """
 A size field opens right on that text, showing the bay's size selected, and
 typing goes straight into it."""
@@ -83,8 +85,8 @@ typing goes straight into it."""
   id = "type"
   instruction = ["Type 250 and press Return."]
   expected = """
-The field closes, the shelf moves, and the dimension reads 250 in the
-color of a locked size."""
+The field closes, the shelf moves, and the dimension reads 250 without
+parentheses, in the color of a locked size."""
 
 [[case]]
 id = "editor.formula"
@@ -99,7 +101,8 @@ title = "The f(x) dialog from a dimension's size field"
   [[case.step]]
   id = "expression"
   instruction = [
-    "Click the lower bay's dimension text.",
+    "Click the lower bay.",
+    "Double-click the lower bay's dimension text.",
     "Type =.",
     "Enter VarSet.Len - 20 mm in the f(x) dialog.",
     "Accept the dialog.",
@@ -230,69 +233,65 @@ the panel closes, and nothing is left drawn in the view."""
   expected = "The unit comes back as one open bay, with no panel open."
 
 [[case]]
-id = "editor.padlocks"
-title = "Padlocks on a HiDPI screen and on a busy unit"
+id = "editor.dimensions"
+title = "Dimensions as the Sketcher draws them, and Lock Width on a column"
 
   [[case.step]]
   id = "start"
-  action = "shelf_unit_with_varset"
+  action = "large_unit"
   instruction = [
     "Move FreeCAD to a HiDPI screen, such as a Mac's built-in display.",
     "Select the container (ShelvingUnit).",
     "Run Edit Unit.",
   ]
   expected = """
-Each bay's dimension leads the row after its text with a padlock, open and
-in the dimension's color. It is as sharp as the text beside it, covers
-none of the text, and reads as a padlock. Each size reads plainly on its
-own tile over the opening fills."""
+No dimension shows over the unit, since nothing is locked, constrained or
+selected, and the openings read plainly without them."""
 
   [[case.step]]
-  id = "zoom"
+  id = "select"
   instruction = [
-    "Zoom in until one bay fills the view.",
-    "Zoom out until the whole unit is a few centimeters tall.",
+    "Click an opening in the second column.",
+    "Click an opening in the third column.",
   ]
   expected = """
-At every zoom each padlock stays at the head of the row after its own
-text, covers none of its own dimension's text, and stays legible. Zoomed
-out, a row may run over a neighboring dimension's text."""
+Each click shows the opening's height and its column's width as blue
+dimensions with their values in parentheses, and the previous opening's
+go. They appear and disappear in place, nothing else in the view moves,
+and the change reads as calm rather than jumpy. The parentheses read
+plainly at the default zoom."""
 
   [[case.step]]
-  id = "lock"
-  instruction = ["Click the lower bay's padlock."]
+  id = "lock_width"
+  instruction = ["Click Lock Width on the toolbar."]
   expected = """
-The closed padlock reads plainly as closed beside the open ones, at a
-glance and without zooming in."""
+The column's width dimension turns red and loses its parentheses, plainly
+showing that the whole column's width is locked, not only the opening's.
+No board moves, and the opening's height stays blue."""
 
   [[case.step]]
-  id = "held"
-  instruction = ["Click the shelf."]
-  expected = """
-A closed padlock sits where the shelf's arrow would be, legible beside the
-dimensions, and the lower bay's outline stands out from the other
-openings' at a glance."""
-
-  [[case.step]]
-  id = "display"
+  id = "deactivate"
   instruction = [
-    "Move the FreeCAD window to a display with a different scaling.",
-    "Move it back.",
+    "Uncheck the Lock Width row's box in the Constraints list.",
+    "Click another opening in the same column.",
   ]
   expected = """
-On each display, without a click, every padlock stays at the head of the
-row after its own text and the shelf's padlock stays where its arrow would
-be, each as sharp as the text beside it."""
+The column's width dimension turns gray and stays gray when the opening's
+blue height appears beside it. The gray and the blue are plainly
+different at a glance."""
 
   [[case.step]]
-  id = "busy"
-  action = "large_unit"
-  instruction = ["Select the container (ShelvingUnit).", "Run Edit Unit."]
+  id = "double_click"
+  instruction = [
+    "Double-click the gray width dimension's text.",
+    "Press Escape.",
+    "Double-click the blue height dimension's text.",
+    "Type 200 and press Return.",
+  ]
   expected = """
-Every opening's dimension has its padlock, and each padlock is plainly its
-own dimension's. On a large monitor the openings and their sizes read at
-the fitted zoom; on a small laptop screen reading them may take zooming
-in."""
+Each double-click opens a size field on that text at the first try, and
+selects no board. After Return the opening is 200 mm and its height reads
+200 in red, without parentheses."""
 
 [[case]]
 id = "editor.fixed_point"
@@ -371,8 +370,8 @@ disabled."""
   instruction = ["Click the Stock row."]
   expected = """
 All six boards show in FreeCAD's selection color in the 3D view, each one
-whole, and are selected in the tree. No arrow, add buttons or padlock on a
-board shows, and Change stock… is enabled."""
+whole, and are selected in the tree. No arrow or add buttons show, and
+Change stock… is enabled."""
 
   [[case.step]]
   id = "view"
@@ -480,9 +479,11 @@ title = "Equal and even spacing, from icons to a hand-moved shelf"
     "Run Edit Unit.",
   ]
   expected = """
-A toolbar with Constrain Equal and Constrain Even Spacing appears. The
-Equal button shows an equals sign and the Even spacing button three evenly
-spaced uprights, both in the style of the Sketcher's constraint icons."""
+A toolbar with Lock Width, Lock Height, Constrain Equal and Constrain Even
+Spacing appears. Lock Width shows two uprights with a dimension line
+between them and Lock Height the same turned on its side, the Equal button
+an equals sign and the Even spacing button three evenly spaced uprights,
+all in the style of the Sketcher's constraint icons."""
 
   [[case.step]]
   id = "even"
@@ -492,11 +493,11 @@ spaced uprights, both in the style of the Sketcher's constraint icons."""
     "Click Constrain Even Spacing on the toolbar.",
   ]
   expected = """
-The leftmost column's six openings become the same height. Each shows the
-even spacing icon after the padlock that follows its dimension's text, in
-the red of a Sketcher constraint icon on a small tile of the view's
-background like the padlock's, as sharp as the text and clear of the
-text's tile and of the padlock."""
+The leftmost column's six openings become the same height, and each shows
+its height as a blue dimension in parentheses. The even spacing icon
+follows each dimension's text, in the red of a Sketcher constraint icon on
+a small tile of the view's background like the text's, as sharp as the
+text and clear of the text's tile."""
 
   [[case.step]]
   id = "equal"
@@ -538,8 +539,8 @@ the second column's bottom opening stays equal to them."""
   expected = """
 During the drag both relations hold: the leftmost column stays evenly
 spaced and the second column's bottom opening keeps its size. The
-leftmost column's shelf shows no arrow and no padlock, and the column's
-openings are outlined as the openings holding it."""
+leftmost column's shelf shows no arrow, nothing takes the arrow's place,
+and the column's openings are outlined as the openings holding it."""
 
   [[case.step]]
   id = "reopen"
@@ -605,13 +606,15 @@ holding no rows and a grayed Delete Deactivated button."""
     "Click the bottom opening of the leftmost column.",
     "Ctrl-click the opening above it.",
     "Click Constrain Equal on the toolbar.",
-    "Click the padlock on the bottom opening's dimension.",
-    "Click the padlock on the dimension of the opening above it.",
+    "Click the bottom opening of the leftmost column.",
+    "Click Lock Height on the toolbar.",
+    "Click the opening above it.",
+    "Click Lock Height on the toolbar.",
   ]
   expected = """
 One notification says the lock is redundant. The list shows an Equal row,
-then two Lock rows in the order you locked them, each with its box checked,
-its icon and its size. All three carry a
+then two Lock Height rows in the order you locked them, each with its box
+checked, the Lock Height icon and its size. All three carry a
 warning icon, and hovering one says it is redundant. The rows fit the panel
 at its default width with no horizontal scroll bar, and every icon is as
 sharp as the text beside it and easy to recognize."""
@@ -654,6 +657,6 @@ as an even spacing."""
     "Click Delete Deactivated.",
   ]
   expected = """
-The Equal row goes, and with it the warning icons on the two Lock rows.
-Then the Even spacing row goes. Only the two Lock rows remain, no board
+The Equal row goes, and with it the warning icons on the two Lock Height
+rows. Then the Even spacing row goes. Only the two Lock Height rows remain, no board
 moved, and Delete Deactivated is grayed again."""

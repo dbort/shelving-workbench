@@ -40,6 +40,7 @@ from freecad.Shelving.core.layout import (
     Unit,
     Void,
     constraint_regions,
+    region_lock,
 )
 from freecad.Shelving.core.scan import elevation_axes
 from freecad.Shelving.core.solver import LayoutSolveError, solve
@@ -47,7 +48,11 @@ from freecad.Shelving.core.solver import LayoutSolveError, solve
 Side = Literal["front", "back"]
 FaceKind = Literal["bay", "void"]
 OutlineRole = Literal["region", "selected", "holding"]
-LabelColor = Literal["locked", "unlocked"]
+# A driving dimension is an active Lock's, a deactivated one a deactivated
+# Lock's, and a reference one shows a size nothing locks.
+LabelRole = Literal["driving", "deactivated", "reference"]
+# The elevation direction Lock Width or Lock Height acts along.
+ElevationDirection = Literal["horizontal", "vertical"]
 ConstraintKind = Literal["equal", "even_spacing"]
 
 # How far in front of the face outlines and dimensions sit, so they do not
@@ -324,9 +329,15 @@ class DimensionLabel:
     # Left as a number: its text follows the user's unit system, which this
     # module, free of FreeCAD, cannot read.
     size_mm: float
-    color: LabelColor
+    role: LabelRole
     # Where the text's center sits along the line, as a fraction from start.
     text_fraction: float
+    # Whether the region's Lock is selected; a selected region leaves its
+    # dimension as it is, as selecting Sketcher geometry does.
+    selected: bool = False
+    # The region's Lock, active or deactivated; None for a reference
+    # dimension.
+    lock_id: ConstraintId | None = None
 
     @property
     def text_at_mm(self) -> tuple[float, float]:
@@ -354,10 +365,9 @@ class DimensionLabel:
         return (self.text_fraction - 0.5) * self.length_mm
 
 
-# The row after a dimension's text: every opening has a padlock, so it
-# leads, and the constraint icons follow it in the order they were made.
-PADLOCK_SLOT = 0
-FIRST_CONSTRAINT_SLOT = PADLOCK_SLOT + 1
+# The first place in the row after a dimension's text; the constraint
+# icons follow it in the order they were made.
+FIRST_CONSTRAINT_SLOT = 0
 
 
 @dataclass(frozen=True)
@@ -380,42 +390,19 @@ class ConstraintIcon:
 
 
 @dataclass(frozen=True)
-class PadlockIcon:
-    """An opening's padlock, at the head of the row after its dimension's
-    text: closed for a locked opening, open for an unlocked one."""
-
-    label: DimensionLabel
-    slot: int = PADLOCK_SLOT
-
-    @property
-    def locked(self) -> bool:
-        return self.label.color == "locked"
-
-
-RowIcon = ConstraintIcon | PadlockIcon
-
-
-@dataclass(frozen=True)
 class Overlay:
     """Everything drawn over the unit, in the order Coin draws it: faces,
-    then outlines, then dimensions, then each dimension's row of padlock
-    and constraint icons."""
+    then outlines, then dimensions, then each dimension's row of constraint
+    icons."""
 
     faces: Sequence[Face] = ()
     outlines: Sequence[Outline] = ()
     labels: Sequence[DimensionLabel] = ()
-    padlocks: Sequence[PadlockIcon] = ()
     icons: Sequence[ConstraintIcon] = ()
-
-    @property
-    def row_icons(self) -> tuple[RowIcon, ...]:
-        """Every padlock, then every constraint icon: the order they are
-        drawn in."""
-        return (*self.padlocks, *self.icons)
 
 
 def icon_center_px(
-    icon: RowIcon,
+    icon: ConstraintIcon,
     text_at_px: tuple[float, float],
     tile_along_px: float,
     icon_px: float,
@@ -435,18 +422,18 @@ def icon_center_px(
 
 
 def icon_at(
-    icons: Sequence[RowIcon],
+    icons: Sequence[ConstraintIcon],
     project: Callable[[float, float], tuple[float, float]],
     tile_along_px: Callable[[DimensionLabel], float],
     icon_px: float,
     gap_px: float,
     x_px: float,
     y_px: float,
-) -> RowIcon | None:
+) -> ConstraintIcon | None:
     """The icon whose square, placed as :func:`icon_center_px` places it,
     holds the device point ``(x_px, y_px)``; ``project`` takes an elevation
     point to device pixels with y up. Of two, the one drawn later."""
-    found: RowIcon | None = None
+    found: ConstraintIcon | None = None
     half_px = icon_px / 2
     for icon in icons:
         center_x_px, center_y_px = icon_center_px(
@@ -500,6 +487,7 @@ class _Planner:
     # How far apart the rows of outer dimensions sit, the first from the
     # unit's outer face.
     outer_row_mm: float
+    selected_constraints: Collection[ConstraintId] = ()
     outer_rows: _OuterRows = field(default_factory=dict)
 
     def rects(self) -> Iterator[tuple[Region, Rect]]:
@@ -596,18 +584,19 @@ class _Planner:
                 start_mm, end_mm = (low_mm, cross_mm), (high_mm, cross_mm)
             else:
                 start_mm, end_mm = (cross_mm, low_mm), (cross_mm, high_mm)
-            # A selected region keeps its lock color, as the Sketcher's
-            # constraints keep theirs when their geometry is selected. A
-            # deactivated lock holds nothing, so its region takes the
-            # unlocked color.
-            color: LabelColor = "locked" if measured.fixed else "unlocked"
+            found = region_lock(self.unit, item.id)
+            role: LabelRole = "reference"
+            if found is not None:
+                role = "driving" if found.active else "deactivated"
             yield DimensionLabel(
                 region_id=item.id,
                 start_mm=start_mm,
                 end_mm=end_mm,
                 size_mm=measured.size_mm,
-                color=color,
+                role=role,
                 text_fraction=text_fraction,
+                selected=found is not None and found.id in self.selected_constraints,
+                lock_id=None if found is None else found.id,
             )
 
 
@@ -625,24 +614,25 @@ def plan_overlay(
     """What to draw for ``unit`` solved as ``spaces`` on ``frame``'s face:
     a face per bay and void, an outline per opening and for each selected
     node, a "holding" outline for each region holding a selected board and
-    for each region ``flagged`` names or a constraint it names holds, a
-    dimension and a padlock for every region in a run along an elevation
-    axis, and an icon for each constraint beside each of its openings'
-    dimensions.
+    for each region ``flagged`` names or a constraint it names holds, the
+    dimensions :func:`drawn_dimensions` picks, and an icon for each Equal
+    or Even spacing beside each of its openings' dimensions.
 
     ``selected_id`` is the single selection, ``selected_items`` every
     selected board and opening, and ``selected_constraints`` the selected
-    constraints, whose openings take the selected outline and whose icons
-    are marked selected. A board is held by the locks :func:`held_padlock`
-    gives a padlock, or by other constraints, and the openings of either
-    then take the holding outline. The selected outline wins over a holding
-    one, and an id in ``flagged`` that names nothing draws nothing.
-    ``spaces`` must hold every node of ``unit``. A dimension outside the
-    unit sits a whole number of ``outer_row_mm`` rows out from its outer
-    face, so resizing the unit moves only the rows past the faces that
-    move. Icons at one opening sit in a row after its padlock in the order
-    the constraints were made; a lock draws as the padlock, not an icon."""
-    planner = _Planner(unit, spaces, frame, outer_row_mm)
+    constraints, whose openings take the selected outline, whose icons are
+    marked selected, and whose Locks' dimensions are marked selected. A
+    board is held by the constraints :func:`~freecad.Shelving.core.edit.held_by`
+    names, Locks included, and their openings then take the holding
+    outline. The selected outline wins over a holding one, and an id in
+    ``flagged`` that names nothing draws nothing. ``spaces`` must hold
+    every node of ``unit``. A dimension outside the unit sits a whole
+    number of ``outer_row_mm`` rows out from its outer face, so resizing
+    the unit moves only the rows past the faces that move; each region
+    keeps its place whether its dimension is drawn or not, so one
+    appearing moves no other. Icons at one opening sit in a row after its
+    dimension's text in the order the constraints were made."""
+    planner = _Planner(unit, spaces, frame, outer_row_mm, selected_constraints)
     held: Held | None = None
     if selected_id is not None:
         held = held_by(unit, selected_id)
@@ -657,14 +647,15 @@ def plan_overlay(
             holding.add(flag)
         else:
             holding.update(constraint_regions(unit, constraint))
-    selected = {*selected_items, *([] if selected_id is None else [selected_id])}
+    picked = (*selected_items, *([] if selected_id is None else [selected_id]))
+    selected = set(picked)
     for constraint_id in selected_constraints:
         constraint = by_id.get(constraint_id)
         if constraint is not None:
             selected.update(constraint_regions(unit, constraint))
     faces: list[Face] = []
     outlines: list[Outline] = []
-    labels: list[DimensionLabel] = []
+    every_label: list[DimensionLabel] = []
     for node, _depth, parent in _walk(unit.root):
         is_selected = node.id in selected
         if isinstance(node, Board):
@@ -683,9 +674,10 @@ def plan_overlay(
         elif isinstance(node, Bay | Void):
             outlines.append(Outline(rect, "region"))
         if isinstance(node, Division):
-            labels.extend(planner.labels(node))
+            every_label.extend(planner.labels(node))
+    drawn = drawn_dimensions(unit, frame, picked)
+    labels = [label for label in every_label if label.region_id in drawn]
     label_of = {label.region_id: label for label in labels}
-    padlocks = [PadlockIcon(label) for label in labels]
     slots: dict[str, int] = {}
     icons: list[ConstraintIcon] = []
     for constraint in unit.constraints:
@@ -711,9 +703,85 @@ def plan_overlay(
                     selected=constraint_selected,
                 )
             )
-    return Overlay(
-        faces=faces, outlines=outlines, labels=labels, padlocks=padlocks, icons=icons
-    )
+    return Overlay(faces=faces, outlines=outlines, labels=labels, icons=icons)
+
+
+def _parents(unit: Unit) -> dict[str, Division]:
+    """The division holding each region and board of ``unit``, by id; the
+    root has none."""
+    return {
+        node.id: parent
+        for node, _depth, parent in _walk(unit.root)
+        if parent is not None
+    }
+
+
+def _spans_unit(
+    parents: Mapping[str, Division], division: Division, axis: Axis
+) -> bool:
+    """Whether ``division`` reaches across the whole unit along ``axis``:
+    it is the root, or it fills a run across ``axis`` that does."""
+    parent = parents.get(division.id)
+    if parent is None:
+        return True
+    return parent.axis != axis and _spans_unit(parents, parent, axis)
+
+
+def region_along(unit: Unit, node_id: str, axis: Axis) -> str | None:
+    """The region whose size along ``axis`` holds ``node_id``'s: the nearest
+    of ``node_id`` and its enclosing regions whose parent division runs
+    along ``axis``, as the Sketcher's distance constraints act on the
+    geometry spanning that direction. ``None`` for a board, the root or an
+    unknown id, and when the size along ``axis`` is the unit's own: no such
+    region exists, or the one found is alone among boards in a run that
+    spans the unit, so only the unit's size changes it."""
+    parents = _parents(unit)
+    parent = parents.get(node_id)
+    if parent is None:
+        return None
+    if any(item.id == node_id and isinstance(item, Board) for item in parent.items):
+        return None
+    current = node_id
+    while parent is not None:
+        if parent.axis == axis:
+            alone = all(
+                isinstance(item, Board) or item.id == current for item in parent.items
+            )
+            if alone and _spans_unit(parents, parent, axis):
+                return None
+            return current
+        current = parent.id
+        parent = parents.get(current)
+    return None
+
+
+def drawn_dimensions(
+    unit: Unit, frame: ElevationFrame, selected: Collection[str]
+) -> frozenset[str]:
+    """The regions whose dimensions are drawn, as the Sketcher draws only
+    its dimension constraints: every region with a Lock, active or
+    deactivated, every region an Equal or Even spacing holds, active or
+    deactivated, and every region in ``selected`` together with the region
+    owning its size along the other elevation axis, as
+    :func:`region_along` finds it. Ids in ``selected`` naming boards or
+    nothing add nothing. A region whose run lies along the depth axis is in
+    the set but has no dimension to draw."""
+    drawn: set[str] = set()
+    for constraint in unit.constraints:
+        drawn.update(constraint_regions(unit, constraint))
+    parents = _parents(unit)
+    boards = board_ids(unit)
+    for node_id in selected:
+        parent = parents.get(node_id)
+        if parent is None or node_id in boards:
+            continue
+        drawn.add(node_id)
+        across = frame.vertical if parent.axis == frame.horizontal else frame.horizontal
+        if parent.axis in (frame.horizontal, frame.vertical):
+            other = region_along(unit, node_id, across)
+            if other is not None:
+                drawn.add(other)
+    return frozenset(drawn)
 
 
 def region_at(
@@ -807,22 +875,14 @@ def arrow_for(
     unit: Unit, spaces: Mapping[str, Space], frame: ElevationFrame, board_id: str
 ) -> Arrow | None:
     """The arrow for ``board_id`` when a drag may move it along a run in the
-    elevation plane; ``None`` for a board a locked opening holds, a carcass
-    board, a board whose run runs through the depth, and a region. The
-    arrow sits beside the dimension of the region before the board, just
-    past its line, so a view zoomed in on that region shows both. A board a
-    constraint holds gets none either."""
+    elevation plane; ``None`` for a board any constraint holds, Locks
+    included, a carcass board, a board whose run runs through the depth,
+    and a region. The arrow sits beside where the dimension of the region
+    before the board goes, just past its line, so a view zoomed in on that
+    region shows both."""
     held = held_by(unit, board_id)
     if held is None or not held.free:
         return None
-    return _arrow_place(unit, spaces, frame, board_id)
-
-
-def _arrow_place(
-    unit: Unit, spaces: Mapping[str, Space], frame: ElevationFrame, board_id: str
-) -> Arrow | None:
-    """:func:`arrow_for`'s arrow whether or not a locked opening holds the
-    board."""
     try:
         axis = run_axis(unit, board_id)
         before_id = region_before(unit, board_id)
@@ -864,34 +924,6 @@ def _arrow_place(
             (origin.z_mm + top.z_mm) / 2,
         ),
     )
-
-
-@dataclass(frozen=True)
-class HeldPadlock:
-    """The padlock a held board shows in place of its arrow."""
-
-    board_id: str
-    # Where the board's arrow would sit.
-    at_mm: tuple[float, float]
-    # The locks holding the board, low side first: what clicking the
-    # padlock deletes.
-    holders: tuple[ConstraintId, ...]
-
-
-def held_padlock(
-    unit: Unit, spaces: Mapping[str, Space], frame: ElevationFrame, board_id: str
-) -> HeldPadlock | None:
-    """The padlock for ``board_id`` when locks alone hold it, so deleting
-    them would give it an arrow; ``None`` for a board a drag may move, a
-    board another constraint holds, which no unlock frees, a carcass board,
-    a board whose run runs through the depth, and a region."""
-    held = held_by(unit, board_id)
-    if held is None or not held.locks or held.constraints:
-        return None
-    place = _arrow_place(unit, spaces, frame, board_id)
-    if place is None:
-        return None
-    return HeldPadlock(board_id, place.at_mm, held.locks)
 
 
 def dragged_to_mm(arrow: Arrow, offset_mm: float) -> Vec3:

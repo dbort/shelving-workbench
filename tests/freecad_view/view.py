@@ -168,6 +168,26 @@ class ViewDriver:
         )
         self.pump()
 
+    def double_click(
+        self, at: Point, modifiers: QtCore.Qt.KeyboardModifier = _NO_MODIFIER
+    ) -> None:
+        """A left double-click at ``at``, sent as Qt sends one: a press and
+        release, then a ``MouseButtonDblClick`` in place of the second press,
+        and its release."""
+        point = self.qt_point(at)
+        self._press(point, modifiers)
+        self._send(
+            QtCore.QEvent.Type.MouseButtonRelease, point, _LEFT, _NO_BUTTON, modifiers
+        )
+        self._send(
+            QtCore.QEvent.Type.MouseButtonDblClick, point, _LEFT, _LEFT, modifiers
+        )
+        self._send(
+            QtCore.QEvent.Type.MouseButtonRelease, point, _LEFT, _NO_BUTTON, modifiers
+        )
+        self._last_press_s = time.monotonic()
+        self.pump()
+
     def drag(
         self,
         start: Point,

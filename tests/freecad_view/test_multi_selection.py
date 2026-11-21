@@ -151,9 +151,12 @@ def test_a_plain_click_returns_to_a_single_selection(
     click_task_button("Close", driver)
 
 
-def test_a_dimension_click_returns_to_its_region(
+def test_a_dimension_click_leaves_the_boards_for_its_lock_or_region(
     magic_start: tuple[FreeCAD.DocumentObject, ViewDriver],
 ) -> None:
+    """The scan locks Magic Start's plinth gap, so its dimension shows: a
+    click selects that Lock, and a double-click its region, each clearing
+    the board selection, in FreeCAD's selection too."""
     container, driver = magic_start
     panel = edit_unit(container, driver)
     editor = editor_of(panel)
@@ -161,7 +164,15 @@ def test_a_dimension_click_returns_to_its_region(
     driver.click(_face(panel, "Shelf"))
     driver.click(_face(panel, "Top"), _CTRL)
     label = editor.overlay.labels[0]
-    driver.click(driver.qt_point(editor.to_document(*label.text_at_mm)))
+    assert label.lock_id is not None
+    point = driver.qt_point(editor.to_document(*label.text_at_mm))
+    driver.click(point)
+    driver.pump()
+    assert session.selected_constraints == (label.lock_id,)
+    _assert_mirrored(panel, ())
+    driver.click(_face(panel, "Shelf"))
+    driver.click(_face(panel, "Top"), _CTRL)
+    driver.double_click(point)
     driver.pump()
     assert session.selected_id == label.region_id
     _assert_mirrored(panel, ())
@@ -180,7 +191,6 @@ def test_several_boards_show_no_arrow_and_no_add_buttons(
     _assert_mirrored(panel, ("Shelf", "Floor"))
     assert editor.arrow is None
     assert not editor.add_bar.isVisible()
-    assert not editor.held_marker.shown
     click_task_button("Close", driver)
 
 

@@ -1,4 +1,4 @@
-"""The task panel's Constraints group: one row per constraint, locks
+"""The task panel's Constraints group: one row per constraint, Locks
 included, in the order they were made, in the manner of the Sketcher's
 constraint list.
 
@@ -17,16 +17,20 @@ import FreeCAD
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from freecad.Shelving.core.layout import ConstraintId
+from freecad.Shelving.editor.elevation import ElevationDirection
 from freecad.Shelving.editor.overlay import (
     TILE_PAD_PX,
     Tile,
     constraint_icon_image,
-    padlock_image,
+    lock_icon_image,
+    text_tile_image,
     view_style,
 )
 from freecad.Shelving.editor.session import ConstraintRow, RowKind
 
 _KIND_NAMES: dict[RowKind, str] = {
+    "lock_width": "Lock Width",
+    "lock_height": "Lock Height",
     "lock": "Lock",
     "equal": "Equal",
     "even_spacing": "Even spacing",
@@ -75,26 +79,34 @@ def kind_icon(
     active: bool = True,
 ) -> QtGui.QIcon:
     """A row's icon, ``side_px`` logical pixels square at device pixel
-    ratio ``ratio``: the 3D view's closed padlock for a lock, grayed in
-    Qt's disabled mode unless ``active``, else the constraint's own icon
-    with the view's corner X unless ``active``, each in the view's color
-    for it on a tile of ``base``, the list's own background."""
+    ratio ``ratio``, on a tile of ``base``, the list's own background: for
+    a Lock, the icon of the command that makes it, grayed in Qt's disabled
+    mode unless ``active``, and the bare tile for a Lock through the depth,
+    which no command makes; for another constraint its own icon with the
+    view's corner X unless ``active``. Each glyph takes the view's
+    constraint icon color."""
     device_px = round(side_px * ratio)
     tile = Tile(
         (base.redF(), base.greenF(), base.blueF()), round(TILE_PAD_PX * ratio), 0.0
     )
     # Only the colors are read, so the text size does not matter.
     style = view_style(0)
+    is_lock = kind in ("lock_width", "lock_height", "lock")
     if kind == "lock":
-        image = padlock_image(True, style.locked_rgb, tile, device_px)
+        image = text_tile_image(tile, device_px, device_px)
+    elif kind in ("lock_width", "lock_height"):
+        direction: ElevationDirection = (
+            "horizontal" if kind == "lock_width" else "vertical"
+        )
+        image = lock_icon_image(direction, style.icon_rgb, tile, device_px)
     else:
         image = constraint_icon_image(kind, style.icon_rgb, tile, device_px, active)
     pixmap = QtGui.QPixmap.fromImage(image)
     pixmap.setDevicePixelRatio(ratio)
-    if kind == "lock" and not active:
+    if is_lock and not active:
         # The Sketcher grays a deactivated constraint's icon this way. The
-        # view has no padlock with an X to match, since its open padlock
-        # already shows a deactivated lock.
+        # view draws a deactivated Lock as a gray dimension, never as an
+        # icon with an X, so the list follows the Sketcher here.
         pixmap = QtGui.QIcon(pixmap).pixmap(
             QtCore.QSize(side_px, side_px), ratio, QtGui.QIcon.Mode.Disabled
         )
