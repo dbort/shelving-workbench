@@ -165,3 +165,9 @@ every state.
 - **N3: The corner region's bounds come from the code under test** (`tests/freecad_view/test_constraints.py:534`): the region is `overlay.corner_x_extent_px`, with only `extent_px < 2 * glyph_px / 3` as an independent bound; enlarging `_CORNER_X_SIDE` moves the test's goalposts up to that cap.
 - **N4: Edited prose was not rewrapped** (`docs/scope-and-design.md:107`, `README.md:126`): the scope-and-design line is 100 characters, and the README glossary paragraph ends on a short line.
 - **N5: `_corner_x_widths_px` docstring is imprecise** (`freecad/Shelving/editor/overlay.py:230`): the second value is the full width of the cleared band (stroke plus a gap on each side), not the gap's width.
+
+### Round 2: APPROVED
+- **N1: Rewrapped prose still leaves short lines** (`docs/scope-and-design.md:282`, `freecad/Shelving/qa/cases/30-editor.toml:630`): the new edits leave a short line in each, "mark it the same way. A constraint's" and "rows carry no X. The second column's".
+- **N2: The selected-row icon test uses a hardcoded size** (`tests/freecad_gui/test_constraint_list.py:262`): `QSize(16, 16)` where the list's `PM_SmallIconSize` would match `_drawn_icon`. It still catches the tint, since both modes scale alike; the reviewer confirmed with a bare PySide `QIcon` that Qt's generated Selected mode differs from Normal.
+- **N3: No QA step checks that a selected row's icon stays untinted** (`freecad/Shelving/qa/cases/30-editor.toml:636`): `toggle_selected` selects the row but its expected text doesn't say the row's icon keeps its red and tile. The GUI test meets the Must Have.
+- **N4: Pressing the checkbox to select the row is still not tested with a real press** (`tests/freecad_view/test_constraints.py:524`): the toggle test selects the row, then calls `setCheckState`. Unchanged Qt default, accepted in round 1; recorded for the audit trail.
