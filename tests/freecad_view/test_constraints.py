@@ -14,9 +14,8 @@ from PySide6 import QtCore, QtGui, QtSvg
 from freecad.Shelving.container import write_container
 from freecad.Shelving.editor import overlay
 from freecad.Shelving.editor.constraint_list import TEXT_COLUMN
-from freecad.Shelving.editor.elevation import ConstraintIcon
+from freecad.Shelving.editor.elevation import ICON_SOURCES, ConstraintIcon
 from freecad.Shelving.editor.overlay import (
-    ICON_SOURCES,
     RGB,
     IconNode,
     ViewParams,

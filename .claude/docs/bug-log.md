@@ -39,8 +39,8 @@ log happens only when the user asks.
   scanning logic.
 - `bug-005` - **after deleting a divider beside a stack of shelves, a
   full-height divider cannot be added back**: the whole-width region is a
-  `Division`, and `Session.can_split` and `core.edit.split_region` act only
-  on a selected `Bay`. Found in sh-020's manual QA. Fix: `sh-XXX task`.
+  `Division`, and `Session.split` and `core.edit.split_region` act only
+  on selected `Bay`s. Found in sh-020's manual QA. Fix: `sh-XXX task`.
   It needs an edit that splits a `Division` across its cross axis and a
   way to select a region with no area of its own, both design questions.
 - `bug-010` - **a dimension set from an expression keeps only the resolved

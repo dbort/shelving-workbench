@@ -8,17 +8,19 @@ what to select, as the Sketcher's constraint commands explain a wrong
 selection rather than graying out.
 """
 
-import os
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Literal, NamedTuple, TypedDict
 
-from freecad.Shelving.editor.elevation import ElevationDirection
+from freecad.Shelving.editor.elevation import (
+    ADD_ICON_SOURCES,
+    ICON_SOURCES,
+    LOCK_ICON_SOURCES,
+    ElevationDirection,
+)
 from freecad.Shelving.editor.session import EDIT_COMMANDS, SplitDirection
 
 if TYPE_CHECKING:
     from freecad.Shelving.editor.panel import ConstraintCommand, EditUnitPanel
-
-_RESOURCES = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources")
 
 
 class _CommandResources(TypedDict):
@@ -31,7 +33,6 @@ class _CommandResources(TypedDict):
 class _Spec(NamedTuple):
     menu_text: str
     tooltip: str
-    # A file in the workbench's resources folder.
     icon: str
     act: Callable[["EditUnitPanel"], None]
 
@@ -52,41 +53,41 @@ _SPECS: Mapping[str, _Spec] = {
     "Shelving_AddShelf": _Spec(
         "Add Shelf",
         "Add a shelf across the middle of each selected bay",
-        "Shelving_AddShelf.svg",
+        ADD_ICON_SOURCES["vertical"],
         _add("vertical"),
     ),
     "Shelving_AddDivider": _Spec(
         "Add Divider",
         "Add a divider down the middle of each selected bay",
-        "Shelving_AddDivider.svg",
+        ADD_ICON_SOURCES["horizontal"],
         _add("horizontal"),
     ),
     "Shelving_LockWidth": _Spec(
         "Lock Width",
         "Lock the width of each selected opening at its current size; "
         "a bay in a column locks the column's width",
-        "Constraint_HorizontalDistance.svg",
+        LOCK_ICON_SOURCES["horizontal"],
         _lock("horizontal"),
     ),
     "Shelving_LockHeight": _Spec(
         "Lock Height",
         "Lock the height of each selected opening at its current size; "
         "a bay in a row of bays locks the row's height",
-        "Constraint_VerticalDistance.svg",
+        LOCK_ICON_SOURCES["vertical"],
         _lock("vertical"),
     ),
     "Shelving_ConstrainEqual": _Spec(
         "Constrain Equal",
         "Keep the selected openings the same size: select two or more "
         "widths, or two or more heights",
-        "Constraint_Equal.svg",
+        ICON_SOURCES["equal"],
         _constrain("equal"),
     ),
     "Shelving_ConstrainEvenSpacing": _Spec(
         "Constrain Even Spacing",
         "Space the openings of one row or column evenly: select its "
         "first and last opening, or the two boards at its ends",
-        "Constraint_EvenSpacing.svg",
+        ICON_SOURCES["even_spacing"],
         _constrain("even_spacing"),
     ),
 }
@@ -100,7 +101,7 @@ class EditCommand:
         return {
             "MenuText": self._spec.menu_text,
             "ToolTip": self._spec.tooltip,
-            "Pixmap": os.path.join(_RESOURCES, self._spec.icon),
+            "Pixmap": self._spec.icon,
             # The session makes its own undo step.
             "CmdType": "NoTransaction",
         }

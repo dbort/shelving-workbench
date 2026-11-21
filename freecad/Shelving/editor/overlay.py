@@ -12,9 +12,8 @@ instead: fills, then outlines, then dimensions.
 from __future__ import annotations
 
 import math
-import os
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol, TypeAlias
 
@@ -23,7 +22,9 @@ from pivy import coin
 from PySide6 import QtCore, QtGui, QtSvg, QtWidgets
 
 from freecad.Shelving.editor.elevation import (
+    ICON_SOURCES,
     LIFT_MM,
+    LOCK_ICON_SOURCES,
     ConstraintIcon,
     ConstraintKind,
     DimensionLabel,
@@ -174,23 +175,6 @@ def view_style(label_size_pt: int) -> Style:
         icon_rgb=_view_color("ConstrainedIcoColor", 0xFF2600FF),
         tile_rgb=background_rgb(FreeCAD.ParamGet(_VIEW_PARAMS)),
     )
-
-
-# The workbench's own icons in the Sketcher's constraint style. Drawing
-# Equal as well as Even spacing keeps the pair matched and spares
-# importing SketcherGui, whose import alone registers the Sketcher's icons
-# (.claude/docs/freecad-notes.md).
-_RESOURCES = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources")
-ICON_SOURCES: Mapping[ConstraintKind, str] = {
-    "equal": os.path.join(_RESOURCES, "Constraint_Equal.svg"),
-    "even_spacing": os.path.join(_RESOURCES, "Constraint_EvenSpacing.svg"),
-}
-# Lock Width's and Lock Height's icons, after the Sketcher's horizontal and
-# vertical distance constraints'.
-LOCK_ICON_SOURCES: Mapping[ElevationDirection, str] = {
-    "horizontal": os.path.join(_RESOURCES, "Constraint_HorizontalDistance.svg"),
-    "vertical": os.path.join(_RESOURCES, "Constraint_VerticalDistance.svg"),
-}
 
 
 # The tile's margin around a glyph or a dimension's text, and its corner

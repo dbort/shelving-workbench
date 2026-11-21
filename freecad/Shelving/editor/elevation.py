@@ -11,6 +11,7 @@ picking an opening into a ray meeting z = 0.
 from __future__ import annotations
 
 import math
+import os
 from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Literal, NamedTuple
@@ -52,6 +53,28 @@ LabelRole = Literal["driving", "deactivated", "reference"]
 # The elevation direction Lock Width or Lock Height acts along.
 ElevationDirection = Literal["horizontal", "vertical"]
 ConstraintKind = Literal["equal", "even_spacing"]
+
+# The workbench's own icons in the Sketcher's constraint style. Drawing
+# Equal as well as Even spacing keeps the pair matched and spares
+# importing SketcherGui, whose import alone registers the Sketcher's icons
+# (.claude/docs/freecad-notes.md).
+_RESOURCES = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources")
+ICON_SOURCES: Mapping[ConstraintKind, str] = {
+    "equal": os.path.join(_RESOURCES, "Constraint_Equal.svg"),
+    "even_spacing": os.path.join(_RESOURCES, "Constraint_EvenSpacing.svg"),
+}
+# Lock Width's and Lock Height's icons, after the Sketcher's horizontal and
+# vertical distance constraints'.
+LOCK_ICON_SOURCES: Mapping[ElevationDirection, str] = {
+    "horizontal": os.path.join(_RESOURCES, "Constraint_HorizontalDistance.svg"),
+    "vertical": os.path.join(_RESOURCES, "Constraint_VerticalDistance.svg"),
+}
+# Add Shelf's and Add Divider's icons, keyed by the elevation direction
+# the split runs along, as the editor's split takes it.
+ADD_ICON_SOURCES: Mapping[ElevationDirection, str] = {
+    "vertical": os.path.join(_RESOURCES, "Shelving_AddShelf.svg"),
+    "horizontal": os.path.join(_RESOURCES, "Shelving_AddDivider.svg"),
+}
 
 # How far in front of the face outlines and dimensions sit, so they do not
 # z-fight with the board faces they lie on. Opening faces sit on the face
