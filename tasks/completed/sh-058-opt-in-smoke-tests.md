@@ -17,44 +17,44 @@ planning obligation makes every future task keep that set representative
 as features come and go.
 
 ## Must Have
-- [ ] `pixi run tests` green; `pyrefly check` clean over the changed code.
-- [ ] No `full_only` marker or mention remains in the repository outside
+- [x] `pixi run tests` green; `pyrefly check` clean over the changed code.
+- [x] No `full_only` marker or mention remains in the repository outside
       `tasks/completed/` and the logs (`git grep full_only`).
-- [ ] `tests/conftest.py` registers a `smoke` marker that takes one
+- [x] `tests/conftest.py` registers a `smoke` marker that takes one
       argument, the user path the test covers
       (`@pytest.mark.smoke("open Edit Unit, change a size")`);
       `pytest --markers` lists it with that signature and a description
       of what earns a test the marker.
-- [ ] `pixi run tests` fails, naming the test, on a `smoke` mark with no
+- [x] `pixi run tests` fails, naming the test, on a `smoke` mark with no
       path, an empty path, or more than one argument, and on two `smoke`
       marks that give the same path, whether both are in one suite or one
       is in `tests/freecad_gui/` and the other in `tests/freecad_view/`.
       A test covers each case.
-- [ ] `pixi run tests -- --smoke` runs, in full: the static checks, the
+- [x] `pixi run tests -- --smoke` runs, in full: the static checks, the
       core and repository pytest run, the workflow lint, the `freecadcmd`
       import check, and `tests/freecad/`. In `tests/freecad_gui/` it runs
       only the tests marked `smoke`. In `tests/freecad_view/` it runs exactly these three and no other:
       - `test_editor_input.py::test_a_selected_board_drags_by_its_arrow_under_each_navigation_style[Gui::CADNavigationStyle]`
       - `test_undo_in_the_editor.py::test_undo_and_redo_step_one_edit_and_the_panel_follows`
       - `test_scan_and_write.py::test_edit_unit_reads_a_hand_built_unit_and_close_changes_nothing`
-- [ ] In a smoke run, the `tests/freecad_gui/` and `tests/freecad_view/`
+- [x] In a smoke run, the `tests/freecad_gui/` and `tests/freecad_view/`
       pytest output each ends with the list of smoke tests that ran, each
       with its user path.
-- [ ] `CLAUDE.md` § Standing task-planning obligations has a **Smoke set
+- [x] `CLAUDE.md` § Standing task-planning obligations has a **Smoke set
       stays representative** entry per the Advice.
-- [ ] The full run (`pixi run tests` without `--smoke`) runs every test,
+- [x] The full run (`pixi run tests` without `--smoke`) runs every test,
       including every parametrization that carried `full_only`.
-- [ ] `pixi run tests -- --smoke` on the dev VM finishes in under 50 s of
+- [x] `pixi run tests -- --smoke` on the dev VM finishes in under 50 s of
       wall time; the measured time is recorded in the review log.
-- [ ] A smoke run still going 90 s after it started is stopped: the
+- [x] A smoke run still going 90 s after it started is stopped: the
       command exits with status 124 and prints to stderr a line naming
       the 90 s smoke limit. Every process it started, including Xvfb and
       FreeCAD, is gone afterward. A test asserts the exit status, the
       message and the cleanup by driving the limit mechanism with a short
       limit against a stand-in command that starts a child process, and
       finishes in a few seconds.
-- [ ] The full run has no time limit.
-- [ ] `README.md`, `.claude/docs/pipeline.md` § Checks, the
+- [x] The full run has no time limit.
+- [x] `README.md`, `.claude/docs/pipeline.md` § Checks, the
       `tools/run-tests.sh` header comment and the marker description
       describe smoke as opt-in and state the 90 s limit.
 
