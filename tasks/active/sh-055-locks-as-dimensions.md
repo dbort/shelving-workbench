@@ -213,3 +213,7 @@ types a size.
 - **N4: Double-click test uses a different unit** (`tests/freecad_view/test_dimensions.py:268`): equivalent check; noted only.
 - **N5: Task id in a section header** (`tests/test_editor_elevation.py:716`): drop "(sh-055)".
 - **N6: Overlong line after the rewrap** (`docs/scope-and-design.md:336`), and a few short README and 30-editor.toml lines; `doc-hygiene` can fix these.
+
+### Round 2: APPROVED
+- **N1: Re-wrapping left lines too long** (`README.md:107`, `README.md:158`, `docs/scope-and-design.md:336`): two README lines run to 86 and 103 columns and the scope-and-design line to 89; cosmetic, for `doc-hygiene` in `/ship`.
+- **N2: The depth-Lock row is tested without a scan** (`tests/freecad_gui/test_constraint_list.py`, `freecad/Shelving/editor/elevation.py:758`): accepted, since a scan cannot build a run through the depth from boards; the kind decision lives in the pure `run_direction`, tested on a hand-built depth run, and the list test checks the "Lock" text and bare-tile icon.
