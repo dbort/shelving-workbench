@@ -22,7 +22,6 @@ from freecad.Shelving.core.edit import (
     measure,
     region_before,
     run_axis,
-    split_region,
 )
 from freecad.Shelving.core.geometry import Space, Vec3
 from freecad.Shelving.core.layout import (
@@ -43,7 +42,6 @@ from freecad.Shelving.core.layout import (
     region_lock,
 )
 from freecad.Shelving.core.scan import elevation_axes
-from freecad.Shelving.core.solver import LayoutSolveError, solve
 
 Side = Literal["front", "back"]
 FaceKind = Literal["bay", "void"]
@@ -859,24 +857,6 @@ def label_at(
         if abs(x_px - at_x_px) <= half_x_px and abs(y_px - at_y_px) <= half_y_px:
             found = label
     return found
-
-
-def split_preview(
-    unit: Unit, frame: ElevationFrame, region_id: str, axis: Axis
-) -> Rect | None:
-    """Where the board splitting ``region_id`` along ``axis`` would go,
-    solved as the split would be; ``None`` when the split would be
-    refused."""
-    try:
-        candidate = split_region(unit, region_id, axis)
-        spaces = solve(candidate)
-    except (EditError, LayoutSolveError):
-        return None
-    added = board_ids(candidate) - board_ids(unit)
-    if len(added) != 1:
-        return None
-    space = board_space(candidate, spaces, next(iter(added)))
-    return None if space is None else frame.rect(space)
 
 
 @dataclass(frozen=True)

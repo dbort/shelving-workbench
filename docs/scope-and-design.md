@@ -239,8 +239,10 @@ stays as it is, and on Close the camera returns when the Sketcher's
 openings and their dimensions are drawn over the real boards, on whichever
 face the camera sees. A click on a board selects the whole board through
 FreeCAD's own selection; a double-click on a dimension types its size on
-the spot; buttons over a selected opening add a shelf or a divider; an
-arrow drags the selected board; Delete removes it. The task panel holds
+the spot; an arrow drags the selected board; Delete removes it. Adding a
+shelf or a divider, like locking and constraining, is a command on the
+toolbar Edit Unit shows and in the view's right-click menu, as the
+Sketcher's tools are, so nothing covers a selected opening's dimensions. The task panel holds
 only what has no place on the drawing: the unit's size, the constraint
 list, what a selected opening's or constraint's sizes measure, and the
 objects the workbench did not create, each saying whether it follows the

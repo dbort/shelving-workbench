@@ -99,7 +99,6 @@ def test_two_selected_boards_are_no_single_selection(session: Session) -> None:
     session.select_boards(["Shelf", "Top"])
     assert session.selected_boards == ("Shelf", "Top")
     assert session.selected_id is None
-    assert not session.can_split()
     assert not session.can_merge()
     assert session.selected_measurement() is None
     session.select_boards(["Shelf"])

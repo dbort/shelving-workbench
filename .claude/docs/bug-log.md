@@ -144,12 +144,6 @@ log happens only when the user asks.
   agree. Found in sh-054's review round 1 (N1). Fix: `sh-XXX task`; it
   needs a key that tells those openings apart, a change to the record
   format.
-- `bug-026` - **the add buttons cover a selected opening's dimensions**:
-  selecting an opening centers its add-shelf and add-divider buttons on the
-  opening, over the reference dimensions selecting it now draws, so the
-  dimensions can be read and double-clicked only when zoomed far in.
-  Found in sh-055's manual QA (`editor.dimensions`, step select). Fix:
-  `sh-XXX task`; where the buttons go instead is a design decision.
 - `bug-027` - **a constraint deactivated at open looks like one turned
   off by hand**: its row in the constraint list carries no warning icon
   and no tooltip saying the boards no longer met it, or that turning it

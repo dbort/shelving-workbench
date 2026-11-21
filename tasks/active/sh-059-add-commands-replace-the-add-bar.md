@@ -103,6 +103,10 @@ leaves less Python than it found.
   board across it (horizontal for the shelf, vertical for the divider),
   drawn in the style of the existing `Constraint_*.svg` files. They
   replace the QPainter-drawn `_board_icon`.
+- 2026-11-21, found during `/work`: every workbench's View menu starts
+  with Link Actions and a separator above `Std_ViewFitAll`. The commands
+  are inserted before `Std_ViewFitAll`, the one anchor every workbench
+  has, so Link Actions stays above them (`.claude/docs/freecad-notes.md`).
 - No default shortcuts, the same as the other editor commands; users bind
   them in Tools > Customize.
 - Ordering: sh-056 is `blocked_by` this task and adds its four
@@ -116,7 +120,7 @@ leaves less Python than it found.
   test carried none, so no mark is lost.
 
 ## Plan
-- [ ] **Step 1** (`editor/session.py`, `tests/freecad/test_editor_session.py`):
+- [x] **Step 1** (`editor/session.py`, `tests/freecad/test_editor_session.py`):
       `split(direction)` splits every selected bay as one undo step, all or
       nothing, and refuses an empty selection or any non-bay. Single-bay
       callers (`qa/actions.py`, `tests/freecad/test_edit_history.py`,
@@ -127,7 +131,7 @@ leaves less Python than it found.
       `tests/freecad/test_editor_session.py`). Update the
       `can_split` fixture text in `tests/test_readme_glossary.py` only if
       that test needs a live identifier.
-- [ ] **Step 2** (`commands/edit_commands.py`, `init_gui.py`,
+- [x] **Step 2** (`commands/edit_commands.py`, `init_gui.py`,
       `editor/panel.py`, `resources/`, `.claude/docs/code-map.md`):
       one module registers `Shelving_AddShelf`, `Shelving_AddDivider` and
       the four existing commands from a table, and the four old modules are
@@ -136,14 +140,14 @@ leaves less Python than it found.
       The renamed edit toolbar and the Shelving menu read the single id
       tuple. Add the two SVG icons. The code-map's `commands/` line
       describes the merged module.
-- [ ] **Step 3** (`editor/panel.py` or a sibling editor module,
+- [x] **Step 3** (`editor/panel.py` or a sibling editor module,
       `.claude/docs/freecad-notes.md`): the context-menu manipulator,
       installed and removed with the edit toolbar.
-- [ ] **Step 4** (`editor/view_editor.py`, `editor/overlay.py`,
+- [x] **Step 4** (`editor/view_editor.py`, `editor/overlay.py`,
       `editor/elevation.py`): delete `AddBar`, `_bind`, `_board_icon`, the
       bar's construction, placement and icon redraw, `_add_board`,
       `_hover_add`, the preview state and drawing, and `split_preview`.
-- [ ] **Step 5** (tests): rename `tests/freecad_gui/test_constraint_commands.py`
+- [x] **Step 5** (tests): rename `tests/freecad_gui/test_constraint_commands.py`
       to `test_edit_commands.py` and cover the Must Haves' toolbar, menu,
       multi-bay, refusal and manipulator cases, with the smoke mark.
       `tests/freecad_view/editor.py`'s `add_board` helper runs the command
@@ -154,7 +158,7 @@ leaves less Python than it found.
       `tests/freecad_view/test_multi_selection.py`. Drop
       `test_split_preview_is_where_the_new_board_goes` in
       `tests/test_editor_elevation.py`.
-- [ ] **Step 6** (`README.md`, `docs/scope-and-design.md`,
+- [x] **Step 6** (`README.md`, `docs/scope-and-design.md`,
       `freecad/Shelving/qa/cases/30-editor.toml`,
       `.claude/docs/bug-log.md`): add a glossary entry for Add Shelf and
       Add Divider covering where they sit and the multi-bay behavior. Say

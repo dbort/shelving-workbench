@@ -14,6 +14,7 @@ import FreeCADGui
 from PySide6 import QtCore, QtGui, QtTest, QtWidgets
 
 _LEFT = QtCore.Qt.MouseButton.LeftButton
+_RIGHT = QtCore.Qt.MouseButton.RightButton
 _NO_BUTTON = QtCore.Qt.MouseButton.NoButton
 _NO_MODIFIER = QtCore.Qt.KeyboardModifier.NoModifier
 # CAD navigation holds back a left press that comes sooner than the
@@ -166,6 +167,17 @@ class ViewDriver:
         self._send(
             QtCore.QEvent.Type.MouseButtonRelease, point, _LEFT, _NO_BUTTON, modifiers
         )
+        self.pump()
+
+    def right_click(self, at: Point) -> None:
+        """A right click at ``at``, which opens FreeCAD's context menu."""
+        point = self.qt_point(at)
+        press, release = (
+            QtCore.QEvent.Type.MouseButtonPress,
+            QtCore.QEvent.Type.MouseButtonRelease,
+        )
+        self._send(press, point, _RIGHT, _RIGHT, _NO_MODIFIER)
+        self._send(release, point, _RIGHT, _NO_BUTTON, _NO_MODIFIER)
         self.pump()
 
     def double_click(

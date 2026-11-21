@@ -27,7 +27,8 @@ Each layer imports only the layers listed above it.
   refusal, with the suggested next step for each reason, and the
   Notification Area error that it and the editor's refused edits use. Tested in
   `tests/freecad/test_refusals.py` and `tests/freecad_gui/test_refusals.py`.
-- `freecad/Shelving/commands/`: one thin module per toolbar command.
+- `freecad/Shelving/commands/`: the commands, editing ones in
+  `edit_commands.py`.
 - `freecad/Shelving/init_gui.py`: workbench registration.
 - `freecad/Shelving/compat.py`: standard-library names newer than the
   Python FreeCAD 1.1 ships, usable from any layer.

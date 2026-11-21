@@ -40,7 +40,6 @@ from freecad.Shelving.editor.elevation import (
     region_along,
     region_at,
     run_direction,
-    split_preview,
 )
 
 _T_MM = 18.0
@@ -445,17 +444,6 @@ def test_label_at_takes_a_point_on_a_text_tile_and_the_later_of_two() -> None:
     # A vertical dimension's tile stands upright.
     assert label_at(labels, project, tile_px, 4.0, 119.0) == labels[3]
     assert label_at(labels, project, tile_px, 19.0, 100.0) is None
-
-
-def test_split_preview_is_where_the_new_board_goes() -> None:
-    frame = elevation_frame(_UNIT)
-    preview = split_preview(_UNIT, frame, "upper", Axis.Z)
-    assert preview is not None
-    upper = frame.rect(_SPACES["upper"])
-    assert preview.h0_mm == pytest.approx(upper.h0_mm)
-    assert preview.v1_mm - preview.v0_mm == pytest.approx(_T_MM)
-    assert upper.v0_mm < preview.v0_mm < upper.v1_mm
-    assert split_preview(_UNIT, frame, "shelf", Axis.Z) is None
 
 
 def test_a_movable_board_gets_an_arrow_beside_the_dimension_before_it() -> None:

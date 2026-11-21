@@ -118,6 +118,19 @@ Seen on FreeCAD 1.1.3 under Xvfb; `editor/view_editor.py` relies on each.
   `"(0.8984, 0.7305, 0.3906, 1.0)"`, which the Material workbench's own
   editor parses the same way.
 
+## The 3D view's right-click menu in every workbench
+
+`FreeCADGui.addWorkbenchManipulator(obj)` applies to whatever workbench is
+active, and FreeCAD calls `obj.modifyContextMenu(recipient)` each time it
+builds a context menu, so adding or removing a manipulator takes effect at
+the next right-click with no workbench reload (1.1.3, under Xvfb;
+`editor/panel.py`'s `ViewMenu`). The method returns a list of dicts; each
+`{"insert": command, "menuItem": item}` puts the command just before the
+item, and `"Separator"` inserts a separator. In the 3D view, recipient
+`"View"`, every workbench's menu holds `Std_ViewFitAll` ("Fit All") at the
+head of its view entries, with only Link Actions and a separator above
+it. A right-click leaves FreeCAD's selection as it was.
+
 ## Picking a box's edges face on
 
 Seen on 1.1.3 under Xvfb in Edit Unit's front view, for an 18 mm

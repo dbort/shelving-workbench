@@ -110,6 +110,20 @@ from freecad.Shelving.editor.history import EditHistory, Schedule
 
 SplitDirection = Literal["horizontal", "vertical"]
 
+# The commands that edit the open unit, in the order the editor's toolbar,
+# its right-click menu and the Shelving menu list them, with FreeCAD's
+# "Separator" between the add and constraint commands. Here, free of Qt,
+# so the headless workbench module can read it.
+EDIT_COMMANDS = (
+    "Shelving_AddShelf",
+    "Shelving_AddDivider",
+    "Separator",
+    "Shelving_LockWidth",
+    "Shelving_LockHeight",
+    "Shelving_ConstrainEqual",
+    "Shelving_ConstrainEvenSpacing",
+)
+
 
 UnitDimension = Literal["width", "depth", "height"]
 
@@ -194,6 +208,7 @@ _LOCK_STEPS: Mapping[ElevationDirection, str] = {
     "vertical": "Lock Height",
 }
 # Whole sentences per direction, so each translates on its own.
+_SELECT_TO_SPLIT = "Select one or more open compartments to split."
 _SELECT_TO_LOCK: Mapping[ElevationDirection, str] = {
     "horizontal": "Select one or more openings to lock their widths.",
     "vertical": "Select one or more openings to lock their heights.",
@@ -714,14 +729,6 @@ class Session:
         self._selection = selection
         self._constraint_selection = ()
 
-    def can_split(self) -> bool:
-        """Whether the current selection is a ``Bay``: the only region
-        :meth:`split` acts on."""
-        if self.selected_id is None:
-            return False
-        node = _find_node(self.unit.root, self.selected_id)
-        return isinstance(node, Bay)
-
     def can_merge(self) -> bool:
         """Whether the current selection is a ``Board``: the only kind of
         node :meth:`merge` acts on. ``True`` does not promise :meth:`merge`
@@ -901,22 +908,31 @@ class Session:
 
     @_edit
     def split(self, direction: SplitDirection) -> EditFailure | None:
-        """Split the selected ``Bay`` in two with a board that copies its stock
-        from :func:`~freecad.Shelving.core.stock.source_board`'s choice.
+        """Split every selected ``Bay`` in two at its middle, as one undo
+        step, each with a board that copies its stock from
+        :func:`~freecad.Shelving.core.stock.source_board`'s choice.
 
         ``direction`` names an elevation axis, not a model axis:
-        "horizontal" divides the bay left and right behind a vertical
+        "horizontal" divides a bay left and right behind a vertical
         divider, "vertical" stacks it top and bottom behind a horizontal
         shelf, whichever model axis the unit's depth runs along. Returns
         ``None`` on success, which clears the selection, or an
-        :class:`EditFailure` on refusal, which changes nothing."""
+        :class:`EditFailure`, splitting none, when nothing is selected, any
+        selected item is not a bay, or any bay is refused."""
         self.settle()
-        if self.selected_id is None:
-            return EditFailure("select a bay to split", None)
+        selection = self._selection
+        root = self.unit.root
+        not_bay = next(
+            (n for n in selection if not isinstance(_find_node(root, n), Bay)), None
+        )
+        if not selection or not_bay is not None:
+            return EditFailure(_SELECT_TO_SPLIT, not_bay)
         horizontal, vertical = self._elevation_axes()
         axis = horizontal if direction == "horizontal" else vertical
+        candidate = self.unit
         try:
-            candidate = split_region(self.unit, self.selected_id, axis)
+            for bay_id in selection:
+                candidate = split_region(candidate, bay_id, axis)
         except EditError as err:
             return EditFailure(str(err), err.node_id)
         except LayoutSolveError as err:
