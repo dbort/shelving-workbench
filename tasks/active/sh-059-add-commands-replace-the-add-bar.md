@@ -168,3 +168,19 @@ leaves less Python than it found.
       name, then delete `bug-026`.
 
 ## Review log
+
+### Round 1: APPROVED
+- N1: `.claude/docs/bug-log.md` bug-005 still names the removed
+  `Session.can_split`; point it at `Session.split`.
+- N2: `tests/freecad_gui/test_edit_commands.py` refusal test counts the
+  three reported errors once after the loop, not one per selection.
+- N3: `commands/edit_commands.py` repeats the four `Constraint_*.svg`
+  file names that `editor/overlay.py`'s icon mappings hold.
+- N4: `docs/scope-and-design.md` paragraph is not rewrapped, and "so
+  nothing covers a selected opening's dimensions" leans toward
+  reader-memory framing.
+- N5: `_MenuInsert` in `editor/panel.py` documents its fields in the
+  class docstring rather than on each declaration.
+- N6: the manipulator Must Have is covered by a view test reading the
+  real menu, stronger than asked; its 300 ms timer could be slow-machine
+  sensitive.
