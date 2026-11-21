@@ -329,11 +329,21 @@ class _FieldKeys(QtCore.QObject):
 
     @override
     def eventFilter(self, watched: QtCore.QObject, event: QtCore.QEvent) -> bool:
-        if event.type() == QtCore.QEvent.Type.KeyPress:
-            if cast("QtGui.QKeyEvent", event).key() == QtCore.Qt.Key.Key_Escape:
-                self._on_escape()
-                return True
-        return False
+        kind = event.type()
+        if kind not in (
+            QtCore.QEvent.Type.ShortcutOverride,
+            QtCore.QEvent.Type.KeyPress,
+        ):
+            return False
+        if cast("QtGui.QKeyEvent", event).key() != QtCore.Qt.Key.Key_Escape:
+            return False
+        if kind == QtCore.QEvent.Type.ShortcutOverride:
+            # Claimed here, an Escape shortcut elsewhere in FreeCAD cannot
+            # take the key before it arrives as a press.
+            event.accept()
+            return True
+        self._on_escape()
+        return True
 
 
 class _DeleteKeys(QtCore.QObject):

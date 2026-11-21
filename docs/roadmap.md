@@ -161,6 +161,8 @@ Each of these is its own task when it comes up.
   plain-number preference. The reader must keep it above the joint
   clearance plus the snap tolerance, or a minimum opening vanishes on the
   next read, checking it as it checks the snap against the clearance.
+- **Moving several boards together:** Ctrl-click (Cmd-click on a Mac)
+  several shelves, then drag them all at once.
 - **Typed moves and a drag step** in the 3D view: type how far to move the
   selected board, and set the drag increment, in the style of FreeCAD's
   own transform arrows. FreeCAD's `SoLinearDragger` has the fields for it

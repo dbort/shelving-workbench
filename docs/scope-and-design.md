@@ -271,8 +271,10 @@ way the Sketcher writes a reference value. So a constraint's icon always
 sits on a line whose arrowheads say which way it holds, and an unlocked
 size the user is not looking at draws nothing. A selected opening also
 draws the dimension of the region whose size it shares along the other
-elevation axis, unless that is the unit's own size, which shows what Lock
-Width and Lock Height would lock and gives both sizes a click target. A
+elevation axis, which shows what Lock Width and Lock Height would lock and
+gives both sizes a click target. It does so even when that size is the
+unit's own, as a lone column's width is, though the Lock commands refuse
+such a size and point to the panel's field for it. A
 dimension whose lock is selected takes the selection color, which hides a
 deactivated one's gray as the Sketcher's does; selecting a region recolors
 none, as selecting Sketcher geometry leaves its dimensions' colors alone.

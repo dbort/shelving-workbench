@@ -88,8 +88,11 @@ types a size.
 - **Selected opening, both axes** (user decision): a selected opening
   draws its own reference dimension and the reference dimension of the
   region owning its size on the other elevation axis, unless that one is
-  already drawn or is the unit's own size. It shows what Lock Width and
-  Lock Height would lock and gives both sizes a click target.
+  already drawn. It shows what Lock Width and Lock Height would lock and
+  gives both sizes a click target. That region is drawn even when its size
+  is the unit's own, such as the width of a column alone between the two
+  sides, which Lock Width still refuses (user decision 2026-11-21, from
+  manual QA: the user expected a selected bay to show its width).
 - **Direction stays visible** (user decision): a constrained region draws
   its dimension, so an Equal or Even spacing icon always sits on a line
   and arrowheads that say which way it holds. Icons keep their place in
@@ -167,8 +170,7 @@ types a size.
   2026-11-20): a size is the unit's own when no enclosing region's run
   lies along that axis, or when the region found is alone among boards in
   a run spanning the unit, as a column between the two sides is. That is
-  what makes Lock Width on a bay with no divider refuse, and it also keeps
-  a selected column from drawing the interior's height.
+  what makes Lock Width on a bay with no divider refuse.
 
 ## Plan
 - [x] **Step 1** (`editor/elevation.py`, `tests/test_editor_elevation.py`):

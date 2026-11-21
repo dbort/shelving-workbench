@@ -197,7 +197,8 @@ def test_dimensions_take_the_sketchers_colors_and_reference_parentheses(
     editor.select(upper)
     driver.pump()
     drawn = _drawn(editor)
-    assert set(drawn) == {lower, upper}
+    # With the upper bay, its lone column's width, the unit's own.
+    assert len(drawn) == 3 and {lower, upper} <= set(drawn)
     assert _close_rgb(drawn[lower].rgb, _rgb("ConstrainedDimColor"))
     assert _close_rgb(drawn[upper].rgb, _rgb("NonDrivingConstrDimColor"))
     upper_size = length_text(measure(session.unit, upper, session.spaces).size_mm)

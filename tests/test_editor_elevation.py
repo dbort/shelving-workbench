@@ -803,8 +803,31 @@ def test_a_selected_region_keeps_its_lock_drawn_unselected() -> None:
     }
 
 
-def test_a_selected_column_draws_no_dimension_for_the_unit_height() -> None:
-    assert _drawn(_overlay(_columns(), selected_id="L")) == {"L": ("reference", False)}
+def test_a_selected_column_draws_the_lone_row_spanning_the_unit_height() -> None:
+    """The row is alone between the bottom and top, so its height is the
+    unit's own: Lock Height refuses it, but a selected column still shows
+    it."""
+    assert _drawn(_overlay(_columns(), selected_id="L")) == {
+        "L": ("reference", False),
+        "row": ("reference", False),
+    }
+
+
+def test_a_bay_in_a_lone_column_shows_the_columns_width() -> None:
+    unit = dataclasses.replace(
+        _column(),
+        root=Division(
+            axis=Axis.X,
+            id="root",
+            items=[
+                Board(thickness_mm=_T_MM, id="left"),
+                dataclasses.replace(_column().root, size_mm=564.0),
+                Board(thickness_mm=_T_MM, id="right"),
+            ],
+        ),
+    )
+    assert region_along(unit, "A", Axis.X) is None
+    assert set(_drawn(_overlay(unit, selected_id="A"))) == {"A", "column"}
 
 
 def test_an_equal_draws_its_openings_as_reference_with_its_icon_first() -> None:

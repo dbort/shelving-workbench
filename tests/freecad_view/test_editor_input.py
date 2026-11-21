@@ -8,7 +8,7 @@ from typing import Literal, Protocol, cast
 import FreeCAD
 import FreeCADGui
 import pytest
-from PySide6 import QtCore, QtTest, QtWidgets
+from PySide6 import QtCore, QtGui, QtTest, QtWidgets
 
 from freecad.Shelving.core.layout import (
     Basis,
@@ -319,6 +319,35 @@ def test_escape_closes_the_field_and_not_the_edit(
     # With no field open, Escape in the view leaves the edit open too.
     driver.key(QtCore.Qt.Key.Key_Escape)
     assert FreeCADGui.Control.activeDialog()
+    click_task_button("Close", driver)
+
+
+def test_escape_closes_the_field_ahead_of_an_escape_shortcut(
+    unit: FreeCAD.DocumentObject, driver: ViewDriver
+) -> None:
+    """A FreeCAD build can bind Escape to a shortcut, which would take the
+    key before the field sees it as a press."""
+    panel = edit_unit(unit, driver)
+    editor = editor_of(panel)
+    window = cast("QtWidgets.QMainWindow", FreeCADGui.getMainWindow())
+    fired: list[bool] = []
+    shortcut = QtGui.QShortcut(QtGui.QKeySequence(QtCore.Qt.Key.Key_Escape), window)
+    shortcut.setContext(QtCore.Qt.ShortcutContext.ApplicationShortcut)
+    shortcut.activated.connect(lambda: fired.append(True))
+    try:
+        _open_field(editor, driver, bay_ids(panel.session.unit.root)[0])
+        field = editor.field
+        assert field is not None
+        focus = QtWidgets.QApplication.focusWidget()
+        assert focus is not None
+        QtTest.QTest.keyClick(focus, QtCore.Qt.Key.Key_Escape)
+        driver.pump()
+        assert editor.field is None
+        assert fired == []
+    finally:
+        shortcut.setEnabled(False)
+        shortcut.deleteLater()
+        driver.pump()
     click_task_button("Close", driver)
 
 

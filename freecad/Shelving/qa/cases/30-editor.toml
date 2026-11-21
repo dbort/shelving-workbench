@@ -70,23 +70,24 @@ title = "The size field and dimension text on a HiDPI screen"
     "Click the lower bay.",
   ]
   expected = """
-The lower bay's height shows as a dimension, its value in parentheses. The
-dimension text is as large and as sharp as a sketch's dimensions on the
-same screen."""
+The lower bay's height and its column's width show as dimensions, their
+values in parentheses. The dimension text is as large and as sharp as a
+sketch's dimensions on the same screen."""
 
   [[case.step]]
   id = "field"
-  instruction = ["Double-click the lower bay's dimension text."]
+  instruction = ["Double-click the text of the lower bay's height dimension."]
   expected = """
 A size field opens right on that text, showing the bay's size selected, and
 typing goes straight into it."""
 
   [[case.step]]
   id = "type"
-  instruction = ["Type 250 and press Return."]
+  instruction = ["Type 250 mm and press Return."]
   expected = """
-The field closes, the shelf moves, and the dimension reads 250 without
-parentheses, in the color of a locked size."""
+The field closes, the shelf moves, and the height dimension reads 250 mm,
+shown in your unit system, without parentheses and in the color of a
+locked size."""
 
 [[case]]
 id = "editor.formula"
@@ -102,7 +103,7 @@ title = "The f(x) dialog from a dimension's size field"
   id = "expression"
   instruction = [
     "Click the lower bay.",
-    "Double-click the lower bay's dimension text.",
+    "Double-click the text of the lower bay's height dimension.",
     "Type =.",
     "Enter VarSet.Len - 20 mm in the f(x) dialog.",
     "Accept the dialog.",
@@ -286,12 +287,12 @@ different at a glance."""
     "Double-click the gray width dimension's text.",
     "Press Escape.",
     "Double-click the blue height dimension's text.",
-    "Type 200 and press Return.",
+    "Type 200 mm and press Return.",
   ]
   expected = """
 Each double-click opens a size field on that text at the first try, and
 selects no board. After Return the opening is 200 mm and its height reads
-200 in red, without parentheses."""
+200 mm, shown in your unit system, in red and without parentheses."""
 
 [[case]]
 id = "editor.fixed_point"
@@ -325,7 +326,7 @@ edge, drawn over the top board and still sharp."""
 
   [[case.step]]
   id = "resize"
-  instruction = ["Type 1200 in Height and press Return."]
+  instruction = ["Type 1200 mm in Height and press Return."]
   expected = """
 The unit grows downward: its top and the cross stay where they were, and
 the cross reads as the point that held still."""
@@ -421,7 +422,7 @@ and the middle opening's a locked clear size."""
     "Ctrl-click the upper shelf.",
     "Click Change stock….",
     "Click the Thickness field.",
-    "Type 12.",
+    "Type 12 mm.",
     "Click OK.",
   ]
   expected = """

@@ -727,6 +727,24 @@ def _spans_unit(
     return parent.axis != axis and _spans_unit(parents, parent, axis)
 
 
+def _owner_along(
+    parents: Mapping[str, Division], unit: Unit, node_id: str, axis: Axis
+) -> str | None:
+    """The nearest of ``node_id`` and its enclosing regions whose parent
+    division runs along ``axis``; ``None`` for a board, the root, an unknown
+    id, or when no enclosing run lies along ``axis``."""
+    parent = parents.get(node_id)
+    if parent is None or node_id in board_ids(unit):
+        return None
+    current = node_id
+    while parent is not None:
+        if parent.axis == axis:
+            return current
+        current = parent.id
+        parent = parents.get(current)
+    return None
+
+
 def region_along(unit: Unit, node_id: str, axis: Axis) -> str | None:
     """The region whose size along ``axis`` holds ``node_id``'s: the nearest
     of ``node_id`` and its enclosing regions whose parent division runs
@@ -736,23 +754,14 @@ def region_along(unit: Unit, node_id: str, axis: Axis) -> str | None:
     region exists, or the one found is alone among boards in a run that
     spans the unit, so only the unit's size changes it."""
     parents = _parents(unit)
-    parent = parents.get(node_id)
-    if parent is None:
+    found = _owner_along(parents, unit, node_id, axis)
+    if found is None:
         return None
-    if any(item.id == node_id and isinstance(item, Board) for item in parent.items):
+    parent = parents[found]
+    alone = all(isinstance(item, Board) or item.id == found for item in parent.items)
+    if alone and _spans_unit(parents, parent, axis):
         return None
-    current = node_id
-    while parent is not None:
-        if parent.axis == axis:
-            alone = all(
-                isinstance(item, Board) or item.id == current for item in parent.items
-            )
-            if alone and _spans_unit(parents, parent, axis):
-                return None
-            return current
-        current = parent.id
-        parent = parents.get(current)
-    return None
+    return found
 
 
 def run_direction(
@@ -777,10 +786,11 @@ def drawn_dimensions(
     its dimension constraints: every region with a Lock, active or
     deactivated, every region an Equal or Even spacing holds, active or
     deactivated, and every region in ``selected`` together with the region
-    owning its size along the other elevation axis, as
-    :func:`region_along` finds it. Ids in ``selected`` naming boards or
-    nothing add nothing. A region whose run lies along the depth axis is in
-    the set but has no dimension to draw."""
+    owning its size along the other elevation axis, found as
+    :func:`region_along` finds it but kept when it spans the unit between
+    boards, so a bay in a lone column shows the column's width. Ids in
+    ``selected`` naming boards or nothing add nothing. A region whose run
+    lies along the depth axis is in the set but has no dimension to draw."""
     drawn: set[str] = set()
     for constraint in unit.constraints:
         drawn.update(constraint_regions(unit, constraint))
@@ -793,7 +803,7 @@ def drawn_dimensions(
         drawn.add(node_id)
         across = frame.vertical if parent.axis == frame.horizontal else frame.horizontal
         if parent.axis in (frame.horizontal, frame.vertical):
-            other = region_along(unit, node_id, across)
+            other = _owner_along(parents, unit, node_id, across)
             if other is not None:
                 drawn.add(other)
     return frozenset(drawn)
