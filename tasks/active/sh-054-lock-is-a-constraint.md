@@ -156,3 +156,8 @@ padlocks for now; sh-055 replaces them with Sketcher-style dimensions.
       creation order. Adjust any QA expectation about Lock row order.
 
 ## Review log
+
+### Round 1: APPROVED
+- **N1: Restoring Locks under a shared key assumes they were stored in tree order** (`freecad/Shelving/core/record.py:497`): Locks under a key several regions share (runs of axis wraps keyed `~|~`) go to those regions in tree order, but a version 3 record stores them in constraint order. Deleting wrap A's Lock of A, B reopens it on A; deactivating B, deleting A's Lock and relocking A reopens with A off and B on. The version 2 reader locked every region sharing the key, so an unlock never persisted there either. The Lock entry shape the Must Have fixes cannot tell such regions apart, so not blocking; take it to the user or the bug log. The shared-key test covers only constraint order matching tree order.
+- **N2: Unused TypedDict** (`freecad/Shelving/core/record.py:165`): `_LockMapEntryDoc` is never referenced; delete it or use it.
+- **N3: Implementation notes checked against the Advice**: split and merge Lock carry-over, `carry_constraints` walking `after.constraints`, sizeless deactivated Lock rows, rows tracking selected constraints only, `lock_ids` for the lock-only conflict wording, and no smoke mark change are all consistent. Every Must Have has a test; `pixi run tests` passed in full on 3a5b9ef.
