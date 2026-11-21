@@ -22,8 +22,8 @@ so the smoke set cannot quietly grow back and a hung test cannot stall it.
 - [ ] `pixi run tests -- --smoke` runs, in full: the static checks, the
       core and repository pytest run, the workflow lint, the `freecadcmd`
       import check, and `tests/freecad/`. In `tests/freecad_gui/` it runs
-      only the tests marked `smoke`, exactly one per `test_*.py` module.
-      In `tests/freecad_view/` it runs exactly these three and no other:
+      only the tests marked `smoke`; the review log lists them, each with
+      the user path it covers. In `tests/freecad_view/` it runs exactly these three and no other:
       - `test_editor_input.py::test_a_selected_board_drags_by_its_arrow_under_each_navigation_style[Gui::CADNavigationStyle]`
       - `test_undo_in_the_editor.py::test_undo_and_redo_step_one_edit_and_the_panel_follows`
       - `test_scan_and_write.py::test_edit_unit_reads_a_hand_built_unit_and_close_changes_nothing`
@@ -56,9 +56,12 @@ so the smoke set cannot quietly grow back and a hung test cannot stall it.
   task panel; the scan-and-write test covers reading a hand-built unit
   and writing nothing back. Mark only the CAD navigation-style
   parametrization of the drag test.
-- **GUI picks:** one test per `tests/freecad_gui/test_*.py` module, the
-  one that walks that module's main user path most broadly. Prefer a
-  cheaper test when two cover the same path.
+- **GUI picks** (user decision): the smallest set of
+  `tests/freecad_gui/` tests that together give quick confidence the
+  workbench's GUI is healthy. Choose by coverage of the main user paths,
+  not by module: a module may contribute two tests or none. Prefer a
+  test that walks a path end to end over several narrow ones, and the
+  cheaper of two tests that cover the same path.
 - **Pass the marker filter as arguments to the two GUI pytest runs, never
   through `PYTEST_ADDOPTS`:** `tests/test_collection_runs.py` starts
   child pytest runs with the inherited environment, and a `-m smoke`
@@ -97,8 +100,8 @@ so the smoke set cannot quietly grow back and a hung test cannot stall it.
   describing its contents; it needs no edit.
 
 ## Plan
-- [ ] **Step 1** (`tests/conftest.py`, `tests/freecad_view/test_undo_in_the_editor.py`, `tests/freecad_view/test_offset_unit.py`, `tests/freecad_view/test_editor_input.py`, `tests/freecad_view/test_padlocks.py`, `tests/freecad_view/test_editor_drawing.py`): Replace the `full_only` marker registration with `smoke`, its description saying a test earns it by being its GUI module's representative or one of the three 3D-view picks, and that every smoke test also runs in the full suite. Remove every `full_only` mark, collapsing `pytest.param(..., marks=...)` wrappers back to plain values.
-- [ ] **Step 2** (`tests/freecad_gui/test_*.py`, `tests/freecad_view/test_editor_input.py`, `tests/freecad_view/test_undo_in_the_editor.py`, `tests/freecad_view/test_scan_and_write.py`): Mark one test per GUI module and the three 3D-view tests `smoke`; the drag test's mark goes on its CAD-style parameter only.
+- [ ] **Step 1** (`tests/conftest.py`, `tests/freecad_view/test_undo_in_the_editor.py`, `tests/freecad_view/test_offset_unit.py`, `tests/freecad_view/test_editor_input.py`, `tests/freecad_view/test_padlocks.py`, `tests/freecad_view/test_editor_drawing.py`): Replace the `full_only` marker registration with `smoke`, its description saying a test earns it by being part of the small set that together shows the GUI and 3D view are healthy, and that every smoke test also runs in the full suite. Remove every `full_only` mark, collapsing `pytest.param(..., marks=...)` wrappers back to plain values.
+- [ ] **Step 2** (`tests/freecad_gui/test_*.py`, `tests/freecad_view/test_editor_input.py`, `tests/freecad_view/test_undo_in_the_editor.py`, `tests/freecad_view/test_scan_and_write.py`): Mark the GUI set chosen per the Advice and the three 3D-view tests `smoke`; the drag test's mark goes on its CAD-style parameter only.
 - [ ] **Step 3** (`tools/run-tests.sh`, `tools/` limit helper if needed, its test under `tests/`): `--smoke` adds `-m smoke` to the `tests/freecad_gui` and `tests/freecad_view` pytest runs and runs the whole script under the 90 s limit with process-group kill, exit 124 and the stderr message. Test the limit with a short limit and a stand-in command that spawns a child, asserting status, message and that the child is gone.
 - [ ] **Step 4** (`README.md`, `.claude/docs/pipeline.md`, `.claude/docs/code-map.md` if it describes smoke): Describe smoke as opt-in by marker in the two GUI suites, the rest whole, under a 90 s hard limit; keep the `/ship` exception in `pipeline.md` § Checks unchanged.
 - [ ] **Step 5**: Time `pixi run tests -- --smoke` on the dev VM, save its output and exit status to a file, and record the wall time in the review log.
