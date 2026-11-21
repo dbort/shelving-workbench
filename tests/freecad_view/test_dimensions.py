@@ -250,7 +250,7 @@ def test_a_click_on_a_reference_dimension_selects_its_opening(
     session = panel.session
     lower, upper = bay_ids(session.unit.root)
     session.select_items([lower, upper])
-    panel.constrain("equal")
+    panel.constrain("equal_height")
     editor.select(None)
     driver.pump()
     assert {x.role for x in editor.overlay.labels} == {"reference"}
@@ -314,7 +314,7 @@ def test_an_icon_wins_a_press_over_a_text_tile(
     session = panel.session
     lower, upper = bay_ids(session.unit.root)
     session.select_items([lower, upper])
-    panel.constrain("equal")
+    panel.constrain("equal_height")
     editor.select(None)
     driver.pump()
     (equal,) = session.constraints
@@ -648,7 +648,7 @@ def _equal_pair(panel: EditUnitPanel, driver: ViewDriver) -> None:
     add_board(panel, "vertical", driver)
     session = panel.session
     session.select_items(bay_ids(session.unit.root))
-    panel.constrain("equal")
+    panel.constrain("equal_height")
     editor_of(panel).select(None)
     driver.pump()
 
@@ -660,9 +660,9 @@ def _equal_ends(panel: EditUnitPanel, driver: ViewDriver) -> tuple[str, str]:
     session = panel.session
     bottom, _middle, top = bay_ids(session.unit.root)
     session.select_items([bottom, top])
-    panel.constrain("equal")
+    panel.constrain("equal_height")
     session.select_items([bottom, top])
-    panel.constrain("even_spacing")
+    panel.constrain("even_height")
     editor_of(panel).select(None)
     driver.pump()
     return shelves

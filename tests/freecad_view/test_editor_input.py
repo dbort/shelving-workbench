@@ -563,14 +563,16 @@ def test_a_selected_bay_gets_no_widget_over_it_and_the_right_click_menu_adds(
     try:
         texts = _right_click_menu(driver, center, choose="Add Shelf")
         start = texts.index("Add Shelf")
-        assert texts[start : start + 9] == [
+        assert texts[start : start + 11] == [
             "Add Shelf",
             "Add Divider",
             "",
             "Lock Width",
             "Lock Height",
-            "Constrain Equal",
-            "Constrain Even Spacing",
+            "Equal Width",
+            "Equal Height",
+            "Even Width",
+            "Even Height",
             "",
             "&Fit All",
         ]

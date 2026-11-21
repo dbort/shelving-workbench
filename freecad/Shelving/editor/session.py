@@ -37,8 +37,8 @@ from freecad.Shelving.core.edit import (
     EditError,
     Held,
     Measurement,
-    add_equal,
-    add_even_spacing,
+    add_equal_along,
+    add_even_spacing_along,
     held_by,
     lock,
     measure,
@@ -74,6 +74,7 @@ from freecad.Shelving.core.layout import (
     Region,
     Unit,
     constraint_regions,
+    region_along,
     region_lock,
     renamed_constraint_boards,
 )
@@ -97,13 +98,11 @@ from freecad.Shelving.core.solver import (
 from freecad.Shelving.core.stock import BoardStock, Color, StockGroup, group_stocks
 from freecad.Shelving.debug_log import Stopwatch
 from freecad.Shelving.editor.elevation import (
-    ConstraintKind,
     ElevationDirection,
     ElevationFrame,
     FixedChoice,
     elevation_frame,
     fixed_choices,
-    region_along,
     run_direction,
 )
 from freecad.Shelving.editor.history import EditHistory, Schedule
@@ -120,8 +119,10 @@ EDIT_COMMANDS = (
     "Separator",
     "Shelving_LockWidth",
     "Shelving_LockHeight",
-    "Shelving_ConstrainEqual",
-    "Shelving_ConstrainEvenSpacing",
+    "Shelving_ConstrainEqualWidth",
+    "Shelving_ConstrainEqualHeight",
+    "Shelving_ConstrainEvenWidth",
+    "Shelving_ConstrainEvenHeight",
 )
 
 
@@ -207,6 +208,14 @@ _LOCK_STEPS: Mapping[ElevationDirection, str] = {
     "horizontal": "Lock Width",
     "vertical": "Lock Height",
 }
+_EQUAL_STEPS: Mapping[ElevationDirection, str] = {
+    "horizontal": "Equal Width",
+    "vertical": "Equal Height",
+}
+_EVEN_STEPS: Mapping[ElevationDirection, str] = {
+    "horizontal": "Even Width",
+    "vertical": "Even Height",
+}
 # Whole sentences per direction, so each translates on its own.
 _SELECT_TO_SPLIT = "Select one or more open compartments to split."
 _SELECT_TO_LOCK: Mapping[ElevationDirection, str] = {
@@ -246,10 +255,30 @@ def open_message(report: OpenReport) -> str | None:
     return "\n".join(lines) if lines else None
 
 
-# What a constraint list row holds: a Lock on a width or a height as Lock
-# Width and Lock Height make them, a Lock on a size through the depth, which
-# only a scan makes, or a constraint between openings.
-RowKind = Literal["lock_width", "lock_height", "lock"] | ConstraintKind
+# What a constraint list row holds: a constraint on widths or on heights,
+# named for the command making it, or one on sizes through the depth, which
+# no command makes: a scan's Lock, or an Equal or Even spacing kept from a
+# record made before the commands took their axis.
+RowKind = Literal[
+    "lock_width",
+    "lock_height",
+    "lock",
+    "equal_width",
+    "equal_height",
+    "equal",
+    "even_width",
+    "even_height",
+    "even_spacing",
+]
+_RowConstraint = Literal["lock", "equal", "even_spacing"]
+_AXIS_ROW_KINDS: Mapping[tuple[_RowConstraint, ElevationDirection], RowKind] = {
+    ("lock", "horizontal"): "lock_width",
+    ("lock", "vertical"): "lock_height",
+    ("equal", "horizontal"): "equal_width",
+    ("equal", "vertical"): "equal_height",
+    ("even_spacing", "horizontal"): "even_width",
+    ("even_spacing", "vertical"): "even_height",
+}
 
 
 @dataclasses.dataclass(frozen=True)
@@ -269,12 +298,16 @@ class ConstraintRow:
 
 
 def _row_kind(constraint: Constraint, unit: Unit, frame: ElevationFrame) -> RowKind:
+    kind: _RowConstraint
     if isinstance(constraint, Lock):
-        direction = run_direction(unit, frame, constraint.region_id)
-        if direction is None:
-            return "lock"
-        return "lock_width" if direction == "horizontal" else "lock_height"
-    return "equal" if isinstance(constraint, Equal) else "even_spacing"
+        kind = "lock"
+    elif isinstance(constraint, Equal):
+        kind = "equal"
+    else:
+        kind = "even_spacing"
+    regions = constraint_regions(unit, constraint)
+    direction = None if not regions else run_direction(unit, frame, regions[0])
+    return kind if direction is None else _AXIS_ROW_KINDS[kind, direction]
 
 
 def _structure_key(region: Region) -> tuple[object, ...]:
@@ -823,6 +856,12 @@ class Session:
             )
         return elevation_axes(depth_axis)
 
+    def _direction_axis(self, direction: ElevationDirection) -> Axis:
+        """The model axis the elevation's ``direction`` lies along. Raises
+        ``ValueError`` on the same terms as :meth:`_elevation_axes`."""
+        horizontal, vertical = self._elevation_axes()
+        return horizontal if direction == "horizontal" else vertical
+
     def _unit_axis(self, dimension: UnitDimension) -> Axis:
         """The model axis ``dimension`` names: width and height are the
         elevation's horizontal and vertical axes, depth is the depth axis.
@@ -1172,7 +1211,7 @@ class Session:
     def lock_axis(self, direction: ElevationDirection) -> EditFailure | None:
         """Lock, at its current size, the region each selected opening's
         size along the elevation's ``direction`` belongs to, as
-        :func:`~freecad.Shelving.editor.elevation.region_along` finds it:
+        :func:`~freecad.Shelving.core.layout.region_along` finds it:
         openings that resolve to one region make one Lock, a region whose
         Lock is active is left alone, and a deactivated Lock is turned on.
         One undo step that moves nothing and keeps the selection, adding no
@@ -1187,8 +1226,7 @@ class Session:
         if not selection or any(node_id in boards for node_id in selection):
             first = next((n for n in selection if n in boards), None)
             return EditFailure(_SELECT_TO_LOCK[direction], first)
-        horizontal, vertical = self._elevation_axes()
-        axis = horizontal if direction == "horizontal" else vertical
+        axis = self._direction_axis(direction)
         targets: dict[str, None] = {}
         for node_id in selection:
             target = region_along(self.unit, node_id, axis)
@@ -1258,39 +1296,47 @@ class Session:
         return held_by(self.unit, board_id)
 
     @_edit
-    def constrain_equal(self) -> EditFailure | None:
-        """Make the selected openings equal, each with the next in selection
-        order, as one undo step that clears the selection. A new constraint
-        the locks and constraints already imply is kept, with a warning
-        through :attr:`on_warning` that flags what it repeats. Returns an
-        :class:`EditFailure`, changing nothing, for a selection
-        :func:`~freecad.Shelving.core.edit.add_equal` refuses or one that
-        conflicts."""
+    def equal_axis(self, direction: ElevationDirection) -> EditFailure | None:
+        """Make equal the sizes along the elevation's ``direction`` of the
+        selected openings, each pick resolved as
+        :func:`~freecad.Shelving.core.edit.add_equal_along` resolves it and
+        made equal to the next in selection order, as one undo step that
+        clears the selection. A new constraint the locks and constraints
+        already imply is kept, with a warning through :attr:`on_warning`
+        that flags what it repeats. Returns an :class:`EditFailure`,
+        changing nothing, for a selection ``add_equal_along`` refuses or
+        one that conflicts."""
         self.settle()
         try:
-            candidate = add_equal(self.unit, self._selection)
+            candidate = add_equal_along(
+                self.unit, self._selection, self._direction_axis(direction)
+            )
         except EditError as err:
             return EditFailure(str(err), err.node_id)
         except LayoutSolveError as err:
             return _solve_failure(err)
-        return self._constraining_step("Constrain Equal", candidate)
+        return self._constraining_step(_EQUAL_STEPS[direction], candidate)
 
     @_edit
-    def constrain_even_spacing(self) -> EditFailure | None:
-        """Space evenly the openings between the two selected boards, or
-        from the first selected opening to the last, as one undo step that
-        clears the selection, warning as :meth:`constrain_equal` does.
-        Returns an :class:`EditFailure`, changing nothing, for a selection
-        :func:`~freecad.Shelving.core.edit.add_even_spacing` refuses or one
+    def even_axis(self, direction: ElevationDirection) -> EditFailure | None:
+        """Space evenly, along the elevation's ``direction``, the openings
+        between the two selected boards, or from the first selected
+        opening to the last, as
+        :func:`~freecad.Shelving.core.edit.add_even_spacing_along` resolves
+        them, as one undo step that clears the selection, warning as
+        :meth:`equal_axis` does. Returns an :class:`EditFailure`, changing
+        nothing, for a selection ``add_even_spacing_along`` refuses or one
         that conflicts."""
         self.settle()
         try:
-            candidate = add_even_spacing(self.unit, self._selection)
+            candidate = add_even_spacing_along(
+                self.unit, self._selection, self._direction_axis(direction)
+            )
         except EditError as err:
             return EditFailure(str(err), err.node_id)
         except LayoutSolveError as err:
             return _solve_failure(err)
-        return self._constraining_step("Constrain Even Spacing", candidate)
+        return self._constraining_step(_EVEN_STEPS[direction], candidate)
 
     def _constraining_step(self, name: str, candidate: Unit) -> EditFailure | None:
         """Apply ``candidate``, which adds constraints, as the undo step

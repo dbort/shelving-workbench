@@ -1,5 +1,5 @@
 """The commands that edit the open unit: Add Shelf, Add Divider, Lock Width,
-Lock Height, Constrain Equal and Constrain Even Spacing.
+Lock Height, Equal Width, Equal Height, Even Width and Even Height.
 
 Each is active only while Edit Unit is open, on the toolbar the editor
 shows then, in the 3D view's right-click menu and in the Shelving menu. A
@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Literal, NamedTuple, TypedDict
 
 from freecad.Shelving.editor.elevation import (
     ADD_ICON_SOURCES,
-    ICON_SOURCES,
+    AXIS_ICON_SOURCES,
     LOCK_ICON_SOURCES,
     ElevationDirection,
 )
@@ -76,19 +76,33 @@ _SPECS: Mapping[str, _Spec] = {
         LOCK_ICON_SOURCES["vertical"],
         _lock("vertical"),
     ),
-    "Shelving_ConstrainEqual": _Spec(
-        "Constrain Equal",
-        "Keep the selected openings the same size: select two or more "
-        "widths, or two or more heights",
-        ICON_SOURCES["equal"],
-        _constrain("equal"),
+    "Shelving_ConstrainEqualWidth": _Spec(
+        "Equal Width",
+        "Keep the selected openings' widths equal; a bay in a column "
+        "stands for the column's width",
+        AXIS_ICON_SOURCES["equal", "horizontal"],
+        _constrain("equal_width"),
     ),
-    "Shelving_ConstrainEvenSpacing": _Spec(
-        "Constrain Even Spacing",
-        "Space the openings of one row or column evenly: select its "
-        "first and last opening, or the two boards at its ends",
-        ICON_SOURCES["even_spacing"],
-        _constrain("even_spacing"),
+    "Shelving_ConstrainEqualHeight": _Spec(
+        "Equal Height",
+        "Keep the selected openings' heights equal; a bay in a row of bays "
+        "stands for the row's height",
+        AXIS_ICON_SOURCES["equal", "vertical"],
+        _constrain("equal_height"),
+    ),
+    "Shelving_ConstrainEvenWidth": _Spec(
+        "Even Width",
+        "Space the columns of one row evenly: select a bay in its first and "
+        "last column, or the two boards at its ends",
+        AXIS_ICON_SOURCES["even_spacing", "horizontal"],
+        _constrain("even_width"),
+    ),
+    "Shelving_ConstrainEvenHeight": _Spec(
+        "Even Height",
+        "Space the openings of one column evenly: select its first and last "
+        "opening, or the two boards at its ends",
+        AXIS_ICON_SOURCES["even_spacing", "vertical"],
+        _constrain("even_height"),
     ),
 }
 

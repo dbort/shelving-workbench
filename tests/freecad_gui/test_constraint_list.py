@@ -3,7 +3,7 @@ their checkboxes, delete buttons and redundancy marks, and the basis menu
 for a selected constraint. Selection shared with the 3D view is
 ``tests/freecad_view/test_constraint_list.py``'s."""
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from typing import cast
 
 import FreeCAD
@@ -35,6 +35,7 @@ from freecad.Shelving.editor.constraint_list import (
     TEXT_COLUMN,
     ConstraintList,
 )
+from freecad.Shelving.editor.elevation import ConstraintKind, ElevationDirection
 from freecad.Shelving.editor.overlay import (
     TILE_PAD_PX,
     Tile,
@@ -209,13 +210,22 @@ def test_the_group_follows_the_unit_group_and_shows_with_no_rows(
     assert not bare.rows.delete_deactivated_button.isEnabled()
 
 
+_AXIS_KINDS: Mapping[RowKind, tuple[ConstraintKind, ElevationDirection]] = {
+    "equal_width": ("equal", "horizontal"),
+    "equal_height": ("equal", "vertical"),
+    "even_width": ("even_spacing", "horizontal"),
+    "even_height": ("even_spacing", "vertical"),
+}
+
+
 def _drawn_icon(
     tree: QtWidgets.QTreeWidget, kind: RowKind, active: bool = True
 ) -> QtGui.QIcon:
-    """The 3D view's own image for ``kind``, with its corner X unless
-    ``active``, or for a Lock the icon of the command that makes it, or the
-    bare tile when no command makes it, at the list's icon size on a tile
-    of its background."""
+    """The image for ``kind``: the view's own for an Equal or Even spacing
+    through the depth, or else the icon of the command that makes it, with
+    the view's corner X unless ``active``; for a Lock the icon of the
+    command that makes it, or the bare tile when no command makes it; at
+    the list's icon size on a tile of its background."""
     side_px = tree.style().pixelMetric(QtWidgets.QStyle.PixelMetric.PM_SmallIconSize)
     ratio = tree.devicePixelRatioF()
     base = tree.palette().color(QtGui.QPalette.ColorRole.Base)
@@ -230,8 +240,13 @@ def _drawn_icon(
         image = lock_icon_image("horizontal", style.icon_rgb, tile, device_px)
     elif kind == "lock_height":
         image = lock_icon_image("vertical", style.icon_rgb, tile, device_px)
-    else:
+    elif kind in ("equal", "even_spacing"):
         image = constraint_icon_image(kind, style.icon_rgb, tile, device_px, active)
+    else:
+        constraint, direction = _AXIS_KINDS[kind]
+        image = constraint_icon_image(
+            constraint, style.icon_rgb, tile, device_px, active, direction
+        )
     pixmap = QtGui.QPixmap.fromImage(image)
     pixmap.setDevicePixelRatio(ratio)
     return QtGui.QIcon(pixmap)
@@ -249,17 +264,18 @@ def test_rows_show_their_kind_size_and_the_views_icons(editing: _Editing) -> Non
     assert lock.text(TEXT_COLUMN).startswith("Lock Height")
     assert size in lock.text(TEXT_COLUMN)
     assert "Equal" in equal.text(TEXT_COLUMN) and size in equal.text(TEXT_COLUMN)
-    assert spacing.text(TEXT_COLUMN) == "Even spacing"
+    assert equal.text(TEXT_COLUMN).startswith("Equal Height")
+    assert spacing.text(TEXT_COLUMN) == "Even Height"
     height = _drawn_icon(tree, "lock_height")
-    equals = _drawn_icon(tree, "equal")
-    spaced = _drawn_icon(tree, "even_spacing")
+    equals = _drawn_icon(tree, "equal_height")
+    spaced = _drawn_icon(tree, "even_height")
     assert _image(height) != _image(equals)
     assert _image(height) != _image(spaced)
     assert _image(equals) != _image(spaced)
     assert _image(lock.icon(TEXT_COLUMN)) == _image(height)
     assert _image(equal.icon(TEXT_COLUMN)) == _image(equals)
     # The deactivated even spacing's icon is the view's, red with its X.
-    marked = _drawn_icon(tree, "even_spacing", active=False)
+    marked = _drawn_icon(tree, "even_height", active=False)
     assert _image(spacing.icon(TEXT_COLUMN)) == _image(marked)
     assert _image(marked) != _image(spaced)
 
@@ -302,6 +318,55 @@ def test_a_lock_no_command_makes_reads_lock_on_a_bare_tile(bare: _Editing) -> No
     assert _image(_drawn_icon(rows.tree, "lock")) != _image(
         _drawn_icon(rows.tree, "lock_width")
     )
+
+
+def test_width_rows_name_and_draw_the_width_commands(bare: _Editing) -> None:
+    session = bare.panel.session
+    session.select(bare.bays()[0])
+    assert session.split("horizontal") is None
+    pair = session.unit.root
+    for index in (1, 1, 0):
+        assert isinstance(pair, Division)
+        pair = pair.items[index]
+    assert isinstance(pair, Division) and pair.axis is Axis.X
+    left, right = (item.id for item in pair.items if not isinstance(item, Board))
+    session.select_items([left, right])
+    assert session.equal_axis("horizontal") is None
+    session.select_items([left, right])
+    assert session.even_axis("horizontal") is None
+    bare.panel._refresh()
+    tree = bare.rows.tree
+    equal, spacing = bare.item(0), bare.item(1)
+    assert equal.text(TEXT_COLUMN).startswith("Equal Width")
+    assert spacing.text(TEXT_COLUMN).startswith("Even Width")
+    widths = _drawn_icon(tree, "equal_width")
+    spaced = _drawn_icon(tree, "even_width")
+    assert _image(widths) != _image(_drawn_icon(tree, "equal_height"))
+    assert _image(spaced) != _image(_drawn_icon(tree, "even_height"))
+    assert _image(equal.icon(TEXT_COLUMN)) == _image(widths)
+    assert _image(spacing.icon(TEXT_COLUMN)) == _image(spaced)
+
+
+@pytest.mark.parametrize(
+    ("kind", "text"), [("equal", "Equal"), ("even_spacing", "Even spacing")]
+)
+def test_a_constraint_through_the_depth_reads_its_axis_free_name(
+    bare: _Editing, kind: RowKind, text: str
+) -> None:
+    """An Equal or Even spacing a record made before the commands took
+    their axis may hold sizes through the depth."""
+    rows = bare.rows
+    row = ConstraintRow(
+        constraint_id=ConstraintId("depth"),
+        kind=kind,
+        active=True,
+        size_mm=None,
+        redundant=False,
+    )
+    rows.show([row], ())
+    item = bare.item(0)
+    assert item.text(TEXT_COLUMN) == text
+    assert _image(item.icon(TEXT_COLUMN)) == _image(_drawn_icon(rows.tree, kind))
 
 
 def test_a_selected_rows_icon_keeps_its_colors(editing: _Editing) -> None:
@@ -406,10 +471,10 @@ def test_checking_and_unchecking_turn_a_constraint_on_and_off(
     # spacing.
     tree = editing.rows.tree
     assert _image(editing.item(0).icon(TEXT_COLUMN)) == _image(
-        _drawn_icon(tree, "equal", active=False)
+        _drawn_icon(tree, "equal_height", active=False)
     )
     assert _image(editing.item(1).icon(TEXT_COLUMN)) == _image(
-        _drawn_icon(tree, "even_spacing")
+        _drawn_icon(tree, "even_height")
     )
 
 
@@ -448,7 +513,7 @@ def test_a_delete_button_removes_its_constraint_a_lock_included(
     editing.delete_button(1).click()
     _process_events()
     assert session.container.Document.UndoNames[0] == "Delete Constraint"
-    assert [row.kind for row in editing.rows.rows] == ["even_spacing"]
+    assert [row.kind for row in editing.rows.rows] == ["even_height"]
 
 
 def test_delete_deactivated_is_enabled_exactly_while_one_is(

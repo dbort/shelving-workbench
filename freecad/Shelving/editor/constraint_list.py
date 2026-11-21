@@ -10,14 +10,14 @@ the list from the session again.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Collection, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 
 import FreeCAD
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from freecad.Shelving.core.layout import ConstraintId
-from freecad.Shelving.editor.elevation import ElevationDirection
+from freecad.Shelving.editor.elevation import ConstraintKind, ElevationDirection
 from freecad.Shelving.editor.overlay import (
     TILE_PAD_PX,
     Tile,
@@ -32,8 +32,20 @@ _KIND_NAMES: dict[RowKind, str] = {
     "lock_width": "Lock Width",
     "lock_height": "Lock Height",
     "lock": "Lock",
+    "equal_width": "Equal Width",
+    "equal_height": "Equal Height",
     "equal": "Equal",
+    "even_width": "Even Width",
+    "even_height": "Even Height",
     "even_spacing": "Even spacing",
+}
+# The constraint and direction of each Equal or Even spacing row on widths
+# or heights, for its icon.
+_AXIS_KINDS: Mapping[RowKind, tuple[ConstraintKind, ElevationDirection]] = {
+    "equal_width": ("equal", "horizontal"),
+    "equal_height": ("equal", "vertical"),
+    "even_width": ("even_spacing", "horizontal"),
+    "even_height": ("even_spacing", "vertical"),
 }
 REDUNDANT_TIP = (
     "Redundant: other locks and constraints already fix what this one fixes."
@@ -82,8 +94,9 @@ def kind_icon(
     ratio ``ratio``, on a tile of ``base``, the list's own background: for
     a Lock, the icon of the command that makes it, grayed in Qt's disabled
     mode unless ``active``, and the bare tile for a Lock through the depth,
-    which no command makes; for another constraint its own icon with the
-    view's corner X unless ``active``. Each glyph takes the view's
+    which no command makes; for another constraint the icon of the command
+    making it, or its axis-free icon through the depth, with the view's
+    corner X unless ``active``. Each glyph takes the view's
     constraint icon color."""
     device_px = round(side_px * ratio)
     tile = Tile(
@@ -99,8 +112,13 @@ def kind_icon(
             "horizontal" if kind == "lock_width" else "vertical"
         )
         image = lock_icon_image(direction, style.icon_rgb, tile, device_px)
-    else:
+    elif kind in ("equal", "even_spacing"):
         image = constraint_icon_image(kind, style.icon_rgb, tile, device_px, active)
+    else:
+        constraint, direction = _AXIS_KINDS[kind]
+        image = constraint_icon_image(
+            constraint, style.icon_rgb, tile, device_px, active, direction
+        )
     pixmap = QtGui.QPixmap.fromImage(image)
     pixmap.setDevicePixelRatio(ratio)
     if is_lock and not active:

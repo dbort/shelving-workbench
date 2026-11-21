@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Even Width: Constraint_EvenSpacing.svg's uprights above a horizontal
+     double arrow drawn as Constraint_HorizontalDistance.svg draws its own. -->
+<svg
+   xmlns="http://www.w3.org/2000/svg"
+   width="64"
+   height="64"
+   viewBox="0 0 64 64"
+   version="1.1"
+   id="svg2816">
+  <g
+     id="layer1">
+    <rect
+       style="fill:#cc0000;fill-opacity:1;stroke:#280000;stroke-width:2;stroke-linecap:square;stroke-linejoin:round"
+       id="upright1"
+       width="6"
+       height="30"
+       x="11"
+       y="5" />
+    <rect
+       style="fill:#cc0000;fill-opacity:1;stroke:#280000;stroke-width:2;stroke-linecap:square;stroke-linejoin:round"
+       id="upright2"
+       width="6"
+       height="30"
+       x="29"
+       y="5" />
+    <rect
+       style="fill:#cc0000;fill-opacity:1;stroke:#280000;stroke-width:2;stroke-linecap:square;stroke-linejoin:round"
+       id="upright3"
+       width="6"
+       height="30"
+       x="47"
+       y="5" />
+    <path
+       style="fill:none;stroke:#ef2929;stroke-width:2;stroke-linecap:square;stroke-linejoin:round"
+       d="M 13,7 V 33 M 31,7 V 33 M 49,7 V 33"
+       id="highlights" />
+    <path
+       style="fill:none;stroke:#280000;stroke-width:2;stroke-linecap:square;stroke-linejoin:round"
+       d="M 19,20 H 27 M 37,20 H 45"
+       id="gaps" />
+    <path
+       style="fill:none;stroke:#280000;stroke-width:4;stroke-linecap:butt;stroke-linejoin:round"
+       d="M 20,51 H 44"
+       id="line" />
+    <path
+       style="fill:#cc0000;fill-opacity:1;stroke:#280000;stroke-width:2;stroke-linejoin:round"
+       d="M 8,51 18,44 V 58 Z M 56,51 46,44 V 58 Z"
+       id="arrowheads" />
+  </g>
+</svg>

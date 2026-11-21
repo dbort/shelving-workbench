@@ -1,7 +1,7 @@
 """The commands that edit the open unit, as FreeCAD commands: the toolbar
 Edit Unit shows while it is open, the Shelving menu, when the commands are
-active, what the add and Lock commands do, and how the commands refuse a
-selection they cannot use."""
+active, what the add, Lock, Equal and Even commands do, and how the commands
+refuse a selection they cannot use."""
 
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -22,6 +22,7 @@ from freecad.Shelving.core.layout import (
     Lock,
     Region,
     Unit,
+    constraint_regions,
 )
 from freecad.Shelving.editor import panel as panel_module
 from freecad.Shelving.editor.elevation import board_ids
@@ -33,7 +34,12 @@ from freecad.Shelving.editor.panel import (
 from freecad.Shelving.editor.session import EDIT_COMMANDS
 from freecad.Shelving.unit_ops import create_unit
 
-_COMMANDS = ("Shelving_ConstrainEqual", "Shelving_ConstrainEvenSpacing")
+_COMMANDS = (
+    "Shelving_ConstrainEqualWidth",
+    "Shelving_ConstrainEqualHeight",
+    "Shelving_ConstrainEvenWidth",
+    "Shelving_ConstrainEvenHeight",
+)
 _LOCK_COMMANDS = ("Shelving_LockWidth", "Shelving_LockHeight")
 _ADD_COMMANDS = (
     ("Shelving_AddShelf", "Add Shelf"),
@@ -45,8 +51,10 @@ _MENU_TEXTS = [
     "Add Divider",
     "Lock Width",
     "Lock Height",
-    "Constrain Equal",
-    "Constrain Even Spacing",
+    "Equal Width",
+    "Equal Height",
+    "Even Width",
+    "Even Height",
 ]
 _T_MM = 18.0
 
@@ -168,27 +176,6 @@ def test_a_selection_a_command_cannot_use_is_refused_saying_what_to_select(
     assert editing.session.constraints == ()
 
 
-@pytest.mark.parametrize(
-    "name",
-    [
-        pytest.param(
-            _COMMANDS[0], marks=pytest.mark.smoke("constrain selected openings equal")
-        ),
-        *_COMMANDS[1:],
-    ],
-)
-def test_a_command_constrains_the_selected_openings(
-    editing: EditUnitPanel, reported: list[str], name: str
-) -> None:
-    editing.session.select_items(_bay_ids(editing.session.unit.root))
-    FreeCADGui.runCommand(name)
-    _process_events()
-    assert reported == []
-    (constraint,) = editing.session.constraints
-    assert constraint.active
-    assert editing.session.selected_items == ()
-
-
 def _columns() -> Unit:
     """A unit 654 mm tall of 18 mm boards, split by two dividers into three
     300 mm columns L, M and R, each split by one shelf: A1 300, A2 300;
@@ -283,6 +270,88 @@ def _boards(panel: EditUnitPanel) -> dict[str, tuple[float, float, float]]:
 
 def _locks(panel: EditUnitPanel) -> list[str]:
     return [c.region_id for c in panel.session.constraints if isinstance(c, Lock)]
+
+
+def test_each_constraint_command_has_its_own_icon() -> None:
+    FreeCADGui.activateWorkbench("ShelvingWorkbench")
+    pixmaps = [FreeCADGui.Command.get(name).getInfo()["pixmap"] for name in _COMMANDS]
+    assert len(set(pixmaps)) == len(_COMMANDS)
+    for pixmap in pixmaps:
+        assert not FreeCADGui.getIcon(pixmap).isNull(), pixmap
+
+
+# Indices into the columns unit's bays A1, A2, B1, B2, C1, C2.
+@pytest.mark.parametrize(
+    ("name", "step", "picks", "regions"),
+    [
+        pytest.param(
+            "Shelving_ConstrainEqualWidth",
+            "Equal Width",
+            (0, 2),
+            ("L", "M"),
+            marks=pytest.mark.smoke("make the widths of two columns equal"),
+        ),
+        ("Shelving_ConstrainEqualHeight", "Equal Height", (0, 2), ("A1", "B1")),
+        ("Shelving_ConstrainEvenWidth", "Even Width", (0, 4), ("L", "M", "R")),
+        ("Shelving_ConstrainEvenHeight", "Even Height", (0, 1), ("A1", "A2")),
+    ],
+)
+def test_a_constraint_command_resolves_each_pick_along_its_axis(
+    columns: EditUnitPanel,
+    reported: list[str],
+    name: str,
+    step: str,
+    picks: tuple[int, ...],
+    regions: tuple[str, ...],
+) -> None:
+    session = columns.session
+    doc = session.container.Document
+    bays = _bay_ids(session.unit.root)
+    steps = doc.UndoCount
+    session.select_items([bays[index] for index in picks])
+    FreeCADGui.runCommand(name)
+    _process_events()
+    assert reported == []
+    assert doc.UndoCount == steps + 1
+    assert doc.UndoNames[0] == step
+    assert session.selected_items == ()
+    (constraint,) = session.constraints
+    assert constraint.active
+    # The edit rescans, so the ids are read again.
+    root = session.unit.root
+    assert isinstance(root, Division)
+    row = root.items[1]
+    assert isinstance(row, Division)
+    names = {"L": row.items[1].id, "M": row.items[3].id, "R": row.items[5].id}
+    bays = _bay_ids(root)
+    names.update(zip(("A1", "A2", "B1", "B2", "C1", "C2"), bays, strict=True))
+    assert constraint_regions(session.unit, constraint) == tuple(
+        names[region] for region in regions
+    )
+
+
+@pytest.mark.parametrize(
+    ("name", "select", "says"),
+    [
+        ("Shelving_ConstrainEqualWidth", ("s1",), "not boards"),
+        ("Shelving_ConstrainEqualHeight", ("s1",), "not boards"),
+        ("Shelving_ConstrainEvenHeight", ("d1", "d2"), "two shelves"),
+        ("Shelving_ConstrainEvenWidth", ("s1", "t1"), "two dividers"),
+    ],
+)
+def test_a_constraint_command_refuses_boards_off_its_axis(
+    columns: EditUnitPanel,
+    reported: list[str],
+    name: str,
+    select: tuple[str, ...],
+    says: str,
+) -> None:
+    columns.session.select_items(list(select))
+    FreeCADGui.runCommand(name)
+    _process_events()
+    assert len(reported) == 1
+    assert "Select" in reported[0] and says in reported[0], reported
+    assert columns.session.constraints == ()
 
 
 @pytest.mark.parametrize(

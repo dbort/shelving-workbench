@@ -98,7 +98,17 @@ selected openings make N-1 of them, chained in selection order, as the
 Sketcher's Equal does. Even spacing holds every opening between two ends
 of one row the same size, the ends being boards or the row's own ends, and
 reads its openings afresh at every solve, so an opening added inside the
-span joins it. Both measure the clear opening. The solve counts them after
+span joins it. Each is made by a width command and a height command,
+Equal Width and Equal Height, Even Width and Even Height, as the Sketcher
+keeps separate horizontal and vertical tools. The command gives the
+direction and the selection never does: each selected opening stands for
+the region Lock Width or Lock Height would lock, so a bay in each of two
+columns makes the columns equal. Openings standing for one region count
+once. A selected board refuses Equal, and Even spacing takes two boards
+only when their row runs along the command's direction. A stored
+constraint carries no direction of its own, since its regions imply it,
+and the 3D view draws the same Equal and Even spacing icons for both
+directions, the dimension line under them showing which. Both measure the clear opening. The solve counts them after
 the active locks, so one the locks already imply is accepted as redundant
 with a warning, and one they contradict is refused as a conflict naming
 those locks and itself. Each draws the Sketcher's style of icon beside
@@ -329,8 +339,10 @@ The constraint list follows the Sketcher's: one list holding every
 constraint, locks included, in the order they were made, each with its
 kind's icon, its checkbox and its size in the user's unit system, and
 selection shared with the 3D view in both directions; selecting a lock's
-row selects that lock. A lock's row is named Lock Width or Lock Height and
-shows the icon of the command that makes it, and a deactivated lock's icon
+row selects that lock. A row is named for the command that makes its
+constraint, such as Lock Width or Even Height, and shows that command's
+icon; an Equal or even spacing through the depth, which no command makes,
+keeps the plain name and the view's icon. A deactivated lock's icon
 is grayed in Qt's disabled mode, as the Sketcher's list grays a
 deactivated constraint. It departs from the Sketcher in four places. A
 deactivated Equal's or even spacing's icon carries the 3D view's corner X

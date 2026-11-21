@@ -188,7 +188,7 @@ title = "Undo and Redo inside Edit Unit"
   ]
   expected = """
 The right-click menu lists Add Shelf, Add Divider, Lock Width, Lock Height,
-Constrain Equal and Constrain Even Spacing above Fit All. Two shelves, and
+Equal Width, Equal Height, Even Width and Even Height above Fit All. Two shelves, and
 the panel stays open."""
 
   [[case.step]]
@@ -485,18 +485,20 @@ title = "Equal and even spacing, from icons to a hand-moved shelf"
     "Run Edit Unit.",
   ]
   expected = """
-A toolbar with Lock Width, Lock Height, Constrain Equal and Constrain Even
-Spacing appears. Lock Width shows two uprights with a dimension line
-between them and Lock Height the same turned on its side, the Equal button
-an equals sign and the Even spacing button three evenly spaced uprights,
-all in the style of the Sketcher's constraint icons."""
+A toolbar with Lock Width, Lock Height, Equal Width, Equal Height, Even
+Width and Even Height appears. Lock Width shows two uprights with a
+dimension line between them and Lock Height the same turned on its side,
+the Equal buttons an equals sign and the Even buttons three evenly spaced
+uprights, each with a small double arrow, across on the width buttons and
+upright on the height buttons, all in the style of the Sketcher's
+constraint icons. Each button reads plainly as a width or a height."""
 
   [[case.step]]
   id = "even"
   instruction = [
     "Click the bottom opening of the leftmost column.",
     "Ctrl-click the top opening of the leftmost column.",
-    "Click Constrain Even Spacing on the toolbar.",
+    "Click Even Height on the toolbar.",
   ]
   expected = """
 The leftmost column's six openings become the same height, and each shows
@@ -510,13 +512,28 @@ text and clear of the text's tile."""
   instruction = [
     "Click the bottom opening of the second column.",
     "Ctrl-click the bottom opening of the leftmost column.",
-    "Click Constrain Equal on the toolbar.",
+    "Click Equal Height on the toolbar.",
   ]
   expected = """
 The second column's bottom opening takes the leftmost column's spacing.
 Both openings show the Equal icon, which reads at a glance as an equals
 sign; on the leftmost opening it sits in a row with the even spacing icon,
 neither covering the other."""
+
+  [[case.step]]
+  id = "equal_width"
+  instruction = [
+    "Click the divider between the two rightmost columns.",
+    "Drag its arrow to the right.",
+    "Click the bottom opening of the third column.",
+    "Ctrl-click the top opening of the rightmost column.",
+    "Click Equal Width on the toolbar.",
+  ]
+  expected = """
+The two rightmost columns come back to one width, and nothing in the
+leftmost two columns moves. Each of the two columns shows its width as a
+blue dimension in parentheses, with the Equal icon on it, and no opening's
+height dimension carries that icon."""
 
   [[case.step]]
   id = "display"
@@ -567,7 +584,7 @@ it."""
   [[case.step]]
   id = "activate"
   instruction = [
-    "Check the Even spacing row's box in the task panel's Constraints list.",
+    "Check the Even Height row's box in the task panel's Constraints list.",
     "Click an empty part of the 3D view outside the unit.",
   ]
   expected = """
@@ -611,16 +628,16 @@ holding no rows and a grayed Delete Deactivated button."""
   instruction = [
     "Click the bottom opening of the leftmost column.",
     "Ctrl-click the opening above it.",
-    "Click Constrain Equal on the toolbar.",
+    "Click Equal Height on the toolbar.",
     "Click the bottom opening of the leftmost column.",
     "Click Lock Height on the toolbar.",
     "Click the opening above it.",
     "Click Lock Height on the toolbar.",
   ]
   expected = """
-One notification says the lock is redundant. The list shows an Equal row,
-then two Lock Height rows in the order you locked them, each with its box
-checked, the Lock Height icon and its size. All three carry a
+One notification says the lock is redundant. The list shows an Equal
+Height row, then two Lock Height rows in the order you locked them, each
+with its box checked, the Lock Height icon and its size. All three carry a
 warning icon, and hovering one says it is redundant. The rows fit the panel
 at its default width with no horizontal scroll bar, and every icon is as
 sharp as the text beside it and easy to recognize."""
@@ -630,12 +647,12 @@ sharp as the text beside it and easy to recognize."""
   instruction = [
     "Click the bottom opening of the second column.",
     "Ctrl-click the top opening of the second column.",
-    "Click Constrain Even Spacing on the toolbar.",
-    "Uncheck the Even spacing row's box in the Constraints list.",
+    "Click Even Height on the toolbar.",
+    "Uncheck the Even Height row's box in the Constraints list.",
     "Click an empty part of the 3D view outside the unit.",
   ]
   expected = """
-The Even spacing row reads as off at a glance: its icon stays red, carries
+The Even Height row reads as off at a glance: its icon stays red, carries
 an X in its corner like the view's, and shows no size, while the other
 rows carry no X. The second column's
 even spacing icons in the view stay red and gain an X in their top-right
@@ -644,9 +661,9 @@ corner, and no board moves. Delete Deactivated is now enabled."""
   [[case.step]]
   id = "toggle_selected"
   instruction = [
-    "Click the Even spacing row in the Constraints list.",
-    "Check the Even spacing row's box.",
-    "Uncheck the Even spacing row's box.",
+    "Click the Even Height row in the Constraints list.",
+    "Check the Even Height row's box.",
+    "Uncheck the Even Height row's box.",
   ]
   expected = """
 The row stays selected throughout. The second column's even spacing icons
@@ -659,10 +676,10 @@ as an even spacing."""
   [[case.step]]
   id = "delete"
   instruction = [
-    "Click the delete button on the Equal row.",
+    "Click the delete button on the Equal Height row.",
     "Click Delete Deactivated.",
   ]
   expected = """
-The Equal row goes, and with it the warning icons on the two Lock Height
-rows. Then the Even spacing row goes. Only the two Lock Height rows
+The Equal Height row goes, and with it the warning icons on the two Lock
+Height rows. Then the Even Height row goes. Only the two Lock Height rows
 remain, no board moved, and Delete Deactivated is grayed again."""

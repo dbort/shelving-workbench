@@ -91,22 +91,22 @@ and run Equal Width; today you'd have to select the columns themselves.
   action.
 
 ## Plan
-- [ ] **Step 1** (`core/edit.py`, `core/tests/test_edit.py`,
+- [x] **Step 1** (`core/edit.py`, `core/tests/test_edit.py`,
       `core/tests/test_constraints.py`): axis-taking forms of `add_equal`
       and `add_even_spacing` that resolve picks through sh-055's
       function, with the refusals above.
-- [ ] **Step 2** (`editor/session.py`, `editor/panel.py`,
+- [x] **Step 2** (`editor/session.py`, `editor/panel.py`,
       `tests/freecad/test_constraint_session.py`): `constrain_equal` and
       `constrain_even_spacing` take the axis; `ConstraintCommand` names
       the four commands.
-- [ ] **Step 3** (`commands/`, `init_gui.py`, `resources/`,
+- [x] **Step 3** (`commands/`, `init_gui.py`, `resources/`,
       `editor/constraint_list.py`, `editor/overlay.py`,
       `tests/freecad_gui/test_edit_commands.py`,
       `tests/freecad_gui/test_constraint_list.py`): four rows in
       `commands/edit_commands.py` replace the Constrain Equal and
       Constrain Even Spacing rows;
       their icons; list rows named and iconed by axis.
-- [ ] **Step 4** (`README.md`, `docs/scope-and-design.md`,
+- [x] **Step 4** (`README.md`, `docs/scope-and-design.md`,
       `freecad/Shelving/qa/cases/30-editor.toml`): the glossary and the
       constraints paragraph name the four commands and the resolution;
       every QA step that runs Constrain Equal or Constrain Even Spacing

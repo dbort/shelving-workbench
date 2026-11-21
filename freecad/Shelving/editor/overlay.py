@@ -22,6 +22,7 @@ from pivy import coin
 from PySide6 import QtCore, QtGui, QtSvg, QtWidgets
 
 from freecad.Shelving.editor.elevation import (
+    AXIS_ICON_SOURCES,
     ICON_SOURCES,
     LIFT_MM,
     LOCK_ICON_SOURCES,
@@ -304,15 +305,24 @@ def _icon_image(
 
 
 def constraint_icon_image(
-    kind: ConstraintKind, rgb: RGB, tile: Tile, side_px: int, active: bool = True
+    kind: ConstraintKind,
+    rgb: RGB,
+    tile: Tile,
+    side_px: int,
+    active: bool = True,
+    direction: ElevationDirection | None = None,
 ) -> QtGui.QImage:
     """``kind``'s icon on ``tile``, ``side_px`` device pixels square, with a
-    corner X unless ``active``. The glyph, ``tile.pad_px`` in from each
-    edge, fills every painted pixel with ``rgb`` at its own coverage, as the
-    Sketcher's ``renderConstrIcon`` recolors its icons with a source-in
-    fill, so the X takes ``rgb`` as well; the tile's rounded corners stay
-    transparent."""
-    return _icon_image(ICON_SOURCES[kind], rgb, tile, side_px, active)
+    corner X unless ``active``: the icon of the command making it along
+    ``direction``, or the axis-free one when ``direction`` is ``None``. The
+    glyph, ``tile.pad_px`` in from each edge, fills every painted pixel with
+    ``rgb`` at its own coverage, as the Sketcher's ``renderConstrIcon``
+    recolors its icons with a source-in fill, so the X takes ``rgb`` as
+    well; the tile's rounded corners stay transparent."""
+    source = (
+        ICON_SOURCES[kind] if direction is None else AXIS_ICON_SOURCES[kind, direction]
+    )
+    return _icon_image(source, rgb, tile, side_px, active)
 
 
 def lock_icon_image(

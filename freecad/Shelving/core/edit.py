@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import Collection, Mapping, Sequence
+from typing import Literal
 
 from freecad.Shelving.core.geometry import Space, Vec3
 from freecad.Shelving.core.layout import (
@@ -55,10 +56,12 @@ from freecad.Shelving.core.layout import (
     constraint_regions,
     find_division,
     is_locked,
+    region_along,
     region_lock,
     spacing_group,
 )
 from freecad.Shelving.core.record import keys_by_region, unique_regions_by_key
+from freecad.Shelving.core.scan import elevation_axes
 from freecad.Shelving.core.solver import (
     EPS_MM,
     FIXED_FRACTION,
@@ -1157,11 +1160,18 @@ def add_even_spacing(unit: Unit, node_ids: Sequence[str]) -> Unit:
     :class:`~freecad.Shelving.core.solver.LayoutSolveError` naming the
     locks and constraints that rule it out.
     """
-    distinct = list(dict.fromkeys(node_ids))
-    what = (
+    return _add_even_spacing(
+        unit,
+        node_ids,
         "Select two boards of one row or column, or two or more openings of "
-        "one row or column, to space evenly."
+        "one row or column, to space evenly.",
     )
+
+
+def _add_even_spacing(unit: Unit, node_ids: Sequence[str], what: str) -> Unit:
+    """:func:`add_even_spacing`, refusing a selection of the wrong shape
+    with the message ``what``."""
+    distinct = list(dict.fromkeys(node_ids))
     if len(distinct) < 2:
         raise EditError(distinct[0] if distinct else unit.id, what)
     found = [_locate(unit.root, node_id) for node_id in distinct]
@@ -1198,6 +1208,132 @@ def add_even_spacing(unit: Unit, node_ids: Sequence[str]) -> Unit:
             "Select ends with two or more openings between them to space evenly.",
         )
     return solve_axis(edited, solve(unit), run.axis, MIN_DRAG_GAP_MM)
+
+
+# The elevation word an axis-taking command's messages use. Whole sentences
+# per word follow, so each translates on its own.
+_Elevation = Literal["width", "height"]
+
+_SELECT_TO_EQUAL: Mapping[_Elevation, str] = {
+    "width": "Select openings in two or more columns to make their widths equal.",
+    "height": "Select openings in two or more rows to make their heights equal.",
+}
+_NO_BOARDS_TO_EQUAL: Mapping[_Elevation, str] = {
+    "width": "Select openings for Equal Width, not boards.",
+    "height": "Select openings for Equal Height, not boards.",
+}
+_UNIT_SIZE_TO_EQUAL: Mapping[_Elevation, str] = {
+    "width": (
+        "A selected opening's width is the unit's width. Select openings in "
+        "two or more columns to make their widths equal."
+    ),
+    "height": (
+        "A selected opening's height is the unit's height. Select openings in "
+        "two or more rows to make their heights equal."
+    ),
+}
+_SELECT_TO_SPACE: Mapping[_Elevation, str] = {
+    "width": (
+        "Select two dividers of one row, or openings in two or more columns "
+        "of one row, to space their widths evenly."
+    ),
+    "height": (
+        "Select two shelves of one column, or openings in two or more rows "
+        "of one column, to space their heights evenly."
+    ),
+}
+_UNIT_SIZE_TO_SPACE: Mapping[_Elevation, str] = {
+    "width": (
+        "A selected opening's width is the unit's width. Select two dividers "
+        "of one row, or openings in two or more columns of one row, to space "
+        "their widths evenly."
+    ),
+    "height": (
+        "A selected opening's height is the unit's height. Select two shelves "
+        "of one column, or openings in two or more rows of one column, to "
+        "space their heights evenly."
+    ),
+}
+
+
+def _elevation(unit: Unit, axis: Axis) -> _Elevation:
+    """Whether ``axis`` is ``unit``'s elevation height or, for any other
+    axis, its width; a unit with no depth axis stands upright along Z."""
+    depth_axis = Axis.Y if unit.depth_axis is None else unit.depth_axis
+    return "height" if axis is elevation_axes(depth_axis)[1] else "width"
+
+
+def _is_board(unit: Unit, node_id: str) -> bool:
+    found = _locate(unit.root, node_id)
+    return found is not None and isinstance(found[0].items[found[1]], Board)
+
+
+def _openings_along(
+    unit: Unit, node_ids: Sequence[str], axis: Axis, unit_size: str
+) -> list[str]:
+    """The distinct regions, in selection order, whose sizes along ``axis``
+    hold the openings ``node_ids`` names, each found by
+    :func:`~freecad.Shelving.core.layout.region_along`. Raises
+    :class:`EditError` with the message ``unit_size`` naming the first
+    opening whose size along ``axis`` is the unit's own, and as
+    :func:`add_equal` does for the whole unit or an unknown id. The caller
+    has already refused boards."""
+    found: dict[str, None] = {}
+    for node_id in node_ids:
+        _opening(unit, node_id)
+        target = region_along(unit, node_id, axis)
+        if target is None:
+            raise EditError(node_id, unit_size)
+        found[target] = None
+    return list(found)
+
+
+def add_equal_along(unit: Unit, node_ids: Sequence[str], axis: Axis) -> Unit:
+    """:func:`add_equal` on the regions whose sizes along ``axis`` hold the
+    openings ``node_ids`` names, each the opening itself or its nearest
+    enclosing region whose run lies along ``axis``, as Lock Width and Lock
+    Height find them. Picks resolving to one region count once, keeping
+    the first's place in selection order.
+
+    Raises :class:`EditError` when ``node_ids`` names a board, the whole
+    unit or nothing, an opening whose size along ``axis`` is the unit's
+    own, or fewer than two distinct regions, and a ``"conflict"``
+    :class:`~freecad.Shelving.core.solver.LayoutSolveError` as
+    :func:`add_equal` does.
+    """
+    word = _elevation(unit, axis)
+    board = next((n for n in node_ids if _is_board(unit, n)), None)
+    if board is not None:
+        raise EditError(board, _NO_BOARDS_TO_EQUAL[word])
+    regions = _openings_along(unit, node_ids, axis, _UNIT_SIZE_TO_EQUAL[word])
+    if len(regions) < 2:
+        raise EditError(node_ids[0] if node_ids else unit.id, _SELECT_TO_EQUAL[word])
+    return add_equal(unit, regions)
+
+
+def add_even_spacing_along(unit: Unit, node_ids: Sequence[str], axis: Axis) -> Unit:
+    """:func:`add_even_spacing` along ``axis``: openings resolve as
+    :func:`add_equal_along` resolves them, and boards must lie in a run
+    along ``axis``.
+
+    Raises :class:`EditError` for a selection mixing boards and openings,
+    for boards whose run lies along another axis, for an opening whose
+    size along ``axis`` is the unit's own, and for anything
+    :func:`add_even_spacing` refuses; a ``"conflict"``
+    :class:`~freecad.Shelving.core.solver.LayoutSolveError` as it raises.
+    """
+    word = _elevation(unit, axis)
+    what = _SELECT_TO_SPACE[word]
+    boards = [_is_board(unit, node_id) for node_id in node_ids]
+    if any(boards):
+        if not all(boards):
+            raise EditError(node_ids[0], what)
+        across = next((n for n in node_ids if run_axis(unit, n) is not axis), None)
+        if across is not None:
+            raise EditError(across, what)
+        return _add_even_spacing(unit, node_ids, what)
+    regions = _openings_along(unit, node_ids, axis, _UNIT_SIZE_TO_SPACE[word])
+    return _add_even_spacing(unit, regions, what)
 
 
 def remove_constraints(unit: Unit, constraint_ids: Collection[ConstraintId]) -> Unit:
