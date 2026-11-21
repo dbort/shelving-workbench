@@ -114,3 +114,7 @@ and run Equal Width; today you'd have to select the columns themselves.
       Equal Width step.
 
 ## Review log
+
+### Round 1: APPROVED
+- **N1: Unwrapped paragraph line** (`docs/scope-and-design.md:111`): the new constraints prose joins "Both measure the clear opening. The solve counts them after" on one 116-character line; reflow it to the file's wrap width.
+- **N2: Over-long QA expected line** (`freecad/Shelving/qa/cases/30-editor.toml:191`): the 85-character "Equal Width, Equal Height, Even Width and Even Height above Fit All. Two shelves, and" line was not rewrapped; cosmetic.
