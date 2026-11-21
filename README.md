@@ -103,8 +103,8 @@ The vocabulary the documentation and the code share.
   size make one lock, a size already locked is left alone, and a lock that
   is off is turned back on. Nothing moves, and Undo takes the whole
   command back. A selected panel or an empty selection is refused, and so
-  is a size that is the unit's own, which the panel's Width or Height
-  field sets. A lock is drawn as a red dimension, gray while it is off:
+  is a size that is the unit's own, which the Width or Height field of the
+  Edit Unit task panel sets. A lock is drawn as a red dimension, gray while it is off:
   click its text to select the lock, Ctrl-click to select more, and press
   Delete to remove them. Double-click any dimension's text to type a size.
   The commands sit on the toolbar Edit Unit shows and in the Shelving menu.
@@ -155,8 +155,7 @@ The vocabulary the documentation and the code share.
   the constraint stays, and it holds nothing. An Equal's or Even spacing's
   icons in the view and the constraint list carry an X in the corner; a
   lock's row shows its icon grayed, and its dimension turns gray. Check
-  its box in the constraint list
-  to turn it back on, which moves the boards to meet it again, or delete
+  its box in the constraint list to turn it back on, which moves the boards to meet it again, or delete
   it there or with Delete. A lock holds its opening at whatever size it
   has, so it never comes in deactivated and turning it on moves nothing.
   One the boards miss by no more than the joint clearance stays active,

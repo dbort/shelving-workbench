@@ -39,6 +39,7 @@ from freecad.Shelving.editor.elevation import (
     plan_overlay,
     region_along,
     region_at,
+    run_direction,
     split_preview,
 )
 
@@ -713,7 +714,7 @@ def test_a_flagged_constraint_outlines_its_openings() -> None:
     assert _roles(overlay, "B", unit) == ["region"]
 
 
-# --- dimensions as the Sketcher draws them (sh-055) --------------------------
+# --- dimensions as the Sketcher draws them ----------------------------------
 
 
 def _columns() -> Unit:
@@ -864,3 +865,86 @@ def test_a_bay_with_no_divider_has_no_width_of_its_own() -> None:
     )
     assert region_along(sided, "A", Axis.X) is None
     assert region_along(sided, "B", Axis.Z) == "B"
+
+
+def test_a_run_direction_names_the_lock_command_and_none_through_the_depth() -> None:
+    unit = _columns()
+    frame = elevation_frame(unit)
+    assert run_direction(unit, frame, "L") == "horizontal"
+    assert run_direction(unit, frame, "A1") == "vertical"
+    for none in ("root", "s1", "nothing"):
+        assert run_direction(unit, frame, none) is None
+    depth = Unit(
+        size_mm=Vec3(900.0, 300.0, 600.0),
+        root=Division(
+            axis=Axis.Y,
+            items=[
+                Bay(size_mm=141.0, id="front"),
+                Board(thickness_mm=_T_MM),
+                Bay(size_mm=141.0, id="rear"),
+            ],
+        ),
+        depth_axis=Axis.Y,
+    )
+    assert run_direction(depth, elevation_frame(depth), "front") is None
+
+
+def _nested() -> Unit:
+    """A unit whose left column holds a lower row of two openings, SA and
+    SB, so SA's width and the column's both reach the unit's bottom past
+    boards alone: the column's width takes the first row below the unit,
+    SA's the second."""
+    sub = Division(
+        axis=Axis.X,
+        id="sub",
+        items=[
+            Division(
+                axis=Axis.Z, id="SA", items=[Bay(size_mm=300.0, id="a1")], size_mm=200.0
+            ),
+            Board(thickness_mm=_T_MM, id="sub_board"),
+            Bay(size_mm=182.0, id="SB"),
+        ],
+        size_mm=300.0,
+    )
+    left = Division(
+        axis=Axis.Z,
+        id="colL",
+        items=[sub, Board(thickness_mm=_T_MM, id="shelf"), Bay(size_mm=246.0)],
+        size_mm=400.0,
+    )
+    return Unit(
+        size_mm=Vec3(900.0, 300.0, 600.0),
+        root=Division(
+            axis=Axis.Z,
+            id="root",
+            items=[
+                Board(thickness_mm=_T_MM, id="bottom"),
+                Division(
+                    axis=Axis.X,
+                    id="row",
+                    items=[
+                        Board(thickness_mm=_T_MM, id="left"),
+                        left,
+                        Board(thickness_mm=_T_MM, id="divider"),
+                        Bay(size_mm=446.0, id="colR"),
+                        Board(thickness_mm=_T_MM, id="right"),
+                    ],
+                    size_mm=564.0,
+                ),
+                Board(thickness_mm=_T_MM, id="top"),
+            ],
+        ),
+        depth_axis=Axis.Y,
+    )
+
+
+def test_an_outer_dimension_keeps_its_row_when_the_one_inside_it_is_hidden() -> None:
+    unit = _nested()
+    every = {label.region_id: label for label in _every_label(unit)}
+    assert every["colL"].start_mm[1] == pytest.approx(-_ROW_MM)
+    assert every["SA"].start_mm[1] == pytest.approx(-2 * _ROW_MM)
+    alone = {
+        label.region_id: label for label in _overlay(unit, selected_id="SA").labels
+    }
+    assert "colL" not in alone
+    assert alone["SA"].start_mm == every["SA"].start_mm

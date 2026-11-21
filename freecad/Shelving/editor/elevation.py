@@ -755,6 +755,21 @@ def region_along(unit: Unit, node_id: str, axis: Axis) -> str | None:
     return None
 
 
+def run_direction(
+    unit: Unit, frame: ElevationFrame, region_id: str
+) -> ElevationDirection | None:
+    """The elevation direction the run holding ``region_id`` lies along in
+    ``frame``: what Lock Width or Lock Height its Lock would be. ``None``
+    for a run through the depth, which neither makes, and for the root, a
+    board or an unknown id."""
+    parent = _parents(unit).get(region_id)
+    if parent is None or region_id in board_ids(unit):
+        return None
+    if parent.axis == frame.horizontal:
+        return "horizontal"
+    return "vertical" if parent.axis == frame.vertical else None
+
+
 def drawn_dimensions(
     unit: Unit, frame: ElevationFrame, selected: Collection[str]
 ) -> frozenset[str]:

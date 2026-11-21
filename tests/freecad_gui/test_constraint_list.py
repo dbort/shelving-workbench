@@ -18,6 +18,7 @@ from freecad.Shelving.core.layout import (
     Bay,
     Board,
     Constraint,
+    ConstraintId,
     Division,
     Equal,
     EvenSpacing,
@@ -39,10 +40,11 @@ from freecad.Shelving.editor.overlay import (
     Tile,
     constraint_icon_image,
     lock_icon_image,
+    text_tile_image,
     view_style,
 )
 from freecad.Shelving.editor.panel import EditUnitPanel
-from freecad.Shelving.editor.session import RowKind
+from freecad.Shelving.editor.session import ConstraintRow, RowKind
 
 _T_MM = 18.0
 _BAY_MM = 288.0
@@ -211,8 +213,9 @@ def _drawn_icon(
     tree: QtWidgets.QTreeWidget, kind: RowKind, active: bool = True
 ) -> QtGui.QIcon:
     """The 3D view's own image for ``kind``, with its corner X unless
-    ``active``, or for a Lock the icon of the command that makes it, at the
-    list's icon size on a tile of its background."""
+    ``active``, or for a Lock the icon of the command that makes it, or the
+    bare tile when no command makes it, at the list's icon size on a tile
+    of its background."""
     side_px = tree.style().pixelMetric(QtWidgets.QStyle.PixelMetric.PM_SmallIconSize)
     ratio = tree.devicePixelRatioF()
     base = tree.palette().color(QtGui.QPalette.ColorRole.Base)
@@ -221,12 +224,13 @@ def _drawn_icon(
     )
     style = view_style(0)
     device_px = round(side_px * ratio)
-    if kind == "lock_width":
+    if kind == "lock":
+        image = text_tile_image(tile, device_px, device_px)
+    elif kind == "lock_width":
         image = lock_icon_image("horizontal", style.icon_rgb, tile, device_px)
     elif kind == "lock_height":
         image = lock_icon_image("vertical", style.icon_rgb, tile, device_px)
     else:
-        assert kind != "lock"
         image = constraint_icon_image(kind, style.icon_rgb, tile, device_px, active)
     pixmap = QtGui.QPixmap.fromImage(image)
     pixmap.setDevicePixelRatio(ratio)
@@ -279,6 +283,25 @@ def test_a_lock_row_names_and_draws_the_command_that_makes_its_axis_lock(
     assert _image(width_icon) != _image(height_icon)
     assert _image(width.icon(TEXT_COLUMN)) == _image(width_icon)
     assert _image(height.icon(TEXT_COLUMN)) == _image(height_icon)
+
+
+def test_a_lock_no_command_makes_reads_lock_on_a_bare_tile(bare: _Editing) -> None:
+    """A Lock through the depth, which only a scan makes."""
+    rows = bare.rows
+    row = ConstraintRow(
+        constraint_id=ConstraintId("depth"),
+        kind="lock",
+        active=True,
+        size_mm=None,
+        redundant=False,
+    )
+    rows.show([row], ())
+    item = bare.item(0)
+    assert item.text(TEXT_COLUMN) == "Lock"
+    assert _image(item.icon(TEXT_COLUMN)) == _image(_drawn_icon(rows.tree, "lock"))
+    assert _image(_drawn_icon(rows.tree, "lock")) != _image(
+        _drawn_icon(rows.tree, "lock_width")
+    )
 
 
 def test_a_selected_rows_icon_keeps_its_colors(editing: _Editing) -> None:

@@ -658,5 +658,5 @@ as an even spacing."""
   ]
   expected = """
 The Equal row goes, and with it the warning icons on the two Lock Height
-rows. Then the Even spacing row goes. Only the two Lock Height rows remain, no board
-moved, and Delete Deactivated is grayed again."""
+rows. Then the Even spacing row goes. Only the two Lock Height rows
+remain, no board moved, and Delete Deactivated is grayed again."""

@@ -99,9 +99,12 @@ from freecad.Shelving.debug_log import Stopwatch
 from freecad.Shelving.editor.elevation import (
     ConstraintKind,
     ElevationDirection,
+    ElevationFrame,
     FixedChoice,
+    elevation_frame,
     fixed_choices,
     region_along,
+    run_direction,
 )
 from freecad.Shelving.editor.history import EditHistory, Schedule
 
@@ -186,11 +189,11 @@ _REDUNDANT_ACTIVATED = (
     "The outlined locks and constraints already fix these sizes, so the "
     "constraint turned on is redundant."
 )
-# Whole sentences per direction, so each translates on its own.
 _LOCK_STEPS: Mapping[ElevationDirection, str] = {
     "horizontal": "Lock Width",
     "vertical": "Lock Height",
 }
+# Whole sentences per direction, so each translates on its own.
 _SELECT_TO_LOCK: Mapping[ElevationDirection, str] = {
     "horizontal": "Select one or more openings to lock their widths.",
     "vertical": "Select one or more openings to lock their heights.",
@@ -250,17 +253,12 @@ class ConstraintRow:
     redundant: bool
 
 
-def _row_kind(constraint: Constraint, unit: Unit, axes: tuple[Axis, Axis]) -> RowKind:
-    """``constraint``'s row kind in ``unit``, whose elevation axes are
-    ``axes``, horizontal first."""
+def _row_kind(constraint: Constraint, unit: Unit, frame: ElevationFrame) -> RowKind:
     if isinstance(constraint, Lock):
-        try:
-            axis = run_axis(unit, constraint.region_id)
-        except EditError:
+        direction = run_direction(unit, frame, constraint.region_id)
+        if direction is None:
             return "lock"
-        if axis == axes[0]:
-            return "lock_width"
-        return "lock_height" if axis == axes[1] else "lock"
+        return "lock_width" if direction == "horizontal" else "lock_height"
     return "equal" if isinstance(constraint, Equal) else "even_spacing"
 
 
@@ -644,7 +642,7 @@ class Session:
         """The constraint list's rows: every constraint, locks included,
         active or deactivated, in the order they were made."""
         redundant = self._redundant_rules()
-        axes = self._elevation_axes()
+        frame = elevation_frame(self.unit)
         rows: list[ConstraintRow] = []
         for constraint in self.unit.constraints:
             regions = constraint_regions(self.unit, constraint)
@@ -659,7 +657,7 @@ class Session:
             rows.append(
                 ConstraintRow(
                     constraint_id=constraint.id,
-                    kind=_row_kind(constraint, self.unit, axes),
+                    kind=_row_kind(constraint, self.unit, frame),
                     active=constraint.active,
                     size_mm=size_mm,
                     redundant=constraint.id in redundant,

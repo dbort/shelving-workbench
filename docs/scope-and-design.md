@@ -81,8 +81,8 @@ The refusal outlines the locks it names, and any opening held at the
 minimum, as the Sketcher highlights the constraints in a conflict.
 
 Any region may lock but the unit itself, whose size the panel's Width,
-Height and Depth fields set. When the locks fix the unit's size along an axis,
-that size is a reference, as a Sketcher reference dimension is: a resize
+Height and Depth fields set. When the locks fix the unit's size along an
+axis, that size is a reference, as a Sketcher reference dimension is: a resize
 along it is refused naming those locks, the panel shows its field
 read-only, and every other edit lets it follow the locks with the fixed
 point holding. Depth is never divided, so it is never a reference. A lock
