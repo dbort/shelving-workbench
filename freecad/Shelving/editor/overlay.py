@@ -240,7 +240,8 @@ _CORNER_X_GAP = 0.04
 
 
 def _corner_x_widths_px(glyph_px: int) -> tuple[float, float]:
-    """The X's stroke width and the width of the gap cleared along it."""
+    """The X's stroke width, and the full width of the band cleared along
+    each stroke: the stroke plus a gap on either side."""
     stroke_px = max(1.0, _CORNER_X_STROKE * glyph_px)
     return stroke_px, stroke_px + 2 * max(1.0, _CORNER_X_GAP * glyph_px)
 

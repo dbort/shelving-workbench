@@ -34,9 +34,13 @@ every state.
   throughout.
 - [x] `grep -rn DeactivatedConstrDimColor freecad/ tests/` finds nothing.
   `Style` has no `deactivated_rgb` field.
-- [x] The constraint list is unchanged: a deactivated row's icon is still
-  grayed in Qt's disabled mode, and pressing a row's checkbox still
-  selects the row.
+- [x] A deactivated constraint's row in the constraint list shows the 3D
+  view's unselected icon of its kind with the corner X, in the icon color,
+  in place of Qt's disabled-mode gray; an active row's icon carries no X.
+  A GUI test checks a row's icon gains and loses the X as its box is
+  unchecked and checked. Pressing a row's checkbox still selects the row.
+  `docs/scope-and-design.md` and the QA cases describe the list's
+  deactivated icon by its X, not as grayed.
 - [x] README's **Deactivated constraint** entry, the notification shown
   when Edit Unit opens with deactivated constraints
   (`_DEACTIVATED_AT_OPEN` in `freecad/Shelving/editor/session.py`), and
@@ -76,10 +80,15 @@ every state.
   (`freecad/Shelving/editor/elevation.py`) carries both independently, in
   place of the three-valued `IconState`. Color depends on selection only,
   and the X on activation only.
-- Leave the constraint list alone. Its unchecked box and Qt's
-  disabled-mode icon already show "off" under a row's selection
-  highlight. A press on the checkbox selecting the row is Qt's default and
-  the Sketcher's list behavior. The user kept it.
+- The constraint list keeps its selection behavior: a press on the
+  checkbox selecting the row is Qt's default and the Sketcher's list
+  behavior. The user kept it.
+- 2026-11-20, during `/work` after round 1: the user reversed the
+  earlier "leave the constraint list alone" for the row icon. A
+  deactivated row's icon carries the view's corner X instead of Qt's
+  disabled-mode gray, so the list and the view mark deactivation the same
+  way. This departs from the Sketcher's list as well; record it with the
+  list's other departures in `docs/scope-and-design.md`.
 - Unlocked dimensions and a blue selection color can still look alike.
   The user accepted that. Do not add an outline or recolor to work around
   it.
@@ -131,6 +140,14 @@ every state.
   be recognizable.
 - [x] **Step 6** (`.claude/docs/bug-log.md`): delete the `bug-024` entry
   in the fixing commit, leaving `next_id` as is.
+- [x] **Step 7** (`freecad/Shelving/editor/constraint_list.py`,
+  `tests/freecad_gui/test_constraint_list.py`, `README.md`,
+  `docs/scope-and-design.md`, `_DEACTIVATED_AT_OPEN`, `30-editor.toml`):
+  `kind_icon` takes the `active` flag and passes it to
+  `constraint_icon_image`; `disabled_icon` goes. The GUI tests compare a
+  deactivated row's icon to the view's X icon and follow it through a
+  toggle. The docs, notification and QA steps say the list's icon carries
+  the X too.
 
 ## Review log
 

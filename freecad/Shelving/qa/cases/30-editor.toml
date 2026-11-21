@@ -567,7 +567,7 @@ it."""
 The leftmost column is evenly spaced again: the shelf you raised drops back
 to its even place, and the second column's bottom opening stays equal to
 the leftmost column's. The even spacing's icons in the view lose their X,
-and its row's icon turns from gray to red with its size beside it."""
+and its row's icon loses its X as well, with its size beside it."""
 
   [[case.step]]
   id = "undo"
@@ -625,8 +625,9 @@ sharp as the text beside it and easy to recognize."""
     "Click an empty part of the 3D view outside the unit.",
   ]
   expected = """
-The Even spacing row reads as off at a glance: its icon is grayed and it
-shows no size, while the other rows keep their colors. The second column's
+The Even spacing row reads as off at a glance: its icon stays red, carries
+an X in its corner like the view's, and shows no size, while the other
+rows carry no X. The second column's
 even spacing icons in the view stay red and gain an X in their top-right
 corner, and no board moves. Delete Deactivated is now enabled."""
 
@@ -640,9 +641,10 @@ corner, and no board moves. Delete Deactivated is now enabled."""
   expected = """
 The row stays selected throughout. The second column's even spacing icons
 stay in the selection color while the X in their corner disappears when
-the box is checked and returns when it is unchecked. On the HiDPI screen
-the X is easy to see at a glance, and each icon still reads as an even
-spacing."""
+the box is checked and returns when it is unchecked, and the row's own
+icon loses and regains its X with them. On the HiDPI screen the X is easy
+to see at a glance in the view and in the list, and each icon still reads
+as an even spacing."""
 
   [[case.step]]
   id = "delete"

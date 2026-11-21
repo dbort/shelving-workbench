@@ -31,7 +31,6 @@ from freecad.Shelving.editor.constraint_list import (
     REDUNDANT_TIP,
     TEXT_COLUMN,
     ConstraintList,
-    disabled_icon,
 )
 from freecad.Shelving.editor.elevation import ConstraintKind
 from freecad.Shelving.editor.overlay import (
@@ -208,10 +207,11 @@ def test_the_group_follows_the_unit_group_and_shows_with_no_rows(
 
 
 def _drawn_icon(
-    tree: QtWidgets.QTreeWidget, kind: ConstraintKind | None
+    tree: QtWidgets.QTreeWidget, kind: ConstraintKind | None, active: bool = True
 ) -> QtGui.QIcon:
-    """The 3D view's own image for ``kind``, the closed padlock for a lock
-    (``None``), at the list's icon size on a tile of its background."""
+    """The 3D view's own image for ``kind``, with its corner X unless
+    ``active``, or the closed padlock for a lock (``None``), at the list's
+    icon size on a tile of its background."""
     side_px = tree.style().pixelMetric(QtWidgets.QStyle.PixelMetric.PM_SmallIconSize)
     ratio = tree.devicePixelRatioF()
     base = tree.palette().color(QtGui.QPalette.ColorRole.Base)
@@ -223,7 +223,7 @@ def _drawn_icon(
     if kind is None:
         image = padlock_image(True, style.locked_rgb, tile, device_px)
     else:
-        image = constraint_icon_image(kind, style.icon_rgb, tile, device_px)
+        image = constraint_icon_image(kind, style.icon_rgb, tile, device_px, active)
     pixmap = QtGui.QPixmap.fromImage(image)
     pixmap.setDevicePixelRatio(ratio)
     return QtGui.QIcon(pixmap)
@@ -247,11 +247,10 @@ def test_rows_show_their_kind_size_and_the_views_icons(editing: _Editing) -> Non
     assert _image(equals) != _image(spaced)
     assert _image(lock.icon(TEXT_COLUMN)) == _image(padlock)
     assert _image(equal.icon(TEXT_COLUMN)) == _image(equals)
-    # The deactivated even spacing's icon, as Qt grays a disabled icon.
-    side_px = tree.style().pixelMetric(QtWidgets.QStyle.PixelMetric.PM_SmallIconSize)
-    grayed = disabled_icon(spaced, side_px, tree.devicePixelRatioF())
-    assert _image(spacing.icon(TEXT_COLUMN)) == _image(grayed)
-    assert _image(grayed) != _image(spaced)
+    # The deactivated even spacing's icon is the view's, red with its X.
+    marked = _drawn_icon(tree, "even_spacing", active=False)
+    assert _image(spacing.icon(TEXT_COLUMN)) == _image(marked)
+    assert _image(marked) != _image(spaced)
 
 
 def test_a_constraint_row_has_a_checkbox_a_lock_row_none(editing: _Editing) -> None:
@@ -277,6 +276,15 @@ def test_checking_and_unchecking_turn_a_constraint_on_and_off(
     _process_events()
     assert [c.active for c in editing.panel.session.constraints] == [False, True]
     assert editing.item(1).checkState(TEXT_COLUMN) == QtCore.Qt.CheckState.Checked
+    # Each row's icon follows its box: the X on the Equal, none on the even
+    # spacing.
+    tree = editing.rows.tree
+    assert _image(editing.item(0).icon(TEXT_COLUMN)) == _image(
+        _drawn_icon(tree, "equal", active=False)
+    )
+    assert _image(editing.item(1).icon(TEXT_COLUMN)) == _image(
+        _drawn_icon(tree, "even_spacing")
+    )
 
 
 def test_a_refused_activation_stays_unchecked_and_reports(

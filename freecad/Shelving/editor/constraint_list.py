@@ -78,12 +78,17 @@ def row_text(row: ListRow) -> str:
 
 
 def kind_icon(
-    kind: ConstraintKind | None, side_px: int, ratio: float, base: QtGui.QColor
+    kind: ConstraintKind | None,
+    side_px: int,
+    ratio: float,
+    base: QtGui.QColor,
+    active: bool = True,
 ) -> QtGui.QIcon:
     """A row's icon, ``side_px`` logical pixels square at device pixel
     ratio ``ratio``: the 3D view's closed padlock for a lock (``None``),
-    else the constraint's own icon, each in the view's color for it on a
-    tile of ``base``, the list's own background."""
+    else the constraint's own icon with the view's corner X unless
+    ``active``, each in the view's color for it on a tile of ``base``, the
+    list's own background. ``active`` has no effect on a padlock."""
     device_px = round(side_px * ratio)
     tile = Tile(
         (base.redF(), base.greenF(), base.blueF()), round(TILE_PAD_PX * ratio), 0.0
@@ -93,18 +98,10 @@ def kind_icon(
     if kind is None:
         image = padlock_image(True, style.locked_rgb, tile, device_px)
     else:
-        image = constraint_icon_image(kind, style.icon_rgb, tile, device_px)
+        image = constraint_icon_image(kind, style.icon_rgb, tile, device_px, active)
     pixmap = QtGui.QPixmap.fromImage(image)
     pixmap.setDevicePixelRatio(ratio)
     return QtGui.QIcon(pixmap)
-
-
-def disabled_icon(icon: QtGui.QIcon, side_px: int, ratio: float) -> QtGui.QIcon:
-    """``icon`` as Qt draws it in ``QIcon.Mode.Disabled``, as the Sketcher's
-    list grays a deactivated constraint's icon."""
-    return QtGui.QIcon(
-        icon.pixmap(QtCore.QSize(side_px, side_px), ratio, QtGui.QIcon.Mode.Disabled)
-    )
 
 
 class ConstraintList:
@@ -152,15 +149,19 @@ class ConstraintList:
         )
 
     def row_icon(self, row: ListRow) -> QtGui.QIcon:
-        """The icon :meth:`show` gives ``row``: its kind's, grayed while it
-        is a deactivated constraint."""
-        side_px = self._icon_side_px()
-        ratio = self.tree.devicePixelRatioF()
+        """The icon :meth:`show` gives ``row``: its kind's, marked with the
+        3D view's corner X while it is a deactivated constraint. The
+        Sketcher's list grays such an icon in Qt's disabled mode; the X
+        keeps the list matching the view."""
         base = self.tree.palette().color(QtGui.QPalette.ColorRole.Base)
-        icon = kind_icon(_kind(row), side_px, ratio, base)
-        if isinstance(row, ConstraintRow) and not row.active:
-            return disabled_icon(icon, side_px, ratio)
-        return icon
+        active = not isinstance(row, ConstraintRow) or row.active
+        return kind_icon(
+            _kind(row),
+            self._icon_side_px(),
+            self.tree.devicePixelRatioF(),
+            base,
+            active,
+        )
 
     def show(
         self,

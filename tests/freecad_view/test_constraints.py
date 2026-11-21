@@ -452,6 +452,11 @@ def _assert_marked_as(
         assert x >= glyph_px - extent_px and y < extent_px, (node.icon, x, y)
         got = drawn.pixelColor(x + tile.pad_px, y + tile.pad_px)
         assert _blend_of(got, rgb, tile_rgb), (node.icon, x, y, got.name())
+    # A gap cleared with no X painted on it would pass the checks above.
+    assert any(
+        _near(drawn.pixelColor(x + tile.pad_px, y + tile.pad_px), rgb)
+        for x, y in mismatches
+    ), node.icon
 
 
 def test_icons_take_their_selections_color_and_deactivated_ones_a_corner_x(

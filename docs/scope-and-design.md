@@ -104,8 +104,9 @@ line they cut; an even spacing is dropped only with an end. Geometry wins
 when a unit opens: a constraint the boards miss by more than the joint
 clearance comes in deactivated, its icons marked with a corner X and
 never solved, and one naming boards or openings that are gone is
-dropped, each said once in a notification. The constraint commands sit on a toolbar shown only while
-Edit Unit is open, as the Sketcher's edit-mode toolbars are.
+dropped, each said once in a notification. The constraint commands sit
+on a toolbar shown only while Edit Unit is open, as the Sketcher's
+edit-mode toolbars are.
 
 A drag moves a board and every board joined to it through locked regions;
 every other board moves only when an opening ahead of it reaches the
@@ -274,9 +275,11 @@ the next edit or selection change.
 The constraint list follows the Sketcher's: one list holding every lock
 and every Equal and Even spacing, locks first in tree order and then
 constraints in the order they were made, each with its kind's icon and its
-size in the user's unit system, the icon grayed in Qt's disabled mode for
-a deactivated constraint, and selection shared with the 3D view in both
-directions. It departs from the Sketcher in three places. A constraint's
+size in the user's unit system, and selection shared with the 3D view in
+both directions. It departs from the Sketcher in four places. A
+deactivated constraint's icon carries the 3D view's corner X where the
+Sketcher's list grays it in Qt's disabled mode, so the list and the view
+mark it the same way. A constraint's
 checkbox means active, since the editor has no virtual space for the
 Sketcher's visibility box to choose. Each row has a delete button and one
 button deletes every deactivated constraint, because opening a unit can
