@@ -171,6 +171,10 @@ types a size.
   lies along that axis, or when the region found is alone among boards in
   a run spanning the unit, as a column between the two sides is. That is
   what makes Lock Width on a bay with no divider refuse.
+- **bug-026 ships deferred** (user decision 2026-11-21, from manual QA):
+  the add buttons over a selected opening cover the reference dimensions
+  this task makes selection draw. The user filed it as bug-026 to plan as
+  its own task after this one, rather than fix it here.
 
 ## Plan
 - [x] **Step 1** (`editor/elevation.py`, `tests/test_editor_elevation.py`):
@@ -219,3 +223,8 @@ types a size.
 ### Round 2: APPROVED
 - **N1: Re-wrapping left lines too long** (`README.md:107`, `README.md:158`, `docs/scope-and-design.md:336`): two README lines run to 86 and 103 columns and the scope-and-design line to 89; cosmetic, for `doc-hygiene` in `/ship`.
 - **N2: The depth-Lock row is tested without a scan** (`tests/freecad_gui/test_constraint_list.py`, `freecad/Shelving/editor/elevation.py:758`): accepted, since a scan cannot build a run through the depth from boards; the kind decision lives in the pure `run_direction`, tested on a hand-built depth run, and the list test checks the "Lock" text and bare-tile icon.
+
+### Round 3: APPROVED
+- **N1: Decision to ship bug-026 is missing from the Advice** (`.claude/docs/bug-log.md:147`): this branch causes bug-026, so merging without a fix is a user decision for `## Advice`.
+- **N2: The field and Lock Width now treat a unit-size dimension differently** (`freecad/Shelving/editor/elevation.py:806`): a lone column's drawn width refuses Lock Width but locks through a typed size, as `main` already allowed; now easier to reach. Raise with the user.
+- **N3: Doc line wrapping still uneven** (`docs/scope-and-design.md:277`, `.claude/docs/qa-wizard.md:31`, `README.md:107`, `README.md:158`, `docs/scope-and-design.md:336`): for `doc-hygiene` in `/ship`.
