@@ -494,10 +494,10 @@ def _rotated_default_unit() -> Unit:
 def test_selection_permissions_and_split() -> None:
     """Selecting a bay permits split and not merge; splitting writes one new
     board and two bays; selecting that board refuses a split, naming it,
-    and permits merge; merging removes
-    it and restores the original board count and names. Also covers the
-    "nothing selected" refusal both buttons can hit: no id was named to
-    refuse, so ``EditFailure.node_id`` is ``None`` rather than an id string."""
+    and permits merge; merging removes it and restores the original board
+    count and names. Also covers the "nothing selected" refusal split and
+    merge both hit: no id was named to refuse, so ``EditFailure.node_id`` is
+    ``None`` rather than an id string."""
     doc = FreeCAD.newDocument("editor_smoke")
     try:
         container = create_unit(doc)

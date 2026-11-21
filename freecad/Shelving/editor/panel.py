@@ -91,10 +91,11 @@ class _MainWindow(Protocol):
 
 
 class _MenuInsert(TypedDict):
-    """One entry of a workbench manipulator's ``modifyContextMenu`` result:
-    the command ``insert`` goes just before the item ``menuItem``."""
+    """One entry of a workbench manipulator's ``modifyContextMenu`` result."""
 
+    # The command id to add to the menu, or "Separator".
     insert: str
+    # The command id of the existing item the new entry goes just before.
     menuItem: str
 
 
