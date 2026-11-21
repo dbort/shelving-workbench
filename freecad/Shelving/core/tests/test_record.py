@@ -19,6 +19,7 @@ from freecad.Shelving.core.layout import (
     Equal,
     EvenSpacing,
     Item,
+    Lock,
     Region,
     RunEnd,
     Unit,
@@ -29,6 +30,7 @@ from freecad.Shelving.core.record import (
     RULE_RECORD_VERSION,
     OpenReport,
     StoredEqual,
+    StoredLock,
     StoredRules,
     parse_rules,
     region_keys,
@@ -72,7 +74,13 @@ def _closed_box_unit(
     bay2_lock: Basis | None = None, *, mid_lock: Basis | None = None
 ) -> Unit:
     """Four 427.5 mm bays behind three shelves in a closed box, every region
-    unlocked unless told otherwise."""
+    unlocked unless told otherwise: ``mid_lock`` locks the division between
+    the bottom and the top, then ``bay2_lock`` the second bay."""
+    locks = tuple(
+        Lock(region_id, basis)
+        for region_id, basis in (("mid", mid_lock), ("bay2", bay2_lock))
+        if basis is not None
+    )
     return Unit(
         size_mm=Vec3(900.0, 300.0, 1800.0),
         root=Division(
@@ -88,7 +96,7 @@ def _closed_box_unit(
                             items=[
                                 Bay(size_mm=427.5, id="bay1"),
                                 _b("shelf1"),
-                                Bay(size_mm=427.5, lock=bay2_lock, id="bay2"),
+                                Bay(size_mm=427.5, id="bay2"),
                                 _b("shelf2"),
                                 Bay(size_mm=427.5, id="bay3"),
                                 _b("shelf3"),
@@ -99,11 +107,12 @@ def _closed_box_unit(
                         _b("right"),
                     ],
                     size_mm=1764.0,
-                    lock=mid_lock,
+                    id="mid",
                 ),
                 _b("top"),
             ],
         ),
+        constraints=locks,
     )
 
 
@@ -125,7 +134,7 @@ def _with_next_unit() -> Unit:
                         Division(
                             axis=Axis.Z,
                             items=[
-                                Bay(size_mm=382.0, lock=Basis.WITH_NEXT, id="spaced"),
+                                Bay(size_mm=382.0, id="spaced"),
                                 _b("shelf"),
                                 Bay(size_mm=764.0, id="top_bay"),
                             ],
@@ -138,6 +147,7 @@ def _with_next_unit() -> Unit:
                 _b("top"),
             ],
         ),
+        constraints=(Lock("spaced", Basis.WITH_NEXT),),
     )
 
 
@@ -179,19 +189,19 @@ def _restored(original: Unit, rescanned: Unit) -> Unit:
 
 
 def _locks(unit: Unit) -> Mapping[str, Basis | None]:
-    """Each non-root region's lock, by its record key."""
-    keys = region_keys(unit)
-    found: dict[str, Basis | None] = {}
+    """The basis of each non-root region's active Lock, ``None`` for one
+    with none, by its record key."""
+    locks = {
+        c.region_id: c.basis
+        for c in unit.constraints
+        if isinstance(c, Lock) and c.active
+    }
+    return {key: locks.get(region_id) for key, region_id in region_keys(unit).items()}
 
-    def walk(region: Region) -> None:
-        if isinstance(region, Division):
-            for item in region.items:
-                if not isinstance(item, Board):
-                    found[item.id] = item.lock
-                    walk(item)
 
-    walk(unit.root)
-    return {key: found[region_id] for key, region_id in keys.items()}
+def _stored_locks(*keys: str, basis: Basis = Basis.CLEAR) -> StoredRules:
+    """A record of one active lock in ``basis`` per key, in that order."""
+    return StoredRules(tuple(StoredLock(key, basis, True) for key in keys))
 
 
 def _board_ids(region: Region) -> list[str]:
@@ -214,33 +224,91 @@ def _assert_same_spaces(a: Unit, b: Unit) -> None:
 # --- rules_to_json() ---------------------------------------------------------
 
 
-def test_rules_to_json_emits_one_entry_per_locked_region_and_nothing_else() -> None:
+def test_rules_to_json_emits_each_lock_as_a_constraint_in_order() -> None:
     unit = _closed_box_unit(Basis.CLEAR, mid_lock=Basis.WITH_NEXT)
+    mid, bay2 = unit.constraints
+    unit = dataclasses.replace(
+        unit,
+        constraints=(bay2, dataclasses.replace(mid, active=False)),
+    )
     assert json.loads(rules_to_json(unit)) == {
         "schema_version": RULE_RECORD_VERSION,
-        "locks": {
-            rule_key("bottom", "top"): {"basis": "with_next"},
-            rule_key("shelf1", "shelf2"): {"basis": "clear"},
-        },
-        "constraints": [],
+        "constraints": [
+            {
+                "kind": "lock",
+                "active": True,
+                "basis": "clear",
+                "region": rule_key("shelf1", "shelf2"),
+            },
+            {
+                "kind": "lock",
+                "active": False,
+                "basis": "with_next",
+                "region": rule_key("bottom", "top"),
+            },
+        ],
     }
-    assert RULE_RECORD_VERSION == 2
+    assert RULE_RECORD_VERSION == 3
 
 
-def test_rules_to_json_of_an_unlocked_unit_has_no_locks() -> None:
+def test_rules_to_json_of_an_unlocked_unit_has_no_constraints() -> None:
     doc = json.loads(rules_to_json(_closed_box_unit()))
-    assert doc == {"schema_version": 2, "locks": {}, "constraints": []}
+    assert doc == {"schema_version": 3, "constraints": []}
 
 
 # --- rules_from_json() --------------------------------------------------------
 
 
-def test_rules_from_json_round_trips_both_bases() -> None:
+def test_rules_from_json_round_trips_both_bases_and_activation() -> None:
     unit = _closed_box_unit(Basis.CLEAR, mid_lock=Basis.WITH_NEXT)
-    assert rules_from_json(rules_to_json(unit)).locks == {
-        rule_key("bottom", "top"): Basis.WITH_NEXT,
-        rule_key("shelf1", "shelf2"): Basis.CLEAR,
-    }
+    mid, bay2 = unit.constraints
+    unit = dataclasses.replace(
+        unit, constraints=(dataclasses.replace(mid, active=False), bay2)
+    )
+    assert rules_from_json(rules_to_json(unit)).constraints == (
+        StoredLock(rule_key("bottom", "top"), Basis.WITH_NEXT, False),
+        StoredLock(rule_key("shelf1", "shelf2"), Basis.CLEAR, True),
+    )
+
+
+def test_a_version_2_record_reads_its_locks_first_in_tree_order() -> None:
+    text = json.dumps(
+        {
+            "schema_version": 2,
+            "locks": {
+                "bottom|top": {"basis": "with_next"},
+                "shelf1|shelf2": {"basis": "clear"},
+            },
+            "constraints": [
+                {
+                    "kind": "equal",
+                    "basis": "clear",
+                    "active": False,
+                    "openings": ["~|shelf1", "shelf2|shelf3"],
+                }
+            ],
+        }
+    )
+    assert rules_from_json(text).constraints == (
+        StoredLock("bottom|top", Basis.WITH_NEXT, True),
+        StoredLock("shelf1|shelf2", Basis.CLEAR, True),
+        StoredEqual(("~|shelf1", "shelf2|shelf3"), Basis.CLEAR, False),
+    )
+
+
+def test_a_lock_entry_with_an_unknown_basis_or_no_region_is_dropped_alone() -> None:
+    kept = {"kind": "lock", "active": True, "basis": "clear", "region": "a|b"}
+    text = json.dumps(
+        {
+            "schema_version": 3,
+            "constraints": [
+                {**kept, "basis": "through_two_boards"},
+                {"kind": "lock", "active": True, "basis": "clear"},
+                kept,
+            ],
+        }
+    )
+    assert rules_from_json(text).constraints == (StoredLock("a|b", Basis.CLEAR, True),)
 
 
 @pytest.mark.parametrize(
@@ -331,6 +399,25 @@ def test_rules_from_json_round_trips_both_bases() -> None:
         json.dumps(
             {"schema_version": 1, "locks": {"a|b": {"basis": "clear", "size_mm": 3}}}
         ),
+        json.dumps({"schema_version": 3}),
+        json.dumps({"schema_version": 3, "locks": {}, "constraints": []}),
+        json.dumps({"schema_version": 4, "constraints": []}),
+        json.dumps(
+            {
+                "schema_version": 3,
+                "constraints": [
+                    {"kind": "lock", "active": 1, "basis": "clear", "region": "a|b"}
+                ],
+            }
+        ),
+        json.dumps(
+            {
+                "schema_version": 3,
+                "constraints": [
+                    {"kind": "lock", "active": True, "basis": "clear", "region": 7}
+                ],
+            }
+        ),
         json.dumps([1, 2]),
         "not json at all",
         "",
@@ -350,9 +437,7 @@ def test_parse_locks_tells_an_empty_record_from_no_record() -> None:
 
 def test_with_stored_rules_locks_a_matching_region_and_moves_nothing() -> None:
     scanned = _closed_box_unit()
-    restored = with_stored_rules(
-        scanned, StoredRules({rule_key("shelf1", "shelf2"): Basis.CLEAR})
-    )
+    restored = with_stored_rules(scanned, _stored_locks(rule_key("shelf1", "shelf2")))
     assert _locks(restored)[rule_key("shelf1", "shelf2")] is Basis.CLEAR
     assert solve(restored) == solve(scanned)
     others = {
@@ -370,7 +455,7 @@ def _plinth_unit() -> Unit:
         root=Division(
             axis=Axis.Z,
             items=[
-                Void(size_mm=100.0, lock=Basis.CLEAR, id="plinth"),
+                Void(size_mm=100.0, id="plinth"),
                 _b("bottom"),
                 Bay(size_mm=400.0, id="lower"),
                 _b("shelf"),
@@ -378,6 +463,7 @@ def _plinth_unit() -> Unit:
                 _b("top"),
             ],
         ),
+        constraints=(Lock("plinth"),),
     )
 
 
@@ -390,15 +476,13 @@ def test_a_record_is_the_whole_lock_state() -> None:
     """A region the record does not name is unlocked, the scan's lock on a
     plinth void included."""
     scanned = _plinth_unit()
-    restored = with_stored_rules(
-        scanned, StoredRules({rule_key("shelf", "top"): Basis.CLEAR})
-    )
+    restored = with_stored_rules(scanned, _stored_locks(rule_key("shelf", "top")))
     locks = _locks(restored)
     assert locks[rule_key(None, "bottom")] is None
     assert locks[rule_key("shelf", "top")] is Basis.CLEAR
     assert locks[rule_key("bottom", "shelf")] is None
     assert solve(restored) == solve(scanned)
-    assert set(_locks(with_stored_rules(scanned, StoredRules({}))).values()) == {None}
+    assert with_stored_rules(scanned, StoredRules()).constraints == ()
 
 
 def test_an_unlocked_void_stays_unlocked_across_a_rescan() -> None:
@@ -423,9 +507,43 @@ def test_a_stored_spacing_with_no_board_after_it_locks_its_clear_size() -> None:
         ),
     )
     restored = with_stored_rules(
-        scanned, StoredRules({rule_key("left", None): Basis.WITH_NEXT})
+        scanned, _stored_locks(rule_key("left", None), basis=Basis.WITH_NEXT)
     )
     assert _locks(restored)[rule_key("left", None)] is Basis.CLEAR
+
+
+def test_locks_under_a_shared_key_go_to_its_regions_in_tree_order() -> None:
+    """Two regions with no board beside them share a key, as a run of axis
+    wraps does: its locks fill them in tree order, one each, and a third is
+    left out."""
+    scanned = Unit(
+        size_mm=Vec3(600.0, 300.0, 900.0),
+        root=Division(
+            axis=Axis.X,
+            items=[
+                Division(
+                    axis=Axis.Z,
+                    items=[Bay(size_mm=882.0, id="a"), _b("ta")],
+                    size_mm=300.0,
+                    id="wrap_a",
+                ),
+                Division(
+                    axis=Axis.Z,
+                    items=[Bay(size_mm=882.0, id="b"), _b("tb")],
+                    size_mm=300.0,
+                    id="wrap_b",
+                ),
+            ],
+        ),
+    )
+    shared = rule_key(None, None)
+    one = with_stored_rules(scanned, _stored_locks(shared))
+    assert [c.region_id for c in one.constraints if isinstance(c, Lock)] == ["wrap_a"]
+    three = with_stored_rules(scanned, _stored_locks(shared, shared, shared))
+    assert [c.region_id for c in three.constraints if isinstance(c, Lock)] == [
+        "wrap_a",
+        "wrap_b",
+    ]
 
 
 # --- Intent survival across a rescan: the point of the module. ----------------
@@ -477,7 +595,7 @@ def test_renamed_bounding_board_leaves_its_regions_unlocked() -> None:
     restored = with_stored_rules(renamed, rules_from_json(serialized))
     assert _locks(restored)[rule_key("shelf1", "shelf2_renamed")] is None
     stored = with_stored_rules(
-        renamed, StoredRules({rule_key("shelf1", "shelf2_renamed"): Basis.CLEAR})
+        renamed, _stored_locks(rule_key("shelf1", "shelf2_renamed"))
     )
     assert _locks(stored)[rule_key("shelf1", "shelf2_renamed")] is Basis.CLEAR
 
@@ -571,7 +689,6 @@ def test_rules_to_json_emits_each_constraint_by_its_keys() -> None:
         EvenSpacing(run_id=box.root.id, start="bottom", end="top"),
     )
     doc = json.loads(rules_to_json(unit))
-    assert doc["locks"] == {}
     assert doc["constraints"] == [
         {
             "kind": "equal",
@@ -632,16 +749,18 @@ def test_a_constraint_in_the_spacing_basis_round_trips() -> None:
 
 def test_a_constraint_with_an_unknown_basis_is_dropped_alone() -> None:
     box = _closed_box_unit()
+    lock = Lock(_bay_ids(box)[0])
     doc = json.loads(
-        rules_to_json(_constrained(box, _equal(box, 0, 2), _equal(box, 1, 3)))
+        rules_to_json(_constrained(box, lock, _equal(box, 0, 2), _equal(box, 1, 3)))
     )
-    doc["locks"] = {rule_key(None, "shelf1"): {"basis": "clear"}}
-    doc["constraints"][0]["basis"] = "through_two_boards"
+    doc["constraints"][1]["basis"] = "through_two_boards"
     rules = rules_from_json(json.dumps(doc))
-    assert rules.locks == {rule_key(None, "shelf1"): Basis.CLEAR}
-    assert [c.keys for c in rules.constraints if isinstance(c, StoredEqual)] == [
-        (rule_key("shelf1", "shelf2"), rule_key("shelf3", None)),
-    ]
+    assert rules.constraints == (
+        StoredLock(rule_key(None, "shelf1"), Basis.CLEAR, True),
+        StoredEqual(
+            (rule_key("shelf1", "shelf2"), rule_key("shelf3", None)), Basis.CLEAR, True
+        ),
+    )
 
 
 def test_a_version_1_record_gives_no_constraints() -> None:
@@ -726,6 +845,26 @@ def test_opening_drops_a_constraint_whose_key_or_end_board_is_gone() -> None:
     equal, spacing = restored.constraints
     assert isinstance(equal, Equal) and isinstance(spacing, EvenSpacing)
     assert spacing.end == "shelf3"
+
+
+def test_opening_drops_a_lock_whose_key_is_gone_and_never_deactivates_one() -> None:
+    box = _closed_box_unit(Basis.CLEAR)
+    bays = _bay_ids(box)
+    original = _constrained(
+        box,
+        Lock(bays[0]),
+        Lock(bays[1], active=False),
+        Lock(bays[3]),
+    )
+    moved = _rescan_with_board_moved(original, "shelf3", 40.0)
+    gone = _renamed_board(moved, "shelf1", "Box001")
+    restored, report = restore_rules(
+        gone, parse_rules(rules_to_json(original)), DEFAULT_CLEARANCE_MM
+    )
+    assert report == OpenReport(dropped=2)
+    (kept,) = restored.constraints
+    assert isinstance(kept, Lock) and kept.active
+    assert region_keys(restored)[rule_key("shelf3", None)] == kept.region_id
 
 
 def test_opening_with_no_record_keeps_the_scan_and_reports_nothing() -> None:

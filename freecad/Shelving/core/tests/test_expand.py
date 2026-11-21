@@ -6,7 +6,6 @@ from freecad.Shelving.core.expand import BoardSpec, expand, total_volume_mm3
 from freecad.Shelving.core.geometry import Vec3
 from freecad.Shelving.core.layout import (
     Axis,
-    Basis,
     Bay,
     Board,
     Division,
@@ -79,7 +78,7 @@ def _column(void_mm: float, prefix: str) -> Division:
         Board(thickness_mm=18.0, role="top", id=f"{prefix}_top"),
     ]
     if void_mm > 0:
-        items.append(Void(size_mm=void_mm, lock=Basis.CLEAR, id=f"{prefix}_void"))
+        items.append(Void(size_mm=void_mm, id=f"{prefix}_void"))
     return Division(axis=Axis.Z, items=items, size_mm=376.0, id=f"{prefix}_division")
 
 

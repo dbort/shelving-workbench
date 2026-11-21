@@ -6,8 +6,8 @@ box that is not part of the unit), or a ``Division`` (a region cut into an
 ordered run of boards and sub-regions along one ``Axis``). The carcass
 shell is not a distinguished rule here: it is the outermost boards of the
 outermost divisions, built from the same items an interior division uses.
-A unit also carries the constraints between its openings, ``Equal`` and
-``EvenSpacing``, which name the tree's regions and boards by id.
+A unit also carries the constraints on its openings, ``Lock``, ``Equal``
+and ``EvenSpacing``, which name the tree's regions and boards by id.
 """
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ class Axis(enum.StrEnum):
 
 
 class Basis(enum.StrEnum):
-    """What a locked region's size measures.
+    """What a held size measures.
 
     ``CLEAR`` is the region's own extent along its division's axis.
     ``WITH_NEXT`` is the region plus the item immediately after it in the
@@ -134,9 +134,6 @@ class Bay:
     # The region's current clear size along its parent division's axis. The
     # root has no parent run and keeps 0.
     size_mm: float = 0.0
-    # What the region's size measures while it holds still through edits;
-    # ``None`` means unlocked.
-    lock: Basis | None = None
     id: str = field(default_factory=new_id)
 
 
@@ -151,9 +148,6 @@ class Void:
     # The region's current clear size along its parent division's axis. The
     # root has no parent run and keeps 0.
     size_mm: float = 0.0
-    # What the region's size measures while it holds still through edits;
-    # ``None`` means unlocked.
-    lock: Basis | None = None
     id: str = field(default_factory=new_id)
 
 
@@ -170,9 +164,6 @@ class Division:
     # The region's current clear size along its parent division's axis. The
     # root has no parent run and keeps 0.
     size_mm: float = 0.0
-    # What the region's size measures while it holds still through edits;
-    # ``None`` means unlocked.
-    lock: Basis | None = None
     id: str = field(default_factory=new_id)
 
     def __post_init__(self) -> None:
@@ -322,7 +313,25 @@ class EvenSpacing:
     id: ConstraintId = field(default_factory=new_constraint_id)
 
 
-Constraint = Equal | EvenSpacing
+@dataclass(frozen=True)
+class Lock:
+    """One opening held at its size through edits.
+
+    It records no size: turning it on holds the opening at the size the
+    boards give it then, so it moves nothing and never conflicts.
+    """
+
+    region_id: str
+    # What the held size measures. The solve holds the clear size either
+    # way; a spacing keeps its number when the board after it changes
+    # thickness.
+    basis: Basis = Basis.CLEAR
+    # A deactivated constraint is kept and drawn but never solved.
+    active: bool = True
+    id: ConstraintId = field(default_factory=new_constraint_id)
+
+
+Constraint = Equal | EvenSpacing | Lock
 
 
 @dataclass
@@ -357,8 +366,9 @@ class Unit:
     # Per model axis rather than per elevation side, so a facing found or
     # corrected later renames the choice but keeps the physical side.
     fixed_point: FixedPoint = FixedPoint()
-    # The geometric constraints between openings, in the order they were
-    # made. Each names regions and boards of this tree.
+    # The geometric constraints on openings, in the order they were made.
+    # Each names regions and boards of this tree, and no region holds more
+    # than one Lock.
     constraints: tuple[Constraint, ...] = ()
     id: str = field(default_factory=new_id)
 
@@ -432,12 +442,33 @@ def spacing_group(unit: Unit, spacing: EvenSpacing) -> tuple[str, ...] | None:
 
 
 def constraint_regions(unit: Unit, constraint: Constraint) -> tuple[str, ...]:
-    """The regions ``constraint`` holds in ``unit``, in its own order: an
-    ``Equal``'s two, or an ``EvenSpacing``'s group, empty when the group no
-    longer resolves."""
+    """The regions ``constraint`` holds in ``unit``, in its own order: a
+    ``Lock``'s one, an ``Equal``'s two, or an ``EvenSpacing``'s group, empty
+    when the group no longer resolves."""
+    if isinstance(constraint, Lock):
+        return (constraint.region_id,)
     if isinstance(constraint, Equal):
         return constraint.region_ids
     return spacing_group(unit, constraint) or ()
+
+
+def region_lock(unit: Unit, region_id: str) -> Lock | None:
+    """The ``Lock``, active or deactivated, naming the region ``region_id``
+    in ``unit``; ``None`` when none does."""
+    return next(
+        (
+            c
+            for c in unit.constraints
+            if isinstance(c, Lock) and c.region_id == region_id
+        ),
+        None,
+    )
+
+
+def is_locked(unit: Unit, region_id: str) -> bool:
+    """Whether an active ``Lock`` holds the region ``region_id``."""
+    found = region_lock(unit, region_id)
+    return found is not None and found.active
 
 
 def renamed_constraint_boards(

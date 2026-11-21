@@ -24,6 +24,7 @@ from freecad.Shelving.core.layout import (
     Board,
     Division,
     Item,
+    Lock,
     Region,
     Unit,
     Void,
@@ -88,6 +89,8 @@ def test_a_scan_locks_only_axis_wraps_and_voids_beside_a_compartment(
     name: str,
 ) -> None:
     unit = _scanned(name)
+    locks = {c.region_id: c for c in unit.constraints if isinstance(c, Lock)}
+    assert len(locks) == len(unit.constraints)
     for division in _divisions(unit.root):
         compartments = [
             item
@@ -99,9 +102,10 @@ def test_a_scan_locks_only_axis_wraps_and_voids_beside_a_compartment(
                 continue
             beside = isinstance(item, Void) and bool(compartments)
             if _is_axis_wrap(item) or beside:
-                assert item.lock is Basis.CLEAR, item
+                lock = locks[item.id]
+                assert (lock.basis, lock.active) == (Basis.CLEAR, True), item
             else:
-                assert item.lock is None, item
+                assert item.id not in locks, item
 
 
 @pytest.mark.parametrize("name", _FIXTURE_NAMES)

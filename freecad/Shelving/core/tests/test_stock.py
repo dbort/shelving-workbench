@@ -8,7 +8,6 @@ import pytest
 from freecad.Shelving.core.geometry import Vec3
 from freecad.Shelving.core.layout import (
     Axis,
-    Basis,
     Bay,
     Board,
     Division,
@@ -156,7 +155,7 @@ def test_with_no_interior_board_in_the_run_the_nearest_interior_board_wins() -> 
         Division(
             axis=Axis.Z,
             items=[
-                Void(size_mm=300.0, lock=Basis.CLEAR),
+                Void(size_mm=300.0),
                 _board("floor_b"),
                 Bay(size_mm=646.0, id="target"),
             ],

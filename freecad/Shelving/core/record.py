@@ -1,5 +1,5 @@
-"""The stored rule record: the locked regions and the constraints between
-openings, keyed to survive a rescan.
+"""The stored rule record: the constraints on a unit's openings, locks
+included, keyed to survive a rescan.
 
 A rescan assigns every region a fresh :func:`~freecad.Shelving.core.layout.new_id`,
 so a record keyed by region id would match nothing on the next scan and the
@@ -19,17 +19,18 @@ bounds at most one region on each side within one run.
 
 GEOMETRY WINS. A rescan takes every region's size from the boards, so a
 board moved by hand stays where it was moved. The record contributes only
-what geometry cannot say: which regions are locked, and in which basis. A
-stored lock takes its region's scanned size. A valid record is the whole
-lock state: a region it does not name is unlocked, even where the scan
-would have locked it, so an opening the user unlocked stays unlocked. The
-scan's own locks stand only when the container holds no valid record.
+what geometry cannot say: which constraints the unit holds, which of them
+are active, and in which basis each measures. A lock records no size: it
+holds its region at the scanned size. A valid record is the whole
+constraint state: a region no stored lock names is unlocked, even where the
+scan would have locked it, so an opening the user unlocked stays unlocked.
+The scan's own locks stand only when the container holds no valid record.
 
 CONSEQUENCES of keying this way, because they are not obvious. Renaming or
 deleting a bounding board invalidates its neighbors' keys; the correct
-response, and what :func:`with_stored_rules` does, is to leave that region
-unlocked rather than raise. The geometry scanned is still correct, only the
-stored lock for that one region is lost.
+response, and what :func:`with_stored_rules` does, is to leave that
+constraint out rather than raise. The geometry scanned is still correct,
+only the stored constraint on that region is lost.
 
 A lock's :class:`~freecad.Shelving.core.layout.Basis` rides along in the
 record, because it cannot be recovered from geometry: a clear opening and a
@@ -38,23 +39,26 @@ identically, and a scan always locks in ``Basis.CLEAR``. A stored
 ``Basis.WITH_NEXT`` surviving a rescan is the only way that intent survives
 at all.
 
-A constraint names its openings by the same keys, and an even spacing names
-its run by the run's key and its ends by board id, so it survives a rescan
-as a lock does. Geometry wins for constraints too: one the boards no longer
-meet comes in deactivated rather than moving anything, and one naming a key
-or board that matches nothing is left out (:func:`restore_rules`).
+An even spacing names its run by the run's key and its ends by board id.
+Geometry wins for constraints too: one the boards no longer meet comes in
+deactivated rather than moving anything, and one naming a key or board that
+matches nothing is left out (:func:`restore_rules`). A lock always meets the
+boards, so it never comes in deactivated.
 
-A record in any other shape than :func:`rules_to_json` writes, the version 1
-record of locks alone included, reads as no record (:func:`parse_rules`
-gives ``None``): the unit opens with the locks the scan gives it and no
-constraints, where raising would leave it unopenable.
+The version 2 record kept its locks in a map of their own ahead of the
+constraint list; it reads as those locks, active and in the tree order it
+wrote them in, followed by its constraints, so every unit saved in it keeps
+its locks. A record in any other shape, the version 1 record of locks alone
+included, reads as no record (:func:`parse_rules` gives ``None``): the unit
+opens with the locks the scan gives it and no other constraints, where
+raising would leave it unopenable.
 
-WHAT IS NOT IN THE RECORD. Anything but the locks and constraints. A unit's
-id, its depth axis, and its facing are single values with an obvious home as
+WHAT IS NOT IN THE RECORD. Anything but the constraints. A unit's id, its
+depth axis, and its facing are single values with an obvious home as
 ordinary container properties (``sh-018``'s job, not this module's); a board's
 material, provenance, and pinned size live on the board's own object. This
 record exists because a bay or a void is not a board and so has nowhere else
-to keep its lock or its constraints.
+to keep its constraints.
 """
 
 from __future__ import annotations
@@ -73,6 +77,7 @@ from freecad.Shelving.core.layout import (
     Equal,
     EvenSpacing,
     Item,
+    Lock,
     Region,
     RunEnd,
     SpacingEnd,
@@ -81,7 +86,9 @@ from freecad.Shelving.core.layout import (
 )
 from freecad.Shelving.core.solver import constraint_spread_mm, solve
 
-RULE_RECORD_VERSION: int = 2
+RULE_RECORD_VERSION: int = 3
+# The previous version, which parse_rules converts.
+_LOCK_MAP_VERSION: int = 2
 
 # A FreeCAD object's internal Name is identifier-only (letters, digits,
 # underscore), so any punctuation is safe here; printable characters are
@@ -155,8 +162,16 @@ def unique_regions_by_key(unit: Unit) -> Mapping[str, str]:
 BasisName = Literal["clear", "with_next"]
 
 
-class _LockDoc(TypedDict):
+class _LockMapEntryDoc(TypedDict):
     basis: BasisName
+
+
+class _LockDoc(TypedDict):
+    kind: Literal["lock"]
+    active: bool
+    basis: BasisName
+    # The region's key.
+    region: str
 
 
 class _EqualDoc(TypedDict):
@@ -178,10 +193,12 @@ class _EvenSpacingDoc(TypedDict):
     end: str
 
 
+_ConstraintDoc = _LockDoc | _EqualDoc | _EvenSpacingDoc
+
+
 class _RuleRecordDoc(TypedDict):
     schema_version: int
-    locks: dict[str, _LockDoc]
-    constraints: list[_EqualDoc | _EvenSpacingDoc]
+    constraints: list[_ConstraintDoc]
 
 
 # The root has no parent run and so no rule_key; neither sentinel holds the
@@ -194,6 +211,17 @@ _RUN_END_NAMES: Mapping[RunEnd, str] = {
     RunEnd.START: RUN_START_SENTINEL,
     RunEnd.END: RUN_END_SENTINEL,
 }
+
+
+@dataclasses.dataclass(frozen=True)
+class StoredLock:
+    """A :class:`~freecad.Shelving.core.layout.Lock` as the record keeps
+    it."""
+
+    # The region's rule key.
+    key: str
+    basis: Basis
+    active: bool
 
 
 @dataclasses.dataclass(frozen=True)
@@ -220,15 +248,13 @@ class StoredEvenSpacing:
     active: bool
 
 
-StoredConstraint = StoredEqual | StoredEvenSpacing
+StoredConstraint = StoredLock | StoredEqual | StoredEvenSpacing
 
 
 @dataclasses.dataclass(frozen=True)
 class StoredRules:
     """What a valid record holds."""
 
-    # Each stored lock's basis, by rule key.
-    locks: Mapping[str, Basis] = dataclasses.field(default_factory=dict)
     # In the order the unit holds them.
     constraints: tuple[StoredConstraint, ...] = ()
 
@@ -243,9 +269,19 @@ def _end_name(end: SpacingEnd) -> str:
 
 def _constraint_doc(
     unit: Unit, constraint: Constraint, keys: Mapping[str, str]
-) -> _EqualDoc | _EvenSpacingDoc | None:
+) -> _ConstraintDoc | None:
     """``constraint`` as its record entry, or ``None`` when a region it
     names has no key in ``unit``."""
+    if isinstance(constraint, Lock):
+        key = keys.get(constraint.region_id)
+        if key is None:
+            return None
+        return {
+            "kind": "lock",
+            "active": constraint.active,
+            "basis": _basis_name(constraint.basis),
+            "region": key,
+        }
     if isinstance(constraint, Equal):
         first, second = (keys.get(region_id) for region_id in constraint.region_ids)
         if first is None or second is None:
@@ -274,32 +310,26 @@ def _constraint_doc(
 
 
 def rules_to_json(unit: Unit) -> str:
-    """Every locked region and every constraint in ``unit`` as JSON.
+    """Every constraint in ``unit``, locks included, as JSON.
 
-    ``{"schema_version": 2, "locks": {key: {"basis": "clear" |
-    "with_next"}}, "constraints": [...]}``: one lock entry per locked
-    non-root region, keyed by :func:`rule_key`, and none for an unlocked
-    one. Each constraint entry has ``"kind"`` (``"equal"`` or
-    ``"even_spacing"``), ``"basis"`` and ``"active"``; an Equal names its
-    two openings' keys as ``"openings"``, and an even spacing names its
-    run's key, :data:`ROOT_RUN_SENTINEL` for the root's, as ``"run"`` and
-    its ends as ``"start"`` and ``"end"``, each a board id or
-    :data:`RUN_START_SENTINEL` / :data:`RUN_END_SENTINEL`. A constraint
-    naming a region with no key is left out.
+    ``{"schema_version": 3, "constraints": [...]}``, in the unit's order.
+    Each entry has ``"kind"`` (``"lock"``, ``"equal"`` or
+    ``"even_spacing"``), ``"active"`` and ``"basis"`` (``"clear"`` or
+    ``"with_next"``). A lock names its region's :func:`rule_key` as
+    ``"region"``; an Equal names its two openings' keys as ``"openings"``;
+    an even spacing names its run's key, :data:`ROOT_RUN_SENTINEL` for the
+    root's, as ``"run"`` and its ends as ``"start"`` and ``"end"``, each a
+    board id or :data:`RUN_START_SENTINEL` / :data:`RUN_END_SENTINEL`. A
+    constraint naming a region with no key is left out.
     """
-    locks: dict[str, _LockDoc] = {}
-    for key, item in _iter_keyed_regions(unit.root):
-        if item.lock is not None:
-            locks[key] = {"basis": _basis_name(item.lock)}
     keys = keys_by_region(unit)
-    constraints: list[_EqualDoc | _EvenSpacingDoc] = []
+    constraints: list[_ConstraintDoc] = []
     for constraint in unit.constraints:
         entry = _constraint_doc(unit, constraint, keys)
         if entry is not None:
             constraints.append(entry)
     doc: _RuleRecordDoc = {
         "schema_version": RULE_RECORD_VERSION,
-        "locks": locks,
         "constraints": constraints,
     }
     return json.dumps(doc)
@@ -331,6 +361,18 @@ def _unknown_basis(raw: object) -> bool:
     return isinstance(basis, str) and _parse_basis(basis) is None
 
 
+_LOCK_FIELDS = frozenset({"kind", "active", "basis", "region"})
+
+
+def _lock_without_region(raw: object) -> bool:
+    """Whether ``raw`` is a lock entry with every field but ``"region"``."""
+    return (
+        isinstance(raw, dict)
+        and raw.get("kind") == "lock"
+        and set(raw) == _LOCK_FIELDS - {"region"}
+    )
+
+
 def _parse_constraint(raw: object) -> StoredConstraint | None:
     if not isinstance(raw, dict):
         return None
@@ -339,6 +381,13 @@ def _parse_constraint(raw: object) -> StoredConstraint | None:
     active: object = raw.get("active")
     if basis is None or not isinstance(active, bool):
         return None
+    if kind == "lock":
+        if set(raw) != _LOCK_FIELDS:
+            return None
+        region: object = raw["region"]
+        if not isinstance(region, str):
+            return None
+        return StoredLock(key=region, basis=basis, active=active)
     if kind == "equal":
         if set(raw) != {"kind", "basis", "active", "openings"}:
             return None
@@ -366,30 +415,12 @@ def _parse_constraint(raw: object) -> StoredConstraint | None:
     return None
 
 
-def parse_rules(text: str) -> StoredRules | None:
-    """The locks and constraints in the record :func:`rules_to_json`
-    emitted; ``None`` for a record in any other shape, a version 1 record
-    included, or text that is not JSON, which an empty record never gives.
-    A constraint entry whose basis is a string naming no basis is left out
-    and the rest of the record read. Never raises."""
-    try:
-        parsed: object = json.loads(text)
-    except ValueError:
+def _parse_lock_map(raw_locks: object) -> list[StoredConstraint] | None:
+    """A version 2 record's lock map as active locks, in its order, which
+    is the tree order its writer walked; ``None`` when it is malformed."""
+    if not isinstance(raw_locks, dict):
         return None
-    if not isinstance(parsed, dict) or set(parsed) != {
-        "schema_version",
-        "locks",
-        "constraints",
-    }:
-        return None
-    version: object = parsed["schema_version"]
-    if isinstance(version, bool) or version != RULE_RECORD_VERSION:
-        return None
-    raw_locks: object = parsed["locks"]
-    raw_constraints: object = parsed["constraints"]
-    if not isinstance(raw_locks, dict) or not isinstance(raw_constraints, list):
-        return None
-    locks: dict[str, Basis] = {}
+    locks: list[StoredConstraint] = []
     for key, raw_lock in raw_locks.items():
         if not isinstance(key, str) or not isinstance(raw_lock, dict):
             return None
@@ -398,58 +429,85 @@ def parse_rules(text: str) -> StoredRules | None:
         basis = _parse_basis(raw_lock["basis"])
         if basis is None:
             return None
-        locks[key] = basis
-    constraints: list[StoredConstraint] = []
+        locks.append(StoredLock(key=key, basis=basis, active=True))
+    return locks
+
+
+def parse_rules(text: str) -> StoredRules | None:
+    """The constraints in the record :func:`rules_to_json` emitted, or in a
+    version 2 record, whose locks come first, active, in its order; ``None``
+    for a record in any other shape, a version 1 record included, or text
+    that is not JSON, which an empty record never gives. A constraint entry
+    whose basis is a string naming no basis, or a lock entry with no
+    ``"region"``, is left out and the rest of the record read. Never
+    raises."""
+    try:
+        parsed: object = json.loads(text)
+    except ValueError:
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    version: object = parsed.get("schema_version")
+    if isinstance(version, bool):
+        return None
+    constraints: list[StoredConstraint]
+    if version == RULE_RECORD_VERSION and set(parsed) == {
+        "schema_version",
+        "constraints",
+    }:
+        constraints = []
+    elif version == _LOCK_MAP_VERSION and set(parsed) == {
+        "schema_version",
+        "locks",
+        "constraints",
+    }:
+        locks = _parse_lock_map(parsed["locks"])
+        if locks is None:
+            return None
+        constraints = locks
+    else:
+        return None
+    raw_constraints: object = parsed["constraints"]
+    if not isinstance(raw_constraints, list):
+        return None
     for raw in raw_constraints:
-        if _unknown_basis(raw):
-            # A basis this workbench does not know costs that constraint
-            # alone, not every lock and constraint beside it.
+        if _unknown_basis(raw) or _lock_without_region(raw):
+            # An entry this workbench cannot place costs that constraint
+            # alone, not every constraint beside it.
             continue
         constraint = _parse_constraint(raw)
         if constraint is None:
             return None
         constraints.append(constraint)
-    return StoredRules(locks=locks, constraints=tuple(constraints))
+    return StoredRules(constraints=tuple(constraints))
 
 
 def rules_from_json(text: str) -> StoredRules:
     """:func:`parse_rules`, with a record in any other shape, or text that
-    is not JSON, giving no locks and no constraints; never raises."""
+    is not JSON, giving no constraints; never raises."""
     rules = parse_rules(text)
     return StoredRules() if rules is None else rules
 
 
-def _locked_items(run: Division, locks: Mapping[str, Basis]) -> list[Item]:
-    """``run``'s items, each region whose key ``locks`` names locked in its
-    stored basis, and in ``Basis.CLEAR`` when that is ``Basis.WITH_NEXT``
-    and no board follows it any more; every other region unlocked."""
-    items = run.items
-    new_items: list[Item] = []
-    for index, item in enumerate(items):
-        if isinstance(item, Board):
-            new_items.append(item)
-            continue
-        new_item = _with_stored_locks(item, locks)
-        key = rule_key(
-            _neighbor_board_id(items, index - 1), _neighbor_board_id(items, index + 1)
-        )
-        basis = locks.get(key)
-        if basis is Basis.WITH_NEXT and _neighbor_board_id(items, index + 1) is None:
-            basis = Basis.CLEAR
-        if new_item.lock is not basis:
-            new_item = dataclasses.replace(new_item, lock=basis)
-        new_items.append(new_item)
-    return new_items
-
-
-def _with_stored_locks(region: Region, locks: Mapping[str, Basis]) -> Region:
-    if not isinstance(region, Division):
-        return region
-    return dataclasses.replace(region, items=_locked_items(region, locks))
+def _restored_lock(
+    unit: Unit, stored: StoredLock, free: Mapping[str, list[str]]
+) -> Lock | None:
+    """``stored`` on the first region in ``free`` under its key, which it
+    takes off that list; ``None`` when none is left. A lock in
+    ``Basis.WITH_NEXT`` on a region no board follows any more comes back in
+    ``Basis.CLEAR``."""
+    candidates = free.get(stored.key)
+    if not candidates:
+        return None
+    region_id = candidates.pop(0)
+    basis = stored.basis
+    if basis is Basis.WITH_NEXT and not _board_follows(unit.root, region_id):
+        basis = Basis.CLEAR
+    return Lock(region_id=region_id, basis=basis, active=stored.active)
 
 
 def _restored_constraint(
-    unit: Unit, stored: StoredConstraint, regions: Mapping[str, str]
+    unit: Unit, stored: StoredEqual | StoredEvenSpacing, regions: Mapping[str, str]
 ) -> Constraint | None:
     """``stored`` named by ``unit``'s ids, or ``None`` when a key or board it
     names matches nothing there, or its ends no longer bound a run."""
@@ -477,29 +535,55 @@ def _restored_constraint(
     return spacing if spacing_group(unit, spacing) is not None else None
 
 
-def with_stored_rules(unit: Unit, rules: StoredRules | None) -> Unit:
-    """``unit``, as scanned, with each region whose :func:`rule_key` matches
-    a stored lock locked in that lock's basis and every other region
-    unlocked, each at its scanned size, so every node keeps the space it
-    had in ``unit``, and with each stored constraint whose keys and boards
-    all match, as stored. Returns ``unit`` itself, with the scan's locks
-    and no constraints, when ``rules`` is ``None``: no valid record.
+def _board_follows(region: Region, region_id: str) -> bool:
+    """Whether a board comes right after the region ``region_id`` in its
+    run within ``region``'s subtree."""
+    if not isinstance(region, Division):
+        return False
+    for index, item in enumerate(region.items):
+        if isinstance(item, Board):
+            continue
+        if item.id == region_id:
+            return _neighbor_board_id(region.items, index + 1) is not None
+        if _board_follows(item, region_id):
+            return True
+    return False
 
-    A region no lock matches, most often because a bounding board was
-    renamed or deleted since the record was written, is unlocked, and a
-    constraint naming such a region or board is left out; neither is an
-    error. Moves nothing, even for a constraint the boards do not meet.
+
+def with_stored_rules(unit: Unit, rules: StoredRules | None) -> Unit:
+    """``unit``, as scanned, with its constraints replaced by each stored
+    one whose keys and boards all match, as stored, so a region no stored
+    lock matches is unlocked; every node keeps the space it had in
+    ``unit``. Returns ``unit`` itself, with the scan's locks, when ``rules``
+    is ``None``: no valid record.
+
+    A constraint naming a region or board that matches nothing, most often
+    because a bounding board was renamed or deleted since the record was
+    written, is left out; that is not an error. Moves nothing, even for a
+    constraint the boards do not meet.
+
+    An Equal or even spacing whose key two regions share is left out. Locks
+    under a key several regions share, as runs of axis wraps with no board
+    between them have, go to those regions in tree order, one each, which
+    is the order a scan made them in; a lock with no region left under its
+    key is left out, so no region gets two.
     """
     if rules is None:
         return unit
-    locked = dataclasses.replace(unit, root=_with_stored_locks(unit.root, rules.locks))
-    regions = unique_regions_by_key(locked)
+    regions = unique_regions_by_key(unit)
+    free: dict[str, list[str]] = {}
+    for key, region in _iter_keyed_regions(unit.root):
+        free.setdefault(key, []).append(region.id)
     constraints: list[Constraint] = []
     for stored in rules.constraints:
-        restored = _restored_constraint(locked, stored, regions)
+        restored = (
+            _restored_lock(unit, stored, free)
+            if isinstance(stored, StoredLock)
+            else _restored_constraint(unit, stored, regions)
+        )
         if restored is not None:
             constraints.append(restored)
-    return dataclasses.replace(locked, constraints=tuple(constraints))
+    return dataclasses.replace(unit, constraints=tuple(constraints))
 
 
 @dataclasses.dataclass(frozen=True)
@@ -509,8 +593,8 @@ class OpenReport:
     # The constraints stored active that the boards miss by more than the
     # clearance, now deactivated, in the unit's order.
     deactivated: tuple[ConstraintId, ...] = ()
-    # How many stored constraints named a region or board the unit no
-    # longer has, and were left out.
+    # How many stored constraints, locks included, named a region or board
+    # the unit no longer has, and were left out.
     dropped: int = 0
 
     @property

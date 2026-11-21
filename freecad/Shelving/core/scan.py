@@ -34,7 +34,7 @@ from __future__ import annotations
 import enum
 import json
 from collections import deque
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
@@ -51,6 +51,7 @@ from freecad.Shelving.core.layout import (
     FollowedFace,
     Insets,
     Item,
+    Lock,
     Region,
     Unit,
     Void,
@@ -567,25 +568,8 @@ def _finalize_items(
 ) -> list[Item]:
     """``raw`` with each region given its span in ``bounds``/``coords_mm``
     as its size, and each ``Board`` given that span as its ``thickness_mm``,
-    or as its ``extent_mm`` when it has one.
-
-    A scan locks only what geometry alone says should hold still: each
-    ``Void`` beside a ``Bay`` or ``Division``, so a plinth gap holds while
-    the compartments beside it change, and each axis-wrap ``Division`` (see
-    ``_is_axis_wrap``) at its wrapped board's slot, so the ``Void`` inside it
-    takes changes along the wrap's axis instead. A run holding no ``Bay`` or
-    ``Division`` locks none of its voids, so the void above a short column
-    still lets a stepped unit grow. Every compartment stays unlocked:
-    geometry cannot tell a size someone meant to hold from one that came out
-    that way, so a compartment's size holds only once it is locked in the
-    editor and kept in the stored rule record.
-    """
+    or as its ``extent_mm`` when it has one."""
     items = list(raw)
-    compartments = [
-        item
-        for item in items
-        if isinstance(item, Bay | Division) and not _is_axis_wrap(item)
-    ]
     for i, item in enumerate(items):
         # A board's extent along its run is its slot in the same snapped
         # grid every sibling's size comes from, so a run adds up exactly. Its
@@ -598,9 +582,37 @@ def _finalize_items(
                 item.extent_mm = slot_mm
             continue
         item.size_mm = slot_mm
-        if _is_axis_wrap(item) or (isinstance(item, Void) and compartments):
-            item.lock = Basis.CLEAR
     return items
+
+
+def _scan_locks(region: Region) -> Iterator[Lock]:
+    """An active ``Basis.CLEAR`` Lock for each region in ``region``'s
+    subtree a scan holds still, in tree order.
+
+    A scan locks only what geometry alone says should hold still: each
+    ``Void`` beside a ``Bay`` or ``Division``, so a plinth gap holds while
+    the compartments beside it change, and each axis-wrap ``Division`` (see
+    ``_is_axis_wrap``) at its wrapped board's slot, so the ``Void`` inside it
+    takes changes along the wrap's axis instead. A run holding no ``Bay`` or
+    ``Division`` locks none of its voids, so the void above a short column
+    still lets a stepped unit grow. Every compartment stays unlocked:
+    geometry cannot tell a size someone meant to hold from one that came out
+    that way, so a compartment's size holds only once it is locked in the
+    editor and kept in the stored rule record.
+    """
+    if not isinstance(region, Division):
+        return
+    compartments = [
+        item
+        for item in region.items
+        if isinstance(item, Bay | Division) and not _is_axis_wrap(item)
+    ]
+    for item in region.items:
+        if isinstance(item, Board):
+            continue
+        if _is_axis_wrap(item) or (isinstance(item, Void) and compartments):
+            yield Lock(region_id=item.id, basis=Basis.CLEAR)
+        yield from _scan_locks(item)
 
 
 def _slab(
@@ -1107,6 +1119,7 @@ def scan(
             horizontal, vertical, depth_axis, grid.hs_mm[0], grid.vs_mm[0], depth_lo_mm
         ),
         backs=_backs(panels, members, elevated, grid, ctx, front_at_min),
+        constraints=tuple(_scan_locks(root)),
     )
     return ScanResult(
         unit=unit,
