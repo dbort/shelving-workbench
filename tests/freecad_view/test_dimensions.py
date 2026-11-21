@@ -150,7 +150,7 @@ def _corners(editor: ViewEditor, region_id: str) -> _Corners:
 
 
 def _holding_outlines(editor: ViewEditor) -> set[_Corners]:
-    """The corners of each outline drawn in the locked dimension color,
+    """The corners of each outline drawn in the driving dimension color,
     brought back onto the face from the lift outlines sit at."""
     locked_rgb = _rgb("ConstrainedDimColor")
     lift_mm = editor.to_document(

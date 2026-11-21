@@ -1065,15 +1065,15 @@ class ViewEditor:
         self._place_widgets()
 
     def _icon_metrics_px(self) -> tuple[int, int]:
-        """The side of a constraint icon's tile, and the gap
-        around it, in device pixels at the view's ratio now."""
+        """The side of a constraint icon's tile, and the gap around it, in
+        device pixels at the view's ratio now."""
         ratio = self._viewer.devicePixelRatioF()
         side_px = round(icon_side_px() * ratio) + 2 * self.icon_tile().pad_px
         return side_px, round(_ICON_GAP_PX * ratio)
 
     def icon_tile(self) -> Tile:
-        """The tile under each constraint icon and dimension text,
-        in device pixels at the view's ratio now."""
+        """The tile under each constraint icon and dimension text, in device
+        pixels at the view's ratio now."""
         ratio = self._viewer.devicePixelRatioF()
         return Tile(
             self.style.tile_rgb, round(TILE_PAD_PX * ratio), TILE_RADIUS_PX * ratio

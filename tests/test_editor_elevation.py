@@ -718,9 +718,9 @@ def test_a_flagged_constraint_outlines_its_openings() -> None:
 
 
 def _columns() -> Unit:
-    """sh-050's unit: 654 mm tall of 18 mm boards, split by two dividers
-    into three 300 mm columns L, M and R, each split by one shelf: A1 300,
-    s1, A2 300; B1 200, t1, B2 400; C1 250, u1, C2 350, bottom to top."""
+    """A unit 654 mm tall of 18 mm boards, split by two dividers into three
+    300 mm columns L, M and R, each split by one shelf: A1 300, s1, A2 300;
+    B1 200, t1, B2 400; C1 250, u1, C2 350, bottom to top."""
 
     def column(
         name: str, lower: str, upper: str, shelf: str, sizes_mm: tuple[float, float]

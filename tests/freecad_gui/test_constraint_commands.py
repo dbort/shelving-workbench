@@ -188,9 +188,9 @@ def test_a_command_constrains_the_selected_openings(
 
 
 def _columns() -> Unit:
-    """sh-050's unit: 654 mm tall of 18 mm boards, split by two dividers
-    into three 300 mm columns L, M and R, each split by one shelf: A1 300,
-    A2 300; B1 200, B2 400; C1 250, C2 350, bottom to top."""
+    """A unit 654 mm tall of 18 mm boards, split by two dividers into three
+    300 mm columns L, M and R, each split by one shelf: A1 300, A2 300;
+    B1 200, B2 400; C1 250, C2 350, bottom to top."""
 
     def column(sizes_mm: tuple[float, float], shelf: str) -> Division:
         return Division(

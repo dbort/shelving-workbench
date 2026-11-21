@@ -82,8 +82,8 @@ minimum, as the Sketcher highlights the constraints in a conflict.
 
 Any region may lock but the unit itself, whose size the panel's Width,
 Height and Depth fields set. When the locks fix the unit's size along an
-axis, that size is a reference, as a Sketcher reference dimension is: a resize
-along it is refused naming those locks, the panel shows its field
+axis, that size is a reference, as a Sketcher reference dimension is: a
+resize along it is refused naming those locks, the panel shows its field
 read-only, and every other edit lets it follow the locks with the fixed
 point holding. Depth is never divided, so it is never a reference. A lock
 the other locks already imply is redundant: as the Sketcher does, the edit
@@ -239,13 +239,12 @@ stays as it is, and on Close the camera returns when the Sketcher's
 openings and their dimensions are drawn over the real boards, on whichever
 face the camera sees. A click on a board selects the whole board through
 FreeCAD's own selection; a double-click on a dimension types its size on
-the spot;
-buttons over a selected opening add a shelf or a divider; an arrow drags
-the selected board; Delete removes it. The task panel holds only what has
-no place on the drawing: the unit's size, the constraint list, what a
-selected opening's or constraint's sizes measure, and the objects the
-workbench did not create, each saying whether it follows the boards as a
-back or is left alone.
+the spot; buttons over a selected opening add a shelf or a divider; an
+arrow drags the selected board; Delete removes it. The task panel holds
+only what has no place on the drawing: the unit's size, the constraint
+list, what a selected opening's or constraint's sizes measure, and the
+objects the workbench did not create, each saying whether it follows the
+boards as a back or is left alone.
 
 Beside each of the unit's Width, Height and Depth fields, under a Fixed
 point column header, a choice names the fixed side as the editor's view
@@ -274,12 +273,12 @@ draws the dimension of the region whose size it shares along the other
 elevation axis, which shows what Lock Width and Lock Height would lock and
 gives both sizes a click target. It does so even when that size is the
 unit's own, as a lone column's width is, though the Lock commands refuse
-such a size and point to the panel's field for it. A
-dimension whose lock is selected takes the selection color, which hides a
-deactivated one's gray as the Sketcher's does; selecting a region recolors
-none, as selecting Sketcher geometry leaves its dimensions' colors alone.
-Each region keeps its dimension's place whether it is drawn or not, so
-one appearing moves no other.
+such a size and point to the panel's field for it. A dimension whose lock
+is selected takes the selection color, which hides a deactivated one's
+gray as the Sketcher's does; selecting a region recolors none, as
+selecting Sketcher geometry leaves its dimensions' colors alone. Each
+region keeps its dimension's place whether it is drawn or not, so one
+appearing moves no other.
 
 Lock Width and Lock Height make locks as the Sketcher's horizontal and
 vertical distance constraints fix distances: each selected opening locks
@@ -335,8 +334,8 @@ deactivated constraint. It departs from the Sketcher in four places. A
 deactivated Equal's or even spacing's icon carries the 3D view's corner X
 where the Sketcher's list grays it, so the list and the view mark it the
 same way; a lock has no icon in the view to match, since its gray
-dimension already marks it. A constraint's checkbox means active, since the editor has no
-virtual space for the Sketcher's visibility box to choose.
+dimension already marks it. A constraint's checkbox means active, since the
+editor has no virtual space for the Sketcher's visibility box to choose.
 Each row has a delete button and one button deletes every deactivated
 constraint, because opening a unit can deactivate several at once, which
 the Sketcher never does. A redundant lock or constraint is marked on its

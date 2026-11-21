@@ -400,9 +400,9 @@ def _read_unit(
     container: FreeCAD.DocumentObject,
 ) -> tuple[Unit, Mapping[str, str], OpenReport]:
     """``container`` read fresh and scanned, with its stored constraints and
-    unit id reapplied, the reason each part the scan did not
-    place in the tree was set aside, keyed by ``Name``, and what reapplying
-    the constraints deactivated and dropped.
+    unit id reapplied, the reason each part the scan did not place in the
+    tree was set aside, keyed by ``Name``, and what reapplying the
+    constraints deactivated and dropped.
 
     Mirrors :func:`freecad.Shelving.unit_ops._rescanned_unit`; kept as its
     own copy here rather than imported, the way every other small
