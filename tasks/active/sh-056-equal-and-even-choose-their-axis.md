@@ -1,7 +1,7 @@
 ---
 id: sh-056
 title: "Equal and Even spacing choose their axis"
-blocked_by: [sh-055]
+blocked_by: [sh-055, sh-059]
 ---
 
 # sh-056: Equal and Even spacing choose their axis
@@ -36,7 +36,7 @@ and run Equal Width; today you'd have to select the columns themselves.
         a run along the width axis;
       - on a unit with no divider, Equal Width or Even Width on bays is
         refused.
-- [ ] GUI (`tests/freecad_gui/test_constraint_commands.py`):
+- [ ] GUI (`tests/freecad_gui/test_edit_commands.py`):
       `Shelving_ConstrainEqualWidth`, `Shelving_ConstrainEqualHeight`,
       `Shelving_ConstrainEvenWidth` and `Shelving_ConstrainEvenHeight` sit
       on the edit toolbar and in the Shelving menu, each with its own icon,
@@ -58,7 +58,9 @@ and run Equal Width; today you'd have to select the columns themselves.
   theirs. Reuse sh-055's resolution function: each opening pick resolves
   to the nearest region, itself or an ancestor, whose parent runs along
   the command's axis. Remove `Shelving_ConstrainEqual` and
-  `Shelving_ConstrainEvenSpacing` together with their modules.
+  `Shelving_ConstrainEvenSpacing` together with their rows in
+  `commands/edit_commands.py` (sh-059's table of editor commands); the
+  four new commands are rows in that table, not modules.
 - **Equal:** resolved picks are deduplicated in selection order, and N
   distinct regions make N-1 Equals chained in that order, as now. Fewer
   than two distinct regions, a board pick, or a pick with no region on
@@ -99,9 +101,10 @@ and run Equal Width; today you'd have to select the columns themselves.
       the four commands.
 - [ ] **Step 3** (`commands/`, `init_gui.py`, `resources/`,
       `editor/constraint_list.py`, `editor/overlay.py`,
-      `tests/freecad_gui/test_constraint_commands.py`,
-      `tests/freecad_gui/test_constraint_list.py`): the four command
-      modules replace `constrain_equal.py` and `constrain_even_spacing.py`;
+      `tests/freecad_gui/test_edit_commands.py`,
+      `tests/freecad_gui/test_constraint_list.py`): four rows in
+      `commands/edit_commands.py` replace the Constrain Equal and
+      Constrain Even Spacing rows;
       their icons; list rows named and iconed by axis.
 - [ ] **Step 4** (`README.md`, `docs/scope-and-design.md`,
       `freecad/Shelving/qa/cases/30-editor.toml`): the glossary and the

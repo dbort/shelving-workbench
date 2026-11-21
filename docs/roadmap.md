@@ -90,7 +90,7 @@ size changes, and scans back as the same treatment.
 
 ## M18: Constraints
 
-**Status:** Tasks sh-045, sh-046, sh-047, sh-048, sh-051, sh-049, sh-050, sh-054, sh-055, sh-056, sh-057
+**Status:** Tasks sh-045, sh-046, sh-047, sh-048, sh-051, sh-049, sh-050, sh-054, sh-055, sh-059, sh-056, sh-057
 
 - [x] sh-045: the constraint engine for one axis
 - [x] sh-046: lay units out with the engine (blocked on sh-045)
@@ -101,7 +101,8 @@ size changes, and scans back as the same treatment.
 - [ ] sh-050: Aligned faces, picked by a board's face edges (blocked on sh-049)
 - [x] sh-054: a lock is a constraint you can turn off
 - [x] sh-055: locks drawn as dimensions, made with Lock Width and Lock Height (blocked on sh-053, sh-054)
-- [ ] sh-056: Equal and Even spacing choose their axis (blocked on sh-055)
+- [ ] sh-059: Add Shelf and Add Divider become editor commands
+- [ ] sh-056: Equal and Even spacing choose their axis (blocked on sh-055, sh-059)
 - [ ] sh-057: fully constrained boards in color, and degrees of freedom in the panel (blocked on sh-055)
 
 Relations between the openings and boards of one unit, in the Sketcher's
