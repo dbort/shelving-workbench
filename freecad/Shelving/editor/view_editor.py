@@ -1544,10 +1544,9 @@ class ViewEditor:
     def _sort_press(self, position: QtCore.QPointF, adding: bool) -> PressKind:
         """A press on the drag arrow is the dragger's; one on the held
         board's padlock deletes the locks holding it; one on a dimension's
-        padlock locks or unlocks its opening; one on a
-        constraint's icon selects the constraint, or adds it for an
-        ``adding`` press; one on a dimension's text tile opens that
-        dimension's field."""
+        padlock locks or unlocks its opening; one on a constraint's icon
+        selects the constraint, or adds it for an ``adding`` press; one on a
+        dimension's text tile opens that dimension's field."""
         if self._closed:
             return "leave"
         device = self._device_point(position)

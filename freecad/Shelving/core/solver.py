@@ -492,10 +492,11 @@ def solve_axis(
     sizes along ``axis`` and the unit's size and position on it change.
 
     Raises a ``"conflict"`` :class:`LayoutSolveError` when no layout meets
-    the constraints, naming the regions whose locks or minimum widths and
-    the constraints the engine found in conflict. One for a ``size_mm``
-    the locks rule out names the locks and constraints that determine the
-    size, and its ``detail`` carries that size as ``"fixed_size_mm"``.
+    the constraints, naming the regions whose minimum widths and the
+    constraints, locks included, the engine found in conflict. One for a
+    ``size_mm`` the locks rule out names the locks and constraints that
+    determine the size, and its ``detail`` carries that size as
+    ``"fixed_size_mm"``.
     """
     system = _build(unit, spaces, axis)
     axis_index = axis.component_index
@@ -727,11 +728,11 @@ def fixing_locks(
 
     ``spaces`` is ``unit`` laid out. A constraint ``without`` names is left
     out, as though it were deactivated. An empty set means the boards and
-    outer faces alone fix the
-    face, as for a carcass board, and is also the answer when the layout
-    misses its own locks by more than the engine's tolerance, so a caller
-    treats the board as immovable rather than failing. When several sets
-    fix it, the result is one of them, preferring locks to constraints.
+    outer faces alone fix the face, as for a carcass board, and is also the
+    answer when the layout misses its own locks by more than the engine's
+    tolerance, so a caller treats the board as immovable rather than
+    failing. When several sets fix it, the result is one of them, preferring
+    locks to other constraints.
     Never raises for a board of ``unit`` on a run along ``axis``.
     """
     system = _build(unit, spaces, axis)
@@ -822,7 +823,8 @@ def describe_solve_error(err: LayoutSolveError) -> str:
     to 0.1 mm.
     """
     detail = err.detail
-    # Whether the error names a constraint that is not a lock.
+    # The constraints the error names other than locks; the wording speaks
+    # of constraints only when there is one.
     others = set(err.constraint_ids) - set(err.lock_ids)
     match err.reason:
         case "misfit":

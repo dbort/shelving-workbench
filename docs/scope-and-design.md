@@ -68,15 +68,15 @@ holds at most one. It stores no size: turning one on holds its region at
 the size the boards give it then, so it moves nothing and never
 conflicts, and a deactivated lock holds nothing until it is turned back
 on. The Sketcher keeps a dimension the same way, as one constraint among
-the others that can be turned off. Every edit solves the
-layout the way the Sketcher does: the boards move as little as possible
-from where they are, within the locks and a 5 mm minimum opening. A resize
-changes the openings beside the outer faces that move, and pushes inward
-once one reaches the minimum. A typed size locks the opening, turning its
-lock back on when it is off, and moves the boards either side of it, half
-the change each when both are free. An edit
-the locks and the minimum cannot allow is refused, where the Sketcher would
-leave the sketch in error: an unsolvable layout has no panels to write.
+the others that can be turned off. Every edit solves the layout the way
+the Sketcher does: the boards move as little as possible from where they
+are, within the locks and a 5 mm minimum opening. A resize changes the
+openings beside the outer faces that move, and pushes inward once one
+reaches the minimum. A typed size locks the opening, turning its lock back
+on when it is off, and moves the boards either side of it, half the change
+each when both are free. An edit the locks and the minimum cannot allow is
+refused, where the Sketcher would leave the sketch in error: an
+unsolvable layout has no panels to write.
 The refusal outlines the locks it names, and any opening held at the
 minimum, as the Sketcher highlights the constraints in a conflict.
 
@@ -100,8 +100,8 @@ reads its openings afresh at every solve, so an opening added inside the
 span joins it. Both measure the clear opening. The solve counts them after
 the active locks, so one the locks already imply is accepted as redundant
 with a warning, and one they contradict is refused as a conflict naming
-those locks and itself. Each draws the
-Sketcher's style of icon beside each of its openings' dimensions, in the
+those locks and itself. Each draws the Sketcher's style of icon beside
+each of its openings' dimensions, in the
 Sketcher's constraint icon color on a small tile of the 3D view's
 background color; clicking an icon selects the constraint, and Delete
 removes it. A board a constraint holds shows no arrow and no padlock,
@@ -114,9 +114,8 @@ clearance comes in deactivated, its icons marked with a corner X and
 never solved, and one naming boards or openings that are gone is
 dropped, a lock included, each said once in a notification. A lock always
 meets the boards, so it never comes in deactivated. The constraint
-commands sit
-on a toolbar shown only while Edit Unit is open, as the Sketcher's
-edit-mode toolbars are.
+commands sit on a toolbar shown only while Edit Unit is open, as the
+Sketcher's edit-mode toolbars are.
 
 A split carries a bay's lock to both halves, or to the division that
 takes its place when the board runs across the bay's run; a merge of two
@@ -286,9 +285,9 @@ place shows a closed padlock where its arrow would be and outlines the
 locked openings holding it; clicking that padlock deletes their locks,
 and the arrow takes its place. Like the Sketcher's constraint icons, the
 padlocks are drawn in the view and carry no tooltip. Besides the padlock,
-only a lock's row in the constraint list unlocks. A refused
-edit's or a redundant lock's outline uses the same color, and lasts until
-the next edit or selection change.
+only a lock's row in the constraint list unlocks. A refused edit's or a
+redundant lock's outline uses the same color, and lasts until the next
+edit or selection change.
 
 The constraint list follows the Sketcher's: one list holding every
 constraint, locks included, in the order they were made, each with its
@@ -300,8 +299,8 @@ departs from the Sketcher in four places. A deactivated Equal's or even
 spacing's icon carries the 3D view's corner X where the Sketcher's list
 grays it, so the list and the view mark it the same way; the view has no
 padlock with an X, since its open padlock already marks a deactivated
-lock. A constraint's checkbox means active, since the
-editor has no virtual space for the Sketcher's visibility box to choose.
+lock. A constraint's checkbox means active, since the editor has no
+virtual space for the Sketcher's visibility box to choose.
 Each row has a delete button and one button deletes every deactivated
 constraint, because opening a unit can deactivate several at once, which
 the Sketcher never does. A redundant lock or constraint is marked on its

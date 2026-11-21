@@ -162,10 +162,6 @@ def unique_regions_by_key(unit: Unit) -> Mapping[str, str]:
 BasisName = Literal["clear", "with_next"]
 
 
-class _LockMapEntryDoc(TypedDict):
-    basis: BasisName
-
-
 class _LockDoc(TypedDict):
     kind: Literal["lock"]
     active: bool

@@ -78,8 +78,8 @@ The vocabulary the documentation and the code share.
   one takes whatever size the boards around it leave. A lock is a
   constraint like Equal and Even spacing: it has a row in the constraint
   list, and turning it off there leaves the opening unlocked until you
-  turn it back on, which holds it at the size it has then. Every edit moves the
-  boards as little as it can. When the unit's size changes, the openings
+  turn it back on, which holds it at the size it has then. Every edit
+  moves the boards as little as it can. When the unit's size changes, the openings
   beside the edges that move take up the change, and one that reaches
   5 mm pushes the boards beyond it inward. Typing a size locks the opening
   at that size and moves the boards either side of it, half the change
@@ -135,9 +135,9 @@ The vocabulary the documentation and the code share.
   it there or with Delete. A lock holds its opening at whatever size it
   has, so it never comes in deactivated and turning it on moves nothing.
   One the boards miss by no more than the joint clearance stays active,
-  and the next edit makes it exact. A constraint, a lock included, whose
-  openings or end boards are gone is removed. A notification says so once,
-  when Edit Unit opens.
+  and the next edit makes it exact. A constraint whose openings or end
+  boards are gone is removed, a lock included. A notification says so
+  once, when Edit Unit opens.
 - **Constraint list**: the Constraints group in the Edit Unit panel. It
   lists every constraint, locks included, in the order they were made, as
   the Sketcher lists its constraints, each with its icon, its name and its
