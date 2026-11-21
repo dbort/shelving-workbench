@@ -38,7 +38,9 @@ every state.
   view's unselected icon of its kind with the corner X, in the icon color,
   in place of Qt's disabled-mode gray; an active row's icon carries no X.
   A GUI test checks a row's icon gains and loses the X as its box is
-  unchecked and checked. Pressing a row's checkbox still selects the row.
+  unchecked and checked. A selected row's icon keeps its colors: Qt draws
+  it untinted by the highlight, which a GUI test checks for every row
+  kind. Pressing a row's checkbox still selects the row.
   `docs/scope-and-design.md` and the QA cases describe the list's
   deactivated icon by its X, not as grayed.
 - [x] README's **Deactivated constraint** entry, the notification shown
@@ -89,6 +91,11 @@ every state.
   disabled-mode gray, so the list and the view mark deactivation the same
   way. This departs from the Sketcher's list as well; record it with the
   list's other departures in `docs/scope-and-design.md`.
+- 2026-11-20, from the user's manual check: a selected row's icon looked
+  washed gray. Qt's style generates a Selected-mode icon by tinting it
+  with the highlight color; `kind_icon` adds its own pixmap for Selected
+  mode so a row's icon keeps the view's colors when selected, padlocks
+  included. Fixed in this task, so it gets no bug-log entry.
 - Unlocked dimensions and a blue selection color can still look alike.
   The user accepted that. Do not add an outline or recolor to work around
   it.
@@ -144,7 +151,8 @@ every state.
   `tests/freecad_gui/test_constraint_list.py`, `README.md`,
   `docs/scope-and-design.md`, `_DEACTIVATED_AT_OPEN`, `30-editor.toml`):
   `kind_icon` takes the `active` flag and passes it to
-  `constraint_icon_image`; `disabled_icon` goes. The GUI tests compare a
+  `constraint_icon_image`, and gives its icon the same pixmap for Selected
+  mode; `disabled_icon` goes. The GUI tests compare a
   deactivated row's icon to the view's X icon and follow it through a
   toggle. The docs, notification and QA steps say the list's icon carries
   the X too.

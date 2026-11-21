@@ -253,6 +253,20 @@ def test_rows_show_their_kind_size_and_the_views_icons(editing: _Editing) -> Non
     assert _image(marked) != _image(spaced)
 
 
+def test_a_selected_rows_icon_keeps_its_colors(editing: _Editing) -> None:
+    a, _b, _c = editing.bays()
+    assert editing.panel.session.set_lock(a, locked=True) is None
+    editing.panel._refresh()
+    tree = editing.rows.tree
+    size = QtCore.QSize(16, 16)
+    ratio = tree.devicePixelRatioF()
+    for index in range(3):
+        icon = editing.item(index).icon(TEXT_COLUMN)
+        normal = icon.pixmap(size, ratio, QtGui.QIcon.Mode.Normal).toImage()
+        selected = icon.pixmap(size, ratio, QtGui.QIcon.Mode.Selected).toImage()
+        assert selected == normal, index
+
+
 def test_a_constraint_row_has_a_checkbox_a_lock_row_none(editing: _Editing) -> None:
     a, _b, _c = editing.bays()
     assert editing.panel.session.set_lock(a, locked=True) is None

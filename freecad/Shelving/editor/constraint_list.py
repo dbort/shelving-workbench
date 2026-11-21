@@ -101,7 +101,13 @@ def kind_icon(
         image = constraint_icon_image(kind, style.icon_rgb, tile, device_px, active)
     pixmap = QtGui.QPixmap.fromImage(image)
     pixmap.setDevicePixelRatio(ratio)
-    return QtGui.QIcon(pixmap)
+    icon = QtGui.QIcon(pixmap)
+    # A selected row draws its icon in Selected mode, which the style
+    # otherwise generates by washing the highlight color over the glyph and
+    # its tile. The view's icons are never tinted, so the list's keep their
+    # colors too.
+    icon.addPixmap(pixmap, QtGui.QIcon.Mode.Selected)
+    return icon
 
 
 class ConstraintList:
