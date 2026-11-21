@@ -1,5 +1,5 @@
 ---
-next_id: bug-025
+next_id: bug-026
 ---
 
 # Bug log
@@ -128,3 +128,19 @@ log happens only when the user asks.
   in `tests/freecad/test_constraint_session.py` pins the settling. Found
   in sh-048's review round 1 (N4). Fix: `sh-XXX task`; exempting Delete
   from settling or rewording the Must Have is a design decision.
+- `bug-025` - **a lock under a shared key can reopen on the wrong
+  opening**: openings with no board on either side, such as a run of axis
+  wraps, all get the rule key `~|~`. `with_stored_rules` in
+  `core/record.py` hands the stored locks under such a key to those
+  openings in tree order, one each, but a version 3 record stores locks in
+  the order they were made. Of two wraps A then B, both scan-locked,
+  deleting A's lock reopens the remaining lock on A; deactivating B,
+  deleting A's lock and locking A again reopens with A off and B on. The
+  version 2 reader locked every opening sharing the key, so an unlock
+  never persisted there either. A lock entry names only its region's key,
+  so the record cannot tell such openings apart.
+  `test_locks_under_a_shared_key_go_to_its_regions_in_tree_order` in
+  `core/tests/test_record.py` covers only the case where the two orders
+  agree. Found in sh-054's review round 1 (N1). Fix: `sh-XXX task`; it
+  needs a key that tells those openings apart, a change to the record
+  format.
