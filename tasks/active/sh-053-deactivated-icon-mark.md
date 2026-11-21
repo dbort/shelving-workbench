@@ -133,3 +133,10 @@ every state.
   in the fixing commit, leaving `next_id` as is.
 
 ## Review log
+
+### Round 1: APPROVED
+- **N1: The reworked view test covers three of the four selected/active combinations** (`tests/freecad_view/test_constraints.py:476`): Plan Step 3 asks for all four; unselected and active is missing there. It is still pinned with default colors by `test_the_icons_are_drawn_from_their_svgs_in_the_sketchers_way_on_a_tile` (`:213`) and the toggle test covers selected and active, so the Must Haves hold across the tests. A fourth constraint would put all four under the distinct-color fixture in one place.
+- **N2: The blend check accepts zero coverage, so it never proves the X is painted** (`tests/freecad_view/test_constraints.py:509`): `_blend_of` passes plain tile color, so an X that only cleared its gap would pass. Asserting at least one mismatch pixel near full coverage in `rgb` would close this.
+- **N3: The corner region's bounds come from the code under test** (`tests/freecad_view/test_constraints.py:534`): the region is `overlay.corner_x_extent_px`, with only `extent_px < 2 * glyph_px / 3` as an independent bound; enlarging `_CORNER_X_SIDE` moves the test's goalposts up to that cap.
+- **N4: Edited prose was not rewrapped** (`docs/scope-and-design.md:107`, `README.md:126`): the scope-and-design line is 100 characters, and the README glossary paragraph ends on a short line.
+- **N5: `_corner_x_widths_px` docstring is imprecise** (`freecad/Shelving/editor/overlay.py:230`): the second value is the full width of the cleared band (stroke plus a gap on each side), not the gap's width.
