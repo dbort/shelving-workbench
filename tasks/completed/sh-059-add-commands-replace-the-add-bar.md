@@ -16,41 +16,41 @@ each of them. The six command modules collapse into one, and the task
 leaves less Python than it found.
 
 ## Must Have
-- [ ] `pixi run tests` green; `pyrefly check` clean over the changed code.
-- [ ] `git diff --numstat main...sh-059 -- '*.py' | awk '{a+=$1; d+=$2} END {exit !(d > a)}'`
+- [x] `pixi run tests` green; `pyrefly check` clean over the changed code.
+- [x] `git diff --numstat main...sh-059 -- '*.py' | awk '{a+=$1; d+=$2} END {exit !(d > a)}'`
       exits 0: the branch removes more Python lines than it adds.
-- [ ] `grep -rnE "AddBar|add_bar|split_preview|_board_icon|_hover_add|_preview_direction|_place_add_bar" freecad tests`
+- [x] `grep -rnE "AddBar|add_bar|split_preview|_board_icon|_hover_add|_preview_direction|_place_add_bar" freecad tests`
       prints nothing.
-- [ ] `freecad/Shelving/commands/edit_commands.py` exists, and none of
+- [x] `freecad/Shelving/commands/edit_commands.py` exists, and none of
       `lock_width.py`, `lock_height.py`, `constrain_equal.py`,
       `constrain_even_spacing.py` exists under `freecad/Shelving/commands/`.
-- [ ] GUI test: the edit toolbar's actions are, in order,
+- [x] GUI test: the edit toolbar's actions are, in order,
       `Shelving_AddShelf`, `Shelving_AddDivider`, `Shelving_LockWidth`,
       `Shelving_LockHeight`, `Shelving_ConstrainEqual`,
       `Shelving_ConstrainEvenSpacing`. The Shelving menu lists the same
       six, and all six are inactive outside an edit.
-- [ ] GUI test: with two bays selected, `Shelving_AddShelf` adds one
+- [x] GUI test: with two bays selected, `Shelving_AddShelf` adds one
       shelf across each bay as a single undo step named `Add Shelf`, and
       the selection afterward is exactly the two new boards.
       `Shelving_AddDivider` does the same with `Add Divider`.
-- [ ] GUI test: run with nothing selected, or with a selection that
+- [x] GUI test: run with nothing selected, or with a selection that
       includes a board or a bay too small to split, either command leaves
       the unit and the document's undo names unchanged and reports exactly
       one Notification Area error.
-- [ ] GUI test: while Edit Unit is open, the editor's workbench
+- [x] GUI test: while Edit Unit is open, the editor's workbench
       manipulator puts the six commands, in toolbar order, into the context
       menu for recipient `"View"` in a workbench other than Shelving. After
       Close, no Shelving manipulator is installed.
-- [ ] View test: selecting a bay shows no new visible widget over the 3D
+- [x] View test: selecting a bay shows no new visible widget over the 3D
       view; the visible children of the viewer's parent widget are the same
       before and after the click.
-- [ ] A test of adding a shelf to a selected bay through
+- [x] A test of adding a shelf to a selected bay through
       `Shelving_AddShelf` carries a `smoke` mark naming that path.
-- [ ] `freecad/Shelving/qa/cases/30-editor.toml`: `editor.undo` adds its
+- [x] `freecad/Shelving/qa/cases/30-editor.toml`: `editor.undo` adds its
       shelves and divider from the toolbar, with one of those additions made
       from the right-click menu. The `select` step of `editor.dimensions`
       expects both dimensions readable, with nothing drawn over them.
-- [ ] The `bug-026` entry is gone from `.claude/docs/bug-log.md`.
+- [x] The `bug-026` entry is gone from `.claude/docs/bug-log.md`.
 
 ## Advice
 - The bar goes because no FreeCAD tool puts buttons over the geometry.
