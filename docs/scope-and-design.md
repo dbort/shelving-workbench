@@ -279,22 +279,22 @@ size in the user's unit system, and selection shared with the 3D view in
 both directions. It departs from the Sketcher in four places. A
 deactivated constraint's icon carries the 3D view's corner X where the
 Sketcher's list grays it in Qt's disabled mode, so the list and the view
-mark it the same way. A constraint's
-checkbox means active, since the editor has no virtual space for the
-Sketcher's visibility box to choose. Each row has a delete button and one
-button deletes every deactivated constraint, because opening a unit can
-deactivate several at once, which the Sketcher never does. A redundant
-lock or constraint is marked on its row, with a warning icon and a
-tooltip, for as long as it stays redundant, in place of the Sketcher's
-message box citing constraint numbers. A lock or constraint is redundant
-when removing it alone leaves its axis's freedom unchanged, so every
-member of an overlapping group is marked. Turning a constraint on solves
-it in as making it new would, moving the boards least, and is refused,
-leaving it off, when locks and constraints rule it out; turning one off
-moves nothing. With one Equal or Even spacing selected, Opening size
-measures switches it between clear sizes and spacings through the next
-board, and re-solves it, since the relation itself changes; the spacing
-choice is offered only when every opening it names has a board after it.
+mark it the same way. A constraint's checkbox means active, since the
+editor has no virtual space for the Sketcher's visibility box to choose.
+Each row has a delete button and one button deletes every deactivated
+constraint, because opening a unit can deactivate several at once, which
+the Sketcher never does. A redundant lock or constraint is marked on its
+row, with a warning icon and a tooltip, for as long as it stays redundant,
+in place of the Sketcher's message box citing constraint numbers. A lock
+or constraint is redundant when removing it alone leaves its axis's
+freedom unchanged, so every member of an overlapping group is marked.
+Turning a constraint on solves it in as making it new would, moving the
+boards least, and is refused, leaving it off, when locks and constraints
+rule it out; turning one off moves nothing. With one Equal or Even spacing
+selected, Opening size measures switches it between clear sizes and
+spacings through the next board, and re-solves it, since the relation
+itself changes; the spacing choice is offered only when every opening it
+names has a board after it.
 
 The unit's container cannot enter FreeCAD's edit mode without workbench
 state in the document, so the editor adds its drawing and input handling

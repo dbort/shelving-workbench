@@ -104,8 +104,9 @@ def kind_icon(
     icon = QtGui.QIcon(pixmap)
     # A selected row draws its icon in Selected mode, which the style
     # otherwise generates by washing the highlight color over the glyph and
-    # its tile. The view's icons are never tinted, so the list's keep their
-    # colors too.
+    # its tile. The row highlight already shows the selection, so the icon
+    # keeps its colors, leaving the glyph and any corner X as legible as on
+    # an unselected row.
     icon.addPixmap(pixmap, QtGui.QIcon.Mode.Selected)
     return icon
 
