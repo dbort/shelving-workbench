@@ -188,9 +188,8 @@ def _stored(container: FreeCAD.DocumentObject) -> list[dict[str, object]]:
 def test_a_record_of_equals_and_even_spacings_opens_unchanged(
     doc: FreeCAD.Document,
 ) -> None:
-    """Equals and Even spacings written before Equal and Even took their
-    axis carry no axis of their own; opening the unit keeps them as
-    written."""
+    """A stored Equal or Even spacing carries no axis of its own, so
+    opening the unit keeps it as written."""
     column = _COLUMN.column.id
     container = _written(
         doc,

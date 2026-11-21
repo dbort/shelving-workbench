@@ -353,8 +353,8 @@ def test_width_rows_name_and_draw_the_width_commands(bare: _Editing) -> None:
 def test_a_constraint_through_the_depth_reads_its_axis_free_name(
     bare: _Editing, kind: RowKind, text: str
 ) -> None:
-    """An Equal or Even spacing a record made before the commands took
-    their axis may hold sizes through the depth."""
+    """A stored Equal or Even spacing may hold sizes through the depth,
+    which no command makes."""
     rows = bare.rows
     row = ConstraintRow(
         constraint_id=ConstraintId("depth"),

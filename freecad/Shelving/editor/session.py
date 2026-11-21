@@ -257,8 +257,8 @@ def open_message(report: OpenReport) -> str | None:
 
 # What a constraint list row holds: a constraint on widths or on heights,
 # named for the command making it, or one on sizes through the depth, which
-# no command makes: a scan's Lock, or an Equal or Even spacing kept from a
-# record made before the commands took their axis.
+# no command makes but a scan's Lock or a stored Equal or Even spacing can
+# hold.
 RowKind = Literal[
     "lock_width",
     "lock_height",
