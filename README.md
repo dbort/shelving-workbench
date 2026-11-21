@@ -94,6 +94,11 @@ The vocabulary the documentation and the code share.
   repeats what other locks already fix is accepted with a warning, and the
   locks it repeats are outlined. A refused edit outlines the locked
   openings, and any opening held at 5 mm, that stand in its way.
+- **Add Shelf and Add Divider**: the commands that add a board. Select
+  one or more bays and run one: each bay gets a shelf across its middle,
+  or a divider down it, in one step Undo takes back, and the new boards
+  are selected, ready to drag. A selected board, or a bay too small to
+  hold the new board, refuses the whole command and nothing changes.
 - **Lock Width and Lock Height**: the commands that lock sizes, as the
   Sketcher's horizontal and vertical distance constraints fix a distance.
   Select one or more openings and run one: each opening locks, at its
@@ -107,8 +112,9 @@ The vocabulary the documentation and the code share.
   Edit Unit task panel sets. A lock is drawn as a red dimension, gray while
   it is off: click its text to select the lock, Ctrl-click to select more,
   and press Delete to remove them. Double-click any dimension's text to
-  type a size. The commands sit on the toolbar Edit Unit shows and in the
-  Shelving menu.
+  type a size. The commands sit on the toolbar Edit Unit shows, in the
+  3D view's right-click menu while Edit Unit is open, and in the Shelving
+  menu, as do Add Shelf, Add Divider, Equal and Even spacing.
 - **Reference dimension**: a size drawn in blue with its value in
   parentheses, as the Sketcher draws a reference dimension: it shows the
   size and holds nothing. A selected opening shows its own, and the one it

@@ -181,11 +181,15 @@ title = "Undo and Redo inside Edit Unit"
   id = "add-shelves"
   instruction = [
     "Click the open bay.",
-    "Click Add shelf over it.",
+    "Click Add Shelf on the toolbar.",
     "Click the lower bay.",
-    "Click Add shelf over it.",
+    "Right-click the lower bay.",
+    "Choose Add Shelf.",
   ]
-  expected = "Two shelves, and the panel stays open."
+  expected = """
+The right-click menu lists Add Shelf, Add Divider, Lock Width, Lock Height,
+Constrain Equal and Constrain Even Spacing above Fit All. Two shelves, and
+the panel stays open."""
 
   [[case.step]]
   id = "keyboard-undo"
@@ -205,7 +209,7 @@ title = "Undo and Redo inside Edit Unit"
     "Choose Edit, Undo.",
     "Choose Edit, Undo.",
     "Click a bay.",
-    "Click Add divider over it.",
+    "Click Add Divider on the toolbar.",
     "Choose Edit, Undo.",
     "Choose Edit, Redo.",
   ]
@@ -259,8 +263,9 @@ selected, and the openings read plainly without them."""
 Each click shows the opening's height and its column's width as blue
 dimensions with their values in parentheses, and the previous opening's
 go. They appear and disappear in place, nothing else in the view moves,
-and the change reads as calm rather than jumpy. The parentheses read
-plainly at the default zoom."""
+and the change reads as calm rather than jumpy. Nothing is drawn over
+either dimension, and the parentheses read plainly at the default
+zoom."""
 
   [[case.step]]
   id = "lock_width"
@@ -371,7 +376,7 @@ disabled."""
   instruction = ["Click the Stock row."]
   expected = """
 All six boards show in FreeCAD's selection color in the 3D view, each one
-whole, and are selected in the tree. No arrow or add buttons show, and
+whole, and are selected in the tree. No arrow shows, and
 Change stock… is enabled."""
 
   [[case.step]]

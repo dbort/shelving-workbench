@@ -1,6 +1,6 @@
 """Edit Unit in the 3D view as a user works it: picking boards and
 openings, the size field on a dimension, the drag arrow under each
-navigation style, the add buttons and the delete key."""
+navigation style, the right-click menu and the delete key."""
 
 from collections.abc import Iterator
 from typing import Literal, Protocol, cast
@@ -23,10 +23,8 @@ from freecad.Shelving.editor.elevation import (
     board_space,
     label_at,
     plan_overlay,
-    split_preview,
 )
 from freecad.Shelving.editor.view_editor import ViewEditor
-from tests.freecad_view import overlay_nodes
 from tests.freecad_view.editor import (
     add_board,
     bay_ids,
@@ -516,58 +514,76 @@ def test_a_held_board_and_a_carcass_board_show_no_arrow(
     click_task_button("Close", driver)
 
 
-def test_the_add_buttons_show_over_a_selected_bay_and_preview_their_board(
+def _right_click_menu(
+    driver: ViewDriver, at: FreeCAD.Vector, choose: str | None = None
+) -> list[str]:
+    """The texts of the context menu a right click at ``at`` opens, after
+    choosing the entry ``choose`` names, or none."""
+    texts: list[str] = []
+
+    def read() -> None:
+        menu = QtWidgets.QApplication.activePopupWidget()
+        assert isinstance(menu, QtWidgets.QMenu)
+        texts.extend(action.text() for action in menu.actions())
+        for action in menu.actions():
+            if action.text() == choose:
+                action.trigger()
+        menu.close()
+
+    QtCore.QTimer.singleShot(300, read)
+    driver.right_click(at)
+    driver.pump(500)
+    return texts
+
+
+def test_a_selected_bay_gets_no_widget_over_it_and_the_right_click_menu_adds(
     unit: FreeCAD.DocumentObject, driver: ViewDriver
 ) -> None:
     panel = edit_unit(unit, driver)
     editor = editor_of(panel)
     session = panel.session
+    parent = editor._viewer.parentWidget()
+    assert parent is not None
+
+    def shown() -> set[QtWidgets.QWidget]:
+        children = parent.findChildren(
+            QtWidgets.QWidget, options=QtCore.Qt.FindChildOption.FindDirectChildrenOnly
+        )
+        return {child for child in children if child.isVisible()}
+
+    before = shown()
     bay = bay_ids(session.unit.root)[0]
     click_region(panel, bay, driver)
-    bar = editor.add_bar
-    assert bar.isVisible()
-    assert sorted(b.text() for b in bar.buttons.values()) == [
-        "Add divider",
-        "Add shelf",
-    ]
-    center = driver.qt_point(
-        editor.to_document(*editor.frame.rect(session.spaces[bay]).center_mm)
-    ).toPoint()
-    parent = bar.parentWidget()
-    assert parent is not None
-    at = editor._viewer.mapFrom(parent, bar.geometry().center())
-    assert (at - center).manhattanLength() <= 4
-    faces = len(overlay_nodes.faces(editor.root))
-    shelf_button = bar.buttons["vertical"]
-    QtWidgets.QApplication.sendEvent(
-        shelf_button, QtCore.QEvent(QtCore.QEvent.Type.Enter)
-    )
-    driver.pump()
-    assert editor.preview == split_preview(
-        session.unit, editor.frame, bay, editor.frame.vertical
-    )
-    assert len(overlay_nodes.faces(editor.root)) == faces + 1
-    QtWidgets.QApplication.sendEvent(
-        shelf_button, QtCore.QEvent(QtCore.QEvent.Type.Leave)
-    )
-    driver.pump()
-    assert editor.preview is None
+    assert session.selected_id == bay
+    assert shown() == before
+    center = editor.to_document(*editor.frame.rect(session.spaces[bay]).center_mm)
     names = list(unit.Document.UndoNames)
-    before = set(session.spaces)
-    shelf_button.click()
+    FreeCADGui.activateWorkbench("PartWorkbench")
     driver.pump()
-    assert list(unit.Document.UndoNames) == ["Add Shelf", *names]
-    (shelf,) = {
-        node for node in set(session.spaces) - before if unit.Document.getObject(node)
-    }
-    assert session.selected_id == shelf
-    assert editor.arrow is not None and editor.arrow.board_id == shelf
-    assert not bar.isVisible()
-    click_region(panel, bay_ids(session.unit.root)[0], driver)
-    assert bar.isVisible()
-    editor.select(None)
-    assert not bar.isVisible()
-    click_task_button("Close", driver)
+    try:
+        texts = _right_click_menu(driver, center, choose="Add Shelf")
+        start = texts.index("Add Shelf")
+        assert texts[start : start + 9] == [
+            "Add Shelf",
+            "Add Divider",
+            "",
+            "Lock Width",
+            "Lock Height",
+            "Constrain Equal",
+            "Constrain Even Spacing",
+            "",
+            "&Fit All",
+        ]
+        assert list(unit.Document.UndoNames) == ["Add Shelf", *names]
+        shelf = session.selected_id
+        assert shelf is not None and unit.Document.getObject(shelf) is not None
+        assert editor.arrow is not None and editor.arrow.board_id == shelf
+        assert selection() == [(shelf, ())]
+        click_task_button("Close", driver)
+        assert "Add Shelf" not in _right_click_menu(driver, center)
+    finally:
+        FreeCADGui.activateWorkbench("ShelvingWorkbench")
+        driver.pump()
 
 
 @pytest.mark.parametrize(

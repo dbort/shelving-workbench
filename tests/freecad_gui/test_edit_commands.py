@@ -1,9 +1,10 @@
-"""Lock Width, Lock Height, Constrain Equal and Constrain Even Spacing as
-FreeCAD commands: the toolbar Edit Unit shows while it is open, the
-Shelving menu, when the commands are active, what the Lock commands lock,
-and how the commands refuse a selection they cannot use."""
+"""The commands that edit the open unit, as FreeCAD commands: the toolbar
+Edit Unit shows while it is open, the Shelving menu, when the commands are
+active, what the add and Lock commands do, and how the commands refuse a
+selection they cannot use."""
 
 from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import cast
 
 import FreeCAD
@@ -11,7 +12,6 @@ import FreeCADGui
 import pytest
 from PySide6 import QtCore, QtWidgets
 
-from freecad.Shelving import init_gui
 from freecad.Shelving.container import write_container
 from freecad.Shelving.core.geometry import Vec3
 from freecad.Shelving.core.layout import (
@@ -24,17 +24,30 @@ from freecad.Shelving.core.layout import (
     Unit,
 )
 from freecad.Shelving.editor import panel as panel_module
+from freecad.Shelving.editor.elevation import board_ids
 from freecad.Shelving.editor.panel import (
-    CONSTRAINT_TOOLBAR_COMMANDS,
-    CONSTRAINT_TOOLBAR_NAME,
+    EDIT_TOOLBAR_NAME,
     EditUnitPanel,
     active_panel,
 )
+from freecad.Shelving.editor.session import EDIT_COMMANDS
 from freecad.Shelving.unit_ops import create_unit
 
 _COMMANDS = ("Shelving_ConstrainEqual", "Shelving_ConstrainEvenSpacing")
 _LOCK_COMMANDS = ("Shelving_LockWidth", "Shelving_LockHeight")
-_ALL_COMMANDS = (*_LOCK_COMMANDS, *_COMMANDS)
+_ADD_COMMANDS = (
+    ("Shelving_AddShelf", "Add Shelf"),
+    ("Shelving_AddDivider", "Add Divider"),
+)
+_ALL_COMMANDS = tuple(name for name in EDIT_COMMANDS if name != "Separator")
+_MENU_TEXTS = [
+    "Add Shelf",
+    "Add Divider",
+    "Lock Width",
+    "Lock Height",
+    "Constrain Equal",
+    "Constrain Even Spacing",
+]
 _T_MM = 18.0
 
 
@@ -50,7 +63,7 @@ def _main_window() -> QtWidgets.QMainWindow:
 
 
 def _toolbar() -> QtWidgets.QToolBar | None:
-    return _main_window().findChild(QtWidgets.QToolBar, CONSTRAINT_TOOLBAR_NAME)
+    return _main_window().findChild(QtWidgets.QToolBar, EDIT_TOOLBAR_NAME)
 
 
 def _is_active(name: str) -> bool:
@@ -100,10 +113,6 @@ def editing(
         FreeCADGui.activateWorkbench("ShelvingWorkbench")
 
 
-def test_the_panel_toolbar_holds_the_menus_constraint_commands() -> None:
-    assert CONSTRAINT_TOOLBAR_COMMANDS == init_gui.CONSTRAINT_COMMANDS == _ALL_COMMANDS
-
-
 def test_the_commands_are_in_the_menu_and_inactive_outside_an_edit() -> None:
     FreeCADGui.activateWorkbench("ShelvingWorkbench")
     _process_events()
@@ -113,14 +122,9 @@ def test_the_commands_are_in_the_menu_and_inactive_outside_an_edit() -> None:
         if action.text().replace("&", "") == "Shelving"
     ]
     (menu,) = menus
-    texts = [action.text() for action in menu.actions()]
-    for text in (
-        "Lock Width",
-        "Lock Height",
-        "Constrain Equal",
-        "Constrain Even Spacing",
-    ):
-        assert text in texts, text
+    texts = [action.text() for action in menu.actions() if not action.isSeparator()]
+    start = texts.index(_MENU_TEXTS[0])
+    assert texts[start : start + len(_MENU_TEXTS)] == _MENU_TEXTS
     assert active_panel() is None
     for name in _ALL_COMMANDS:
         assert not _is_active(name)
@@ -133,12 +137,9 @@ def test_the_toolbar_shows_exactly_while_an_edit_is_open_in_any_workbench(
     toolbar = _toolbar()
     assert toolbar is not None
     assert not toolbar.isHidden()
-    assert [action.text() for action in toolbar.actions()] == [
-        "Lock Width",
-        "Lock Height",
-        "Constrain Equal",
-        "Constrain Even Spacing",
-    ]
+    actions = toolbar.actions()
+    assert [a.text() for a in actions if not a.isSeparator()] == _MENU_TEXTS
+    assert actions[2].isSeparator()
     for name in _ALL_COMMANDS:
         assert _is_active(name)
     for workbench in ("PartWorkbench", "NoneWorkbench", "ShelvingWorkbench"):
@@ -149,6 +150,7 @@ def test_the_toolbar_shows_exactly_while_an_edit_is_open_in_any_workbench(
     editing.reject()
     _process_events()
     assert _toolbar() is None
+    assert editing.toolbar is None
     for name in _ALL_COMMANDS:
         assert not _is_active(name)
 
@@ -230,15 +232,13 @@ def _columns() -> Unit:
     )
 
 
-@pytest.fixture
-def columns(
-    request: pytest.FixtureRequest, reported: list[str]
-) -> Iterator[EditUnitPanel]:
-    """An open Edit Unit panel on :func:`_columns`."""
+@contextmanager
+def _editing(name: str, unit: Unit) -> Iterator[EditUnitPanel]:
+    """An open Edit Unit panel on ``unit``, written to a new document."""
     FreeCADGui.activateWorkbench("ShelvingWorkbench")
-    doc = FreeCAD.newDocument(request.node.name)
+    doc = FreeCAD.newDocument(name)
     container = cast("FreeCAD.DocumentObject", doc.addObject("App::Part", "Unit"))
-    write_container(container, _columns())
+    write_container(container, unit)
     doc.recompute()
     panel = EditUnitPanel(container)
     try:
@@ -249,6 +249,15 @@ def columns(
         _process_events()
         FreeCAD.closeDocument(doc.Name)
         FreeCADGui.activateWorkbench("ShelvingWorkbench")
+
+
+@pytest.fixture
+def columns(
+    request: pytest.FixtureRequest, reported: list[str]
+) -> Iterator[EditUnitPanel]:
+    """An open Edit Unit panel on :func:`_columns`."""
+    with _editing(request.node.name, _columns()) as panel:
+        yield panel
 
 
 def _left(panel: EditUnitPanel) -> tuple[str, str, str]:
@@ -346,3 +355,89 @@ def test_lock_width_refuses_a_bay_with_no_divider_naming_the_width_field(
     assert len(reported) == 1
     assert "panel's Width field" in reported[0], reported
     assert editing.session.constraints == ()
+
+
+@pytest.mark.parametrize(
+    ("name", "step"),
+    [
+        pytest.param(
+            *_ADD_COMMANDS[0],
+            marks=pytest.mark.smoke("add a shelf to each selected bay"),
+        ),
+        _ADD_COMMANDS[1],
+    ],
+)
+def test_an_add_command_splits_every_selected_bay_in_one_step(
+    columns: EditUnitPanel, reported: list[str], name: str, step: str
+) -> None:
+    session = columns.session
+    doc = session.container.Document
+    a1, b1 = _bay_ids(session.unit.root)[0], _bay_ids(session.unit.root)[2]
+    before = board_ids(session.unit)
+    steps = doc.UndoCount
+    session.select_items([a1, b1])
+    FreeCADGui.runCommand(name)
+    _process_events()
+    assert reported == []
+    assert doc.UndoCount == steps + 1
+    assert doc.UndoNames[0] == step
+    added = board_ids(session.unit) - before
+    assert len(added) == 2
+    assert set(session.selected_items) == added
+
+
+def _thin_bay() -> Unit:
+    """A unit whose narrow left column, 10 mm wide, holds a 10 mm square
+    bay under a shelf, too small for an 18 mm board either way, beside a
+    300 mm wide bay."""
+    return Unit(
+        size_mm=Vec3(364.0, 300.0, 364.0),
+        root=Division(
+            axis=Axis.Z,
+            items=[
+                Board(thickness_mm=_T_MM, role="bottom"),
+                Division(
+                    axis=Axis.X,
+                    items=[
+                        Board(thickness_mm=_T_MM, role="left_side"),
+                        Division(
+                            axis=Axis.Z,
+                            items=[
+                                Bay(size_mm=10.0),
+                                Board(thickness_mm=_T_MM, role="s1"),
+                                Bay(size_mm=300.0),
+                            ],
+                            size_mm=10.0,
+                        ),
+                        Board(thickness_mm=_T_MM, role="d1"),
+                        Bay(size_mm=300.0),
+                        Board(thickness_mm=_T_MM, role="right_side"),
+                    ],
+                    size_mm=328.0,
+                ),
+                Board(thickness_mm=_T_MM, role="top"),
+            ],
+        ),
+        depth_axis=Axis.Y,
+        front_at_min=None,
+    )
+
+
+@pytest.mark.parametrize(("name", "_step"), _ADD_COMMANDS)
+def test_an_add_command_refuses_nothing_a_board_or_a_thin_bay_changing_nothing(
+    request: pytest.FixtureRequest, reported: list[str], name: str, _step: str
+) -> None:
+    with _editing(request.node.name, _thin_bay()) as panel:
+        session = panel.session
+        doc = session.container.Document
+        thin, _narrow, roomy = _bay_ids(session.unit.root)
+        names = list(doc.UndoNames)
+        selections: list[list[str]] = [[], [roomy, "s1"], [roomy, thin]]
+        for selection in selections:
+            unit = session.unit
+            session.select_items(selection)
+            FreeCADGui.runCommand(name)
+            _process_events()
+            assert session.unit is unit, selection
+            assert list(doc.UndoNames) == names, selection
+        assert len(reported) == 3

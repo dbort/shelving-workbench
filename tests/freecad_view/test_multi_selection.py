@@ -179,7 +179,7 @@ def test_a_dimension_click_leaves_the_boards_for_its_lock_or_region(
     click_task_button("Close", driver)
 
 
-def test_several_boards_show_no_arrow_and_no_add_buttons(
+def test_several_boards_show_no_arrow(
     magic_start: tuple[FreeCAD.DocumentObject, ViewDriver],
 ) -> None:
     container, driver = magic_start
@@ -190,7 +190,6 @@ def test_several_boards_show_no_arrow_and_no_add_buttons(
     driver.click(_face(panel, "Floor"), _CTRL)
     _assert_mirrored(panel, ("Shelf", "Floor"))
     assert editor.arrow is None
-    assert not editor.add_bar.isVisible()
     click_task_button("Close", driver)
 
 

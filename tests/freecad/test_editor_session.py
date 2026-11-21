@@ -493,10 +493,11 @@ def _rotated_default_unit() -> Unit:
 
 def test_selection_permissions_and_split() -> None:
     """Selecting a bay permits split and not merge; splitting writes one new
-    board and two bays; selecting that board permits merge; merging removes
-    it and restores the original board count and names. Also covers the
-    "nothing selected" refusal both buttons can hit: no id was named to
-    refuse, so ``EditFailure.node_id`` is ``None`` rather than an id string."""
+    board and two bays; selecting that board refuses a split, naming it,
+    and permits merge; merging removes it and restores the original board
+    count and names. Also covers the "nothing selected" refusal split and
+    merge both hit: no id was named to refuse, so ``EditFailure.node_id`` is
+    ``None`` rather than an id string."""
     doc = FreeCAD.newDocument("editor_smoke")
     try:
         container = create_unit(doc)
@@ -517,7 +518,6 @@ def test_selection_permissions_and_split() -> None:
             bay_id = _find_bay_id(session.unit.root)
             bay_count_before = _bay_count(session.unit.root)
             session.select(bay_id)
-            assert session.can_split() is True
             assert session.can_merge() is False
 
             unit_before_split = session.unit
@@ -530,13 +530,47 @@ def test_selection_permissions_and_split() -> None:
 
             new_board_id = _find_new_board_id(unit_before_split.root, session.unit.root)
             session.select(new_board_id)
-            assert session.can_split() is False
+            board_split = session.split("horizontal")
+            assert isinstance(board_split, EditFailure), board_split
+            assert board_split.node_id == new_board_id, board_split
             assert session.can_merge() is True
 
             result = session.merge()
             assert result is None, result
             doc.recompute()
             assert _board_names(container) == names_before
+        finally:
+            session.close()
+    finally:
+        FreeCAD.closeDocument(doc.Name)
+
+
+def test_split_splits_every_selected_bay_or_none() -> None:
+    doc = FreeCAD.newDocument("editor_split_several")
+    try:
+        container = create_unit(doc)
+        doc.recompute()
+        session = Session(container)
+        session.open()
+        try:
+            session.select(_find_bay_id(session.unit.root))
+            assert session.split("vertical") is None
+            bays = _find_bay_ids_in_order(session.unit.root)
+            assert len(bays) == 2
+            names_before = _board_names(container)
+            unit_before = session.unit
+            board = sorted(_board_ids(unit_before.root))[0]
+            session.select_items([bays[0], board])
+            refused = session.split("horizontal")
+            assert isinstance(refused, EditFailure), refused
+            assert refused.node_id == board, refused
+            assert session.unit is unit_before
+
+            session.select_items(bays)
+            assert session.split("horizontal") is None
+            assert _bay_count(session.unit.root) == 4
+            assert len(_board_names(container)) == len(names_before) + 2
+            assert session.selected_items == ()
         finally:
             session.close()
     finally:

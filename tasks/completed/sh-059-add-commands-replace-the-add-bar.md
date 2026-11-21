@@ -16,41 +16,41 @@ each of them. The six command modules collapse into one, and the task
 leaves less Python than it found.
 
 ## Must Have
-- [ ] `pixi run tests` green; `pyrefly check` clean over the changed code.
-- [ ] `git diff --numstat main...sh-059 -- '*.py' | awk '{a+=$1; d+=$2} END {exit !(d > a)}'`
+- [x] `pixi run tests` green; `pyrefly check` clean over the changed code.
+- [x] `git diff --numstat main...sh-059 -- '*.py' | awk '{a+=$1; d+=$2} END {exit !(d > a)}'`
       exits 0: the branch removes more Python lines than it adds.
-- [ ] `grep -rnE "AddBar|add_bar|split_preview|_board_icon|_hover_add|_preview_direction|_place_add_bar" freecad tests`
+- [x] `grep -rnE "AddBar|add_bar|split_preview|_board_icon|_hover_add|_preview_direction|_place_add_bar" freecad tests`
       prints nothing.
-- [ ] `freecad/Shelving/commands/edit_commands.py` exists, and none of
+- [x] `freecad/Shelving/commands/edit_commands.py` exists, and none of
       `lock_width.py`, `lock_height.py`, `constrain_equal.py`,
       `constrain_even_spacing.py` exists under `freecad/Shelving/commands/`.
-- [ ] GUI test: the edit toolbar's actions are, in order,
+- [x] GUI test: the edit toolbar's actions are, in order,
       `Shelving_AddShelf`, `Shelving_AddDivider`, `Shelving_LockWidth`,
       `Shelving_LockHeight`, `Shelving_ConstrainEqual`,
       `Shelving_ConstrainEvenSpacing`. The Shelving menu lists the same
       six, and all six are inactive outside an edit.
-- [ ] GUI test: with two bays selected, `Shelving_AddShelf` adds one
+- [x] GUI test: with two bays selected, `Shelving_AddShelf` adds one
       shelf across each bay as a single undo step named `Add Shelf`, and
       the selection afterward is exactly the two new boards.
       `Shelving_AddDivider` does the same with `Add Divider`.
-- [ ] GUI test: run with nothing selected, or with a selection that
+- [x] GUI test: run with nothing selected, or with a selection that
       includes a board or a bay too small to split, either command leaves
       the unit and the document's undo names unchanged and reports exactly
       one Notification Area error.
-- [ ] GUI test: while Edit Unit is open, the editor's workbench
+- [x] GUI test: while Edit Unit is open, the editor's workbench
       manipulator puts the six commands, in toolbar order, into the context
       menu for recipient `"View"` in a workbench other than Shelving. After
       Close, no Shelving manipulator is installed.
-- [ ] View test: selecting a bay shows no new visible widget over the 3D
+- [x] View test: selecting a bay shows no new visible widget over the 3D
       view; the visible children of the viewer's parent widget are the same
       before and after the click.
-- [ ] A test of adding a shelf to a selected bay through
+- [x] A test of adding a shelf to a selected bay through
       `Shelving_AddShelf` carries a `smoke` mark naming that path.
-- [ ] `freecad/Shelving/qa/cases/30-editor.toml`: `editor.undo` adds its
+- [x] `freecad/Shelving/qa/cases/30-editor.toml`: `editor.undo` adds its
       shelves and divider from the toolbar, with one of those additions made
       from the right-click menu. The `select` step of `editor.dimensions`
       expects both dimensions readable, with nothing drawn over them.
-- [ ] The `bug-026` entry is gone from `.claude/docs/bug-log.md`.
+- [x] The `bug-026` entry is gone from `.claude/docs/bug-log.md`.
 
 ## Advice
 - The bar goes because no FreeCAD tool puts buttons over the geometry.
@@ -103,6 +103,10 @@ leaves less Python than it found.
   board across it (horizontal for the shelf, vertical for the divider),
   drawn in the style of the existing `Constraint_*.svg` files. They
   replace the QPainter-drawn `_board_icon`.
+- 2026-11-21, found during `/work`: every workbench's View menu starts
+  with Link Actions and a separator above `Std_ViewFitAll`. The commands
+  are inserted before `Std_ViewFitAll`, the one anchor every workbench
+  has, so Link Actions stays above them (`.claude/docs/freecad-notes.md`).
 - No default shortcuts, the same as the other editor commands; users bind
   them in Tools > Customize.
 - Ordering: sh-056 is `blocked_by` this task and adds its four
@@ -116,7 +120,7 @@ leaves less Python than it found.
   test carried none, so no mark is lost.
 
 ## Plan
-- [ ] **Step 1** (`editor/session.py`, `tests/freecad/test_editor_session.py`):
+- [x] **Step 1** (`editor/session.py`, `tests/freecad/test_editor_session.py`):
       `split(direction)` splits every selected bay as one undo step, all or
       nothing, and refuses an empty selection or any non-bay. Single-bay
       callers (`qa/actions.py`, `tests/freecad/test_edit_history.py`,
@@ -127,7 +131,7 @@ leaves less Python than it found.
       `tests/freecad/test_editor_session.py`). Update the
       `can_split` fixture text in `tests/test_readme_glossary.py` only if
       that test needs a live identifier.
-- [ ] **Step 2** (`commands/edit_commands.py`, `init_gui.py`,
+- [x] **Step 2** (`commands/edit_commands.py`, `init_gui.py`,
       `editor/panel.py`, `resources/`, `.claude/docs/code-map.md`):
       one module registers `Shelving_AddShelf`, `Shelving_AddDivider` and
       the four existing commands from a table, and the four old modules are
@@ -136,14 +140,14 @@ leaves less Python than it found.
       The renamed edit toolbar and the Shelving menu read the single id
       tuple. Add the two SVG icons. The code-map's `commands/` line
       describes the merged module.
-- [ ] **Step 3** (`editor/panel.py` or a sibling editor module,
+- [x] **Step 3** (`editor/panel.py` or a sibling editor module,
       `.claude/docs/freecad-notes.md`): the context-menu manipulator,
       installed and removed with the edit toolbar.
-- [ ] **Step 4** (`editor/view_editor.py`, `editor/overlay.py`,
+- [x] **Step 4** (`editor/view_editor.py`, `editor/overlay.py`,
       `editor/elevation.py`): delete `AddBar`, `_bind`, `_board_icon`, the
       bar's construction, placement and icon redraw, `_add_board`,
       `_hover_add`, the preview state and drawing, and `split_preview`.
-- [ ] **Step 5** (tests): rename `tests/freecad_gui/test_constraint_commands.py`
+- [x] **Step 5** (tests): rename `tests/freecad_gui/test_constraint_commands.py`
       to `test_edit_commands.py` and cover the Must Haves' toolbar, menu,
       multi-bay, refusal and manipulator cases, with the smoke mark.
       `tests/freecad_view/editor.py`'s `add_board` helper runs the command
@@ -154,7 +158,7 @@ leaves less Python than it found.
       `tests/freecad_view/test_multi_selection.py`. Drop
       `test_split_preview_is_where_the_new_board_goes` in
       `tests/test_editor_elevation.py`.
-- [ ] **Step 6** (`README.md`, `docs/scope-and-design.md`,
+- [x] **Step 6** (`README.md`, `docs/scope-and-design.md`,
       `freecad/Shelving/qa/cases/30-editor.toml`,
       `.claude/docs/bug-log.md`): add a glossary entry for Add Shelf and
       Add Divider covering where they sit and the multi-bay behavior. Say
@@ -164,3 +168,19 @@ leaves less Python than it found.
       name, then delete `bug-026`.
 
 ## Review log
+
+### Round 1: APPROVED
+- N1: `.claude/docs/bug-log.md` bug-005 still names the removed
+  `Session.can_split`; point it at `Session.split`.
+- N2: `tests/freecad_gui/test_edit_commands.py` refusal test counts the
+  three reported errors once after the loop, not one per selection.
+- N3: `commands/edit_commands.py` repeats the four `Constraint_*.svg`
+  file names that `editor/overlay.py`'s icon mappings hold.
+- N4: `docs/scope-and-design.md` paragraph is not rewrapped, and "so
+  nothing covers a selected opening's dimensions" leans toward
+  reader-memory framing.
+- N5: `_MenuInsert` in `editor/panel.py` documents its fields in the
+  class docstring rather than on each declaration.
+- N6: the manipulator Must Have is covered by a view test reading the
+  real menu, stronger than asked; its 300 ms timer could be slow-machine
+  sensitive.

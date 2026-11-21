@@ -773,9 +773,6 @@ def test_images_redraw_for_a_screen_of_another_pixel_ratio(
     for tile in editor.text_tiles:
         across_px = tile.drawn.height() if tile.label.horizontal else tile.drawn.width()
         assert across_px == metrics.height() + 2 * pad_px
-    for button in editor.add_bar.buttons.values():
-        device_px = round(24 * ratio)
-        assert QtCore.QSize(device_px, device_px) in button.icon().availableSizes()
     monkeypatch.undo()
     click_task_button("Close", driver)
 

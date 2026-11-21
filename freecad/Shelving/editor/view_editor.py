@@ -41,7 +41,6 @@ from freecad.Shelving.editor.elevation import (
     DimensionLabel,
     ElevationFrame,
     Overlay,
-    Rect,
     arrow_for,
     board_ids,
     dragged_to_mm,
@@ -52,7 +51,6 @@ from freecad.Shelving.editor.elevation import (
     label_size_pt,
     plan_overlay,
     region_at,
-    split_preview,
 )
 from freecad.Shelving.editor.fields import DimensionField
 from freecad.Shelving.editor.overlay import (
@@ -75,19 +73,13 @@ from freecad.Shelving.editor.overlay import (
     text_tile_image,
     view_style,
 )
-from freecad.Shelving.editor.session import (
-    FIELD_PROPERTIES,
-    Session,
-    SplitDirection,
-)
+from freecad.Shelving.editor.session import FIELD_PROPERTIES, Session
 from freecad.Shelving.refusals import report_error
 
 # A constraint icon image's cache key: its kind, color, activation, tile and
 # side.
 IconImageKey = tuple[str, RGB, bool, Tile, int]
 
-# The add buttons' icon side, in logical pixels.
-_ICON_PX = 24
 # The clear gap between the text of neighboring rows of dimensions outside
 # the unit, and between the first row's text and the unit, in logical
 # pixels at the fitted view.
@@ -193,41 +185,6 @@ def _sbrotation(rotation: FreeCAD.Rotation) -> Coin:
     return coin.SbRotation(x, y, z, w)
 
 
-def _bind(
-    callback: Callable[[SplitDirection], None], direction: SplitDirection
-) -> Callable[[], None]:
-    """A slot taking no arguments: PySide passes ``clicked``'s checked flag
-    to any callable that accepts one, such as a ``partial``."""
-    return lambda: callback(direction)
-
-
-def _board_icon(
-    direction: SplitDirection, ratio: float, rgb: tuple[float, float, float]
-) -> QtGui.QIcon:
-    """An opening with the board ``direction``'s split adds across it: a
-    shelf for "vertical", a divider for "horizontal"."""
-    pixmap = QtGui.QPixmap(round(_ICON_PX * ratio), round(_ICON_PX * ratio))
-    pixmap.setDevicePixelRatio(ratio)
-    pixmap.fill(QtCore.Qt.GlobalColor.transparent)
-    painter = QtGui.QPainter(pixmap)
-    painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
-    pen = QtGui.QPen(
-        QtWidgets.QApplication.palette().color(QtGui.QPalette.ColorRole.ButtonText)
-    )
-    pen.setWidthF(1.5)
-    painter.setPen(pen)
-    side_px = _ICON_PX - 6
-    painter.drawRect(QtCore.QRectF(3, 3, side_px, side_px))
-    bar = (
-        QtCore.QRectF(3, _ICON_PX / 2 - 1.5, side_px, 3)
-        if direction == "vertical"
-        else QtCore.QRectF(_ICON_PX / 2 - 1.5, 3, 3, side_px)
-    )
-    painter.fillRect(bar, QtGui.QColor.fromRgbF(*rgb))
-    painter.end()
-    return QtGui.QIcon(pixmap)
-
-
 def marker_path(side_px: float) -> QtGui.QPainterPath:
     """The fixed point marker's outline and hole, filling the square from
     the origin to ``side_px`` on each axis; its odd-even fill leaves the
@@ -259,64 +216,6 @@ def marker_image(ratio: float, rgb: RGB) -> QtGui.QImage:
     painter.fillPath(marker_path(side_px), QtGui.QColor.fromRgbF(*rgb))
     painter.end()
     return image
-
-
-class AddBar(QtWidgets.QFrame):
-    """The Add shelf and Add divider buttons over the selected bay.
-    Hovering one reports its split to ``on_hover``; leaving reports
-    ``None``."""
-
-    def __init__(
-        self,
-        parent: QtWidgets.QWidget | None,
-        rgb: tuple[float, float, float],
-        on_add: Callable[[SplitDirection], None],
-        on_hover: Callable[[SplitDirection | None], None],
-    ) -> None:
-        super().__init__(parent)
-        self._on_hover = on_hover
-        self._rgb = rgb
-        self.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
-        self.setAutoFillBackground(True)
-        layout = QtWidgets.QHBoxLayout(self)
-        layout.setContentsMargins(2, 2, 2, 2)
-        layout.setSpacing(2)
-        self.buttons: dict[SplitDirection, QtWidgets.QToolButton] = {}
-        directions: tuple[tuple[SplitDirection, str], ...] = (
-            ("vertical", "Add shelf"),
-            ("horizontal", "Add divider"),
-        )
-        for direction, text in directions:
-            button = QtWidgets.QToolButton(self)
-            button.setIconSize(QtCore.QSize(_ICON_PX, _ICON_PX))
-            button.setText(text)
-            button.setToolTip(text)
-            button.setAccessibleName(text)
-            # As a toolbar button does: keyboard focus stays in the 3D view,
-            # where Delete and FreeCAD's Undo shortcuts reach the edit.
-            button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
-            button.clicked.connect(_bind(on_add, direction))
-            button.installEventFilter(self)
-            layout.addWidget(button)
-            self.buttons[direction] = button
-        self.draw_icons(self.devicePixelRatioF())
-        self.hide()
-
-    def draw_icons(self, ratio: float) -> None:
-        """Give each button its icon drawn at the device pixel ratio
-        ``ratio``."""
-        for direction, button in self.buttons.items():
-            button.setIcon(_board_icon(direction, ratio, self._rgb))
-
-    @override
-    def eventFilter(self, watched: QtCore.QObject, event: QtCore.QEvent) -> bool:
-        if event.type() == QtCore.QEvent.Type.Enter:
-            for direction, button in self.buttons.items():
-                if watched is button:
-                    self._on_hover(direction)
-        elif event.type() == QtCore.QEvent.Type.Leave:
-            self._on_hover(None)
-        return False
 
 
 class _FieldKeys(QtCore.QObject):
@@ -634,14 +533,11 @@ class ViewEditor:
         self.arrow: Arrow | None = None
         self._dragging = False
         self._drag_failure_reported = False
-        self.preview: Rect | None = None
-        self._preview_direction: SplitDirection | None = None
         self.field: DimensionField | None = None
         self._field_host: QtWidgets.QFrame | None = None
         self._field_anchor: tuple[float, float] | None = None
         self._field_region: str | None = None
         self._field_applied = False
-        self._add_anchor: tuple[float, float] | None = None
         # The drawn constraint icons and text tiles, rebuilt with the
         # drawing.
         self.icon_nodes: list[IconNode] = []
@@ -706,7 +602,7 @@ class ViewEditor:
         # The ratio the labels were sized for, which their measured text
         # divides back out.
         self._label_ratio = ratio
-        # The ratio the images and add buttons' icons were drawn at.
+        # The ratio the images were drawn at.
         self._drawn_ratio = ratio
         self._outer_row_mm = self._outer_row_spacing_mm()
         self.root: Coin = coin.SoSeparator()
@@ -723,13 +619,6 @@ class ViewEditor:
         scene_graph = self.view.getSceneGraph()
         scene_graph.addChild(self.root)
         self._installed.append((lambda: scene_graph.removeChild(self.root), True))
-
-        parent = self._viewer.parentWidget()
-        self.add_bar = AddBar(
-            parent, self.style.selected_rgb, self._add_board, self._hover_add
-        )
-        self._installed.append((self.add_bar.deleteLater, True))
-        self._installed.append((self.add_bar.hide, True))
 
         viewport = self.viewport
         clicks = _ViewportClicks(viewport, self._sort_press, self._click)
@@ -1018,8 +907,7 @@ class ViewEditor:
 
     def rebuild(self) -> None:
         """Redraw from the session on the face the camera sees, and place the
-        arrow, the add buttons and the field; the arrow stays put during a
-        drag."""
+        arrow and the field; the arrow stays put during a drag."""
         if self._closed or self._stood_down():
             return
         session = self.session
@@ -1044,7 +932,6 @@ class ViewEditor:
             selected_items=session.selected_items,
             selected_constraints=session.selected_constraints,
         )
-        self._update_preview()
         self._draw_text_tiles()
         self._drawing.removeAllChildren()
         self._drawing.addChild(
@@ -1053,7 +940,6 @@ class ViewEditor:
                 self.frame,
                 self.style,
                 self._front_normal(),
-                self.preview,
                 self.text_tiles,
             )
         )
@@ -1061,7 +947,6 @@ class ViewEditor:
         self.marker.place(self.frame.from_unit(fixed_point_mm(unit)))
         if not self._dragging:
             self._place_arrow()
-            self._place_add_bar()
         self._place_widgets()
 
     def _icon_metrics_px(self) -> tuple[int, int]:
@@ -1175,17 +1060,6 @@ class ViewEditor:
             QtCore.QSizeF(width_px, height_px),
         )
 
-    def _update_preview(self) -> None:
-        direction = self._preview_direction
-        selected = self.session.selected_id
-        if direction is None or selected is None or not self.session.can_split():
-            self.preview = None
-            return
-        axis = (
-            self.frame.horizontal if direction == "horizontal" else self.frame.vertical
-        )
-        self.preview = split_preview(self.session.unit, self.frame, selected, axis)
-
     def _place_arrow(self) -> None:
         session = self.session
         selected = session.selected_id
@@ -1209,22 +1083,7 @@ class ViewEditor:
         self.dragger.translation.setValue(0, 0, 0)
         self._dragger_switch.whichChild.setValue(0)
 
-    def _place_add_bar(self) -> None:
-        session = self.session
-        selected = session.selected_id
-        if selected is None or not session.can_split() or self._dragging:
-            self.add_bar.hide()
-            self._add_anchor = None
-            self._preview_direction = None
-            return
-        self._add_anchor = self.frame.rect(session.spaces[selected]).center_mm
-        self.add_bar.show()
-        self.add_bar.adjustSize()
-        self.add_bar.raise_()
-
     def _place_widgets(self) -> None:
-        if self._add_anchor is not None:
-            self._move_to(self.add_bar, self._add_anchor)
         if self._field_host is not None and self._field_anchor is not None:
             if Shiboken.isValid(self._field_host):
                 self._move_to(self._field_host, self._field_anchor)
@@ -1262,7 +1121,6 @@ class ViewEditor:
         if self._closed or self._stood_down():
             return
         self._close_field()
-        self._preview_direction = None
 
     # Hiding other objects
 
@@ -1393,13 +1251,16 @@ class ViewEditor:
         select_in_freecad(self._doc_name, [] if board is None else [board])
         self._on_change()
 
-    def select_boards(self, board_ids: Sequence[str]) -> None:
-        """Select exactly the boards ``board_ids``, in the session and, whole,
+    def select_boards(self, ids: Sequence[str]) -> None:
+        """Select exactly the boards ``ids``, in the session and, whole,
         in FreeCAD's selection."""
         if self._closed:
             return
-        self.session.select_boards(board_ids)
-        select_in_freecad(self._doc_name, list(dict.fromkeys(board_ids)))
+        # Ahead of the redraw that refreshes it: the selection gate admits
+        # only the boards it lists, and a board an edit just added is new.
+        self._boards = board_ids(self.session.unit)
+        self.session.select_boards(ids)
+        select_in_freecad(self._doc_name, list(dict.fromkeys(ids)))
         self._on_change()
 
     def select_constraints(self, constraint_ids: Sequence[ConstraintId]) -> None:
@@ -1683,32 +1544,10 @@ class ViewEditor:
         ratio = self._viewer.devicePixelRatioF()
         if ratio != self._drawn_ratio:
             self._drawn_ratio = ratio
-            self.add_bar.draw_icons(ratio)
             self._draw_marker(ratio)
             # Redraws the constraint icons and text tiles.
             self.rebuild()
         self._place_widgets()
-
-    # The add buttons
-
-    def _hover_add(self, direction: SplitDirection | None) -> None:
-        if direction != self._preview_direction:
-            self._preview_direction = direction
-            self.rebuild()
-
-    def _add_board(self, direction: SplitDirection) -> None:
-        """Split the selected bay, then select the new board, so its arrow
-        is ready to move it."""
-        self._preview_direction = None
-        before = board_ids(self.session.unit)
-        failure = self.session.split(direction)
-        if failure is not None:
-            report_error(failure.message)
-            self._on_change()
-            return
-        added = board_ids(self.session.unit) - before
-        self._boards = board_ids(self.session.unit)
-        self.select(next(iter(added)) if len(added) == 1 else None)
 
     # Delete
 
@@ -1747,7 +1586,6 @@ class ViewEditor:
             return
         self._dragging = True
         self._drag_failure_reported = False
-        self.add_bar.hide()
 
     def _drag_moved(self, dragger: Coin) -> None:
         arrow = self.arrow

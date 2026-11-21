@@ -134,10 +134,12 @@ def click_region(panel: EditUnitPanel, region_id: str, driver: ViewDriver) -> No
 def add_board(
     panel: EditUnitPanel, direction: SplitDirection, driver: ViewDriver
 ) -> str:
-    """Select the first bay and press its in-view add button for
-    ``direction``; returns the new board, which the editor selects."""
+    """Select the first bay and run the add command for ``direction``;
+    returns the new board, which the command selects."""
     click_region(panel, bay_ids(panel.session.unit.root)[0], driver)
-    editor_of(panel).add_bar.buttons[direction].click()
+    FreeCADGui.runCommand(
+        "Shelving_AddShelf" if direction == "vertical" else "Shelving_AddDivider"
+    )
     driver.pump()
     selected = panel.session.selected_id
     assert selected is not None

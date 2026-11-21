@@ -1,5 +1,5 @@
 ---
-next_id: friction-032
+next_id: friction-033
 ---
 
 # Friction log
@@ -88,3 +88,12 @@ the papercut and its fix in its message.
   closes the document straight after `reject()`, as `test_panel.py` does.
   Simpler if: the GUI tests shared one fixture helper that closes a panel
   the way `FreeCADGui.Control.closeDialog` does, deleting its form.
+- `friction-032` - **running one GUI or view test**: in sh-059,
+  `pixi run tests -- tests/freecad_gui/test_edit_commands.py` stops with
+  the usage message, since `tools/run-tests.sh` takes only `--smoke` and
+  `--offline`. The workaround was to copy each tier's command by hand:
+  `QT_QPA_PLATFORM=offscreen pixi run pytest <path>` for
+  `tests/freecad_gui` and `pixi run python -m tools.xvfb_run pytest
+  <path>::<name>` for `tests/freecad_view`. Simpler if: a `pixi run`
+  task, or a `run-tests.sh` option, ran one test node under its tier's
+  environment.

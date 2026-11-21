@@ -12,9 +12,8 @@ instead: fills, then outlines, then dimensions.
 from __future__ import annotations
 
 import math
-import os
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol, TypeAlias
 
@@ -23,7 +22,9 @@ from pivy import coin
 from PySide6 import QtCore, QtGui, QtSvg, QtWidgets
 
 from freecad.Shelving.editor.elevation import (
+    ICON_SOURCES,
     LIFT_MM,
+    LOCK_ICON_SOURCES,
     ConstraintIcon,
     ConstraintKind,
     DimensionLabel,
@@ -43,7 +44,6 @@ _BAY_RGB: RGB = (0.85, 0.85, 0.85)
 _VOID_RGB: RGB = (0.6, 0.6, 0.6)
 _OUTLINE_RGB: RGB = (0.2, 0.2, 0.2)
 _FILL_TRANSPARENCY = 0.6
-_PREVIEW_TRANSPARENCY = 0.3
 _THIN_LINE_PX = 1.0
 _THICK_LINE_PX = 3.0
 _DIMENSION_LINE_PX = 1.5
@@ -175,23 +175,6 @@ def view_style(label_size_pt: int) -> Style:
         icon_rgb=_view_color("ConstrainedIcoColor", 0xFF2600FF),
         tile_rgb=background_rgb(FreeCAD.ParamGet(_VIEW_PARAMS)),
     )
-
-
-# The workbench's own icons in the Sketcher's constraint style. Drawing
-# Equal as well as Even spacing keeps the pair matched and spares
-# importing SketcherGui, whose import alone registers the Sketcher's icons
-# (.claude/docs/freecad-notes.md).
-_RESOURCES = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources")
-ICON_SOURCES: Mapping[ConstraintKind, str] = {
-    "equal": os.path.join(_RESOURCES, "Constraint_Equal.svg"),
-    "even_spacing": os.path.join(_RESOURCES, "Constraint_EvenSpacing.svg"),
-}
-# Lock Width's and Lock Height's icons, after the Sketcher's horizontal and
-# vertical distance constraints'.
-LOCK_ICON_SOURCES: Mapping[ElevationDirection, str] = {
-    "horizontal": os.path.join(_RESOURCES, "Constraint_HorizontalDistance.svg"),
-    "vertical": os.path.join(_RESOURCES, "Constraint_VerticalDistance.svg"),
-}
 
 
 # The tile's margin around a glyph or a dimension's text, and its corner
@@ -466,7 +449,6 @@ def drawing_node(
     frame: ElevationFrame,
     style: Style,
     normal: FreeCAD.Vector,
-    preview: Rect | None,
     text_tiles: Sequence[TextTileNode] = (),
 ) -> Coin:
     """The whole drawing for ``overlay`` on ``frame``'s face, in elevation
@@ -519,13 +501,6 @@ def drawing_node(
                 style.outline_rgb(outline.role),
                 _THIN_LINE_PX if outline.role == "region" else _THICK_LINE_PX,
             )
-        )
-    if preview is not None:
-        outlines.addChild(
-            face_node(preview, 1.5 * lift_mm, style.selected_rgb, _PREVIEW_TRANSPARENCY)
-        )
-        outlines.addChild(
-            outline_node(preview, 1.5 * lift_mm, style.selected_rgb, _THICK_LINE_PX)
         )
     for tile in text_tiles:
         tiles.addChild(tile.root)

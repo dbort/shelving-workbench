@@ -17,7 +17,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable, Mapping, Sequence
 from functools import partial
-from typing import Literal, Protocol, cast
+from typing import Literal, Protocol, TypedDict, cast
 
 import FreeCAD
 from PySide6 import QtCore, QtGui, QtWidgets
@@ -27,14 +27,16 @@ from freecad.Shelving.core.layout import Basis, ConstraintId
 from freecad.Shelving.core.stock import Color, StockGroup
 from freecad.Shelving.debug_log import Stopwatch
 from freecad.Shelving.editor.constraint_list import ConstraintList, ListActions
-from freecad.Shelving.editor.elevation import ElevationDirection
+from freecad.Shelving.editor.elevation import ElevationDirection, board_ids
 from freecad.Shelving.editor.fields import DimensionField, WheelFilter
 from freecad.Shelving.editor.overlay import RGB, marker_rgb
 from freecad.Shelving.editor.session import (
+    EDIT_COMMANDS,
     FIELD_PROPERTIES,
     EditFailure,
     EditWarning,
     Session,
+    SplitDirection,
     UnitDimension,
 )
 from freecad.Shelving.editor.stock_dialog import StockDialog
@@ -61,19 +63,11 @@ _FIXED_TIPS: Mapping[UnitDimension, str] = {
 
 _REFERENCE_TIP = "Locked openings fix this size. Unlock one of them to change it here."
 
-# The commands on the toolbar the panel shows while it is open; the Shelving
-# menu lists the same ones (freecad/Shelving/init_gui.py).
-CONSTRAINT_TOOLBAR_COMMANDS = (
-    "Shelving_LockWidth",
-    "Shelving_LockHeight",
-    "Shelving_ConstrainEqual",
-    "Shelving_ConstrainEvenSpacing",
-)
-CONSTRAINT_TOOLBAR_NAME = "ShelvingConstraints"
+EDIT_TOOLBAR_NAME = "ShelvingEdit"
 
 ConstraintCommand = Literal["equal", "even_spacing"]
 
-# The panel open now, which the constraint commands act through; at most one
+# The panel open now, which the editor's commands act through; at most one
 # task panel is open at a time.
 _active: EditUnitPanel | None = None
 
@@ -96,11 +90,39 @@ class _MainWindow(Protocol):
     def removeToolBar(self, toolbar: QtWidgets.QToolBar, /) -> None: ...
 
 
-class ConstraintToolBar:
-    """The constraint commands' toolbar in FreeCAD's main window, shown while
-    an edit is open whatever the active workbench, as the Sketcher shows its
-    edit-mode toolbars. A workbench switch rebuilds the main window's
-    toolbars, so the toolbar shows itself again after one."""
+class _MenuInsert(TypedDict):
+    """One entry of a workbench manipulator's ``modifyContextMenu`` result."""
+
+    # The command id to add to the menu, or "Separator".
+    insert: str
+    # The command id of the existing item the new entry goes just before.
+    menuItem: str
+
+
+class ViewMenu:
+    """A workbench manipulator that lists the editor's commands in the 3D
+    view's right-click menu, above its view entries, as the Sketcher's edit
+    mode lists its tools there. A manipulator applies in every workbench,
+    as the editor does."""
+
+    def modifyContextMenu(self, recipient: str) -> list[_MenuInsert]:
+        if recipient != "View":
+            return []
+        # Std_ViewFitAll heads the view entries every workbench's menu
+        # holds (StdWorkbench::setupContextMenu); only Link Actions sits
+        # above it.
+        return [
+            {"insert": name, "menuItem": "Std_ViewFitAll"}
+            for name in (*EDIT_COMMANDS, "Separator")
+        ]
+
+
+class EditToolBar:
+    """The editor's commands on a toolbar in FreeCAD's main window and in
+    the 3D view's right-click menu, shown while an edit is open whatever the
+    active workbench, as the Sketcher shows its edit-mode toolbars. A
+    workbench switch rebuilds the main window's toolbars, so the toolbar
+    shows itself again after one."""
 
     def __init__(self) -> None:
         import FreeCADGui
@@ -109,10 +131,13 @@ class ConstraintToolBar:
         # None once closed.
         self._window: _MainWindow | None = main
         self.toolbar = QtWidgets.QToolBar(
-            "Shelving constraints", cast("QtWidgets.QMainWindow", main)
+            "Shelving edit", cast("QtWidgets.QMainWindow", main)
         )
-        self.toolbar.setObjectName(CONSTRAINT_TOOLBAR_NAME)
-        for name in CONSTRAINT_TOOLBAR_COMMANDS:
+        self.toolbar.setObjectName(EDIT_TOOLBAR_NAME)
+        for name in EDIT_COMMANDS:
+            if name == "Separator":
+                self.toolbar.addSeparator()
+                continue
             command = cast("_GuiCommand | None", FreeCADGui.Command.get(name))
             if command is not None:
                 for action in command.getAction():
@@ -120,6 +145,8 @@ class ConstraintToolBar:
         main.addToolBar(self.toolbar)
         self.toolbar.show()
         main.workbenchActivated.connect(self._reshow)
+        self.view_menu = ViewMenu()
+        FreeCADGui.addWorkbenchManipulator(self.view_menu)
 
     def _reshow(self, _name: str) -> None:
         # After the switch has finished hiding the toolbars it does not list.
@@ -134,7 +161,10 @@ class ConstraintToolBar:
         window = self._window
         if window is None:
             return
+        import FreeCADGui
+
         self._window = None
+        FreeCADGui.removeWorkbenchManipulator(self.view_menu)
         window.workbenchActivated.disconnect(self._reshow)
         self.toolbar.hide()
         window.removeToolBar(self.toolbar)
@@ -372,7 +402,7 @@ class EditUnitPanel:
         self.session.on_warning = _report_warning
         watch.lap("open session")
         self.editor: ViewEditor | None = None
-        self.toolbar: ConstraintToolBar | None = None
+        self.toolbar: EditToolBar | None = None
         # Without this, a failure building the form or the in-view editor
         # would leave the session following the document with no dialog to
         # end it.
@@ -382,7 +412,7 @@ class EditUnitPanel:
                 self.editor = ViewEditor(self.session, view, self._refresh)
                 watch.lap("view editor")
             if FreeCAD.GuiUp:
-                self.toolbar = ConstraintToolBar()
+                self.toolbar = EditToolBar()
         except BaseException:
             if self.editor is not None:
                 self.editor.close(restore_camera=False)
@@ -561,12 +591,15 @@ class EditUnitPanel:
     def select_stock(self, group: StockGroup) -> None:
         """Select exactly ``group``'s boards, in the session and in FreeCAD's
         selection."""
+        self._select_boards(group.board_ids)
+
+    def _select_boards(self, ids: Sequence[str]) -> None:
         if self.editor is not None:
             # The editor's change callback is this panel's refresh.
-            self.editor.select_boards(group.board_ids)
+            self.editor.select_boards(ids)
             return
-        self.session.select_boards(group.board_ids)
-        select_in_freecad(self.session.container.Document.Name, group.board_ids)
+        self.session.select_boards(ids)
+        select_in_freecad(self.session.container.Document.Name, ids)
         self._refresh()
 
     def _open_stock_dialog(self) -> None:
@@ -753,6 +786,17 @@ class EditUnitPanel:
         if failure is None and self.editor is not None:
             select_in_freecad(self.session.container.Document.Name, [])
         self._show_result(failure)
+
+    def add(self, direction: SplitDirection) -> None:
+        """Split every selected bay as :meth:`Session.split` does for
+        ``direction`` and select the new boards, reporting a refusal through
+        the Notification Area."""
+        before = board_ids(self.session.unit)
+        failure = self.session.split(direction)
+        if failure is not None:
+            self._show_result(failure)
+            return
+        self._select_boards(sorted(board_ids(self.session.unit) - before))
 
     def lock(self, direction: ElevationDirection) -> None:
         """Lock the selection's sizes along the elevation's ``direction``,
