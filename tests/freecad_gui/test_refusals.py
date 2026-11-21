@@ -121,6 +121,7 @@ def _selected_names() -> set[str]:
     return {obj.Name for obj in selection}
 
 
+@pytest.mark.smoke("Edit Unit refuses a unit it cannot read and says why")
 def test_edit_unit_refuses_overlapping_boards_and_selects_them(
     doc: FreeCAD.Document, recorded: list[_Refusal]
 ) -> None:

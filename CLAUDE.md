@@ -81,6 +81,15 @@ wrong.
   not fit cleanly are decided with the user and the decision recorded in
   the task's `## Advice`.
 
+- **Smoke set stays representative:** a task that adds, changes or
+  removes a main user path in the GUI or 3D view, or deletes or rewrites
+  a `smoke` test, adds, moves or retires `smoke` marks so the set still
+  gives quick confidence in the workbench's health and
+  `pixi run tests -- --smoke` stays well inside its 90 s limit. Each mark
+  names the user path its test covers, which shows what the set covers
+  and what a removal loses. A task that touches none of these says so in
+  `## Advice`.
+
 <!-- Example shape for future entries:
 
 - **Config parity:** any task adding an env var a deploy-managed service

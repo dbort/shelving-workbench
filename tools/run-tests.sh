@@ -3,26 +3,39 @@
 # The Shelving Workbench check harness: the single command that gates a merge.
 # Run it as `pixi run tests`; the checks below assume that environment's tools.
 # `--offline` exports SHELVING_OFFLINE=1 so network-dependent checks skip
-# themselves instead of failing on an unreachable service. `--smoke` leaves
-# out the tests marked `full_only` (tests/conftest.py), most of them in the
-# slow 3D-view suite; the full run stays the merge gate. Pass either or both
+# themselves instead of failing on an unreachable service. `--smoke` is the
+# quick pass for use while working: in tests/freecad_gui and
+# tests/freecad_view it runs only the tests marked `smoke`
+# (tests/smoke_marks.py), every other check whole, and it stops and fails
+# the run once it passes a hard 90 s limit (tools/smoke_limit.py). The full
+# run has no limit and stays the merge gate. Pass either option or both
 # after `--`: `pixi run tests -- --smoke --offline`.
 #
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
+# Arguments, not PYTEST_ADDOPTS: tests/test_collection_runs.py starts pytest
+# runs of its own that inherit the environment.
+marked=()
 for arg in "$@"; do
 	case "$arg" in
 		--offline) export SHELVING_OFFLINE=1 ;;
-		# PYTEST_ADDOPTS reaches every pytest run below.
-		--smoke) export PYTEST_ADDOPTS="${PYTEST_ADDOPTS:-} -m 'not full_only'" ;;
+		--smoke) marked=(-m smoke) ;;
 		*)
 			echo "usage: run-tests.sh [--offline] [--smoke]" >&2
 			exit 2
 			;;
 	esac
 done
+
+# The whole smoke run, static checks included, runs under the limit.
+# SHELVING_SMOKE_LIMITED marks the run the limit started, so it does not
+# wrap itself again.
+if [[ ${#marked[@]} -gt 0 && -z ${SHELVING_SMOKE_LIMITED:-} ]]; then
+	export SHELVING_SMOKE_LIMITED=1
+	exec python -m tools.smoke_limit tools/run-tests.sh "$@"
+fi
 
 # The only tool with a heavy external dependency; the pixi environment
 # guarantees the rest.
@@ -59,6 +72,6 @@ freecadcmd tools/freecadcmd_import_check.py
 printf '== %s\n' tests/freecad
 pytest tests/freecad
 printf '== %s\n' tests/freecad_gui
-QT_QPA_PLATFORM=offscreen pytest tests/freecad_gui
+QT_QPA_PLATFORM=offscreen pytest tests/freecad_gui "${marked[@]}"
 printf '== %s\n' tests/freecad_view
-python -m tools.xvfb_run pytest tests/freecad_view
+python -m tools.xvfb_run pytest tests/freecad_view "${marked[@]}"

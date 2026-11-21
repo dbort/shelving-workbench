@@ -194,7 +194,7 @@ def _front_rotation(
 
 @pytest.mark.parametrize(
     "placed_unit",
-    [pytest.param("at the origin", marks=pytest.mark.full_only), "moved and turned"],
+    ["at the origin", "moved and turned"],
     indirect=True,
 )
 def test_opening_turns_the_camera_to_the_units_front(
@@ -263,7 +263,6 @@ def test_close_leaves_the_camera_when_the_sketcher_would(
     assert after.isSame(editing, 1e-6)
 
 
-@pytest.mark.full_only
 def test_a_restore_still_turning_leaves_the_next_session_alone(
     unit: FreeCAD.DocumentObject, driver: ViewDriver, slow_turns: None
 ) -> None:
@@ -627,7 +626,6 @@ def test_the_scene_bounds_reach_every_dimension(
     click_task_button("Close", driver)
 
 
-@pytest.mark.full_only
 def test_closing_the_document_while_the_camera_turns_back_raises_nothing(
     unit: FreeCAD.DocumentObject,
     driver: ViewDriver,

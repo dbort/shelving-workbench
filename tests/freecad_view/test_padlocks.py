@@ -820,9 +820,7 @@ def test_a_carcass_board_shows_neither_arrow_nor_padlock(
     click_task_button("Close", driver)
 
 
-@pytest.mark.parametrize(
-    "dragged", ["lower", pytest.param("upper", marks=pytest.mark.full_only)]
-)
+@pytest.mark.parametrize("dragged", ["lower", "upper"])
 def test_a_drag_carries_both_shelves_around_a_locked_opening(
     unit: FreeCAD.DocumentObject, driver: ViewDriver, dragged: str
 ) -> None:

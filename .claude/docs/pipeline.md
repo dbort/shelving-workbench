@@ -29,9 +29,12 @@ The repo's whole verification surface: static analysis, the core unit
 suite, the repository-consistency checks, the workflow lint, a
 `freecadcmd` import check, and the headless and GUI FreeCAD test suites.
 It must be green before every review and on the merged result before
-`/ship` commits the merge. `pixi run tests -- --smoke` leaves out the
-`full_only` tests and suits iteration between those points; it never
-stands in for the full run at one, with one exception. When `main` has
+`/ship` commits the merge. `pixi run tests -- --smoke` suits iteration
+between those points: it runs every check whole except
+`tests/freecad_gui/` and `tests/freecad_view/`, where it runs only the
+tests marked `smoke` (`tests/smoke_marks.py`), and it stops and fails at a
+hard 90 s limit. It never stands in for the full run at one of those
+points, with one exception. When `main` has
 not moved since the branch was cut (`git merge-base --is-ancestor main
 sh-XXX` succeeds), the merged tree is the branch's tree, and since the
 branch's last full run only its task file has changed: `/work` runs the

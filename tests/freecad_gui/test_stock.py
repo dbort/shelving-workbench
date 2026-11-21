@@ -94,6 +94,7 @@ def _board_ids(region: Region) -> set[str]:
     return ids
 
 
+@pytest.mark.smoke("create a unit")
 def test_create_unit_boards_are_18_mm_in_magic_start_color(
     doc: FreeCAD.Document,
 ) -> None:

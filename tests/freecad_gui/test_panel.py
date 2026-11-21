@@ -636,6 +636,7 @@ def test_the_unit_section_shows_the_units_size(unit_panel: _Fixture) -> None:
     assert _unit_field_mm(unit_panel, "height") == pytest.approx(900.0)
 
 
+@pytest.mark.smoke("type a new unit height in Edit Unit")
 def test_a_typed_height_resizes_the_unit_on_return(unit_panel: _Fixture) -> None:
     _type_unit_size(unit_panel, "height", "1000")
     unit_panel.doc.recompute()

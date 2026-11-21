@@ -106,6 +106,7 @@ def _shift(a: QtGui.QColor, b: QtGui.QColor) -> int:
     )
 
 
+@pytest.mark.smoke("open Edit Unit on a hand-built unit and close it")
 def test_edit_unit_reads_a_hand_built_unit_and_close_changes_nothing(
     driver: ViewDriver,
 ) -> None:

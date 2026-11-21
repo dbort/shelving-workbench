@@ -42,25 +42,23 @@ _CTRL = QtCore.Qt.KeyboardModifier.ControlModifier
 
 # Every navigation style a click and a drag must pass under, with the
 # modifier it selects with: OpenInventor navigation selects on Ctrl+click.
-# A smoke run keeps CAD navigation and the one style with a modifier.
 _STYLES = (
     pytest.param(
-        ("Gui::CADNavigationStyle", _NO_MODIFIER), id="Gui::CADNavigationStyle"
+        ("Gui::CADNavigationStyle", _NO_MODIFIER),
+        id="Gui::CADNavigationStyle",
+        marks=pytest.mark.smoke("drag a selected board by its arrow"),
     ),
     pytest.param(
         ("Gui::GestureNavigationStyle", _NO_MODIFIER),
         id="Gui::GestureNavigationStyle",
-        marks=pytest.mark.full_only,
     ),
     pytest.param(
         ("Gui::TouchpadNavigationStyle", _NO_MODIFIER),
         id="Gui::TouchpadNavigationStyle",
-        marks=pytest.mark.full_only,
     ),
     pytest.param(
         ("Gui::OpenSCADNavigationStyle", _NO_MODIFIER),
         id="Gui::OpenSCADNavigationStyle",
-        marks=pytest.mark.full_only,
     ),
     pytest.param(
         ("Gui::InventorNavigationStyle", _CTRL), id="Gui::InventorNavigationStyle"
@@ -515,7 +513,7 @@ def test_the_add_buttons_show_over_a_selected_bay_and_preview_their_board(
     "key",
     [
         QtCore.Qt.Key.Key_Delete,
-        pytest.param(QtCore.Qt.Key.Key_Backspace, marks=pytest.mark.full_only),
+        QtCore.Qt.Key.Key_Backspace,
     ],
 )
 def test_delete_and_backspace_delete_the_selected_board(
@@ -653,7 +651,7 @@ def _as_plain_group(container: FreeCAD.DocumentObject) -> FreeCAD.DocumentObject
 @pytest.mark.parametrize(
     "kind",
     [
-        pytest.param("plain group", marks=pytest.mark.full_only),
+        "plain group",
         "placed by an expression",
     ],
 )

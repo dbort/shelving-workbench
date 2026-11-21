@@ -279,6 +279,7 @@ def test_a_constraint_row_has_a_checkbox_a_lock_row_none(editing: _Editing) -> N
     assert spacing.checkState(TEXT_COLUMN) == QtCore.Qt.CheckState.Unchecked
 
 
+@pytest.mark.smoke("turn a constraint off and on in the constraint list")
 def test_checking_and_unchecking_turn_a_constraint_on_and_off(
     editing: _Editing,
 ) -> None:

@@ -251,6 +251,7 @@ def test_a_click_on_an_unchecked_field_checks_it(panel: EditUnitPanel) -> None:
     _process_events()
 
 
+@pytest.mark.smoke("change the stock of a selected board")
 def test_the_dialog_swaps_the_checked_fields(panel: EditUnitPanel) -> None:
     dialog = _open_dialog(panel, ["top"])
     dialog.thickness_check.setChecked(True)
