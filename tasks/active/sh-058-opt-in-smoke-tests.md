@@ -143,3 +143,8 @@ as features come and go.
 - [x] **Step 5**: Time `pixi run tests -- --smoke` on the dev VM, save its output and exit status to a file, and record the wall time in the review log.
 
 ## Review log
+
+### Round 1: APPROVED
+- **N1: Nothing tests that `run-tests.sh` routes `--smoke` through the limit** (`tools/run-tests.sh:37`): `tests/test_smoke_limit.py` drives `run_with_limit` directly, as the Must Have asks, but deleting or breaking the `exec python -m tools.smoke_limit` line or its `SHELVING_SMOKE_LIMITED` guard would leave every test passing. A cheap wiring test would catch that.
+- **N2: A child killed by a signal leaks a negative status** (`tools/smoke_limit.py:96`): `run_with_limit` returns `Popen`'s negative returncode, so `SystemExit(-15)` exits 241 rather than the shell's 128+n. No Must Have depends on it.
+- **N3: Measured smoke time:** `pixi run tests -- --smoke` on the dev VM took 44.7 s wall, exit 0; the reviewer's own run under a pty took 43 s, exit 0, with no SIGTTOU stop from the separate process group. Both are under the 50 s Must Have.
