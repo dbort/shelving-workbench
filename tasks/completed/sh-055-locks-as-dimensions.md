@@ -18,10 +18,10 @@ that holds it. A click on a dimension selects it and a double-click
 types a size.
 
 ## Must Have
-- [ ] `pixi run tests` green; `pyrefly check` clean over the changed code.
-- [ ] `grep -rni padlock freecad tests README.md docs/scope-and-design.md`
+- [x] `pixi run tests` green; `pyrefly check` clean over the changed code.
+- [x] `grep -rni padlock freecad tests README.md docs/scope-and-design.md`
       prints nothing.
-- [ ] Elevation plan (`tests/test_editor_elevation.py`), on sh-050's unit:
+- [x] Elevation plan (`tests/test_editor_elevation.py`), on sh-050's unit:
       654 mm tall of 18 mm boards, fixed point `min`, split by two
       dividers into three columns L, M, R, with left A1 300, shelf s1,
       A2 300; middle B1 200, shelf t1, B2 400; right C1 250, shelf u1,
@@ -35,7 +35,7 @@ types a size.
       - with an Equal on A1 and B1, A1's and B1's dimensions are planned
         reference, each followed by its Equal icon at the row's first
         slot.
-- [ ] 3D view (`tests/freecad_view/`):
+- [x] 3D view (`tests/freecad_view/`):
       - a driving dimension takes `ConstrainedDimColor`, a deactivated one
         `DeactivatedConstrDimColor`, a reference one
         `NonDrivingConstrDimColor`, and a dimension whose Lock is selected
@@ -52,7 +52,7 @@ types a size.
         place, and outlines the regions holding it;
       - no icon overlaps another icon or a dimension's text tile in device
         pixels.
-- [ ] GUI (`tests/freecad_gui/`): `Shelving_LockWidth` and
+- [x] GUI (`tests/freecad_gui/`): `Shelving_LockWidth` and
       `Shelving_LockHeight` sit on the edit toolbar beside Constrain Equal
       and in the Shelving menu, and `IsActive` is false outside an edit.
       On the unit above:
@@ -63,12 +63,12 @@ types a size.
         `report_error` with text saying to select openings;
       - on a unit with no divider, a bay selected, Lock Width is refused
         through `report_error` with text naming the panel's Width field.
-- [ ] GUI (`tests/freecad_gui/test_constraint_list.py`): a Lock row shows
+- [x] GUI (`tests/freecad_gui/test_constraint_list.py`): a Lock row shows
       the icon of the command that makes its axis's Lock, and its text
       names Lock Width or Lock Height.
-- [ ] `README.md`'s glossary has entries **Lock Width and Lock Height**
+- [x] `README.md`'s glossary has entries **Lock Width and Lock Height**
       and **Reference dimension**.
-- [ ] `freecad/Shelving/qa/cases/30-editor.toml` has a case with id
+- [x] `freecad/Shelving/qa/cases/30-editor.toml` has a case with id
       `editor.dimensions` and none with id `editor.padlocks`.
 
 ## Advice

@@ -100,7 +100,7 @@ size changes, and scans back as the same treatment.
 - [x] sh-049: the constraint list in the task panel (blocked on sh-048)
 - [ ] sh-050: Aligned faces, picked by a board's face edges (blocked on sh-049)
 - [x] sh-054: a lock is a constraint you can turn off
-- [ ] sh-055: locks drawn as dimensions, made with Lock Width and Lock Height (blocked on sh-053, sh-054)
+- [x] sh-055: locks drawn as dimensions, made with Lock Width and Lock Height (blocked on sh-053, sh-054)
 - [ ] sh-056: Equal and Even spacing choose their axis (blocked on sh-055)
 - [ ] sh-057: fully constrained boards in color, and degrees of freedom in the panel (blocked on sh-055)
 
