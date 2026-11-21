@@ -102,10 +102,11 @@ A board deleted beside an Equal's opening, or added along its row through
 it, drops the Equal, as the Sketcher's Split and Trim drop an Equal on the
 line they cut; an even spacing is dropped only with an end. Geometry wins
 when a unit opens: a constraint the boards miss by more than the joint
-clearance comes in deactivated, drawn grayed and never solved, and one
-naming boards or openings that are gone is dropped, each said once in a
-notification. The constraint commands sit on a toolbar shown only while
-Edit Unit is open, as the Sketcher's edit-mode toolbars are.
+clearance comes in deactivated, its icons marked with a corner X and
+never solved, and one naming boards or openings that are gone is
+dropped, each said once in a notification. The constraint commands sit
+on a toolbar shown only while Edit Unit is open, as the Sketcher's
+edit-mode toolbars are.
 
 A drag moves a board and every board joined to it through locked regions;
 every other board moves only when an opening ahead of it reaches the
@@ -251,9 +252,17 @@ the opening's constraint icons follow it. Each dimension's text sits on a
 tile of its own, drawn under every dimension's lines and arrowheads, and a
 click anywhere on that tile opens the size field. The tiles put each
 glyph and size back on the background its theme chose those colors
-against, where an opening's translucent fill would wash out a gray
-deactivated icon or a size's digits. The Sketcher draws its dimension text
-with no tile; the workbench's openings carry fills a sketch does not.
+against, where an opening's translucent fill would wash out a thin glyph
+or a size's digits. The Sketcher draws its dimension text with no tile;
+the workbench's openings carry fills a sketch does not. A constraint's
+icon takes the selection color while its constraint is selected, as the
+Sketcher's do, and a deactivated constraint's icon carries an X in its
+glyph's top-right corner in the glyph's own color. Here the workbench
+departs from the Sketcher, which draws a deactivated icon in its
+deactivated color: that color gives way to the selection color, so a
+selected Sketcher icon cannot show whether its constraint is on. The X
+keeps activation in the glyph's shape, visible selected or not, and
+leaves the icon's color rules the Sketcher's.
 Clicking a padlock locks or unlocks the opening, and typing a size locks
 it. A selected board held in place shows a closed padlock where its arrow
 would be and outlines the locked openings holding it; clicking that padlock
@@ -266,24 +275,26 @@ the next edit or selection change.
 The constraint list follows the Sketcher's: one list holding every lock
 and every Equal and Even spacing, locks first in tree order and then
 constraints in the order they were made, each with its kind's icon and its
-size in the user's unit system, the icon grayed in Qt's disabled mode for
-a deactivated constraint, and selection shared with the 3D view in both
-directions. It departs from the Sketcher in three places. A constraint's
-checkbox means active, since the editor has no virtual space for the
-Sketcher's visibility box to choose. Each row has a delete button and one
-button deletes every deactivated constraint, because opening a unit can
-deactivate several at once, which the Sketcher never does. A redundant
-lock or constraint is marked on its row, with a warning icon and a
-tooltip, for as long as it stays redundant, in place of the Sketcher's
-message box citing constraint numbers. A lock or constraint is redundant
-when removing it alone leaves its axis's freedom unchanged, so every
-member of an overlapping group is marked. Turning a constraint on solves
-it in as making it new would, moving the boards least, and is refused,
-leaving it off, when locks and constraints rule it out; turning one off
-moves nothing. With one Equal or Even spacing selected, Opening size
-measures switches it between clear sizes and spacings through the next
-board, and re-solves it, since the relation itself changes; the spacing
-choice is offered only when every opening it names has a board after it.
+size in the user's unit system, and selection shared with the 3D view in
+both directions. It departs from the Sketcher in four places. A
+deactivated constraint's icon carries the 3D view's corner X where the
+Sketcher's list grays it in Qt's disabled mode, so the list and the view
+mark it the same way. A constraint's checkbox means active, since the
+editor has no virtual space for the Sketcher's visibility box to choose.
+Each row has a delete button and one button deletes every deactivated
+constraint, because opening a unit can deactivate several at once, which
+the Sketcher never does. A redundant lock or constraint is marked on its
+row, with a warning icon and a tooltip, for as long as it stays redundant,
+in place of the Sketcher's message box citing constraint numbers. A lock
+or constraint is redundant when removing it alone leaves its axis's
+freedom unchanged, so every member of an overlapping group is marked.
+Turning a constraint on solves it in as making it new would, moving the
+boards least, and is refused, leaving it off, when locks and constraints
+rule it out; turning one off moves nothing. With one Equal or Even spacing
+selected, Opening size measures switches it between clear sizes and
+spacings through the next board, and re-solves it, since the relation
+itself changes; the spacing choice is offered only when every opening it
+names has a board after it.
 
 The unit's container cannot enter FreeCAD's edit mode without workbench
 state in the document, so the editor adds its drawing and input handling

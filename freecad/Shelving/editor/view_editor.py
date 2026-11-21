@@ -87,6 +87,10 @@ from freecad.Shelving.editor.session import (
 )
 from freecad.Shelving.refusals import report_error
 
+# A padlock image's cache key: its dimension's color name, its color, tile
+# and side; a constraint icon's: its kind, color, activation, tile and side.
+IconImageKey = tuple[str, RGB, Tile, int] | tuple[str, RGB, bool, Tile, int]
+
 # The add buttons' icon side, in logical pixels.
 _ICON_PX = 24
 # The clear gap between the text of neighboring rows of dimensions outside
@@ -633,7 +637,7 @@ class ViewEditor:
         self.padlock_nodes: list[IconNode[PadlockIcon]] = []
         self.icon_nodes: list[IconNode[ConstraintIcon]] = []
         self.text_tiles: list[TextTileNode] = []
-        self._icon_images: dict[tuple[str, RGB, Tile, int], QtGui.QImage] = {}
+        self._icon_images: dict[IconImageKey, QtGui.QImage] = {}
         self._tile_images: dict[tuple[Tile, int, int], QtGui.QImage] = {}
         self.saved_camera = view.getCamera()
         self._saved_orientation = view.getCameraOrientation()
@@ -1104,20 +1108,22 @@ class ViewEditor:
 
     def _row_image(self, icon: RowIcon, tile: Tile, side_px: int) -> QtGui.QImage:
         """``icon``'s image: a padlock in its dimension's color, a
-        constraint's icon in its state's."""
+        constraint's icon in its selection's color and marked when
+        deactivated."""
+        key: IconImageKey
         if isinstance(icon, PadlockIcon):
             rgb = self.style.label_rgb(icon.label.color)
             key = (icon.label.color, rgb, tile, side_px)
         else:
-            rgb = self.style.icon_state_rgb(icon.state)
-            key = (icon.kind, rgb, tile, side_px)
+            rgb = self.style.constraint_icon_rgb(icon.selected)
+            key = (icon.kind, rgb, icon.active, tile, side_px)
         image = self._icon_images.get(key)
         if image is not None:
             return image
         if isinstance(icon, PadlockIcon):
             image = padlock_image(icon.locked, rgb, tile, side_px)
         else:
-            image = constraint_icon_image(icon.kind, rgb, tile, side_px)
+            image = constraint_icon_image(icon.kind, rgb, tile, side_px, icon.active)
         self._icon_images[key] = image
         return image
 

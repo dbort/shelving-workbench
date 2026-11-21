@@ -552,9 +552,10 @@ openings are outlined as the openings holding it."""
   ]
   expected = """
 One notification says constraints the boards no longer meet were
-deactivated. The leftmost column's even spacing icons are gray on their
-tiles and easy to spot against the openings, the Equal icons stay red,
-and the shelf you raised stays where you put it."""
+deactivated. The leftmost column's even spacing icons stay red and carry
+an X in their top-right corner, easy to spot against the openings, the
+Equal icons carry no X, and the shelf you raised stays where you put
+it."""
 
   [[case.step]]
   id = "activate"
@@ -565,19 +566,19 @@ and the shelf you raised stays where you put it."""
   expected = """
 The leftmost column is evenly spaced again: the shelf you raised drops back
 to its even place, and the second column's bottom opening stays equal to
-the leftmost column's. The even spacing's icons turn red in the view, and
-its row's icon turns from gray to red with its size beside it."""
+the leftmost column's. The even spacing's icons in the view lose their X,
+and its row's icon loses its X as well, with its size beside it."""
 
   [[case.step]]
   id = "undo"
   instruction = ["Press Ctrl+Z."]
   expected = """
-The even spacing's icons are gray again, its box is cleared and its row
-shows no size, and the shelf you raised is back where you put it."""
+The even spacing's icons carry the X again, its box is cleared and its
+row shows no size, and the shelf you raised is back where you put it."""
 
   [[case.step]]
   id = "delete"
-  instruction = ["Click a gray icon.", "Press Delete."]
+  instruction = ["Click an icon marked with an X.", "Press Delete."]
   expected = """
 The even spacing's icons disappear, the Equal's stay, and no board
 moves."""
@@ -624,10 +625,26 @@ sharp as the text beside it and easy to recognize."""
     "Click an empty part of the 3D view outside the unit.",
   ]
   expected = """
-The Even spacing row reads as off at a glance: its icon is grayed and it
-shows no size, while the other rows keep their colors. The second column's
-even spacing icons turn gray in the view, and no board moves. Delete
-Deactivated is now enabled."""
+The Even spacing row reads as off at a glance: its icon stays red, carries
+an X in its corner like the view's, and shows no size, while the other
+rows carry no X. The second column's
+even spacing icons in the view stay red and gain an X in their top-right
+corner, and no board moves. Delete Deactivated is now enabled."""
+
+  [[case.step]]
+  id = "toggle_selected"
+  instruction = [
+    "Click the Even spacing row in the Constraints list.",
+    "Check the Even spacing row's box.",
+    "Uncheck the Even spacing row's box.",
+  ]
+  expected = """
+The row stays selected throughout. The second column's even spacing icons
+stay in the selection color while the X in their corner disappears when
+the box is checked and returns when it is unchecked, and the row's own
+icon loses and regains its X with them. On the HiDPI screen the X is easy
+to see at a glance in the view and in the list, and each icon still reads
+as an even spacing."""
 
   [[case.step]]
   id = "delete"

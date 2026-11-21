@@ -12,8 +12,8 @@ import pytest
 from PySide6 import QtCore, QtGui, QtSvg
 
 from freecad.Shelving.container import write_container
-from freecad.Shelving.core.layout import ConstraintId
 from freecad.Shelving.editor import overlay
+from freecad.Shelving.editor.constraint_list import TEXT_COLUMN
 from freecad.Shelving.editor.elevation import ConstraintIcon, RowIcon
 from freecad.Shelving.editor.overlay import (
     ICON_SOURCES,
@@ -23,6 +23,7 @@ from freecad.Shelving.editor.overlay import (
     background_rgb,
 )
 from freecad.Shelving.editor.panel import EditUnitPanel
+from freecad.Shelving.editor.session import ConstraintRow
 from freecad.Shelving.editor.view_editor import ViewEditor
 from tests.freecad_view import overlay_nodes
 from tests.freecad_view.editor import (
@@ -387,36 +388,81 @@ def _z(unit: FreeCAD.DocumentObject, name: str) -> float:
 
 
 @pytest.fixture
-def icon_colors(monkeypatch: pytest.MonkeyPatch) -> Iterator[tuple[int, int, int]]:
-    """Distinct active, deactivated and selection colors, packed. The two
-    icon colors go into the View preferences. The selection color reaches
-    only the editor's own reading of ``SelectionColor``: the 3D view keeps
-    a changed preference after it is removed, and every later test's
-    selection highlight would take it (bug-022)."""
+def icon_colors(monkeypatch: pytest.MonkeyPatch) -> Iterator[tuple[int, int]]:
+    """Distinct icon and selection colors, packed. The icon color goes into
+    the View preferences. The selection color reaches only the editor's own
+    reading of ``SelectionColor``: the 3D view keeps a changed preference
+    after it is removed, and every later test's selection highlight would
+    take it (bug-022)."""
     params = FreeCAD.ParamGet(_VIEW_PARAMS)
-    colors = (0xC01020FF, 0x30A0B0FF, 0x7020D0FF)
-    for name, packed in zip(
-        ("ConstrainedIcoColor", "DeactivatedConstrDimColor"), colors[:2], strict=True
-    ):
-        params.SetUnsigned(name, packed)
+    colors = (0xC01020FF, 0x7020D0FF)
+    params.SetUnsigned("ConstrainedIcoColor", colors[0])
     real_view_color = overlay._view_color
 
     def view_color(name: str, default: int) -> tuple[float, float, float]:
         if name == "SelectionColor":
-            red, green, blue = _packed_rgb(colors[2])
+            red, green, blue = _packed_rgb(colors[1])
             return (red / 255, green / 255, blue / 255)
         return real_view_color(name, default)
 
     monkeypatch.setattr(overlay, "_view_color", view_color)
     yield colors
-    for name in ("ConstrainedIcoColor", "DeactivatedConstrDimColor"):
-        params.RemUnsigned(name)
+    params.RemUnsigned("ConstrainedIcoColor")
 
 
-def test_active_deactivated_and_selected_icons_take_their_colors(
+def _blend_of(
+    color: QtGui.QColor, rgb: tuple[int, int, int], tile_rgb: tuple[int, int, int]
+) -> bool:
+    """Whether ``color`` is opaque and ``rgb`` over ``tile_rgb`` at one
+    coverage in every channel."""
+    if color.alpha() != 255:
+        return False
+    channels = (color.red(), color.green(), color.blue())
+    spans = [(c - t, g - t) for c, g, t in zip(channels, rgb, tile_rgb, strict=True)]
+    weights = [got / span for got, span in spans if abs(span) > 24]
+    if not weights or not all(-0.02 <= w <= 1.02 for w in weights):
+        return False
+    weight = sum(weights) / len(weights)
+    return all(abs(got - weight * span) <= 4 for got, span in spans)
+
+
+def _assert_marked_as(
+    editor: ViewEditor,
+    node: IconNode[ConstraintIcon],
+    rgb: tuple[int, int, int],
+    active: bool,
+) -> None:
+    """Assert that ``node`` is its SVG in ``rgb``, and that a deactivated
+    one differs from it only in its glyph's top-right corner, there in
+    ``rgb`` over the tile at some coverage."""
+    mismatches = _glyph_mismatches(editor, node, rgb)
+    if active:
+        assert mismatches == [], node.icon
+        return
+    assert mismatches, node.icon
+    side_px, _gap_px = editor._icon_metrics_px()
+    tile = editor.icon_tile()
+    glyph_px = side_px - 2 * tile.pad_px
+    # Antialiasing spreads the mark's edge by up to a pixel.
+    extent_px = overlay.corner_x_extent_px(glyph_px) + 1
+    assert extent_px < 2 * glyph_px / 3, extent_px
+    drawn = _icon_part(node, side_px)
+    tile_rgb = _rgb_255(tile.rgb)
+    for x, y in mismatches:
+        assert x >= glyph_px - extent_px and y < extent_px, (node.icon, x, y)
+        got = drawn.pixelColor(x + tile.pad_px, y + tile.pad_px)
+        assert _blend_of(got, rgb, tile_rgb), (node.icon, x, y, got.name())
+    # A gap cleared with no X painted on it would pass the checks above.
+    assert any(
+        _near(drawn.pixelColor(x + tile.pad_px, y + tile.pad_px), rgb)
+        for x, y in mismatches
+    ), node.icon
+
+
+def test_icons_take_their_selections_color_and_deactivated_ones_a_corner_x(
     unit: FreeCAD.DocumentObject,
     driver: ViewDriver,
-    icon_colors: tuple[int, int, int],
+    icon_colors: tuple[int, int],
 ) -> None:
     panel, (a, b, c) = _column_panel(unit, driver)
     _constrain(panel, "equal", [a, b])
@@ -426,25 +472,77 @@ def test_active_deactivated_and_selected_icons_take_their_colors(
     first, second, third = session.constraints
     off = dataclasses.replace(
         session.unit,
-        constraints=(first, dataclasses.replace(second, active=False), third),
+        constraints=(
+            first,
+            dataclasses.replace(second, active=False),
+            dataclasses.replace(third, active=False),
+        ),
     )
     click_task_button("Close", driver)
     write_container(unit, off)
     unit.Document.recompute()
     panel = edit_unit(unit, driver)
     editor = editor_of(panel)
-    selected_id = panel.session.constraints[2].id
-    icon = next(i for i in _icons(editor) if i.constraint_id == selected_id)
-    driver.click(editor.icon_center(icon))
     ids = [c.id for c in panel.session.constraints]
-    expected: dict[ConstraintId, tuple[int, int, int]] = {
-        constraint_id: _packed_rgb(packed)
-        for constraint_id, packed in zip(ids, icon_colors, strict=True)
-    }
+    # One of each: selected and active, selected and deactivated, neither.
+    first_icon, second_icon = (
+        next(i for i in _icons(editor) if i.constraint_id == constraint_id)
+        for constraint_id in ids[:2]
+    )
+    driver.click(editor.icon_center(first_icon))
+    driver.click(editor.icon_center(second_icon), _CTRL)
+    assert panel.session.selected_constraints == (ids[0], ids[1])
+    icon_rgb, selected_rgb = (_packed_rgb(packed) for packed in icon_colors)
     assert {node.icon.constraint_id for node in editor.icon_nodes} == set(ids)
     for node in editor.icon_nodes:
-        rgb = expected[node.icon.constraint_id]
-        assert _glyph_mismatches(editor, node, rgb) == [], node.icon
+        selected = node.icon.constraint_id in ids[:2]
+        active = node.icon.constraint_id == ids[0]
+        assert (node.icon.selected, node.icon.active) == (selected, active)
+        rgb = selected_rgb if selected else icon_rgb
+        _assert_marked_as(editor, node, rgb, active)
+    click_task_button("Close", driver)
+
+
+def test_toggling_a_selected_rows_box_marks_its_icons_in_the_selection_color(
+    unit: FreeCAD.DocumentObject,
+    driver: ViewDriver,
+    icon_colors: tuple[int, int],
+) -> None:
+    panel, (a, _b, c) = _column_panel(unit, driver)
+    _constrain(panel, "even_spacing", [a, c])
+    (spacing,) = panel.session.constraints
+    editor = editor_of(panel)
+    tree = panel.constraint_list.tree
+    index = next(
+        i
+        for i, row in enumerate(panel.constraint_list.rows)
+        if isinstance(row, ConstraintRow) and row.constraint_id == spacing.id
+    )
+    item = tree.topLevelItem(index)
+    assert item is not None
+    # Under Xvfb no mouse event reaches the hidden task panel (bug-011), so
+    # the row is selected and its box toggled as a press on the box does.
+    flag = QtCore.QItemSelectionModel.SelectionFlag
+    tree.setCurrentItem(item, 0, flag.ClearAndSelect | flag.Rows)
+    driver.pump()
+    _icon_rgb, selected_rgb = (_packed_rgb(packed) for packed in icon_colors)
+    for state, active in (
+        (QtCore.Qt.CheckState.Unchecked, False),
+        (QtCore.Qt.CheckState.Checked, True),
+    ):
+        item = tree.topLevelItem(index)
+        assert item is not None
+        item.setCheckState(TEXT_COLUMN, state)
+        driver.pump()
+        item = tree.topLevelItem(index)
+        assert item is not None
+        assert item.isSelected(), state
+        assert panel.session.selected_constraints == (spacing.id,)
+        nodes = [n for n in editor.icon_nodes if n.icon.constraint_id == spacing.id]
+        assert nodes
+        for node in nodes:
+            assert (node.icon.selected, node.icon.active) == (True, active)
+            _assert_marked_as(editor, node, selected_rgb, active)
     click_task_button("Close", driver)
 
 

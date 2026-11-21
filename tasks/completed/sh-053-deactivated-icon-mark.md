@@ -16,38 +16,44 @@ recolors it in the selection color, X included, so on or off shows in
 every state.
 
 ## Must Have
-- [ ] An icon is drawn in `ConstrainedIcoColor` when unselected and in
+- [x] An icon is drawn in `ConstrainedIcoColor` when unselected and in
   `SelectionColor` when selected, whether its constraint is active or
   deactivated.
-- [ ] A deactivated constraint's icon is the active icon of the same kind
+- [x] A deactivated constraint's icon is the active icon of the same kind
   and selection plus a corner X in the same color. A view test asserts
   that every pixel where the two images differ lies in the glyph's
   top-right corner region, and that each of those pixels is the glyph
   color blended over the tile.
-- [ ] An active constraint's icon carries no X, selected or not.
-- [ ] A test plans an overlay with a deactivated constraint selected and
+- [x] An active constraint's icon carries no X, selected or not.
+- [x] A test plans an overlay with a deactivated constraint selected and
   gets icons that report both selected and not active. Today the single
   `IconState` value `"selected"` hides activation.
-- [ ] A view test selects a constraint's row, unchecks its box, and gets
+- [x] A view test selects a constraint's row, unchecks its box, and gets
   an icon that is still in the selection color and now carries the X.
   Checking the box again removes the X, and the row stays selected
   throughout.
-- [ ] `grep -rn DeactivatedConstrDimColor freecad/ tests/` finds nothing.
+- [x] `grep -rn DeactivatedConstrDimColor freecad/ tests/` finds nothing.
   `Style` has no `deactivated_rgb` field.
-- [ ] The constraint list is unchanged: a deactivated row's icon is still
-  grayed in Qt's disabled mode, and pressing a row's checkbox still
-  selects the row.
-- [ ] README's **Deactivated constraint** entry, the notification shown
+- [x] A deactivated constraint's row in the constraint list shows the 3D
+  view's unselected icon of its kind with the corner X, in the icon color,
+  in place of Qt's disabled-mode gray; an active row's icon carries no X.
+  A GUI test checks a row's icon gains and loses the X as its box is
+  unchecked and checked. A selected row's icon keeps its colors: Qt draws
+  it untinted by the highlight, which a GUI test checks for every row
+  kind. Pressing a row's checkbox still selects the row.
+  `docs/scope-and-design.md` and the QA cases describe the list's
+  deactivated icon by its X, not as grayed.
+- [x] README's **Deactivated constraint** entry, the notification shown
   when Edit Unit opens with deactivated constraints
   (`_DEACTIVATED_AT_OPEN` in `freecad/Shelving/editor/session.py`), and
   `docs/scope-and-design.md` describe a deactivated icon in the view by
   its corner X. None of them call it gray or grayed.
-- [ ] The `bug-024` entry is deleted from `.claude/docs/bug-log.md`.
-- [ ] The manual QA case **The constraint list: rows, redundancy marks and
+- [x] The `bug-024` entry is deleted from `.claude/docs/bug-log.md`.
+- [x] The manual QA case **The constraint list: rows, redundancy marks and
   deactivated rows** (`editor.constraint_list`) has a step for toggling a
   selected row's checkbox, and no step in `30-editor.toml` expects a gray
   icon in the 3D view.
-- [ ] `pixi run tests` passes, with `pyrefly check` clean over the changed
+- [x] `pixi run tests` passes, with `pyrefly check` clean over the changed
   code.
 
 ## Advice
@@ -76,10 +82,20 @@ every state.
   (`freecad/Shelving/editor/elevation.py`) carries both independently, in
   place of the three-valued `IconState`. Color depends on selection only,
   and the X on activation only.
-- Leave the constraint list alone. Its unchecked box and Qt's
-  disabled-mode icon already show "off" under a row's selection
-  highlight. A press on the checkbox selecting the row is Qt's default and
-  the Sketcher's list behavior. The user kept it.
+- The constraint list keeps its selection behavior: a press on the
+  checkbox selecting the row is Qt's default and the Sketcher's list
+  behavior. The user kept it.
+- 2026-11-20, during `/work` after round 1: the user reversed the
+  earlier "leave the constraint list alone" for the row icon. A
+  deactivated row's icon carries the view's corner X instead of Qt's
+  disabled-mode gray, so the list and the view mark deactivation the same
+  way. This departs from the Sketcher's list as well; record it with the
+  list's other departures in `docs/scope-and-design.md`.
+- 2026-11-20, from the user's manual check: a selected row's icon looked
+  washed gray. Qt's style generates a Selected-mode icon by tinting it
+  with the highlight color; `kind_icon` adds its own pixmap for Selected
+  mode so a row's icon keeps the view's colors when selected, padlocks
+  included. Fixed in this task, so it gets no bug-log entry.
 - Unlocked dimensions and a blue selection color can still look alike.
   The user accepted that. Do not add an outline or recolor to work around
   it.
@@ -90,12 +106,12 @@ every state.
 - Shell stays simple: no shell is involved.
 
 ## Plan
-- [ ] **Step 1** (`freecad/Shelving/editor/elevation.py`,
+- [x] **Step 1** (`freecad/Shelving/editor/elevation.py`,
   `tests/test_editor_elevation.py`): `ConstraintIcon` carries `active:
   bool` and `selected: bool`, and `IconState` is removed along with the
   comment above it. Update the tests at lines 546 and 580 to assert both
   fields, including a selected deactivated constraint.
-- [ ] **Step 2** (`freecad/Shelving/editor/overlay.py`,
+- [x] **Step 2** (`freecad/Shelving/editor/overlay.py`,
   `freecad/Shelving/editor/view_editor.py`): `Style` drops
   `deactivated_rgb` and its `DeactivatedConstrDimColor` read.
   `icon_state_rgb` becomes a selection-only color choice.
@@ -103,7 +119,7 @@ every state.
   for a deactivated icon. `_row_image` keys its cache on kind, color,
   activation, tile and size. Update the docstrings and comments at
   `overlay.py` lines 115-134 and 153-169 that describe the gray.
-- [ ] **Step 3** (`tests/freecad_view/test_constraints.py`): the
+- [x] **Step 3** (`tests/freecad_view/test_constraints.py`): the
   `icon_colors` fixture sets only `ConstrainedIcoColor` and the selection
   color. Rework `test_active_deactivated_and_selected_icons_take_their_colors`
   to cover the four combinations of selected and active, using
@@ -111,7 +127,7 @@ every state.
   confined to the corner region. Add the test that toggles a selected
   row's checkbox and checks the X appears and disappears while the icon
   stays in the selection color.
-- [ ] **Step 4** (`README.md`, `docs/scope-and-design.md`,
+- [x] **Step 4** (`README.md`, `docs/scope-and-design.md`,
   `freecad/Shelving/editor/session.py`): replace "drawn grayed" for view
   icons with the corner X in README line 123, scope-and-design line 105,
   and `_DEACTIVATED_AT_OPEN`. Keep that text free of counts and articles
@@ -119,7 +135,7 @@ every state.
   scope-and-design line 254, reword the tiles' rationale, since there is
   no gray icon left to wash out, and add the Sketcher departure. Line 269,
   about the list's grayed icon, stays.
-- [ ] **Step 5** (`freecad/Shelving/qa/cases/30-editor.toml`): in
+- [x] **Step 5** (`freecad/Shelving/qa/cases/30-editor.toml`): in
   `editor.constraints`, the `reopen`, `activate`, `undo` and `delete`
   steps describe the even spacing's icons by their X, with "Click a gray
   icon." becoming "Click an icon marked with an X." In
@@ -129,7 +145,29 @@ every state.
   stay in the selection color while the X disappears and returns, the X to
   be easy to see at a glance on the HiDPI screen, and each glyph's kind to
   be recognizable.
-- [ ] **Step 6** (`.claude/docs/bug-log.md`): delete the `bug-024` entry
+- [x] **Step 6** (`.claude/docs/bug-log.md`): delete the `bug-024` entry
   in the fixing commit, leaving `next_id` as is.
+- [x] **Step 7** (`freecad/Shelving/editor/constraint_list.py`,
+  `tests/freecad_gui/test_constraint_list.py`, `README.md`,
+  `docs/scope-and-design.md`, `_DEACTIVATED_AT_OPEN`, `30-editor.toml`):
+  `kind_icon` takes the `active` flag and passes it to
+  `constraint_icon_image`, and gives its icon the same pixmap for Selected
+  mode; `disabled_icon` goes. The GUI tests compare a
+  deactivated row's icon to the view's X icon and follow it through a
+  toggle. The docs, notification and QA steps say the list's icon carries
+  the X too.
 
 ## Review log
+
+### Round 1: APPROVED
+- **N1: The reworked view test covers three of the four selected/active combinations** (`tests/freecad_view/test_constraints.py:476`): Plan Step 3 asks for all four; unselected and active is missing there. It is still pinned with default colors by `test_the_icons_are_drawn_from_their_svgs_in_the_sketchers_way_on_a_tile` (`:213`) and the toggle test covers selected and active, so the Must Haves hold across the tests. A fourth constraint would put all four under the distinct-color fixture in one place.
+- **N2: The blend check accepts zero coverage, so it never proves the X is painted** (`tests/freecad_view/test_constraints.py:509`): `_blend_of` passes plain tile color, so an X that only cleared its gap would pass. Asserting at least one mismatch pixel near full coverage in `rgb` would close this.
+- **N3: The corner region's bounds come from the code under test** (`tests/freecad_view/test_constraints.py:534`): the region is `overlay.corner_x_extent_px`, with only `extent_px < 2 * glyph_px / 3` as an independent bound; enlarging `_CORNER_X_SIDE` moves the test's goalposts up to that cap.
+- **N4: Edited prose was not rewrapped** (`docs/scope-and-design.md:107`, `README.md:126`): the scope-and-design line is 100 characters, and the README glossary paragraph ends on a short line.
+- **N5: `_corner_x_widths_px` docstring is imprecise** (`freecad/Shelving/editor/overlay.py:230`): the second value is the full width of the cleared band (stroke plus a gap on each side), not the gap's width.
+
+### Round 2: APPROVED
+- **N1: Rewrapped prose still leaves short lines** (`docs/scope-and-design.md:282`, `freecad/Shelving/qa/cases/30-editor.toml:630`): the new edits leave a short line in each, "mark it the same way. A constraint's" and "rows carry no X. The second column's".
+- **N2: The selected-row icon test uses a hardcoded size** (`tests/freecad_gui/test_constraint_list.py:262`): `QSize(16, 16)` where the list's `PM_SmallIconSize` would match `_drawn_icon`. It still catches the tint, since both modes scale alike; the reviewer confirmed with a bare PySide `QIcon` that Qt's generated Selected mode differs from Normal.
+- **N3: No QA step checks that a selected row's icon stays untinted** (`freecad/Shelving/qa/cases/30-editor.toml:636`): `toggle_selected` selects the row but its expected text doesn't say the row's icon keeps its red and tile. The GUI test meets the Must Have.
+- **N4: Pressing the checkbox to select the row is still not tested with a real press** (`tests/freecad_view/test_constraints.py:524`): the toggle test selects the row, then calls `setCheckState`. Unchanged Qt default, accepted in round 1; recorded for the audit trail.
