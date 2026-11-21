@@ -91,6 +91,7 @@ def _add_shelf(panel: EditUnitPanel, driver: ViewDriver) -> None:
     add_board(panel, "vertical", driver)
 
 
+@pytest.mark.smoke("undo and redo an edit made in Edit Unit")
 def test_undo_and_redo_step_one_edit_and_the_panel_follows(
     unit: FreeCAD.DocumentObject, driver: ViewDriver
 ) -> None:
@@ -161,7 +162,6 @@ def test_close_keeps_each_edit_as_a_step(
     assert _boards(unit) == one_shelf
 
 
-@pytest.mark.full_only
 def test_the_gui_redo_crash_sequence_runs_cleanly(tmp_path: Path) -> None:
     """FreeCAD's Gui Redo reads freed view providers after this sequence
     (``editor/history.py``, ``_empty_gui_list``); glibc's allocator is set

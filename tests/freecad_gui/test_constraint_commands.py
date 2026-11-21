@@ -145,7 +145,15 @@ def test_a_selection_a_command_cannot_use_is_refused_saying_what_to_select(
     assert editing.session.constraints == ()
 
 
-@pytest.mark.parametrize("name", _COMMANDS)
+@pytest.mark.parametrize(
+    "name",
+    [
+        pytest.param(
+            _COMMANDS[0], marks=pytest.mark.smoke("constrain selected openings equal")
+        ),
+        *_COMMANDS[1:],
+    ],
+)
 def test_a_command_constrains_the_selected_openings(
     editing: EditUnitPanel, reported: list[str], name: str
 ) -> None:

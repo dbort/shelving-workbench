@@ -1,22 +1,19 @@
 """Keeps the FreeCAD test directories out of runs that are not aimed at
-exactly one of them (:mod:`tests.collection`), and says so at the end."""
+exactly one of them (:mod:`tests.collection`), and says so at the end.
+Registers the ``smoke`` marker's plugin (:mod:`tests.smoke_marks`)."""
 
 from pathlib import Path
 
 import pytest
 
+from tests import smoke_marks
 from tests.collection import collectable_targets, reaches, skipped_freecad_dir
 
 _SKIPPED = pytest.StashKey[list[Path]]()
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    config.addinivalue_line(
-        "markers",
-        "full_only: left out of `pixi run tests -- --smoke`, as another input "
-        "for a behavior the smoke run checks with one representative input, or "
-        "a slow guard against a rare regression",
-    )
+    config.pluginmanager.register(smoke_marks, "smoke_marks")
 
 
 def pytest_ignore_collect(collection_path: Path, config: pytest.Config) -> bool | None:

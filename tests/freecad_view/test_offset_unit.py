@@ -183,7 +183,7 @@ def _assert_openings_on_bays(
 
 @pytest.mark.parametrize(
     "offset_unit",
-    [pytest.param("in place", marks=pytest.mark.full_only), "moved and turned"],
+    ["in place", "moved and turned"],
     indirect=True,
 )
 def test_each_opening_is_drawn_on_its_boards(
