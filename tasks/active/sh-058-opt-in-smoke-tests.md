@@ -12,21 +12,35 @@ the 3D-view suite alone took 275 s. Smoke becomes opt-in: in the two GUI
 FreeCAD suites only tests marked `smoke` run, which brings the run to
 roughly 40 s on the dev VM. A hard 90 s limit stops the run and fails it,
 so the smoke set cannot quietly grow back and a hung test cannot stall it.
+Each smoke test names the user path it covers, and a new standing
+planning obligation makes every future task keep that set representative
+as features come and go.
 
 ## Must Have
 - [ ] `pixi run tests` green; `pyrefly check` clean over the changed code.
 - [ ] No `full_only` marker or mention remains in the repository outside
       `tasks/completed/` and the logs (`git grep full_only`).
-- [ ] `tests/conftest.py` registers a `smoke` marker; `pytest --markers`
-      lists it with a description of what earns a test the marker.
+- [ ] `tests/conftest.py` registers a `smoke` marker that takes one
+      argument, the user path the test covers
+      (`@pytest.mark.smoke("open Edit Unit, change a size")`);
+      `pytest --markers` lists it with that signature and a description
+      of what earns a test the marker.
+- [ ] `pixi run tests` fails, naming the test, on a `smoke` mark with no
+      path, an empty path, or more than one argument, and on two `smoke`
+      marks that give the same path, whether both are in one suite or one
+      is in `tests/freecad_gui/` and the other in `tests/freecad_view/`.
+      A test covers each case.
 - [ ] `pixi run tests -- --smoke` runs, in full: the static checks, the
       core and repository pytest run, the workflow lint, the `freecadcmd`
       import check, and `tests/freecad/`. In `tests/freecad_gui/` it runs
-      only the tests marked `smoke`; the review log lists them, each with
-      the user path it covers. In `tests/freecad_view/` it runs exactly these three and no other:
+      only the tests marked `smoke`. In `tests/freecad_view/` it runs exactly these three and no other:
       - `test_editor_input.py::test_a_selected_board_drags_by_its_arrow_under_each_navigation_style[Gui::CADNavigationStyle]`
       - `test_undo_in_the_editor.py::test_undo_and_redo_step_one_edit_and_the_panel_follows`
       - `test_scan_and_write.py::test_edit_unit_reads_a_hand_built_unit_and_close_changes_nothing`
+- [ ] A smoke run's output ends with the list of smoke tests that ran,
+      each with its user path.
+- [ ] `CLAUDE.md` § Standing task-planning obligations has a **Smoke set
+      stays representative** entry per the Advice.
 - [ ] The full run (`pixi run tests` without `--smoke`) runs every test,
       including every parametrization that carried `full_only`.
 - [ ] `pixi run tests -- --smoke` on the dev VM finishes in under 50 s of
@@ -62,6 +76,27 @@ so the smoke set cannot quietly grow back and a hung test cannot stall it.
   not by module: a module may contribute two tests or none. Prefer a
   test that walks a path end to end over several narrow ones, and the
   cheaper of two tests that cover the same path.
+- **Keeping the set representative** (user decision): the path on each
+  mark records why the test is in smoke, so a later task can see what
+  the set covers and what a removal loses. The duplicate-path check
+  catches two tests claiming one path, the likeliest sign that one is
+  redundant. Completeness takes judgment no check can make, so it goes in
+  a standing obligation, which `new-task` already applies to every plan.
+  Add this entry to `CLAUDE.md`, worded to that list's style: a task that
+  adds, changes or removes a main user path in the GUI or 3D view, or
+  deletes or rewrites a `smoke` test, adds, moves or retires `smoke`
+  marks so the set still gives quick confidence in the workbench's
+  health and the smoke run stays well inside its 90 s limit. A task that
+  touches none of these says so in `## Advice`. The 90 s limit is the
+  counterweight against the set growing.
+- Paths are short user-vocabulary phrases ("drag a selected board by its
+  arrow"), no function or class names, so the printed list reads as a
+  coverage summary. The duplicate check compares the strings exactly;
+  do not build fuzzy matching.
+- The two marked suites run in separate pytest processes, so a check
+  inside one run cannot see the other's marks. Put the cross-suite
+  duplicate check where both are visible, such as a repository test in
+  the core run that reads the marks from both directories' sources.
 - **Pass the marker filter as arguments to the two GUI pytest runs, never
   through `PYTEST_ADDOPTS`:** `tests/test_collection_runs.py` starts
   child pytest runs with the inherited environment, and a `-m smoke`
@@ -100,10 +135,10 @@ so the smoke set cannot quietly grow back and a hung test cannot stall it.
   describing its contents; it needs no edit.
 
 ## Plan
-- [ ] **Step 1** (`tests/conftest.py`, `tests/freecad_view/test_undo_in_the_editor.py`, `tests/freecad_view/test_offset_unit.py`, `tests/freecad_view/test_editor_input.py`, `tests/freecad_view/test_padlocks.py`, `tests/freecad_view/test_editor_drawing.py`): Replace the `full_only` marker registration with `smoke`, its description saying a test earns it by being part of the small set that together shows the GUI and 3D view are healthy, and that every smoke test also runs in the full suite. Remove every `full_only` mark, collapsing `pytest.param(..., marks=...)` wrappers back to plain values.
-- [ ] **Step 2** (`tests/freecad_gui/test_*.py`, `tests/freecad_view/test_editor_input.py`, `tests/freecad_view/test_undo_in_the_editor.py`, `tests/freecad_view/test_scan_and_write.py`): Mark the GUI set chosen per the Advice and the three 3D-view tests `smoke`; the drag test's mark goes on its CAD-style parameter only.
+- [ ] **Step 1** (`tests/conftest.py`, a new repository test under `tests/`, `tests/freecad_view/test_undo_in_the_editor.py`, `tests/freecad_view/test_offset_unit.py`, `tests/freecad_view/test_editor_input.py`, `tests/freecad_view/test_padlocks.py`, `tests/freecad_view/test_editor_drawing.py`): Replace the `full_only` marker registration with `smoke`, its description saying a test earns it by being part of the small set that together shows the GUI and 3D view are healthy, and that every smoke test also runs in the full suite. Validate every collected `smoke` mark's argument and print the run's smoke tests with their paths at the end of a run that selected `-m smoke`. Add the repository test for duplicate paths across both suites and tests for each invalid-mark case. Remove every `full_only` mark, collapsing `pytest.param(..., marks=...)` wrappers back to plain values.
+- [ ] **Step 2** (`tests/freecad_gui/test_*.py`, `tests/freecad_view/test_editor_input.py`, `tests/freecad_view/test_undo_in_the_editor.py`, `tests/freecad_view/test_scan_and_write.py`): Mark the GUI set chosen per the Advice and the three 3D-view tests `smoke`, each with its user path; the drag test's mark goes on its CAD-style parameter only.
 - [ ] **Step 3** (`tools/run-tests.sh`, `tools/` limit helper if needed, its test under `tests/`): `--smoke` adds `-m smoke` to the `tests/freecad_gui` and `tests/freecad_view` pytest runs and runs the whole script under the 90 s limit with process-group kill, exit 124 and the stderr message. Test the limit with a short limit and a stand-in command that spawns a child, asserting status, message and that the child is gone.
-- [ ] **Step 4** (`README.md`, `.claude/docs/pipeline.md`, `.claude/docs/code-map.md` if it describes smoke): Describe smoke as opt-in by marker in the two GUI suites, the rest whole, under a 90 s hard limit; keep the `/ship` exception in `pipeline.md` § Checks unchanged.
+- [ ] **Step 4** (`README.md`, `CLAUDE.md`, `.claude/docs/pipeline.md`, `.claude/docs/code-map.md` if it describes smoke): Describe smoke as opt-in by marker in the two GUI suites, the rest whole, under a 90 s hard limit, each mark naming its user path; add the standing obligation to `CLAUDE.md`; keep the `/ship` exception in `pipeline.md` § Checks unchanged.
 - [ ] **Step 5**: Time `pixi run tests -- --smoke` on the dev VM, save its output and exit status to a file, and record the wall time in the review log.
 
 ## Review log
