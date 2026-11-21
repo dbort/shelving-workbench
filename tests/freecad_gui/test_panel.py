@@ -31,6 +31,8 @@ from freecad.Shelving.core.layout import (
     Board,
     Division,
     Region,
+    Unit,
+    region_lock,
 )
 from freecad.Shelving.editor import panel as panel_module
 from freecad.Shelving.editor.fields import DimensionField
@@ -60,17 +62,10 @@ def _bay_ids(region: Region) -> list[str]:
     return []
 
 
-def _lock_of(region: Region, region_id: str) -> Basis | None:
-    if region.id == region_id:
-        return region.lock
-    if isinstance(region, Division):
-        for item in region.items:
-            if isinstance(item, Board):
-                continue
-            found = _lock_of(item, region_id)
-            if found is not None:
-                return found
-    return None
+def _lock_of(unit: Unit, region_id: str) -> Basis | None:
+    """The basis of the active Lock on ``region_id``, ``None`` for none."""
+    found = region_lock(unit, region_id)
+    return None if found is None or not found.active else found.basis
 
 
 def _new_document(name: str) -> FreeCAD.Document:
@@ -109,7 +104,7 @@ class _Fixture:
         self.panel._refresh()
 
     def lock(self, region_id: str) -> Basis | None:
-        return _lock_of(self.panel.session.unit.root, region_id)
+        return _lock_of(self.panel.session.unit, region_id)
 
     def close(self) -> None:
         self.panel.reject()

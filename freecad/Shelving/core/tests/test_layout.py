@@ -10,9 +10,13 @@ from freecad.Shelving.core.layout import (
     Board,
     Division,
     Insets,
+    Lock,
     Unit,
     Void,
+    constraint_regions,
+    is_locked,
     new_id,
+    region_lock,
 )
 
 
@@ -57,16 +61,28 @@ def test_board_extent_mm_must_be_positive(extent_mm: float) -> None:
         Board(thickness_mm=18.0, extent_mm=extent_mm)
 
 
-def test_regions_default_to_unlocked() -> None:
-    assert Bay(size_mm=300.0).lock is None
-    assert Void(size_mm=300.0).lock is None
-    assert Division(axis=Axis.Z, items=[Bay()], size_mm=300.0).lock is None
+def test_a_lock_defaults_to_an_active_clear_lock_with_its_own_id() -> None:
+    first, second = Lock("bay"), Lock("bay")
+    assert (first.region_id, first.basis, first.active) == ("bay", Basis.CLEAR, True)
+    assert first.id != second.id
 
 
-def test_a_region_carries_its_size_and_lock() -> None:
-    bay = Bay(size_mm=300.0, lock=Basis.WITH_NEXT)
-    assert bay.size_mm == 300.0
-    assert bay.lock is Basis.WITH_NEXT
+def test_a_lock_holds_its_one_region_and_only_an_active_one_locks() -> None:
+    on = Lock("A", Basis.WITH_NEXT)
+    off = Lock("B", active=False)
+    unit = Unit(
+        size_mm=Vec3(300.0, 300.0, 618.0),
+        root=Division(
+            axis=Axis.Z,
+            items=[Bay(size_mm=300.0, id="A"), Board(18.0), Bay(size_mm=300.0, id="B")],
+        ),
+        constraints=(on, off),
+    )
+    assert constraint_regions(unit, on) == ("A",)
+    assert region_lock(unit, "A") is on
+    assert region_lock(unit, "B") is off
+    assert is_locked(unit, "A") and not is_locked(unit, "B")
+    assert region_lock(unit, "C") is None
 
 
 def test_insets_default_to_zero_on_all_six_faces() -> None:

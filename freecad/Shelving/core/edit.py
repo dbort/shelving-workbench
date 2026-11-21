@@ -4,8 +4,9 @@ unlock a region, drag a board, change boards' thickness, and make, remove,
 activate or deactivate Equal and even spacing constraints or change what
 they measure.
 
-A region with a ``lock`` holds its size through edits; an unlocked one
-takes whatever size the boards around it leave. Any region may lock. Where
+A region an active :class:`~freecad.Shelving.core.layout.Lock` names holds
+its size through edits; any other takes whatever size the boards around it
+leave. Any region but the root may lock, and holds at most one Lock. Where
 the locks determine the unit's size along an axis, that size is a reference:
 :func:`set_unit_size` refuses to change it, and every other edit lets it
 follow the locks with the unit's fixed point holding. Every edit returns a unit
@@ -16,9 +17,9 @@ as possible from where they stood before the edit. A caller treats a
 laying out its result as its own kind of refusal, distinct from
 :class:`EditError`.
 
-An active constraint holds through every edit as a lock does, and the
-structural edits carry the constraints over to the new tree, dropping those
-whose openings or end boards they remove (:func:`carry_constraints`).
+Every active constraint holds through every edit, and the structural edits
+carry the constraints over to the new tree, dropping those whose openings or
+end boards they remove (:func:`carry_constraints`).
 
 ``split_region`` and ``merge_at`` are each other's exact inverse while every
 constraint holds. No edit here mutates the argument ``Unit``: untouched
@@ -46,12 +47,15 @@ from freecad.Shelving.core.layout import (
     Equal,
     EvenSpacing,
     Item,
+    Lock,
     Region,
     RunEnd,
     SpacingEnd,
     Unit,
     constraint_regions,
     find_division,
+    is_locked,
+    region_lock,
     spacing_group,
 )
 from freecad.Shelving.core.record import keys_by_region, unique_regions_by_key
@@ -82,11 +86,6 @@ class EditError(ValueError):
         self.node_id = node_id
 
 
-def is_locked(item: Item) -> bool:
-    """Whether ``item`` is a region with a lock; a board never is."""
-    return not isinstance(item, Board) and item.lock is not None
-
-
 def split_region(unit: Unit, region_id: str, axis: Axis) -> Unit:
     """``unit`` with the ``Bay`` named ``region_id`` replaced by a board on
     ``axis``, splitting it into two bays of equal size and moving nothing
@@ -94,13 +93,15 @@ def split_region(unit: Unit, region_id: str, axis: Axis) -> Unit:
 
     When ``region_id``'s parent ``Division`` runs along a *different* axis
     than ``axis``, the replacement is a new ``Division`` on ``axis`` holding
-    ``Bay``, ``Board``, ``Bay``, carrying the split ``Bay``'s own size and
-    lock in the slot it occupied; both new bays are unlocked. Otherwise
+    ``Bay``, ``Board``, ``Bay``, taking the split ``Bay``'s own size and its
+    Lock in the slot it occupied; both new bays are unlocked. Otherwise
     ``region_id``'s parent already runs along ``axis``, and the two new bays
     splice directly into the parent's own ``items`` in ``region_id``'s
-    place, each locked in ``Basis.CLEAR`` when the split bay was locked. A
-    same-axis ``Division`` nested inside another is one that scanning cannot
-    tell apart from a flat run of the same boards (bug-006).
+    place. When the split bay had a Lock, the first half takes it and the
+    second gets a new one just after it, both in ``Basis.CLEAR`` and as
+    active as the bay's was. A same-axis ``Division`` nested inside another
+    is one that scanning cannot tell apart from a flat run of the same
+    boards (bug-006).
 
     The new board takes its thickness from the board
     :func:`~freecad.Shelving.core.stock.source_board` picks, and carries that
@@ -129,10 +130,17 @@ def split_region(unit: Unit, region_id: str, axis: Axis) -> Unit:
     board = Board(thickness_mm=source.thickness_mm, stock_from=source.id)
     if not isinstance(unit.root, Division):
         raise EditError(region_id, "That is not part of this unit.")
-    replaced_root, found = _split_in_division(unit.root, region_id, axis, board, spaces)
-    if not found:
+    replaced_root, replacement = _split_in_division(
+        unit.root, region_id, axis, board, spaces
+    )
+    if replacement is None:
         raise EditError(region_id, "That is not part of this unit.")
-    return _structural(unit, dataclasses.replace(unit, root=replaced_root))
+    split = dataclasses.replace(
+        unit,
+        root=replaced_root,
+        constraints=_split_locks(unit.constraints, region_id, replacement),
+    )
+    return _structural(unit, split)
 
 
 def _split_in_division(
@@ -141,7 +149,9 @@ def _split_in_division(
     axis: Axis,
     board: Board,
     spaces: Mapping[str, Space],
-) -> tuple[Division, bool]:
+) -> tuple[Division, Sequence[Item] | None]:
+    """``division`` with the bay ``region_id`` split, and the items that
+    replaced it; ``None`` for those when it holds no such region."""
     items = division.items
     for index, item in enumerate(items):
         if isinstance(item, Board):
@@ -151,13 +161,38 @@ def _split_in_division(
                 raise EditError(region_id, "Only an open compartment can be split.")
             replacement = _split_replacement(item, division, axis, board, spaces)
             new_items = items[:index] + replacement + items[index + 1 :]
-            return dataclasses.replace(division, items=new_items), True
+            return dataclasses.replace(division, items=new_items), replacement
         if isinstance(item, Division):
             new_child, found = _split_in_division(item, region_id, axis, board, spaces)
-            if found:
+            if found is not None:
                 new_items = items[:index] + [new_child] + items[index + 1 :]
-                return dataclasses.replace(division, items=new_items), True
-    return division, False
+                return dataclasses.replace(division, items=new_items), found
+    return division, None
+
+
+def _split_locks(
+    constraints: tuple[Constraint, ...], region_id: str, replacement: Sequence[Item]
+) -> tuple[Constraint, ...]:
+    """``constraints`` with the split bay ``region_id``'s Lock moved onto
+    ``replacement``, as :func:`split_region` describes."""
+    out: list[Constraint] = []
+    for constraint in constraints:
+        if not isinstance(constraint, Lock) or constraint.region_id != region_id:
+            out.append(constraint)
+            continue
+        first = replacement[0]
+        out.append(dataclasses.replace(constraint, region_id=first.id))
+        if len(replacement) == 1:
+            continue
+        out[-1] = dataclasses.replace(out[-1], basis=Basis.CLEAR)
+        out.append(
+            Lock(
+                region_id=replacement[-1].id,
+                basis=Basis.CLEAR,
+                active=constraint.active,
+            )
+        )
+    return tuple(out)
 
 
 def _split_replacement(
@@ -183,11 +218,9 @@ def _split_replacement(
             axis=axis,
             items=[Bay(size_mm=half_mm), board, Bay(size_mm=half_mm)],
             size_mm=bay.size_mm,
-            lock=bay.lock,
         )
         return [division]
-    lock = None if bay.lock is None else Basis.CLEAR
-    return [Bay(size_mm=half_mm, lock=lock), board, Bay(size_mm=half_mm, lock=lock)]
+    return [Bay(size_mm=half_mm), board, Bay(size_mm=half_mm)]
 
 
 def merge_at(unit: Unit, board_id: str) -> Unit:
@@ -196,12 +229,13 @@ def merge_at(unit: Unit, board_id: str) -> Unit:
     constraint still holds.
 
     The merged region takes the first (lower-index) neighbor's id and a size
-    of the neighbors' combined size plus the removed board's extent, locked
-    in ``Basis.CLEAR`` when both neighbors were locked and unlocked
-    otherwise, the exact inverse of :func:`split_region`. *Unless* the merge
-    leaves its enclosing ``Division`` with only that one item left: the
-    ``Division`` itself is then replaced by it, taking the ``Division``'s own
-    size and lock instead, which is what makes a split-then-merge round trip
+    of the neighbors' combined size plus the removed board's extent. When
+    both neighbors had a Lock, it keeps the first's, in ``Basis.CLEAR`` and
+    active only when both were; otherwise it has none. That is the exact
+    inverse of :func:`split_region`. *Unless* the merge leaves its enclosing
+    ``Division`` with only that one item left: the ``Division`` itself is
+    then replaced by it, taking the ``Division``'s own size and Lock
+    instead, which is what makes a split-then-merge round trip
     return the tree to its original shape rather than leaving a degenerate
     one-item ``Division`` behind. The second neighbor is discarded whole:
     when it is itself a ``Division``, every board and region in its subtree
@@ -217,37 +251,106 @@ def merge_at(unit: Unit, board_id: str) -> Unit:
     used to, one level up in the tree. When that promoted ``Division``'s
     axis matches its *new* parent's axis, leaving it in place would produce
     bug-006's same-axis nesting through merge, so its items splice into the
-    new parent's run in its place instead, each keeping its size and lock.
+    new parent's run in its place instead, each keeping its size and Lock.
 
     The constraints carry over as :func:`carry_constraints` carries them,
-    so one on either merged region or ending at the board is dropped, and
-    an active one left unmet is solved again. Raises a ``"conflict"``
+    so an Equal or even spacing on either merged region or ending at the
+    board is dropped, as is a Lock on a region the merge discards, and an
+    active one left unmet is solved again. Raises a ``"conflict"``
     :class:`~freecad.Shelving.core.solver.LayoutSolveError` when that solve
     finds no layout.
     """
     return _structural(unit, _merged(unit, board_id))
 
 
+@dataclasses.dataclass(frozen=True)
+class _Merge:
+    """Which regions one merge joined."""
+
+    # The neighbor whose id the merged region takes.
+    before_id: str
+    # The neighbor discarded.
+    after_id: str
+    # The Division the merged region replaced, when the merge left it
+    # holding nothing else.
+    collapsed_id: str | None
+
+
 def _merged(unit: Unit, board_id: str) -> Unit:
-    """:func:`merge_at`'s tree edit alone, its constraints left as they
-    were."""
-    new_root, found, _collapsed = _merge_at(unit.root, board_id)
-    if not found:
+    """:func:`merge_at`'s tree edit alone, with its Locks moved and every
+    other constraint left as it was."""
+    new_root, merge, _collapsed = _merge_at(unit.root, board_id)
+    if merge is None:
         raise EditError(board_id, "That is not a board of this unit.")
-    return dataclasses.replace(unit, root=new_root)
+    merged = dataclasses.replace(
+        unit, root=new_root, constraints=_merged_locks(unit.constraints, merge)
+    )
+    return _without_lost_locks(merged)
 
 
-def _merge_at(region: Region, board_id: str) -> tuple[Region, bool, bool]:
-    """``region`` with ``board_id`` merged away, whether a board of that id
-    was found anywhere in its subtree, and whether *this call*
-    collapsed ``region`` itself down to one promoted item. The third element
+def _merged_locks(
+    constraints: tuple[Constraint, ...], merge: _Merge
+) -> tuple[Constraint, ...]:
+    """``constraints`` with the Locks of ``merge``'s regions moved as
+    :func:`merge_at` describes."""
+    first = next(
+        (
+            c
+            for c in constraints
+            if isinstance(c, Lock) and c.region_id == merge.before_id
+        ),
+        None,
+    )
+    second = next(
+        (
+            c
+            for c in constraints
+            if isinstance(c, Lock) and c.region_id == merge.after_id
+        ),
+        None,
+    )
+    out: list[Constraint] = []
+    for constraint in constraints:
+        if constraint is second:
+            continue
+        if constraint is first:
+            if second is None or merge.collapsed_id is not None:
+                continue
+            constraint = dataclasses.replace(
+                constraint,
+                basis=Basis.CLEAR,
+                active=constraint.active and second.active,
+            )
+        elif (
+            isinstance(constraint, Lock) and constraint.region_id == merge.collapsed_id
+        ):
+            constraint = dataclasses.replace(constraint, region_id=merge.before_id)
+        out.append(constraint)
+    return tuple(out)
+
+
+def _without_lost_locks(unit: Unit) -> Unit:
+    """``unit`` without the Locks whose regions its tree no longer holds."""
+    present = keys_by_region(unit)
+    kept = tuple(
+        c for c in unit.constraints if not isinstance(c, Lock) or c.region_id in present
+    )
+    if len(kept) == len(unit.constraints):
+        return unit
+    return dataclasses.replace(unit, constraints=kept)
+
+
+def _merge_at(region: Region, board_id: str) -> tuple[Region, _Merge | None, bool]:
+    """``region`` with ``board_id`` merged away, which regions the merge
+    joined, ``None`` when no board of that id is in its subtree, and whether
+    *this call* collapsed ``region`` itself down to one promoted item. The third element
     is never true for a collapse passed up from deeper in the tree, so the
     caller splices only a ``Division`` this merge promoted, and leaves alone
     one that was same-axis nested for some other reason (unreachable through
     scanning or this module).
     """
     if not isinstance(region, Division):
-        return region, False, False
+        return region, None, False
     items = region.items
     for index, item in enumerate(items):
         if isinstance(item, Board) and item.id == board_id:
@@ -264,21 +367,18 @@ def _merge_at(region: Region, board_id: str) -> tuple[Region, bool, bool]:
                     "This board has another board beside it, so removing it "
                     "would not join two openings.",
                 )
-            both_locked = before.lock is not None and after.lock is not None
             merged: Region = dataclasses.replace(
                 before,
                 size_mm=before.size_mm + board_extent_mm(item) + after.size_mm,
-                lock=Basis.CLEAR if both_locked else None,
             )
             merged_items = items[: index - 1] + [merged] + items[index + 2 :]
             if len(merged_items) == 1:
-                collapsed = dataclasses.replace(
-                    merged, size_mm=region.size_mm, lock=region.lock
-                )
-                return collapsed, True, True
-            return dataclasses.replace(region, items=merged_items), True, False
+                collapsed = dataclasses.replace(merged, size_mm=region.size_mm)
+                return collapsed, _Merge(before.id, after.id, region.id), True
+            joined = _Merge(before.id, after.id, None)
+            return dataclasses.replace(region, items=merged_items), joined, False
     new_items: list[Item] = []
-    changed = False
+    found: _Merge | None = None
     for item in items:
         if isinstance(item, Board):
             new_items.append(item)
@@ -292,10 +392,10 @@ def _merge_at(region: Region, board_id: str) -> tuple[Region, bool, bool]:
             new_items.extend(new_child.items)
         else:
             new_items.append(new_child)
-        changed = changed or child_found
-    if changed:
-        return dataclasses.replace(region, items=new_items), True, False
-    return region, False, False
+        found = found or child_found
+    if found is not None:
+        return dataclasses.replace(region, items=new_items), found, False
+    return region, None, False
 
 
 def remove_boards(unit: Unit, board_ids: Sequence[str]) -> Unit:
@@ -368,8 +468,13 @@ def set_thickness(unit: Unit, board_ids: Collection[str], thickness_mm: float) -
             axes.append(parent.axis)
     spaces = solve(unit)
     targets = frozenset(board_ids)
+    spacings = frozenset(
+        c.region_id
+        for c in unit.constraints
+        if isinstance(c, Lock) and c.active and c.basis is Basis.WITH_NEXT
+    )
     result = dataclasses.replace(
-        unit, root=_with_thickness(unit.root, targets, thickness_mm)
+        unit, root=_with_thickness(unit.root, targets, thickness_mm, spacings)
     )
     for axis in axes:
         result = solve_axis(result, spaces, axis, MIN_DRAG_GAP_MM)
@@ -377,12 +482,16 @@ def set_thickness(unit: Unit, board_ids: Collection[str], thickness_mm: float) -
 
 
 def _with_thickness(
-    region: Region, board_ids: frozenset[str], thickness_mm: float
+    region: Region,
+    board_ids: frozenset[str],
+    thickness_mm: float,
+    spacings: frozenset[str],
 ) -> Region:
     """``region`` with every board in ``board_ids`` at ``thickness_mm``,
-    copying only the paths down to them. A ``Basis.WITH_NEXT`` lock just
-    before a changed board keeps its spacing, so its stored clear size takes
-    the opposite change."""
+    copying only the paths down to them. A region in ``spacings``, the
+    regions active ``Basis.WITH_NEXT`` locks hold, just before a changed
+    board keeps its spacing, so its stored clear size takes the opposite
+    change."""
     if not isinstance(region, Division):
         return region
     new_items: list[Item] = []
@@ -395,12 +504,12 @@ def _with_thickness(
                 else item
             )
         else:
-            new_item = _with_thickness(item, board_ids, thickness_mm)
+            new_item = _with_thickness(item, board_ids, thickness_mm, spacings)
             after = region.items[index + 1] if index + 1 < len(region.items) else None
             if (
                 isinstance(after, Board)
                 and after.id in board_ids
-                and new_item.lock is Basis.WITH_NEXT
+                and new_item.id in spacings
             ):
                 new_item = dataclasses.replace(
                     new_item,
@@ -464,18 +573,11 @@ def _next_board(parent: Division, index: int, basis: Basis) -> Board | None:
     )
 
 
-def _with_region(
-    region: Region,
-    region_id: str,
-    lock: Basis | None,
-    size_mm: float | None = None,
-) -> Region:
-    """``region`` with the region named ``region_id`` given ``lock``, and
-    ``size_mm`` when that is set, copying only the path down to it."""
+def _with_size(region: Region, region_id: str, size_mm: float) -> Region:
+    """``region`` with the region named ``region_id`` at ``size_mm``,
+    copying only the path down to it."""
     if region.id == region_id:
-        if size_mm is None:
-            return dataclasses.replace(region, lock=lock)
-        return dataclasses.replace(region, lock=lock, size_mm=size_mm)
+        return dataclasses.replace(region, size_mm=size_mm)
     if not isinstance(region, Division):
         return region
     new_items: list[Item] = []
@@ -484,10 +586,22 @@ def _with_region(
         if isinstance(item, Board):
             new_items.append(item)
             continue
-        new_item = _with_region(item, region_id, lock, size_mm)
+        new_item = _with_size(item, region_id, size_mm)
         changed = changed or new_item is not item
         new_items.append(new_item)
     return dataclasses.replace(region, items=new_items) if changed else region
+
+
+def _locked(unit: Unit, region_id: str, basis: Basis) -> Unit:
+    """``unit`` with the region ``region_id`` held by an active Lock in
+    ``basis``: its Lock, turned on and changed in place, or a new one after
+    the other constraints."""
+    found = region_lock(unit, region_id)
+    if found is None:
+        return dataclasses.replace(
+            unit, constraints=(*unit.constraints, Lock(region_id, basis))
+        )
+    return _with_constraint(unit, dataclasses.replace(found, basis=basis, active=True))
 
 
 def _fixed_offset_mm(unit: Unit, axis: Axis, size_mm: Vec3) -> float:
@@ -556,7 +670,9 @@ def set_size(unit: Unit, region_id: str, size_mm: float, basis: Basis) -> Unit:
     """``unit`` with the region named ``region_id`` locked at ``size_mm``
     measured in ``basis``, the boards around it moved as little as possible
     and the unit's outer size unchanged; when both boards bounding the
-    region are free, each moves half the change.
+    region are free, each moves half the change. The region's Lock is
+    turned on and takes ``basis``, or a new one is added after the other
+    constraints.
 
     Raises :class:`EditError` naming ``region_id`` when the clear size
     ``size_mm`` gives is under :data:`MIN_DRAG_GAP_MM`, whatever the
@@ -577,8 +693,10 @@ def set_size(unit: Unit, region_id: str, size_mm: float, basis: Basis) -> Unit:
             f"{MIN_DRAG_GAP_MM:.1f} mm minimum.",
         )
     spaces = solve(unit)
-    edited = dataclasses.replace(
-        unit, root=_with_region(unit.root, region_id, basis, clear_mm)
+    edited = _locked(
+        dataclasses.replace(unit, root=_with_size(unit.root, region_id, clear_mm)),
+        region_id,
+        basis,
     )
     return solve_axis(edited, spaces, parent.axis, MIN_DRAG_GAP_MM)
 
@@ -604,7 +722,8 @@ def size_in_basis_mm(
 
 def set_basis(unit: Unit, region_id: str, basis: Basis) -> Unit:
     """``unit`` with the region named ``region_id`` locked in ``basis`` at
-    its current size, moving nothing.
+    its current size, moving nothing: its Lock turned on and changed in
+    place, or a new one after the other constraints.
 
     Raises :class:`EditError` naming ``region_id`` when ``basis`` is
     ``Basis.WITH_NEXT`` and the next item in the region's run is not a
@@ -613,7 +732,7 @@ def set_basis(unit: Unit, region_id: str, basis: Basis) -> Unit:
     """
     parent, index = _locate_region(unit, region_id)
     _next_board(parent, index, basis)
-    return dataclasses.replace(unit, root=_with_region(unit.root, region_id, basis))
+    return _locked(unit, region_id, basis)
 
 
 def run_axis(unit: Unit, node_id: str) -> Axis:
@@ -652,38 +771,41 @@ def region_before(unit: Unit, board_id: str) -> str:
 
 
 def lock(unit: Unit, region_id: str) -> Unit:
-    """``unit`` with the region named ``region_id`` locked in
-    ``Basis.CLEAR`` at its current size, moving nothing. Returns ``unit``
-    itself when the region is already locked. Raises :class:`EditError` for
-    the root, a board, or an unknown id. The lock may make the unit's size
-    along the run a reference, or duplicate other locks; neither is refused.
+    """``unit`` with the region named ``region_id`` locked at its current
+    size, moving nothing: its deactivated Lock turned on, keeping its basis,
+    or a new ``Basis.CLEAR`` Lock appended after the other constraints.
+    Returns ``unit`` itself when an active Lock already holds the region.
+    Raises :class:`EditError` for the root, a board, or an unknown id. The
+    lock may make the unit's size along the run a reference, or duplicate
+    other constraints; neither is refused.
     """
-    parent, index = _locate_region(unit, region_id)
-    if is_locked(parent.items[index]):
+    _locate_region(unit, region_id)
+    if is_locked(unit, region_id):
         return unit
-    return dataclasses.replace(
-        unit, root=_with_region(unit.root, region_id, Basis.CLEAR)
-    )
+    found = region_lock(unit, region_id)
+    return _locked(unit, region_id, Basis.CLEAR if found is None else found.basis)
 
 
 def unlock(unit: Unit, region_id: str) -> Unit:
-    """``unit`` with the region named ``region_id`` unlocked, moving nothing.
-    Returns ``unit`` itself when the region is already unlocked. Raises
-    :class:`EditError` for the root, a board, or an unknown id."""
-    parent, index = _locate_region(unit, region_id)
-    if not is_locked(parent.items[index]):
+    """``unit`` without the active Lock holding the region named
+    ``region_id``, moving nothing. Returns ``unit`` itself when no active
+    Lock holds it. Raises :class:`EditError` for the root, a board, or an
+    unknown id."""
+    _locate_region(unit, region_id)
+    found = region_lock(unit, region_id)
+    if found is None or not found.active:
         return unit
-    return dataclasses.replace(unit, root=_with_region(unit.root, region_id, None))
+    return remove_constraints(unit, (found.id,))
 
 
 @dataclasses.dataclass(frozen=True)
 class Held:
     """What keeps a drag from moving a board, as :func:`held_by` finds it."""
 
-    # The locked regions to unlock, low side first.
-    locks: tuple[str, ...] = ()
-    # The active constraints that hold the board with those locks unlocked,
-    # in the unit's order. No unlock frees a board one holds.
+    # The active Locks to remove, low side first.
+    locks: tuple[ConstraintId, ...] = ()
+    # The other active constraints that hold the board with those Locks
+    # removed, in the unit's order. No unlock frees a board one holds.
     constraints: tuple[ConstraintId, ...] = ()
 
     @property
@@ -696,13 +818,13 @@ def held_by(unit: Unit, board_id: str) -> Held | None:
     """What holds the board ``board_id`` against a drag.
 
     :attr:`Held.free` when a drag may move the board: with the unit's outer
-    faces held, the locks and active constraints leave its position free,
-    whatever the openings' minimum widths allow. Otherwise the fewest locks
-    whose unlocking frees it, or that unlocking leaves to the constraints:
-    the locked region nearest the board on each blocked side, low side
-    first, and further ones only when those leave it held, as across nested
-    runs. When constraints still hold it with those unlocked, they are
-    named and the board stays held whatever is unlocked. ``None`` when
+    faces held, the active constraints leave its position free, whatever the
+    openings' minimum widths allow. Otherwise the fewest Locks whose removal
+    frees it, or that removal leaves to the other constraints: the Lock
+    nearest the board on each blocked side, low side first, and further ones
+    only when those leave it held, as across nested runs. When other
+    constraints still hold it with those removed, they are named and the
+    board stays held whatever is unlocked. ``None`` when
     ``board_id`` names no board, or the boards alone hold it, as for a
     carcass board.
     """
@@ -715,34 +837,37 @@ def held_by(unit: Unit, board_id: str) -> Held | None:
     board_space = spaces[board_id]
     low_face_mm = board_space.origin_mm(axis_index)
     high_face_mm = low_face_mm + board_space.extent_mm(axis_index)
-    order: dict[str, int] = {
+    order: dict[ConstraintId, int] = {
         constraint.id: index for index, constraint in enumerate(unit.constraints)
     }
-    low_side: list[str] = []
-    high_side: list[str] = []
+    held_region = {
+        c.id: spaces[c.region_id]
+        for c in unit.constraints
+        if isinstance(c, Lock) and c.region_id in spaces
+    }
+    low_side: list[ConstraintId] = []
+    high_side: list[ConstraintId] = []
     while True:
         fixing = fixing_locks(unit, spaces, board_id, axis, low_side + high_side)
         if fixing is None:
             return Held(locks=tuple(low_side + high_side))
         if not fixing:
             return None
-        regions = [r for r in fixing if r not in order]
-        if not regions:
+        locks = [c for c in fixing if c in held_region]
+        if not locks:
             return Held(
                 locks=tuple(low_side + high_side),
-                constraints=tuple(
-                    ConstraintId(c) for c in sorted(fixing, key=order.__getitem__)
-                ),
+                constraints=tuple(sorted(fixing, key=order.__getitem__)),
             )
-        below = [r for r in regions if spaces[r].origin_mm(axis_index) < low_face_mm]
-        above = [r for r in regions if r not in below]
+        below = [c for c in locks if held_region[c].origin_mm(axis_index) < low_face_mm]
+        above = [c for c in locks if c not in below]
         if below:
             low_side.append(
                 max(
                     below,
-                    key=lambda r: (
-                        spaces[r].origin_mm(axis_index)
-                        + spaces[r].extent_mm(axis_index)
+                    key=lambda c: (
+                        held_region[c].origin_mm(axis_index)
+                        + held_region[c].extent_mm(axis_index)
                     ),
                 )
             )
@@ -750,7 +875,7 @@ def held_by(unit: Unit, board_id: str) -> Held | None:
             high_side.append(
                 min(
                     above,
-                    key=lambda r: spaces[r].origin_mm(axis_index) - high_face_mm,
+                    key=lambda c: held_region[c].origin_mm(axis_index) - high_face_mm,
                 )
             )
 
@@ -758,15 +883,20 @@ def held_by(unit: Unit, board_id: str) -> Held | None:
 def require_movable(unit: Unit, board_id: str) -> None:
     """Return when a drag may move the board ``board_id``. Raises
     :class:`EditError` naming ``board_id`` when :func:`held_by` gives
-    ``None`` or names constraints, and naming the nearest holding region
-    when it names only locks."""
+    ``None`` or names other constraints, and naming the region of the
+    nearest holding Lock when it names only Locks."""
     held = held_by(unit, board_id)
     if held is None:
         raise EditError(board_id, "This board has no opening on each side to move.")
     if held.constraints:
         raise EditError(board_id, "A constraint holds this board in place.")
     if held.locks:
-        raise EditError(held.locks[0], "A locked opening holds this board in place.")
+        holder = next(
+            c.region_id
+            for c in unit.constraints
+            if isinstance(c, Lock) and c.id == held.locks[0]
+        )
+        raise EditError(holder, "A locked opening holds this board in place.")
 
 
 def move_board(unit: Unit, board_id: str, low_face_mm: float) -> Unit:
@@ -793,10 +923,11 @@ def move_board(unit: Unit, board_id: str, low_face_mm: float) -> Unit:
 class Measurement:
     """A region's size as the editor shows it."""
 
-    # What the region's size measures: its lock's basis, or Basis.CLEAR for
-    # an unlocked region, which is what a typed size would lock it in.
+    # What the region's size measures: its Lock's basis, active or not, or
+    # Basis.CLEAR for a region with none, which is what a typed size would
+    # lock it in.
     basis: Basis
-    # Whether the region is locked.
+    # Whether an active Lock holds the region.
     fixed: bool
     clear_mm: float
     # clear_mm plus the next board's thickness_mm, the number a
@@ -823,9 +954,10 @@ def measure(unit: Unit, region_id: str, spaces: Mapping[str, Space]) -> Measurem
     spacing_mm: float | None = None
     if index + 1 < len(parent.items) and isinstance(parent.items[index + 1], Board):
         spacing_mm = size_in_basis_mm(parent, index, clear_mm, Basis.WITH_NEXT)
+    found = region_lock(unit, region_id)
     return Measurement(
-        basis=region.lock or Basis.CLEAR,
-        fixed=region.lock is not None,
+        basis=Basis.CLEAR if found is None else found.basis,
+        fixed=found is not None and found.active,
         clear_mm=clear_mm,
         spacing_mm=spacing_mm,
     )
@@ -880,22 +1012,28 @@ def _run_carried(
 
 
 def carry_constraints(before: Unit, after: Unit) -> Unit:
-    """``after``, an edit of ``before``'s tree, with ``before``'s
-    constraints that still hold their regions renamed to them and the rest
-    dropped.
+    """``after``, an edit of ``before``'s tree, with the constraints that
+    still hold their regions renamed to them and the rest dropped.
 
-    An ``Equal`` is dropped when either opening's bounding boards changed:
-    deleting a board beside it merges it away, and a board added along its
-    run splits it. A board added across its run keeps it, since its slot
-    and size are unchanged. An ``EvenSpacing`` is kept while its ends are
-    still in one run along its axis, in order, whatever happens between
-    them. Keeps each constraint's order, id and active flag.
+    ``after`` carries ``before``'s constraints with its Locks already moved
+    by the edit, since only the edit knows which region takes a Lock; a
+    Lock whose region ``after`` no longer holds is dropped. An ``Equal`` is
+    dropped when either opening's bounding boards changed: deleting a board
+    beside it merges it away, and a board added along its run splits it. A
+    board added across its run keeps it, since its slot and size are
+    unchanged. An ``EvenSpacing`` is kept while its ends are still in one
+    run along its axis, in order, whatever happens between them. Keeps each
+    constraint's order, id and active flag.
     """
     before_keys = keys_by_region(before)
     after_keys = keys_by_region(after)
     after_by_key = unique_regions_by_key(after)
     carried: list[Constraint] = []
-    for constraint in before.constraints:
+    for constraint in after.constraints:
+        if isinstance(constraint, Lock):
+            if constraint.region_id in after_keys:
+                carried.append(constraint)
+            continue
         if isinstance(constraint, Equal):
             first, second = (
                 _region_carried(region_id, before_keys, after_keys, after_by_key)
@@ -1111,8 +1249,9 @@ def set_constraint_active(
 ) -> Unit:
     """``unit`` with the constraint ``constraint_id`` activated or
     deactivated; ``unit`` itself when it already is. Deactivating moves
-    nothing. Activating solves it in, moving the boards as little as
-    possible, as adding it new would.
+    nothing, and neither does activating a Lock, which holds its opening at
+    its current size. Activating any other solves it in, moving the boards
+    as little as possible, as adding it new would.
 
     Raises :class:`EditError` naming ``constraint_id`` when ``unit`` has no
     such constraint, and a ``"conflict"``
@@ -1124,7 +1263,9 @@ def set_constraint_active(
         return unit
     changed = dataclasses.replace(constraint, active=active)
     edited = _with_constraint(unit, changed)
-    return _solved_constraint(unit, edited, changed) if active else edited
+    if not active or isinstance(changed, Lock):
+        return edited
+    return _solved_constraint(unit, edited, changed)
 
 
 def remove_deactivated(unit: Unit) -> Unit:
@@ -1139,7 +1280,7 @@ def set_constraint_basis(unit: Unit, constraint_id: ConstraintId, basis: Basis) 
     """``unit`` with the constraint ``constraint_id`` measuring its openings
     in ``basis``; ``unit`` itself when it already does. An active
     constraint is solved again in its new basis, moving the boards as
-    little as possible; a deactivated one moves nothing.
+    little as possible; a deactivated one or a Lock moves nothing.
 
     Raises :class:`EditError` naming ``constraint_id`` when ``unit`` has no
     such constraint, and naming an opening for ``Basis.WITH_NEXT`` when no
@@ -1154,4 +1295,6 @@ def set_constraint_basis(unit: Unit, constraint_id: ConstraintId, basis: Basis) 
         _next_board(*_locate_region(unit, region_id), basis)
     changed = dataclasses.replace(constraint, basis=basis)
     edited = _with_constraint(unit, changed)
-    return _solved_constraint(unit, edited, changed) if changed.active else edited
+    if not changed.active or isinstance(changed, Lock):
+        return edited
+    return _solved_constraint(unit, edited, changed)

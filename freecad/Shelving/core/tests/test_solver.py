@@ -9,13 +9,14 @@ import pytest
 from freecad.Shelving.core.geometry import Space, Vec3
 from freecad.Shelving.core.layout import (
     Axis,
-    Basis,
     Bay,
     Board,
+    ConstraintId,
     Division,
     FixedPoint,
     FixedSide,
     Item,
+    Lock,
     Unit,
     Void,
 )
@@ -24,7 +25,7 @@ from freecad.Shelving.core.solver import (
     LayoutSolveError,
     SolveErrorReason,
     describe_solve_error,
-    duplicated_locks,
+    duplicated_constraint,
     fixing_locks,
     size_fixed_by,
     solve,
@@ -46,6 +47,15 @@ def _assert_space(
     assert space.size.z_mm == pytest.approx(size[2], abs=1e-6)
 
 
+def _lock(region_id: str) -> Lock:
+    """A Lock on ``region_id`` whose id is :func:`_lock_id`'s."""
+    return Lock(region_id, id=_lock_id(region_id))
+
+
+def _lock_id(region_id: str) -> ConstraintId:
+    return ConstraintId(f"{region_id}-lock")
+
+
 def _column(
     sizes_mm: Sequence[float],
     locked: Sequence[str] = (),
@@ -56,8 +66,7 @@ def _column(
     items: list[Item] = [Board(thickness_mm=18.0, id="bottom")]
     for index, size_mm in enumerate(sizes_mm):
         name = "ABCDEF"[index]
-        lock = Basis.CLEAR if name in locked else None
-        items.append(Bay(size_mm=size_mm, lock=lock, id=name))
+        items.append(Bay(size_mm=size_mm, id=name))
         last = index == len(sizes_mm) - 1
         items.append(Board(thickness_mm=18.0, id="top" if last else f"s{index + 1}"))
     height_mm = 18.0 * (len(sizes_mm) + 1) + sum(sizes_mm)
@@ -65,6 +74,7 @@ def _column(
         size_mm=Vec3(500.0, 300.0, height_mm),
         root=Division(axis=Axis.Z, items=items, id="root"),
         fixed_point=FixedPoint(z=side),
+        constraints=tuple(_lock(name) for name in locked),
     )
 
 
@@ -314,13 +324,15 @@ def test_solve_axis_moves_a_seam_between_two_regions() -> None:
         axis=Axis.Z,
         items=[
             Board(thickness_mm=18.0, id="bottom"),
-            Void(size_mm=100.0, lock=Basis.CLEAR, id="plinth"),
+            Void(size_mm=100.0, id="plinth"),
             Bay(size_mm=300.0, id="bay"),
             Board(thickness_mm=18.0, id="top"),
         ],
         id="root",
     )
-    unit = Unit(size_mm=Vec3(500.0, 300.0, 436.0), root=root)
+    unit = Unit(
+        size_mm=Vec3(500.0, 300.0, 436.0), root=root, constraints=(_lock("plinth"),)
+    )
     solved = solve_axis(unit, solve(unit), Axis.Z, 5.0, size_mm=536.0)
     assert _sizes(solved) == pytest.approx({"plinth": 100.0, "bay": 400.0})
 
@@ -331,8 +343,8 @@ def test_solve_axis_conflict_names_the_locks_and_openings_at_the_minimum() -> No
         solve_axis(unit, solve(unit), Axis.Z, 5.0, size_mm=360.0)
     err = excinfo.value
     assert err.reason == "conflict"
-    assert set(err.region_ids) <= {"A", "B", "C"}
-    assert "A" in err.region_ids
+    assert set(err.region_ids) <= {"B", "C"}
+    assert err.constraint_ids == err.lock_ids == (_lock_id("A"),)
     assert err.node_id == err.region_ids[0]
     assert err.detail["minimum_mm"] == 5.0
 
@@ -348,7 +360,9 @@ def test_solve_axis_locks_that_fix_the_size_refuse_another_one() -> None:
     with pytest.raises(LayoutSolveError) as excinfo:
         solve_axis(unit, solve(unit), Axis.Z, 5.0, size_mm=700.0)
     assert excinfo.value.reason == "conflict"
-    assert excinfo.value.region_ids == ("A", "B")
+    assert excinfo.value.region_ids == ()
+    assert excinfo.value.constraint_ids == (_lock_id("A"), _lock_id("B"))
+    assert excinfo.value.lock_ids == excinfo.value.constraint_ids
     assert excinfo.value.node_id == "A"
     assert excinfo.value.detail == {"fixed_size_mm": pytest.approx(654.0)}
 
@@ -361,9 +375,7 @@ def test_solve_axis_lets_a_size_the_locks_fix_follow_them() -> None:
         root=dataclasses.replace(
             before.root,
             items=[
-                Bay(size_mm=340.0, lock=Basis.CLEAR, id=item.id)
-                if item.id == "A"
-                else item
+                Bay(size_mm=340.0, id=item.id) if item.id == "A" else item
                 for item in before.root.items
             ],
         ),
@@ -374,7 +386,7 @@ def test_solve_axis_lets_a_size_the_locks_fix_follow_them() -> None:
     assert solved.position_mm.z_mm == pytest.approx(-20.0)
 
 
-# --- size_fixed_by() and duplicated_locks(): reference sizes and redundancy. ---
+# --- size_fixed_by() and duplicated_constraint(): reference sizes and redundancy.
 
 
 def test_size_fixed_by_is_none_until_the_locks_fix_the_size() -> None:
@@ -383,11 +395,19 @@ def test_size_fixed_by_is_none_until_the_locks_fix_the_size() -> None:
         unit = _column([300.0, 300.0], locked=locked)
         assert size_fixed_by(unit, solve(unit), Axis.Z) is None
     unit = _column([300.0, 300.0], locked=["A", "B"])
-    assert size_fixed_by(unit, solve(unit), Axis.Z) == ("A", "B")
+    assert size_fixed_by(unit, solve(unit), Axis.Z) == (_lock_id("A"), _lock_id("B"))
     assert size_fixed_by(unit, solve(unit), Axis.X) is None
 
 
-def test_duplicated_locks_names_what_a_redundant_lock_repeats() -> None:
+def test_a_deactivated_lock_does_not_fix_the_size() -> None:
+    unit = _column([300.0, 300.0], locked=["A", "B"])
+    unit = dataclasses.replace(
+        unit, constraints=(unit.constraints[0], Lock("B", active=False))
+    )
+    assert size_fixed_by(unit, solve(unit), Axis.Z) is None
+
+
+def test_duplicated_constraint_names_what_a_redundant_lock_repeats() -> None:
     """Two rows stacked under one shelf: once the lower row's two locks fix
     the width, locking both of the upper row's openings repeats them."""
     root = Division(
@@ -396,9 +416,9 @@ def test_duplicated_locks_names_what_a_redundant_lock_repeats() -> None:
             Division(
                 axis=Axis.X,
                 items=[
-                    Bay(size_mm=200.0, lock=Basis.CLEAR, id="L1"),
+                    Bay(size_mm=200.0, id="L1"),
                     Board(thickness_mm=18.0, id="dl"),
-                    Bay(size_mm=282.0, lock=Basis.CLEAR, id="L2"),
+                    Bay(size_mm=282.0, id="L2"),
                 ],
                 size_mm=200.0,
                 id="lower",
@@ -407,9 +427,9 @@ def test_duplicated_locks_names_what_a_redundant_lock_repeats() -> None:
             Division(
                 axis=Axis.X,
                 items=[
-                    Bay(size_mm=300.0, lock=Basis.CLEAR, id="U1"),
+                    Bay(size_mm=300.0, id="U1"),
                     Board(thickness_mm=18.0, id="du"),
-                    Bay(size_mm=182.0, lock=Basis.CLEAR, id="U2"),
+                    Bay(size_mm=182.0, id="U2"),
                 ],
                 size_mm=200.0,
                 id="upper",
@@ -417,12 +437,16 @@ def test_duplicated_locks_names_what_a_redundant_lock_repeats() -> None:
         ],
         id="root",
     )
-    unit = Unit(size_mm=Vec3(500.0, 300.0, 418.0), root=root)
+    unit = Unit(
+        size_mm=Vec3(500.0, 300.0, 418.0),
+        root=root,
+        constraints=tuple(_lock(name) for name in ("L1", "L2", "U1", "U2")),
+    )
     spaces = solve(unit)
-    assert duplicated_locks(unit, spaces, "U2", Axis.X) == ("L1", "L2", "U1")
-    assert duplicated_locks(unit, spaces, "L1", Axis.X) == ("L2", "U1", "U2")
-    assert duplicated_locks(unit, spaces, "shelf", Axis.X) is None
-    assert duplicated_locks(unit, spaces, "lower", Axis.Z) is None
+    l1, l2, u1, u2 = (_lock_id(name) for name in ("L1", "L2", "U1", "U2"))
+    assert duplicated_constraint(unit, spaces, u2, Axis.X) == (l1, l2, u1)
+    assert duplicated_constraint(unit, spaces, l1, Axis.X) == (l2, u1, u2)
+    assert duplicated_constraint(unit, spaces, u2, Axis.Z) is None
 
 
 def test_solve_axis_leaves_the_other_axes_alone() -> None:
@@ -449,8 +473,8 @@ def test_fixing_locks_is_empty_for_a_carcass_board() -> None:
 def test_fixing_locks_names_the_lock_and_honors_without() -> None:
     unit = _column([300.0, 300.0], locked=["A"])
     spaces = solve(unit)
-    assert fixing_locks(unit, spaces, "s1", Axis.Z) == frozenset({"A"})
-    assert fixing_locks(unit, spaces, "s1", Axis.Z, without=["A"]) is None
+    assert fixing_locks(unit, spaces, "s1", Axis.Z) == frozenset({_lock_id("A")})
+    assert fixing_locks(unit, spaces, "s1", Axis.Z, without=[_lock_id("A")]) is None
 
 
 # --- describe_solve_error(). ---
@@ -474,3 +498,16 @@ def test_describe_solve_error_reads_as_a_sentence_without_the_node_id(
     assert expected in message
     assert node_id not in message
     assert message.endswith(".")
+
+
+def test_a_conflict_naming_only_locks_does_not_speak_of_constraints() -> None:
+    lock = ConstraintId("lock")
+    equal = ConstraintId("equal")
+    only_locks = LayoutSolveError("A", "conflict", {}, (), (lock,), (lock,))
+    assert describe_solve_error(only_locks) == (
+        "The locked openings cannot all keep their sizes."
+    )
+    with_equal = LayoutSolveError("A", "conflict", {}, (), (lock, equal), (lock,))
+    assert describe_solve_error(with_equal) == (
+        "The locked openings and constraints cannot all hold."
+    )

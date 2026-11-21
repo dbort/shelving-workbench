@@ -16,6 +16,7 @@ from freecad.Shelving.core.layout import (
     ConstraintId,
     Division,
     FixedSide,
+    Lock,
     Unit,
     Void,
 )
@@ -47,9 +48,13 @@ _T_MM = 18.0
 _ROW_MM = 40.0
 
 
-def _bookcase(front_at_min: bool | None = None) -> Unit:
+_LOWER_LOCK = ConstraintId("lower-lock")
+
+
+def _bookcase(front_at_min: bool | None = None, *, locked: bool = True) -> Unit:
     """A 900 x 300 x 600 carcass, depth along Y, holding a column of two
-    bays split by one shelf beside a void."""
+    bays split by one shelf beside a void; the lower bay is locked, by
+    :data:`_LOWER_LOCK`, unless ``locked`` is false."""
     return Unit(
         size_mm=Vec3(900.0, 300.0, 600.0),
         root=Division(
@@ -66,7 +71,7 @@ def _bookcase(front_at_min: bool | None = None) -> Unit:
                             axis=Axis.Z,
                             id="column",
                             items=[
-                                Bay(size_mm=200.0, lock=Basis.CLEAR, id="lower"),
+                                Bay(size_mm=200.0, id="lower"),
                                 Board(thickness_mm=_T_MM, id="shelf"),
                                 Bay(size_mm=346.0, id="upper"),
                             ],
@@ -83,6 +88,7 @@ def _bookcase(front_at_min: bool | None = None) -> Unit:
         ),
         depth_axis=Axis.Y,
         front_at_min=front_at_min,
+        constraints=(Lock("lower", id=_LOWER_LOCK),) if locked else (),
     )
 
 
@@ -277,6 +283,21 @@ def test_a_dimension_reads_its_size_and_color() -> None:
     assert selected["upper"].color == "unlocked"
 
 
+def test_a_deactivated_lock_draws_unlocked_and_holds_no_board() -> None:
+    off = dataclasses.replace(
+        _UNIT, constraints=(Lock("lower", active=False, id=_LOWER_LOCK),)
+    )
+    by_id = {label.region_id: label for label in _labels(unit=off)}
+    assert by_id["lower"].color == "unlocked"
+    frame = elevation_frame(off)
+    overlay = plan_overlay(off, solve(off), frame, None, _ROW_MM)
+    (padlock,) = [p for p in overlay.padlocks if p.label.region_id == "lower"]
+    assert not padlock.locked
+    assert overlay.icons == []
+    assert arrow_for(off, solve(off), frame, "shelf") is not None
+    assert held_padlock(off, solve(off), frame, "shelf") is None
+
+
 def test_a_spacing_spans_through_the_next_board() -> None:
     spacing = Unit(
         size_mm=_UNIT.size_mm,
@@ -284,12 +305,13 @@ def test_a_spacing_spans_through_the_next_board() -> None:
             axis=Axis.Z,
             id="root",
             items=[
-                Bay(size_mm=200.0, lock=Basis.WITH_NEXT, id="lower"),
+                Bay(size_mm=200.0, id="lower"),
                 Board(thickness_mm=_T_MM, id="shelf"),
                 Bay(size_mm=382.0, id="upper"),
             ],
         ),
         depth_axis=Axis.Y,
+        constraints=(Lock("lower", Basis.WITH_NEXT),),
     )
     (label,) = [x for x in _labels(unit=spacing) if x.region_id == "lower"]
     assert label.size_mm == pytest.approx(218.0)
@@ -426,9 +448,7 @@ def test_held_and_carcass_boards_get_no_arrow() -> None:
     assert arrow_for(_UNIT, _SPACES, frame, "shelf") is None
     assert arrow_for(_UNIT, _SPACES, frame, "top") is None
     assert arrow_for(_UNIT, _SPACES, frame, "lower") is None
-    unlocked = _bookcase()
-    lower = Bay(size_mm=200.0, id="lower")
-    _replace_lower(unlocked, lower)
+    unlocked = _bookcase(locked=False)
     arrow = arrow_for(unlocked, solve(unlocked), frame, "shelf")
     assert arrow is not None
     assert arrow.vertical
@@ -447,10 +467,9 @@ def test_a_held_board_gets_a_padlock_where_its_arrow_would_be() -> None:
     frame = elevation_frame(_UNIT)
     padlock = held_padlock(_UNIT, _SPACES, frame, "shelf")
     assert padlock is not None
-    assert padlock.holders == ("lower",)
+    assert padlock.holders == (_LOWER_LOCK,)
     # Beside the lower bay's dimension, level with the shelf, where an arrow would sit.
-    unlocked = _bookcase()
-    _replace_lower(unlocked, Bay(size_mm=200.0, id="lower"))
+    unlocked = _bookcase(locked=False)
     arrow = arrow_for(unlocked, solve(unlocked), frame, "shelf")
     assert arrow is not None
     assert padlock.at_mm[0] == pytest.approx(arrow.at_mm[0])
@@ -480,16 +499,6 @@ def test_a_selected_held_board_outlines_the_openings_holding_it() -> None:
     for other in ("divider", "lower", None):
         overlay = plan_overlay(_UNIT, _SPACES, frame, other, _ROW_MM)
         assert all(o.role != "holding" for o in overlay.outlines)
-
-
-def _replace_lower(unit: Unit, bay: Bay) -> None:
-    root = unit.root
-    assert isinstance(root, Division)
-    row = root.items[1]
-    assert isinstance(row, Division)
-    column = row.items[1]
-    assert isinstance(column, Division)
-    column.items[0] = bay
 
 
 @pytest.mark.parametrize(

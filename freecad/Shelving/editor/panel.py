@@ -31,10 +31,8 @@ from freecad.Shelving.editor.fields import DimensionField, WheelFilter
 from freecad.Shelving.editor.overlay import RGB, marker_rgb
 from freecad.Shelving.editor.session import (
     FIELD_PROPERTIES,
-    ConstraintRow,
     EditFailure,
     EditWarning,
-    ListRow,
     Session,
     UnitDimension,
 )
@@ -442,10 +440,9 @@ class EditUnitPanel:
         self.constraint_list = ConstraintList(
             ListActions(
                 set_active=self._set_constraint_active,
-                delete_row=self._delete_row,
+                delete_constraint=self._delete_constraint,
                 delete_deactivated=self._delete_deactivated,
                 select_constraints=self._select_constraints,
-                select_openings=self._select_openings,
             )
         )
         layout.addWidget(self.constraint_list.box)
@@ -539,12 +536,8 @@ class EditUnitPanel:
     def _set_constraint_active(self, constraint_id: ConstraintId, active: bool) -> None:
         self._show_result(self.session.set_constraint_active(constraint_id, active))
 
-    def _delete_row(self, row: ListRow) -> None:
-        if isinstance(row, ConstraintRow):
-            failure = self.session.delete_constraint(row.constraint_id)
-        else:
-            failure = self.session.set_lock(row.region_id, False)
-        self._show_result(failure)
+    def _delete_constraint(self, constraint_id: ConstraintId) -> None:
+        self._show_result(self.session.delete_constraint(constraint_id))
 
     def _delete_deactivated(self) -> None:
         self._show_result(self.session.delete_deactivated())
@@ -555,13 +548,6 @@ class EditUnitPanel:
             self.editor.select_constraints(constraint_ids)
             return
         self.session.select_constraints(constraint_ids)
-        self._refresh()
-
-    def _select_openings(self, region_ids: Sequence[str]) -> None:
-        if self.editor is not None:
-            self.editor.select_items(region_ids)
-            return
-        self.session.select_items(region_ids)
         self._refresh()
 
     def _stock_clicked(self, item: QtWidgets.QTreeWidgetItem, _column: int) -> None:
@@ -722,9 +708,7 @@ class EditUnitPanel:
             combo.blockSignals(False)
         self._refresh_basis()
         self.constraint_list.show(
-            self.session.constraint_rows(),
-            self.session.selected_constraints,
-            self.session.selected_items,
+            self.session.constraint_rows(), self.session.selected_constraints
         )
         self._refresh_stock()
         self._rebuild_untagged_rows()

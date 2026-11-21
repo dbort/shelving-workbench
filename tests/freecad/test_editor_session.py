@@ -27,11 +27,13 @@ from freecad.Shelving.core.layout import (
     Basis,
     Bay,
     Board,
+    ConstraintId,
     Division,
     FixedPoint,
     Region,
     Unit,
     Void,
+    region_lock,
 )
 from freecad.Shelving.core.record import region_keys
 from freecad.Shelving.core.scan import elevation_axes
@@ -786,7 +788,7 @@ def test_a_unit_with_an_old_rule_record_opens_with_every_opening_unlocked() -> N
             bay_ids = _find_bay_ids_in_order(reopened.unit.root)
             assert len(bay_ids) == 2
             for bay_id in bay_ids:
-                assert _lock_of(reopened.unit.root, bay_id) is None, bay_id
+                assert _lock_of(reopened.unit, bay_id) is None, bay_id
             assert _board_snapshot(container) == snapshot
         finally:
             reopened.close()
@@ -857,13 +859,17 @@ def test_a_redundant_lock_is_applied_with_a_warning_naming_what_it_repeats() -> 
             snapshot = _board_snapshot(container)
             assert session.set_lock(right_upper, locked=True) is None
             doc.recompute()
-            assert _lock_of(session.unit.root, right_upper) is Basis.CLEAR
+            assert _lock_of(session.unit, right_upper) is Basis.CLEAR
             assert _board_snapshot(container) == snapshot
-            assert [w.region_ids for w in warnings] == [
-                (left_lower, left_upper, right_lower)
+            repeated = tuple(
+                _lock_id(session.unit, region_id)
+                for region_id in (left_lower, left_upper, right_lower)
+            )
+            assert [(w.region_ids, w.constraint_ids) for w in warnings] == [
+                ((), repeated)
             ]
             assert "redundant" in warnings[0].message
-            assert session.flagged == (left_lower, left_upper, right_lower)
+            assert session.flagged == repeated
             session.select(right_upper)
             assert session.flagged == ()
         finally:
@@ -875,14 +881,14 @@ def test_a_redundant_lock_is_applied_with_a_warning_naming_what_it_repeats() -> 
         try:
             # A rescan gives the regions new ids.
             bay_ids = _find_bay_ids_in_order(reopened.unit.root)
-            locks = [_lock_of(reopened.unit.root, bay_id) for bay_id in bay_ids]
+            locks = [_lock_of(reopened.unit, bay_id) for bay_id in bay_ids]
             assert locks == [Basis.CLEAR] * 4
             assert reopened.flagged == ()
             assert reopened.resize("width", 700.0) is None
             # Restating a lock that was already redundant raises nothing new.
             reopened.select(bay_ids[3])
             assert reopened.set_basis(Basis.CLEAR) is None
-            assert _lock_of(reopened.unit.root, bay_ids[3]) is Basis.CLEAR
+            assert _lock_of(reopened.unit, bay_ids[3]) is Basis.CLEAR
             assert len(warnings) == 1
             assert reopened.flagged == ()
         finally:
@@ -911,9 +917,13 @@ def test_a_refused_conflict_names_its_locks_and_writes_nothing() -> None:
             undo_count = doc.UndoCount
             refused = session.resize("height", 1000.0)
             assert isinstance(refused, EditFailure), refused
-            assert refused.region_ids == (left_lower, left_upper)
+            holding = tuple(
+                _lock_id(session.unit, region_id)
+                for region_id in (left_lower, left_upper)
+            )
+            assert (refused.region_ids, refused.constraint_ids) == ((), holding)
             assert "Locked openings fix" in refused.message, refused.message
-            assert session.flagged == (left_lower, left_upper)
+            assert session.flagged == holding
             doc.recompute()
             assert _board_snapshot(container) == snapshot
             assert session.unit is unit_before
@@ -1013,19 +1023,18 @@ def test_selection_maps_to_its_unit() -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
-def _lock_of(region: Region, region_id: str) -> Basis | None:
-    """The lock of the region named ``region_id`` in ``region``'s subtree."""
-    if region.id == region_id:
-        return region.lock
-    if isinstance(region, Division):
-        for item in region.items:
-            if isinstance(item, Board):
-                continue
-            try:
-                return _lock_of(item, region_id)
-            except KeyError:
-                pass
-    raise KeyError(region_id)
+def _lock_of(unit: Unit, region_id: str) -> Basis | None:
+    """The basis of the active Lock on the region named ``region_id`` in
+    ``unit``, ``None`` when none holds it."""
+    found = region_lock(unit, region_id)
+    return None if found is None or not found.active else found.basis
+
+
+def _lock_id(unit: Unit, region_id: str) -> ConstraintId:
+    """The id of the Lock on the region named ``region_id``."""
+    found = region_lock(unit, region_id)
+    assert found is not None
+    return found.id
 
 
 def _z_mm(container: FreeCAD.DocumentObject, name: str) -> float:
@@ -1095,7 +1104,7 @@ def test_dimensions_drag_basis_and_untagged() -> None:
             assert session.set_size(282.0) is None
             doc.recompute()
             assert session.selected_id == left_lower_id
-            assert _lock_of(session.unit.root, left_lower_id) is Basis.CLEAR
+            assert _lock_of(session.unit, left_lower_id) is Basis.CLEAR
             lower_mm = session.spaces[left_lower_id].size.z_mm
             upper_mm = session.spaces[left_upper_id].size.z_mm
             assert abs(lower_mm - 282.0) < 1e-6, lower_mm
@@ -1107,7 +1116,7 @@ def test_dimensions_drag_basis_and_untagged() -> None:
             boards_before_toggle = _board_snapshot(container)
             assert session.set_basis(Basis.WITH_NEXT) is None
             doc.recompute()
-            assert _lock_of(session.unit.root, left_lower_id) is Basis.WITH_NEXT
+            assert _lock_of(session.unit, left_lower_id) is Basis.WITH_NEXT
             measured = session.selected_measurement()
             assert measured is not None
             assert abs(measured.size_mm - 300.0) < 1e-6
@@ -1123,14 +1132,16 @@ def test_dimensions_drag_basis_and_untagged() -> None:
             # unlocking moves nothing.
             shelf_z_mm = _z_mm(container, left_shelf_id)
             grab_mm = Vec3(100.0, 0.0, shelf_z_mm + 5.0)
-            assert session.held_by(left_shelf_id) == Held((left_lower_id,))
+            assert session.held_by(left_shelf_id) == Held(
+                (_lock_id(session.unit, left_lower_id),)
+            )
             held = session.begin_drag(left_shelf_id, grab_mm)
             assert isinstance(held, EditFailure), held
             assert held.node_id == left_lower_id
             assert session.unlock_holders(left_shelf_id) is None
             doc.recompute()
             assert _board_snapshot(container) == boards_before_toggle
-            assert _lock_of(session.unit.root, left_lower_id) is None
+            assert _lock_of(session.unit, left_lower_id) is None
             assert session.held_by(left_shelf_id) == Held()
             assert isinstance(session.unlock_holders(left_shelf_id), EditFailure)
 
@@ -1141,12 +1152,15 @@ def test_dimensions_drag_basis_and_untagged() -> None:
             assert session.set_lock(left_upper_id, locked=True) is None
             doc.recompute()
             assert _board_snapshot(container) == boards_before_toggle
-            assert session.size_fixed_by("height") == (left_lower_id, left_upper_id)
+            assert session.size_fixed_by("height") == (
+                _lock_id(session.unit, left_lower_id),
+                _lock_id(session.unit, left_upper_id),
+            )
             assert session.size_fixed_by("width") is None
             assert session.size_fixed_by("depth") is None
             assert session.set_lock(left_upper_id, locked=False) is None
             assert session.set_lock(left_lower_id, locked=False) is None
-            assert _lock_of(session.unit.root, left_lower_id) is None
+            assert _lock_of(session.unit, left_lower_id) is None
 
             # A drag resizes the bays on either side, locks neither, and
             # keeps the board selected.
@@ -1157,7 +1171,7 @@ def test_dimensions_drag_basis_and_untagged() -> None:
             doc.recompute()
             assert session.selected_id == left_shelf_id
             for bay_id in (left_lower_id, left_upper_id):
-                assert _lock_of(session.unit.root, bay_id) is None, bay_id
+                assert _lock_of(session.unit, bay_id) is None, bay_id
             assert abs(_z_mm(container, left_shelf_id) - (shelf_z_mm + 50.0)) < 1e-6
             _assert_session_matches_document(session)
 
@@ -1176,7 +1190,7 @@ def test_dimensions_drag_basis_and_untagged() -> None:
             assert isinstance(too_big, EditFailure), too_big
             doc.recompute()
             assert _board_snapshot(container) == snapshot_solved
-            assert _lock_of(session.unit.root, right_lower_id) is Basis.CLEAR
+            assert _lock_of(session.unit, right_lower_id) is Basis.CLEAR
 
             # The untagged box survived every write untouched.
             assert _board_snapshot_by_name(container)["HandAdded"] == (
@@ -1286,30 +1300,27 @@ def test_a_magic_start_unit_takes_a_typed_size(tmp_path: Path) -> None:
         FreeCAD.closeDocument(doc.Name)
 
 
-def _plinth_id(region: Region) -> str | None:
-    """The id of the first locked void in ``region``'s subtree, or ``None``."""
-    if not isinstance(region, Division):
-        return None
-    for item in region.items:
-        if isinstance(item, Void) and item.lock is not None:
-            return item.id
-        if isinstance(item, Division):
-            found = _plinth_id(item)
-            if found is not None:
-                return found
-    return None
-
-
-def _void_locks(region: Region) -> list[Basis | None]:
+def _voids(region: Region) -> list[Void]:
     if not isinstance(region, Division):
         return []
-    locks: list[Basis | None] = []
+    found: list[Void] = []
     for item in region.items:
         if isinstance(item, Void):
-            locks.append(item.lock)
+            found.append(item)
         elif isinstance(item, Division):
-            locks += _void_locks(item)
-    return locks
+            found += _voids(item)
+    return found
+
+
+def _plinth_id(unit: Unit) -> str | None:
+    """The id of the first locked void in ``unit``, or ``None``."""
+    return next(
+        (void.id for void in _voids(unit.root) if _lock_of(unit, void.id)), None
+    )
+
+
+def _void_locks(unit: Unit) -> list[Basis | None]:
+    return [_lock_of(unit, void.id) for void in _voids(unit.root)]
 
 
 def test_an_unlocked_plinth_gap_stays_unlocked_when_reopened(tmp_path: Path) -> None:
@@ -1325,10 +1336,10 @@ def test_an_unlocked_plinth_gap_stays_unlocked_when_reopened(tmp_path: Path) -> 
         session = Session(container)
         session.open()
         try:
-            plinth_id = _plinth_id(session.unit.root)
+            plinth_id = _plinth_id(session.unit)
             assert plinth_id is not None
             assert session.set_lock(plinth_id, locked=False) is None
-            assert _void_locks(session.unit.root) == [None]
+            assert _void_locks(session.unit) == [None]
         finally:
             session.close()
         doc.recompute()
@@ -1342,7 +1353,7 @@ def test_an_unlocked_plinth_gap_stays_unlocked_when_reopened(tmp_path: Path) -> 
         assert container is not None
         reopened = Session(container)
         try:
-            assert _void_locks(reopened.unit.root) == [None]
+            assert _void_locks(reopened.unit) == [None]
         finally:
             reopened.close()
     finally:
@@ -1363,7 +1374,7 @@ def test_an_unlocked_plinth_gap_follows_undo_and_redo(tmp_path: Path) -> None:
         session = Session(container)
         session.open()
         try:
-            plinth_id = _plinth_id(session.unit.root)
+            plinth_id = _plinth_id(session.unit)
             assert plinth_id is not None
             assert session.set_lock(plinth_id, locked=False) is None
             assert session.resize("height", 800.0) is None
@@ -1378,13 +1389,13 @@ def test_an_unlocked_plinth_gap_follows_undo_and_redo(tmp_path: Path) -> None:
                 session.settle()
 
             undo()
-            assert _void_locks(session.unit.root) == [None]
+            assert _void_locks(session.unit) == [None]
             undo()
-            assert _void_locks(session.unit.root) == [Basis.CLEAR]
+            assert _void_locks(session.unit) == [Basis.CLEAR]
             redo()
-            assert _void_locks(session.unit.root) == [None]
+            assert _void_locks(session.unit) == [None]
             redo()
-            assert _void_locks(session.unit.root) == [None]
+            assert _void_locks(session.unit) == [None]
             assert abs(session.unit_dimension_mm("height") - 800.0) < 1e-6
         finally:
             session.close()

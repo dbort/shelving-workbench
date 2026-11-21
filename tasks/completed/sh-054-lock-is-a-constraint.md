@@ -15,12 +15,12 @@ one, is treated like any other constraint. The 3D view keeps its
 padlocks for now; sh-055 replaces them with Sketcher-style dimensions.
 
 ## Must Have
-- [ ] `pixi run tests` green; `pyrefly check` clean over the changed code.
-- [ ] `Bay`, `Void` and `Division` (`core/layout.py`) have no `lock`
+- [x] `pixi run tests` green; `pyrefly check` clean over the changed code.
+- [x] `Bay`, `Void` and `Division` (`core/layout.py`) have no `lock`
       field, and `Constraint` is `Equal | EvenSpacing | Lock`, where `Lock`
       carries `region_id`, `basis`, `active` and `id` as `Equal` does.
       `grep -rnw LockRow freecad tests` prints nothing.
-- [ ] Core suite, on sh-046's column of 18 mm boards with fixed point
+- [x] Core suite, on sh-046's column of 18 mm boards with fixed point
       `min`: bottom, A 300, shelf s1, B 300, shelf s2, C 300, top (972 mm
       tall):
       - locking A appends one active `Lock` naming A after the unit's
@@ -35,9 +35,9 @@ padlocks for now; sh-055 replaces them with Sketcher-style dimensions.
       - the existing split, merge, delete, drag, `held_by` and redundancy
         tests keep their expected layouts and lock outcomes, rewritten
         against `Lock`.
-- [ ] A unit scanned with no valid record holds an active `Lock` for each
+- [x] A unit scanned with no valid record holds an active `Lock` for each
       void the scan locks today, and none for a bay.
-- [ ] `rules_to_json` emits `{"schema_version": 3, "constraints": [...]}`
+- [x] `rules_to_json` emits `{"schema_version": 3, "constraints": [...]}`
       with no `"locks"` key. A Lock entry is `{"kind": "lock", "active":
       <bool>, "basis": "clear" | "with_next", "region": <region key>}`, in
       the unit's constraint order. `rules_from_json` on a version 2 record
@@ -45,7 +45,7 @@ padlocks for now; sh-055 replaces them with Sketcher-style dimensions.
       constraints. A Lock entry with an unknown basis or a missing region
       key is dropped and nothing is raised; a version 1 record still reads
       as no record.
-- [ ] Headless (`tests/freecad/`), opening a container in `Session`:
+- [x] Headless (`tests/freecad/`), opening a container in `Session`:
       - a stored deactivated Lock opens deactivated, holds nothing, and is
         written back with `"active": false` by the next edit;
       - a stored Lock whose region key matches nothing is dropped, and the
@@ -55,16 +55,16 @@ padlocks for now; sh-055 replaces them with Sketcher-style dimensions.
         moves no board, and Undo restores the previous state;
       - Delete Deactivated removes deactivated Locks with the other
         deactivated constraints, in one undo step.
-- [ ] GUI (`tests/freecad_gui/test_constraint_list.py`): a Lock row has a
+- [x] GUI (`tests/freecad_gui/test_constraint_list.py`): a Lock row has a
       checkbox, and unchecking it deactivates the Lock; a deactivated Lock
       row's icon is grayed in Qt's disabled mode; a Lock made after an
       Equal is listed after it; selecting a Lock row selects that Lock as a
       constraint, and with it selected, Opening size measures switches its
       basis moving nothing.
-- [ ] 3D view (`tests/freecad_view/test_padlocks.py`): an opening whose
+- [x] 3D view (`tests/freecad_view/test_padlocks.py`): an opening whose
       Lock is deactivated shows an open padlock and an unlocked
       dimension; clicking that padlock turns the same Lock back on.
-- [ ] `README.md` does not contain "every locked opening, then", and
+- [x] `README.md` does not contain "every locked opening, then", and
       `docs/scope-and-design.md` does not contain "locks first in tree
       order".
 
@@ -119,7 +119,7 @@ padlocks for now; sh-055 replaces them with Sketcher-style dimensions.
 - **Sequencing:** sh-055 builds on this and is blocked on it.
 
 ## Plan
-- [ ] **Step 1** (`core/layout.py`, `core/edit.py`, `core/solver.py`,
+- [x] **Step 1** (`core/layout.py`, `core/edit.py`, `core/solver.py`,
       `core/scan.py`, `core/tests/test_layout.py`, `test_edit.py`,
       `test_solver.py`, `test_constraints.py`, `test_scan.py`,
       `test_scanned_units.py`, `test_stock.py`, `test_expand.py`): `Lock`
@@ -128,17 +128,17 @@ padlocks for now; sh-055 replaces them with Sketcher-style dimensions.
       engine as it feeds region locks today; lock, unlock, set_size,
       set_basis, set_active and the edits that drop constraints handle
       Lock; the scan makes Locks for the voids it locks.
-- [ ] **Step 2** (`core/record.py`, `core/tests/test_record.py`): schema
+- [x] **Step 2** (`core/record.py`, `core/tests/test_record.py`): schema
       version 3 with Lock entries, the version 2 conversion, restore and
       drop reporting for Locks.
-- [ ] **Step 3** (`container.py`, `unit_ops.py`, `qa/actions.py`,
+- [x] **Step 3** (`container.py`, `unit_ops.py`, `qa/actions.py`,
       `tests/freecad/test_write.py`, `test_backs.py`,
       `test_qa_actions.py`, `test_editor_session.py`,
       `test_constraint_session.py`, `test_edit_history.py`): read and
       write the new record; `Session.set_lock`, `unlock_holders`,
       `set_active`, `delete_deactivated` and the open report treat a Lock
       as a constraint.
-- [ ] **Step 4** (`editor/session.py`, `editor/constraint_list.py`,
+- [x] **Step 4** (`editor/session.py`, `editor/constraint_list.py`,
       `editor/panel.py`, `editor/fields.py`, `editor/elevation.py`,
       `editor/view_editor.py`, `tests/freecad_gui/test_constraint_list.py`,
       `test_panel.py`, `test_refusals.py`,
@@ -148,7 +148,7 @@ padlocks for now; sh-055 replaces them with Sketcher-style dimensions.
       `ConstraintRow` with a lock kind; list order, checkbox and selection
       as above; padlocks and dimension colors follow the Lock's
       activation.
-- [ ] **Step 5** (`README.md`, `docs/scope-and-design.md`,
+- [x] **Step 5** (`README.md`, `docs/scope-and-design.md`,
       `freecad/Shelving/qa/cases/30-editor.toml`): the glossary's Size
       rule, Deactivated constraint and Constraint list entries, the
       layout model's lock paragraphs, the constraint list paragraph and
@@ -156,3 +156,8 @@ padlocks for now; sh-055 replaces them with Sketcher-style dimensions.
       creation order. Adjust any QA expectation about Lock row order.
 
 ## Review log
+
+### Round 1: APPROVED
+- **N1: Restoring Locks under a shared key assumes they were stored in tree order** (`freecad/Shelving/core/record.py:497`): Locks under a key several regions share (runs of axis wraps keyed `~|~`) go to those regions in tree order, but a version 3 record stores them in constraint order. Deleting wrap A's Lock of A, B reopens it on A; deactivating B, deleting A's Lock and relocking A reopens with A off and B on. The version 2 reader locked every region sharing the key, so an unlock never persisted there either. The Lock entry shape the Must Have fixes cannot tell such regions apart, so not blocking; take it to the user or the bug log. The shared-key test covers only constraint order matching tree order.
+- **N2: Unused TypedDict** (`freecad/Shelving/core/record.py:165`): `_LockMapEntryDoc` is never referenced; delete it or use it.
+- **N3: Implementation notes checked against the Advice**: split and merge Lock carry-over, `carry_constraints` walking `after.constraints`, sizeless deactivated Lock rows, rows tracking selected constraints only, `lock_ids` for the lock-only conflict wording, and no smoke mark change are all consistent. Every Must Have has a test; `pixi run tests` passed in full on 3a5b9ef.

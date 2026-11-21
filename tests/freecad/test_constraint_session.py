@@ -1,6 +1,6 @@
-"""Equal and even spacing through the editor's session against a real
-FreeCAD document: what opening a unit does with its stored constraints and
-what it reports, creating them, and deleting them as undo steps."""
+"""Locks, Equal and even spacing through the editor's session against a
+real FreeCAD document: what opening a unit does with its stored constraints
+and what it reports, creating them, and deleting them as undo steps."""
 
 import json
 from collections.abc import Callable, Iterator
@@ -18,18 +18,19 @@ from freecad.Shelving.core.layout import (
     Bay,
     Board,
     Constraint,
+    ConstraintId,
     Division,
     Equal,
     EvenSpacing,
+    Lock,
     RunEnd,
     Unit,
     constraint_regions,
+    region_lock,
 )
 from freecad.Shelving.editor.session import (
-    ConstraintRow,
     EditFailure,
     EditWarning,
-    LockRow,
     Session,
 )
 
@@ -162,6 +163,18 @@ def _opened(container: FreeCAD.DocumentObject) -> Session:
     session = Session(container)
     session.open()
     return session
+
+
+def _others(session: Session) -> tuple[Constraint, ...]:
+    """The session's constraints other than its Locks, in its order."""
+    return tuple(c for c in session.constraints if not isinstance(c, Lock))
+
+
+def _lock_id(session: Session, region_id: str) -> ConstraintId:
+    """The id of the Lock on the region named ``region_id``."""
+    found = region_lock(session.unit, region_id)
+    assert found is not None
+    return found.id
 
 
 def _stored(container: FreeCAD.DocumentObject) -> list[dict[str, object]]:
@@ -463,13 +476,15 @@ def test_a_conflicting_equal_is_refused_naming_its_locks_and_itself(
         assert session.set_size(200.0) is None
         assert session.set_lock(a, locked=True) is None
         snapshot = _snapshot(doc)
+        locks = {_lock_id(session, a), _lock_id(session, c)}
         session.select_items([a, c])
         refused = session.constrain_equal()
         assert isinstance(refused, EditFailure)
-        assert set(refused.region_ids) == {a, c}
-        assert len(refused.constraint_ids) == 1
-        assert session.constraints == ()
-        assert {a, c} <= set(session.flagged)
+        *named_locks, equal = refused.constraint_ids
+        assert set(named_locks) == locks
+        assert equal not in locks
+        assert _others(session) == ()
+        assert {*locks, equal} <= set(session.flagged)
         doc.recompute()
         assert _snapshot(doc) == snapshot
     finally:
@@ -487,12 +502,13 @@ def test_a_redundant_equal_is_kept_with_a_warning(doc: FreeCAD.Document) -> None
         assert session.set_lock(b, locked=True) is None
         session.select_items([a, b])
         assert session.constrain_equal() is None
-        (equal,) = session.constraints
+        (equal,) = _others(session)
         (warning,) = warnings
         assert "redundant" in warning.message
-        assert warning.region_ids == (a, b)
-        assert warning.constraint_ids == (equal.id,)
-        assert set(session.flagged) == {a, b, equal.id}
+        locks = (_lock_id(session, a), _lock_id(session, b))
+        assert warning.region_ids == ()
+        assert warning.constraint_ids == (*locks, equal.id)
+        assert set(session.flagged) == {*locks, equal.id}
     finally:
         session.close()
 
@@ -513,8 +529,8 @@ def test_a_lock_an_equal_implies_is_kept_with_a_warning_naming_it(
         assert warnings == []
         assert session.set_lock(b, locked=True) is None
         (warning,) = warnings
-        assert warning.region_ids == (a,)
-        assert warning.constraint_ids == (equal.id,)
+        assert warning.region_ids == ()
+        assert warning.constraint_ids == (equal.id, _lock_id(session, a))
     finally:
         session.close()
 
@@ -554,7 +570,7 @@ def test_the_open_message_points_to_the_constraints_list(
         session.close()
 
 
-def test_rows_list_locks_in_tree_order_then_constraints_as_made(
+def test_rows_list_every_constraint_locks_included_as_made(
     doc: FreeCAD.Document,
 ) -> None:
     column = _COLUMN.column.id
@@ -569,17 +585,16 @@ def test_rows_list_locks_in_tree_order_then_constraints_as_made(
         assert session.set_lock(c, locked=True) is None
         assert session.set_lock(a, locked=True) is None
         rows = session.constraint_rows()
-        assert [type(row) for row in rows] == [
-            LockRow,
-            LockRow,
-            ConstraintRow,
-            ConstraintRow,
+        spacing, equal, lock_c, lock_a = rows
+        assert [row.constraint_id for row in rows] == [
+            c.id for c in session.constraints
         ]
-        lock_a, lock_c, spacing, equal = rows
-        assert isinstance(lock_a, LockRow) and isinstance(lock_c, LockRow)
-        assert (lock_a.region_id, lock_c.region_id) == (a, c)
+        assert (lock_c.constraint_id, lock_a.constraint_id) == (
+            _lock_id(session, c),
+            _lock_id(session, a),
+        )
+        assert (lock_a.kind, lock_a.active) == ("lock", True)
         assert lock_a.size_mm == pytest.approx(_BAY_MM)
-        assert isinstance(spacing, ConstraintRow) and isinstance(equal, ConstraintRow)
         assert (spacing.kind, spacing.active, spacing.size_mm) == (
             "even_spacing",
             False,
@@ -592,7 +607,15 @@ def test_rows_list_locks_in_tree_order_then_constraints_as_made(
         # the Equal on them repeat each other.
         assert session.set_lock(b, locked=True) is None
         marked = [row.redundant for row in session.constraint_rows()]
-        assert marked == [True, True, False, False, True]
+        assert marked == [False, True, False, True, True]
+        assert session.set_constraint_active(_lock_id(session, c), False) is None
+        off = session.constraint_rows()[2]
+        assert (off.kind, off.active, off.size_mm, off.redundant) == (
+            "lock",
+            False,
+            None,
+            False,
+        )
     finally:
         session.close()
 
@@ -681,20 +704,20 @@ def test_a_refused_reactivation_names_the_conflict_and_changes_nothing(
         assert session.set_size(200.0) is None
         assert session.set_lock(a, locked=True) is None
         doc.recompute()
-        (equal,) = session.constraints
+        (equal,) = _others(session)
         snapshot = _snapshot(doc)
         record = _stored(container)
         steps = doc.UndoCount
         refused = session.set_constraint_active(equal.id, True)
         assert isinstance(refused, EditFailure)
-        assert set(refused.region_ids) == {a, c}
-        assert refused.constraint_ids == (equal.id,)
-        assert {a, c, equal.id} <= set(session.flagged)
+        named = (equal.id, _lock_id(session, c), _lock_id(session, a))
+        assert refused.constraint_ids == named
+        assert set(named) <= set(session.flagged)
         doc.recompute()
         assert doc.UndoCount == steps
         assert _snapshot(doc) == snapshot
         assert _stored(container) == record
-        assert [c.active for c in session.constraints] == [False]
+        assert [c.active for c in _others(session)] == [False]
     finally:
         session.close()
 
@@ -710,13 +733,17 @@ def test_a_redundant_reactivation_is_kept_with_a_warning(
         a, b, _c = _bays(session)
         assert session.set_lock(a, locked=True) is None
         assert session.set_lock(b, locked=True) is None
-        (equal,) = session.constraints
+        (equal,) = _others(session)
         assert session.set_constraint_active(equal.id, True) is None
-        assert [c.active for c in session.constraints] == [True]
+        assert [c.active for c in session.constraints] == [True, True, True]
         (warning,) = warnings
         assert "redundant" in warning.message
-        assert warning.region_ids == (a, b)
-        assert warning.constraint_ids == (equal.id,)
+        assert warning.region_ids == ()
+        assert warning.constraint_ids == (
+            equal.id,
+            _lock_id(session, a),
+            _lock_id(session, b),
+        )
     finally:
         session.close()
 
@@ -731,5 +758,105 @@ def test_a_lone_selected_constraint_reports_its_basis(doc: FreeCAD.Document) -> 
         assert measured.basis is Basis.CLEAR
         assert measured.clear_mm == pytest.approx(_BAY_MM)
         assert measured.spacing_mm == pytest.approx(_BAY_MM + _T_MM)
+    finally:
+        session.close()
+
+
+# --- locks as constraints ---------------------------------------------------
+
+
+def test_a_stored_deactivated_lock_opens_deactivated_and_holds_nothing(
+    doc: FreeCAD.Document, notified: list[str]
+) -> None:
+    container = _written(doc, Lock(_COLUMN.a.id, active=False))
+    session = _opened(container)
+    try:
+        (lock,) = session.constraints
+        assert isinstance(lock, Lock) and not lock.active
+        assert session.open_report.empty
+        assert notified == []
+        session.select(_bays(session)[1])
+        assert session.set_size(_BAY_MM + 100.0) is None
+        doc.recompute()
+        assert _heights_mm(doc) == pytest.approx(
+            (_BAY_MM - 50.0, _BAY_MM + 100.0, _BAY_MM - 50.0)
+        )
+        stored_lock, _typed = _stored(container)
+        assert stored_lock["kind"] == "lock"
+        assert stored_lock["active"] is False
+    finally:
+        session.close()
+
+
+def test_a_stored_lock_on_a_gone_opening_is_reported_with_the_others(
+    doc: FreeCAD.Document, notified: list[str]
+) -> None:
+    container = _written(
+        doc, Lock(_COLUMN.a.id), _equal(_COLUMN.a, _COLUMN.c), Lock(_COLUMN.c.id)
+    )
+    doc.removeObject("shelf_a")
+    doc.recompute()
+    session = _opened(container)
+    try:
+        (kept,) = session.constraints
+        assert isinstance(kept, Lock)
+        assert session.open_report.dropped == 2
+        assert len(notified) == 1
+        assert "removed" in notified[0]
+    finally:
+        session.close()
+
+
+def test_turning_a_lock_off_or_on_is_one_step_that_moves_no_board(
+    doc: FreeCAD.Document,
+) -> None:
+    container = _written(doc, Lock(_COLUMN.a.id))
+    session = _opened(container)
+    try:
+        doc.recompute()
+        snapshot = _snapshot(doc)
+        for active, name in (
+            (False, "Deactivate Constraint"),
+            (True, "Activate Constraint"),
+        ):
+            (lock,) = session.constraints
+            steps = doc.UndoCount
+            assert session.set_constraint_active(lock.id, active) is None
+            doc.recompute()
+            assert doc.UndoCount == steps + 1
+            assert doc.UndoNames[0] == name
+            assert _snapshot(doc) == snapshot
+            assert [c.active for c in session.constraints] == [active]
+            assert [entry["active"] for entry in _stored(container)] == [active]
+            doc.undo()
+            session.settle()
+            assert [c.active for c in session.constraints] == [not active]
+            doc.redo()
+            session.settle()
+            assert [c.active for c in session.constraints] == [active]
+    finally:
+        session.close()
+
+
+def test_delete_deactivated_removes_deactivated_locks_with_the_rest(
+    doc: FreeCAD.Document,
+) -> None:
+    container = _written(
+        doc,
+        Lock(_COLUMN.a.id, active=False),
+        _equal(_COLUMN.a, _COLUMN.b, active=False),
+        Lock(_COLUMN.c.id),
+    )
+    session = _opened(container)
+    try:
+        steps = doc.UndoCount
+        assert session.delete_deactivated() is None
+        (kept,) = session.constraints
+        assert isinstance(kept, Lock) and kept.active
+        assert doc.UndoCount == steps + 1
+        assert doc.UndoNames[0] == "Delete Deactivated Constraints"
+        doc.undo()
+        session.settle()
+        assert [c.active for c in session.constraints] == [False, False, True]
     finally:
         session.close()

@@ -17,9 +17,11 @@ from freecad.Shelving.core.layout import (
     Board,
     Division,
     Item,
+    Lock,
     Region,
     Unit,
     Void,
+    is_locked,
 )
 from freecad.Shelving.core.scan import (
     DEFAULT_SNAP_MM,
@@ -667,7 +669,7 @@ def _stepped_unit() -> Unit:
                             items=[
                                 Bay(size_mm=582.0),
                                 _b("top_right"),
-                                Void(size_mm=582.0, lock=Basis.CLEAR),
+                                Void(size_mm=582.0),
                             ],
                             size_mm=582.0,
                         ),
@@ -735,15 +737,21 @@ def _board_multiset(
     )
 
 
-def _region_locks(region: Bay | Void | Division) -> list[Basis | None]:
-    """Every non-``Board`` item's lock, pre-order."""
-    locks: list[Basis | None] = []
-    if isinstance(region, Division):
-        for item in region.items:
-            if not isinstance(item, Board):
-                locks.append(item.lock)
-                locks.extend(_region_locks(item))
-    return locks
+def _region_locks(unit: Unit) -> list[Basis | None]:
+    """The basis of the active Lock on every non-root region, pre-order,
+    ``None`` for a region with none."""
+    locks = {c.region_id: c.basis for c in unit.constraints if isinstance(c, Lock)}
+
+    def walk(region: Region) -> list[Basis | None]:
+        found: list[Basis | None] = []
+        if isinstance(region, Division):
+            for item in region.items:
+                if not isinstance(item, Board):
+                    found.append(locks.get(item.id))
+                    found.extend(walk(item))
+        return found
+
+    return walk(unit.root)
 
 
 @pytest.mark.parametrize("name", sorted(ROUND_TRIP_UNITS))
@@ -766,7 +774,7 @@ def test_a_scan_locks_no_compartment() -> None:
         for s in expand(original)
     ]
     result = scan(boxes)
-    assert _region_locks(result.unit.root) == [None] * 6
+    assert _region_locks(result.unit) == [None] * 6
 
 
 def test_regions_take_their_measured_sizes() -> None:
@@ -778,7 +786,7 @@ def test_regions_take_their_measured_sizes() -> None:
         for s in expand(original)
     ]
     result = scan(boxes)
-    assert _region_locks(result.unit.root) == [None] * 4
+    assert _region_locks(result.unit) == [None] * 4
     root = _division(result.unit.root)
     column = _division(_division(root.items[1]).items[1])
     lower, _shelf, upper = column.items
@@ -795,11 +803,16 @@ def test_a_scan_locks_a_void_beside_a_compartment() -> None:
         Box(name=s.node_id, corner_mm=s.placement, size_mm=s.size)
         for s in expand(original)
     ]
-    root = _division(scan(boxes).unit.root)
+    unit = scan(boxes).unit
+    root = _division(unit.root)
     right = _division(_division(root.items[1]).items[3])
     bay, _top, void = right.items
-    assert isinstance(void, Void) and void.lock is Basis.CLEAR
-    assert isinstance(bay, Bay) and bay.lock is None
+    assert isinstance(void, Void) and isinstance(bay, Bay)
+    assert [
+        (c.region_id, c.basis, c.active)
+        for c in unit.constraints
+        if isinstance(c, Lock)
+    ] == [(void.id, Basis.CLEAR, True)]
 
 
 def _kinds_names(division: Division) -> tuple[str, list[str]]:
@@ -1123,7 +1136,7 @@ def test_short_divider_between_differently_sized_bays_keeps_its_own_height() -> 
     assert spaces[void_gap_2.id].size.x_mm == pytest.approx(379.0)
     wraps = (divider_wrap, right_side_wrap, divider2_wrap)
     for wrap in wraps:
-        assert wrap.lock is Basis.CLEAR
+        assert is_locked(result.unit, wrap.id)
         assert wrap.size_mm == pytest.approx(18.0)
         assert spaces[wrap.id].size.x_mm == pytest.approx(18.0)
 

@@ -24,7 +24,7 @@ def _column(
 ) -> tuple[EditUnitPanel, list[str]]:
     """Edit Unit with the bay split into a column of three, A locked, an
     Equal on A and B and an even spacing over all three, and A, B and C
-    bottom to top: rows lock A, Equal, Even spacing."""
+    bottom to top: rows Equal, Even spacing, lock A."""
     panel = edit_unit(container, driver)
     session = panel.session
     session.select(bay_ids(session.unit.root)[0])
@@ -84,22 +84,22 @@ def _selected_rows(panel: EditUnitPanel) -> list[int]:
     ]
 
 
-def test_rows_select_their_constraints_and_openings_in_the_view(
+def test_rows_select_their_constraints_in_the_view(
     unit: FreeCAD.DocumentObject, driver: ViewDriver
 ) -> None:
-    panel, (a, _b, _c) = _column(unit, driver)
+    panel, (_a, _b, _c) = _column(unit, driver)
     session = panel.session
-    equal, spacing = session.constraints
-    _click_row(panel, 1, driver)
+    equal, spacing, lock = session.constraints
+    _click_row(panel, 0, driver)
     assert session.selected_constraints == (equal.id,)
     assert session.selected_items == ()
-    _click_row(panel, 2, driver, adding=True)
+    _click_row(panel, 1, driver, adding=True)
     assert session.selected_constraints == (equal.id, spacing.id)
-    assert _selected_rows(panel) == [1, 2]
-    _click_row(panel, 0, driver)
-    assert session.selected_constraints == ()
-    assert session.selected_items == (a,)
-    assert _selected_rows(panel) == [0]
+    assert _selected_rows(panel) == [0, 1]
+    _click_row(panel, 2, driver)
+    assert session.selected_constraints == (lock.id,)
+    assert session.selected_items == ()
+    assert _selected_rows(panel) == [2]
     click_task_button("Close", driver)
 
 
@@ -109,22 +109,22 @@ def test_picks_in_the_view_select_their_rows(
     panel, (a, b, _c) = _column(unit, driver)
     session = panel.session
     editor = editor_of(panel)
-    _equal, spacing = session.constraints
+    _equal, spacing, _lock = session.constraints
     icon = next(
         node.icon for node in editor.icon_nodes if node.icon.constraint_id == spacing.id
     )
     driver.click(editor.icon_center(icon))
     assert session.selected_constraints == (spacing.id,)
-    assert _selected_rows(panel) == [2]
+    assert _selected_rows(panel) == [1]
     click_region(panel, a, driver)
     assert session.selected_items == (a,)
-    assert _selected_rows(panel) == [0]
+    assert _selected_rows(panel) == []
     click_region(panel, b, driver)
     assert _selected_rows(panel) == []
     shelf = _board_after(session.unit.root, a)
     assert shelf is not None
     driver.click(editor.icon_center(icon))
-    assert _selected_rows(panel) == [2]
+    assert _selected_rows(panel) == [1]
     zoom_on(editor, shelf, 300.0, driver)
     driver.click(board_targets(editor, shelf)["Face"])
     assert session.selected_items == (shelf,)

@@ -13,9 +13,16 @@ import FreeCADGui
 import pytest
 from PySide6 import QtCore, QtGui, QtTest, QtWidgets
 
-from freecad.Shelving.core.edit import is_locked
 from freecad.Shelving.core.geometry import Space
-from freecad.Shelving.core.layout import Board, Division, Region
+from freecad.Shelving.core.layout import (
+    Board,
+    ConstraintId,
+    Division,
+    Region,
+    Unit,
+    is_locked,
+    region_lock,
+)
 from freecad.Shelving.editor import overlay
 from freecad.Shelving.editor import view_editor as view_editor_module
 from freecad.Shelving.editor.elevation import (
@@ -153,16 +160,11 @@ def _same_spaces(a: Mapping[str, Space], b: Mapping[str, Space]) -> bool:
     )
 
 
-def _locked(region: Region, region_id: str) -> bool:
-    if region.id == region_id:
-        return is_locked(region)
-    if isinstance(region, Division):
-        return any(
-            _locked(item, region_id)
-            for item in region.items
-            if not isinstance(item, Board)
-        )
-    return False
+def _lock_id(unit: Unit, region_id: str) -> ConstraintId:
+    """The id of the Lock on the region named ``region_id``."""
+    found = region_lock(unit, region_id)
+    assert found is not None
+    return found.id
 
 
 def _rounded(point: FreeCAD.Vector) -> tuple[float, float, float]:
@@ -534,7 +536,7 @@ def test_a_padlock_locks_and_unlocks_its_opening_moving_nothing(
     names = list(doc.UndoNames)
     picked = selection()
     _press(editor, lower, driver)
-    assert _locked(session.unit.root, lower)
+    assert is_locked(session.unit, lower)
     assert list(doc.UndoNames) == ["Lock Opening", *names]
     assert _same_spaces(session.spaces, spaces)
     assert session.selected_id == shelf
@@ -549,13 +551,13 @@ def test_a_padlock_locks_and_unlocks_its_opening_moving_nothing(
     _press(editor, upper, driver)
     assert reported == []
     assert notification_count() == count
-    assert _locked(session.unit.root, upper)
+    assert is_locked(session.unit, upper)
     assert list(doc.UndoNames) == ["Lock Opening", "Lock Opening", *names]
     assert _same_spaces(session.spaces, spaces)
     _assert_drawn(editor, _node(editor, upper).drawn, locked=True)
     assert panel.unit_fields["height"].read_only
     _press(editor, upper, driver)
-    assert not _locked(session.unit.root, upper)
+    assert not is_locked(session.unit, upper)
     assert not panel.unit_fields["height"].read_only
     assert list(doc.UndoNames) == [
         "Unlock Opening",
@@ -566,7 +568,7 @@ def test_a_padlock_locks_and_unlocks_its_opening_moving_nothing(
     names = list(doc.UndoNames)
 
     _press(editor, lower, driver)
-    assert not _locked(session.unit.root, lower)
+    assert not is_locked(session.unit, lower)
     assert list(doc.UndoNames) == ["Unlock Opening", *names]
     assert _same_spaces(session.spaces, spaces)
     assert editor.field is None
@@ -575,7 +577,7 @@ def test_a_padlock_locks_and_unlocks_its_opening_moving_nothing(
     gui_step("Std_Undo", driver)
     # Undo rescans the unit, which names its regions afresh.
     lower = bay_ids(session.unit.root)[0]
-    assert _locked(session.unit.root, lower)
+    assert is_locked(session.unit, lower)
     _assert_drawn(editor, _node(editor, lower).drawn, locked=True)
     click_task_button("Close", driver)
 
@@ -633,7 +635,7 @@ def test_a_padlock_wins_a_press_over_a_text_tile(
     assert label_on_huge_tiles(editor.overlay.labels, editor._project, huge, x_px, y_px)
     monkeypatch.setattr(view_editor_module, "label_at", label_on_huge_tiles)
     driver.click(center)
-    assert _locked(panel.session.unit.root, lower)
+    assert is_locked(panel.session.unit, lower)
     assert editor.field is None
     monkeypatch.undo()
     click_task_button("Close", driver)
@@ -660,7 +662,10 @@ def test_a_refused_edit_outlines_its_locks_until_the_next_edit_or_selection(
     def refuse() -> None:
         failure = session.resize("height", 1000.0)
         assert failure is not None
-        assert failure.region_ids == (lower, upper)
+        assert failure.constraint_ids == (
+            _lock_id(session.unit, lower),
+            _lock_id(session.unit, upper),
+        )
         panel._refresh()
         driver.pump()
         assert _holding_outlines(editor) == expected
@@ -698,9 +703,12 @@ def test_a_redundant_lock_warns_and_outlines_the_locks_it_repeats(
     row = next(item for item in root.items if isinstance(item, Division))
     count = notification_count()
     _press(editor, row.id, driver)
-    assert _locked(session.unit.root, row.id)
+    assert is_locked(session.unit, row.id)
     assert notification_count() == count + 1
-    assert session.flagged == (lower, upper)
+    assert session.flagged == (
+        _lock_id(session.unit, lower),
+        _lock_id(session.unit, upper),
+    )
     assert _holding_outlines(editor) == {
         _corners(editor, lower),
         _corners(editor, upper),
@@ -724,7 +732,7 @@ def test_typing_a_size_closes_the_padlock(
     QtTest.QTest.keyClicks(field_.line_edit, "250")
     QtTest.QTest.keyClick(field_.line_edit, QtCore.Qt.Key.Key_Return)
     driver.pump()
-    assert _locked(session.unit.root, upper)
+    assert is_locked(session.unit, upper)
     _assert_drawn(editor, _node(editor, upper).drawn, locked=True)
     click_task_button("Close", driver)
 
@@ -747,7 +755,7 @@ def test_a_held_board_shows_a_padlock_that_unlocks_the_openings_holding_it(
     driver.pump()
     assert editor.arrow is None
     held = editor.held
-    assert held is not None and held.holders == (bottom,)
+    assert held is not None and held.holders == (_lock_id(session.unit, bottom),)
     assert editor.held_marker.shown
     _assert_drawn(editor, editor.held_marker.drawn, locked=True)
     (at,) = overlay_nodes.markers(editor.root, editor.held_marker.root)
@@ -771,8 +779,8 @@ def test_a_held_board_shows_a_padlock_that_unlocks_the_openings_holding_it(
     names = list(doc.UndoNames)
     driver.click(center)
     assert list(doc.UndoNames) == ["Unlock Board", *names]
-    assert not _locked(session.unit.root, bottom)
-    assert _locked(session.unit.root, middle)
+    assert not is_locked(session.unit, bottom)
+    assert is_locked(session.unit, middle)
     assert _same_spaces(session.spaces, spaces)
     assert session.selected_id == lower_shelf
     assert editor.arrow is not None and editor.arrow.board_id == lower_shelf
@@ -782,6 +790,37 @@ def test_a_held_board_shows_a_padlock_that_unlocks_the_openings_holding_it(
         _close_rgb(outline.rgb, locked_rgb)
         for outline in overlay_nodes.outlines(editor.root)
     )
+    click_task_button("Close", driver)
+
+
+def test_a_deactivated_lock_shows_an_open_padlock_that_turns_it_back_on(
+    unit: FreeCAD.DocumentObject, driver: ViewDriver, dimension_style: None
+) -> None:
+    panel = edit_unit(unit, driver)
+    editor = editor_of(panel)
+    add_board(panel, "vertical", driver)
+    session = panel.session
+    doc = unit.Document
+    lower, _upper = bay_ids(session.unit.root)
+    _press(editor, lower, driver)
+    lock_id = _lock_id(session.unit, lower)
+    assert session.set_constraint_active(lock_id, False) is None
+    panel._refresh()
+    driver.pump()
+    assert not _padlock(editor, lower).locked
+    _assert_drawn(editor, _node(editor, lower).drawn, locked=False)
+    assert _label_of(editor, lower).color == "unlocked"
+    spaces = dict(session.spaces)
+    names = list(doc.UndoNames)
+    _press(editor, lower, driver)
+    found = region_lock(session.unit, lower)
+    assert found is not None
+    assert (found.id, found.active) == (lock_id, True)
+    assert len(session.constraints) == 1
+    assert list(doc.UndoNames) == ["Lock Opening", *names]
+    assert _same_spaces(session.spaces, spaces)
+    _assert_drawn(editor, _node(editor, lower).drawn, locked=True)
+    assert _label_of(editor, lower).color == "locked"
     click_task_button("Close", driver)
 
 
@@ -830,7 +869,7 @@ def test_a_drag_carries_both_shelves_around_a_locked_opening(
     session = panel.session
     middle = bay_ids(session.unit.root)[1]
     _press(editor, middle, driver)
-    assert _locked(session.unit.root, middle)
+    assert is_locked(session.unit, middle)
     middle_mm = session.spaces[middle].size.z_mm
     before_mm = [session.spaces[shelf].origin.z_mm for shelf in shelves]
     shelf = shelves[0] if dragged == "lower" else shelves[1]
@@ -849,7 +888,7 @@ def test_a_drag_carries_both_shelves_around_a_locked_opening(
     assert abs(moved_mm[0]) > 5.0, moved_mm
     assert moved_mm[0] == pytest.approx(moved_mm[1], abs=_TOL_MM)
     assert session.spaces[middle].size.z_mm == pytest.approx(middle_mm, abs=_TOL_MM)
-    assert _locked(session.unit.root, middle)
+    assert is_locked(session.unit, middle)
     click_task_button("Close", driver)
 
 

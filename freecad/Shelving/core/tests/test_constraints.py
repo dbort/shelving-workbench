@@ -1,4 +1,4 @@
-"""Equal and even spacing between openings: creating them, how the solve
+"""Locks, Equal and even spacing on openings: creating them, how the solve
 honors them, what edits drop them, and what they report, on sh-046's column
 of 18 mm boards."""
 
@@ -32,23 +32,26 @@ from freecad.Shelving.core.layout import (
     Basis,
     Bay,
     Board,
+    Constraint,
     ConstraintId,
     Division,
     Equal,
     EvenSpacing,
     FixedPoint,
     Item,
+    Lock,
     Region,
     RunEnd,
     Unit,
     constraint_regions,
+    is_locked,
+    region_lock,
     spacing_group,
 )
 from freecad.Shelving.core.solver import (
     LayoutSolveError,
     constraint_spread_mm,
     duplicated_constraint,
-    duplicated_locks,
     redundant_rules,
     size_fixed_by,
     solve,
@@ -105,6 +108,93 @@ def _a200_b400() -> Unit:
     return unlock(typed, "A")
 
 
+def _lock_id(unit: Unit, region_id: str) -> ConstraintId:
+    """The id of the Lock on ``region_id``, active or not."""
+    found = region_lock(unit, region_id)
+    assert found is not None
+    return found.id
+
+
+def _others(unit: Unit) -> tuple[Constraint, ...]:
+    """``unit``'s constraints other than its Locks, in its order."""
+    return tuple(c for c in unit.constraints if not isinstance(c, Lock))
+
+
+# --- Lock ----------------------------------------------------------------
+
+
+def test_locking_appends_one_active_lock_and_moves_nothing() -> None:
+    unit = add_equal(_column(), ["B", "C"])
+    locked = lock(unit, "A")
+    *kept, added = locked.constraints
+    assert tuple(kept) == unit.constraints
+    assert isinstance(added, Lock)
+    assert (added.region_id, added.basis, added.active) == ("A", Basis.CLEAR, True)
+    assert solve(locked) == solve(unit)
+    assert lock(locked, "A") is locked
+
+
+def test_an_active_lock_holds_and_a_deactivated_one_does_not() -> None:
+    unit = lock(_column(), "A")
+    assert _bay_mm(set_size(unit, "B", 400.0, Basis.CLEAR)) == pytest.approx(
+        {"A": 300.0, "B": 400.0, "C": 200.0}
+    )
+    off = set_constraint_active(unit, _lock_id(unit, "A"), False)
+    assert solve(off) == solve(unit)
+    assert not is_locked(off, "A")
+    assert _bay_mm(set_size(off, "B", 400.0, Basis.CLEAR)) == pytest.approx(
+        {"A": 250.0, "B": 400.0, "C": 250.0}
+    )
+
+
+def test_turning_a_lock_back_on_moves_nothing() -> None:
+    unit = lock(_column((280.0, 300.0, 320.0)), "A")
+    off = set_constraint_active(unit, _lock_id(unit, "A"), False)
+    moved = move_board(off, "s1", 18.0 + 250.0)
+    on = set_constraint_active(moved, _lock_id(unit, "A"), True)
+    assert solve(on) == solve(moved)
+    assert _bay_mm(on)["A"] == pytest.approx(250.0)
+    assert is_locked(on, "A")
+
+
+def test_typing_into_a_region_turns_its_deactivated_lock_on() -> None:
+    unit = lock(_column(), "A")
+    off = set_constraint_active(unit, _lock_id(unit, "A"), False)
+    typed = set_size(off, "A", 250.0, Basis.CLEAR)
+    (only,) = typed.constraints
+    assert isinstance(only, Lock)
+    assert (only.id, only.region_id, only.active) == (_lock_id(unit, "A"), "A", True)
+    assert _bay_mm(typed)["A"] == pytest.approx(250.0)
+
+
+def test_locking_a_deactivated_lock_turns_it_on_keeping_its_basis() -> None:
+    unit = set_size(_column(), "A", 318.0, Basis.WITH_NEXT)
+    off = set_constraint_active(unit, _lock_id(unit, "A"), False)
+    on = lock(off, "A")
+    assert [
+        (c.region_id, c.basis, c.active) for c in on.constraints if isinstance(c, Lock)
+    ] == [("A", Basis.WITH_NEXT, True)]
+    assert unlock(off, "A") is off
+
+
+def test_equal_against_two_locks_names_both_locks_and_the_equal() -> None:
+    unit = lock(set_size(_column(), "C", 200.0, Basis.CLEAR), "A")
+    with pytest.raises(LayoutSolveError) as err:
+        add_equal(unit, ["A", "C"])
+    assert err.value.reason == "conflict"
+    *locks, equal = err.value.constraint_ids
+    assert set(locks) == {_lock_id(unit, "A"), _lock_id(unit, "C")}
+    assert set(err.value.lock_ids) == set(locks)
+    assert equal not in {c.id for c in unit.constraints}
+
+
+def test_a_locks_basis_changes_without_moving_anything() -> None:
+    unit = lock(_thick_s2_column(), "B")
+    spaced = set_constraint_basis(unit, _lock_id(unit, "B"), Basis.WITH_NEXT)
+    assert [c.basis for c in spaced.constraints] == [Basis.WITH_NEXT]
+    assert solve(spaced) == solve(unit)
+
+
 # --- Equal ---------------------------------------------------------------
 
 
@@ -123,7 +213,7 @@ def test_without_an_equal_a_typed_size_moves_only_the_nearest_board() -> None:
 
 def test_equal_on_three_openings_chains_two_constraints_in_selection_order() -> None:
     unit = add_equal(_column(), ["A", "B", "C"])
-    assert [c.region_ids for c in unit.constraints if isinstance(c, Equal)] == [
+    assert [c.region_ids for c in _others(unit) if isinstance(c, Equal)] == [
         ("A", "B"),
         ("B", "C"),
     ]
@@ -159,30 +249,22 @@ def test_equal_across_a_width_and_a_height_is_refused() -> None:
         add_equal(split, ["B", left.id])
 
 
-def test_equal_against_two_locks_of_different_sizes_is_a_conflict() -> None:
-    unit = lock(set_size(_column(), "C", 200.0, Basis.CLEAR), "A")
-    with pytest.raises(LayoutSolveError) as err:
-        add_equal(unit, ["A", "C"])
-    assert err.value.reason == "conflict"
-    assert {"A", "C"} <= set(err.value.region_ids)
-    assert len(err.value.constraint_ids) == 1
-
-
 def test_a_lock_an_equal_already_implies_is_redundant() -> None:
     unit = lock(add_equal(_column(), ["A", "B"]), "A")
     locked = lock(unit, "B")
-    (equal,) = locked.constraints
-    duplicates = duplicated_locks(locked, solve(locked), "B", Axis.Z)
+    (equal,) = _others(locked)
+    b_lock = _lock_id(locked, "B")
+    duplicates = duplicated_constraint(locked, solve(locked), b_lock, Axis.Z)
     assert duplicates is not None
-    assert {"A", equal.id} <= set(duplicates)
+    assert {_lock_id(locked, "A"), equal.id} <= set(duplicates)
 
 
 def test_an_equal_two_locks_already_imply_is_redundant() -> None:
     unit = lock(lock(_column(), "A"), "B")
     equal_unit = add_equal(unit, ["A", "B"])
-    (equal,) = equal_unit.constraints
+    (equal,) = _others(equal_unit)
     duplicates = duplicated_constraint(equal_unit, solve(equal_unit), equal.id, Axis.Z)
-    assert duplicates == ("A", "B")
+    assert duplicates == (_lock_id(unit, "A"), _lock_id(unit, "B"))
     assert duplicated_constraint(unit, solve(unit), equal.id, Axis.Z) is None
 
 
@@ -346,7 +428,7 @@ def test_an_equal_on_two_of_three_openings_leaves_the_shelves_free() -> None:
 
 def test_a_lock_and_an_even_spacing_together_name_both() -> None:
     unit = lock(add_even_spacing(_column(), ["A", "C"]), "A")
-    (spacing,) = unit.constraints
+    (spacing,) = _others(unit)
     held = held_by(unit, "s1")
     assert held is not None
     assert held.constraints == (spacing.id,)
@@ -354,8 +436,8 @@ def test_a_lock_and_an_even_spacing_together_name_both() -> None:
 
 def test_an_even_spacing_and_a_lock_fix_the_column_height() -> None:
     unit = lock(add_even_spacing(_column(), ["A", "C"]), "B")
-    (spacing,) = unit.constraints
-    assert size_fixed_by(unit, solve(unit), Axis.Z) == ("B", spacing.id)
+    (spacing,) = _others(unit)
+    assert size_fixed_by(unit, solve(unit), Axis.Z) == (spacing.id, _lock_id(unit, "B"))
 
 
 def test_a_deactivated_constraint_plays_no_part() -> None:
@@ -416,8 +498,12 @@ def _with_equal(unit: Unit, first: str, second: str, active: bool = True) -> Uni
 
 def test_two_locks_and_an_equal_on_them_are_all_redundant() -> None:
     unit = add_equal(lock(lock(_column(), "A"), "B"), ["A", "B"])
-    (equal,) = unit.constraints
-    assert redundant_rules(unit, solve(unit)) == {"A", "B", equal.id}
+    (equal,) = _others(unit)
+    assert redundant_rules(unit, solve(unit)) == {
+        _lock_id(unit, "A"),
+        _lock_id(unit, "B"),
+        equal.id,
+    }
     freed = unlock(unit, "B")
     assert redundant_rules(freed, solve(freed)) == frozenset()
 
@@ -455,13 +541,16 @@ def test_reactivating_an_equal_moves_the_boards_least() -> None:
 def test_reactivating_against_two_locks_is_a_conflict() -> None:
     locked = lock(set_size(_column(), "C", 200.0, Basis.CLEAR), "A")
     unit = _with_equal(locked, "A", "C", active=False)
-    (equal,) = unit.constraints
+    (equal,) = _others(unit)
     with pytest.raises(LayoutSolveError) as caught:
         set_constraint_active(unit, equal.id, True)
     assert caught.value.reason == "conflict"
-    assert set(caught.value.region_ids) == {"A", "C"}
-    assert caught.value.constraint_ids == (equal.id,)
-    assert [c.active for c in unit.constraints] == [False]
+    assert caught.value.constraint_ids == (
+        _lock_id(unit, "C"),
+        _lock_id(unit, "A"),
+        equal.id,
+    )
+    assert [c.active for c in _others(unit)] == [False]
 
 
 def test_activating_an_unknown_constraint_is_refused() -> None:
@@ -471,14 +560,13 @@ def test_activating_an_unknown_constraint_is_refused() -> None:
 
 def test_removing_the_deactivated_keeps_the_active_and_every_lock() -> None:
     unit = add_even_spacing(add_equal(lock(_column(), "A"), ["A", "B"]), ["A", "C"])
-    equal, spacing = unit.constraints
+    unit = lock(unit, "C")
+    a_lock, equal, spacing, c_lock = unit.constraints
     unit = set_constraint_active(unit, equal.id, False)
+    unit = set_constraint_active(unit, c_lock.id, False)
     cleared = remove_deactivated(unit)
-    assert cleared.constraints == (spacing,)
+    assert cleared.constraints == (a_lock, spacing)
     assert solve(cleared) == solve(unit)
-    root = cleared.root
-    assert isinstance(root, Division)
-    assert [item.id for item in root.items if getattr(item, "lock", None)] == ["A"]
 
 
 def _thick_s2_column() -> Unit:

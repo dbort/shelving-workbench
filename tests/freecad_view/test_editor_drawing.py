@@ -13,8 +13,8 @@ import FreeCADGui
 import pytest
 from PySide6 import QtCore
 
-from freecad.Shelving.core.edit import is_locked, measure
-from freecad.Shelving.core.layout import Board, Division, Region
+from freecad.Shelving.core.edit import measure
+from freecad.Shelving.core.layout import Board, Division, Region, is_locked
 from freecad.Shelving.editor import view_editor as view_editor_module
 from freecad.Shelving.editor.elevation import (
     ElevationFrame,
@@ -399,7 +399,7 @@ def test_each_region_in_a_run_has_a_sketcher_dimension(
             for item in region.items:
                 if isinstance(item, Board):
                     continue
-                if is_locked(item):
+                if is_locked(session.unit, item.id):
                     rgb = _rgb("ConstrainedDimColor", 0)
                 else:
                     rgb = _rgb("NonDrivingConstrDimColor", 0)
