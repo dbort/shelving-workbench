@@ -609,8 +609,9 @@ holding no rows and a grayed Delete Deactivated button."""
     "Click the padlock on the dimension of the opening above it.",
   ]
   expected = """
-One notification says the lock is redundant. The list shows two Lock rows,
-then an Equal row, each with its icon and its size. All three carry a
+One notification says the lock is redundant. The list shows an Equal row,
+then two Lock rows in the order you locked them, each with its box checked,
+its icon and its size. All three carry a
 warning icon, and hovering one says it is redundant. The rows fit the panel
 at its default width with no horizontal scroll bar, and every icon is as
 sharp as the text beside it and easy to recognize."""

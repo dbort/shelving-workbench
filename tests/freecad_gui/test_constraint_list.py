@@ -21,8 +21,10 @@ from freecad.Shelving.core.layout import (
     Division,
     Equal,
     EvenSpacing,
+    Lock,
     RunEnd,
     Unit,
+    region_lock,
 )
 from freecad.Shelving.editor import panel as panel_module
 from freecad.Shelving.editor.constraint_list import (
@@ -32,7 +34,6 @@ from freecad.Shelving.editor.constraint_list import (
     TEXT_COLUMN,
     ConstraintList,
 )
-from freecad.Shelving.editor.elevation import ConstraintKind
 from freecad.Shelving.editor.overlay import (
     TILE_PAD_PX,
     Tile,
@@ -41,7 +42,7 @@ from freecad.Shelving.editor.overlay import (
     view_style,
 )
 from freecad.Shelving.editor.panel import EditUnitPanel
-from freecad.Shelving.editor.session import ConstraintRow
+from freecad.Shelving.editor.session import RowKind
 
 _T_MM = 18.0
 _BAY_MM = 288.0
@@ -207,11 +208,11 @@ def test_the_group_follows_the_unit_group_and_shows_with_no_rows(
 
 
 def _drawn_icon(
-    tree: QtWidgets.QTreeWidget, kind: ConstraintKind | None, active: bool = True
+    tree: QtWidgets.QTreeWidget, kind: RowKind, active: bool = True
 ) -> QtGui.QIcon:
     """The 3D view's own image for ``kind``, with its corner X unless
-    ``active``, or the closed padlock for a lock (``None``), at the list's
-    icon size on a tile of its background."""
+    ``active``, or the closed padlock for a lock, at the list's icon size on
+    a tile of its background."""
     side_px = tree.style().pixelMetric(QtWidgets.QStyle.PixelMetric.PM_SmallIconSize)
     ratio = tree.devicePixelRatioF()
     base = tree.palette().color(QtGui.QPalette.ColorRole.Base)
@@ -220,7 +221,7 @@ def _drawn_icon(
     )
     style = view_style(0)
     device_px = round(side_px * ratio)
-    if kind is None:
+    if kind == "lock":
         image = padlock_image(True, style.locked_rgb, tile, device_px)
     else:
         image = constraint_icon_image(kind, style.icon_rgb, tile, device_px, active)
@@ -235,11 +236,13 @@ def test_rows_show_their_kind_size_and_the_views_icons(editing: _Editing) -> Non
     editing.panel._refresh()
     tree = editing.rows.tree
     size = FreeCAD.Units.Quantity(_BAY_MM, FreeCAD.Units.Length).UserString
-    lock, equal, spacing = (editing.item(i) for i in range(3))
+    # The lock was made after the Equal and the even spacing, so it comes
+    # after them.
+    equal, spacing, lock = (editing.item(i) for i in range(3))
     assert "Lock" in lock.text(TEXT_COLUMN) and size in lock.text(TEXT_COLUMN)
     assert "Equal" in equal.text(TEXT_COLUMN) and size in equal.text(TEXT_COLUMN)
     assert spacing.text(TEXT_COLUMN) == "Even spacing"
-    padlock = _drawn_icon(tree, None)
+    padlock = _drawn_icon(tree, "lock")
     equals = _drawn_icon(tree, "equal")
     spaced = _drawn_icon(tree, "even_spacing")
     assert _image(padlock) != _image(equals)
@@ -267,16 +270,76 @@ def test_a_selected_rows_icon_keeps_its_colors(editing: _Editing) -> None:
         assert selected == normal, index
 
 
-def test_a_constraint_row_has_a_checkbox_a_lock_row_none(editing: _Editing) -> None:
+def test_every_row_has_a_checkbox_and_unchecking_a_lock_turns_it_off(
+    editing: _Editing,
+) -> None:
     a, _b, _c = editing.bays()
-    assert editing.panel.session.set_lock(a, locked=True) is None
+    session = editing.panel.session
+    assert session.set_lock(a, locked=True) is None
     editing.panel._refresh()
-    lock, equal, spacing = (editing.item(i) for i in range(3))
+    equal, spacing, lock = (editing.item(i) for i in range(3))
     checkable = QtCore.Qt.ItemFlag.ItemIsUserCheckable
-    assert not lock.flags() & checkable
-    assert equal.flags() & checkable
+    assert lock.flags() & checkable and equal.flags() & checkable
+    assert lock.checkState(TEXT_COLUMN) == QtCore.Qt.CheckState.Checked
     assert equal.checkState(TEXT_COLUMN) == QtCore.Qt.CheckState.Checked
     assert spacing.checkState(TEXT_COLUMN) == QtCore.Qt.CheckState.Unchecked
+    lock.setCheckState(TEXT_COLUMN, QtCore.Qt.CheckState.Unchecked)
+    _process_events()
+    found = region_lock(session.unit, a)
+    assert found is not None and not found.active
+    assert session.container.Document.UndoNames[0] == "Deactivate Constraint"
+    assert editing.item(2).checkState(TEXT_COLUMN) == QtCore.Qt.CheckState.Unchecked
+
+
+def test_a_deactivated_lock_rows_icon_is_grayed_in_qts_disabled_mode(
+    editing: _Editing,
+) -> None:
+    a, _b, _c = editing.bays()
+    session = editing.panel.session
+    assert session.set_lock(a, locked=True) is None
+    found = region_lock(session.unit, a)
+    assert found is not None
+    assert session.set_constraint_active(found.id, False) is None
+    editing.panel._refresh()
+    tree = editing.rows.tree
+    side_px = tree.style().pixelMetric(QtWidgets.QStyle.PixelMetric.PM_SmallIconSize)
+    size = QtCore.QSize(side_px, side_px)
+    ratio = tree.devicePixelRatioF()
+    padlock = _drawn_icon(tree, "lock")
+    grayed = padlock.pixmap(size, ratio, QtGui.QIcon.Mode.Disabled).toImage()
+    icon = editing.item(2).icon(TEXT_COLUMN)
+    for mode in (QtGui.QIcon.Mode.Normal, QtGui.QIcon.Mode.Selected):
+        assert icon.pixmap(size, ratio, mode).toImage() == grayed
+    assert grayed != padlock.pixmap(size, ratio).toImage()
+
+
+def test_selecting_a_lock_row_selects_the_lock_and_its_basis_moves_nothing(
+    editing: _Editing,
+) -> None:
+    a, _b, _c = editing.bays()
+    session = editing.panel.session
+    assert session.set_lock(a, locked=True) is None
+    editing.panel._refresh()
+    found = region_lock(session.unit, a)
+    assert found is not None
+    editing.item(2).setSelected(True)
+    _process_events()
+    assert session.selected_constraints == (found.id,)
+    assert session.selected_items == ()
+    combo = editing.panel.basis_combo
+    assert combo.isEnabled()
+    assert combo.currentIndex() == 0
+    spaces = session.spaces
+    combo.setCurrentIndex(1)
+    _process_events()
+    changed = region_lock(session.unit, a)
+    assert changed is not None
+    assert (changed.id, changed.basis, changed.active) == (
+        found.id,
+        Basis.WITH_NEXT,
+        True,
+    )
+    assert session.spaces == spaces
 
 
 @pytest.mark.smoke("turn a constraint off and on in the constraint list")
@@ -313,31 +376,31 @@ def test_a_refused_activation_stays_unchecked_and_reports(
     assert session.set_size(200.0) is None
     assert session.set_lock(a, locked=True) is None
     editing.panel._refresh()
-    spacing = editing.item(2)
+    spacing = editing.item(0)
     spacing.setCheckState(TEXT_COLUMN, QtCore.Qt.CheckState.Checked)
     _process_events()
     assert len(reported) == 1
-    assert editing.item(2).checkState(TEXT_COLUMN) == QtCore.Qt.CheckState.Unchecked
-    assert [c.active for c in session.constraints] == [False]
+    assert editing.item(0).checkState(TEXT_COLUMN) == QtCore.Qt.CheckState.Unchecked
+    assert [c.active for c in session.constraints] == [False, True, True]
 
 
-def test_a_delete_button_removes_its_constraint_or_unlocks_its_opening(
+def test_a_delete_button_removes_its_constraint_a_lock_included(
     editing: _Editing,
 ) -> None:
     a, _b, _c = editing.bays()
     session = editing.panel.session
     assert session.set_lock(a, locked=True) is None
     editing.panel._refresh()
-    button = editing.delete_button(1)
+    button = editing.delete_button(0)
     assert button.toolTip() == "Delete"
     assert not button.icon().isNull()
     button.click()
     _process_events()
-    assert [type(c) for c in session.constraints] == [EvenSpacing]
-    editing.delete_button(0).click()
+    assert [type(c) for c in session.constraints] == [EvenSpacing, Lock]
+    editing.delete_button(1).click()
     _process_events()
-    assert session.container.Document.UndoNames[0] == "Unlock Opening"
-    assert [type(row) for row in editing.rows.rows] == [ConstraintRow]
+    assert session.container.Document.UndoNames[0] == "Delete Constraint"
+    assert [row.kind for row in editing.rows.rows] == ["even_spacing"]
 
 
 def test_delete_deactivated_is_enabled_exactly_while_one_is(
@@ -377,13 +440,13 @@ def test_redundant_rows_carry_a_mark_that_follows_every_edit_and_undo(
     assert marked() == [False, False, False]
     assert session.set_lock(b, locked=True) is None
     editing.panel._refresh()
-    assert marked() == [True, True, True, False]
+    assert marked() == [True, False, True, True]
     doc.undo()
     _process_events()
     assert marked() == [False, False, False]
     doc.redo()
     _process_events()
-    assert marked() == [True, True, True, False]
+    assert marked() == [True, False, True, True]
 
 
 def test_undoing_a_deactivation_checks_the_box_again(editing: _Editing) -> None:

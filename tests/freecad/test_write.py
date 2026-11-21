@@ -35,6 +35,7 @@ from freecad.Shelving.core.layout import (
     EvenSpacing,
     FixedPoint,
     FixedSide,
+    Lock,
     RunEnd,
     Unit,
 )
@@ -704,7 +705,7 @@ def test_a_lock_survives_apply_rescan_and_reapply() -> None:
                                 items=[
                                     Bay(size_mm=423.0),
                                     Board(thickness_mm=18.0, role="mid_shelf"),
-                                    Bay(size_mm=423.0, lock=Basis.CLEAR),
+                                    Bay(size_mm=423.0, id="upper"),
                                 ],
                                 size_mm=564.0,
                             ),
@@ -717,6 +718,7 @@ def test_a_lock_survives_apply_rescan_and_reapply() -> None:
             ),
             depth_axis=Axis.Y,
             front_at_min=None,
+            constraints=(Lock("upper"),),
         )
         write_container(container, unit)
         doc.recompute()
@@ -743,7 +745,8 @@ def test_a_lock_survives_apply_rescan_and_reapply() -> None:
 
 def _two_bay_carcass(locked: Basis | None) -> Unit:
     """A closed 900 mm tall carcass of 18 mm boards whose one column holds
-    two 423 mm bays, both locked by ``locked``."""
+    two 423 mm bays, both locked in ``locked`` when it is set."""
+    locks = () if locked is None else (Lock("lower", locked), Lock("upper", locked))
     return Unit(
         size_mm=Vec3(600.0, 300.0, 900.0),
         root=Division(
@@ -757,9 +760,9 @@ def _two_bay_carcass(locked: Basis | None) -> Unit:
                         Division(
                             axis=Axis.Z,
                             items=[
-                                Bay(size_mm=423.0, lock=locked),
+                                Bay(size_mm=423.0, id="lower"),
                                 Board(thickness_mm=18.0, role="mid_shelf"),
-                                Bay(size_mm=423.0, lock=locked),
+                                Bay(size_mm=423.0, id="upper"),
                             ],
                             size_mm=564.0,
                         ),
@@ -772,6 +775,7 @@ def _two_bay_carcass(locked: Basis | None) -> Unit:
         ),
         depth_axis=Axis.Y,
         front_at_min=None,
+        constraints=locks,
     )
 
 
@@ -789,7 +793,7 @@ def test_a_resize_refuses_a_height_the_locks_fix_and_takes_a_width() -> None:
         with pytest.raises(LayoutSolveError) as err:
             resize_unit(container, Vec3(600.0, 300.0, 1000.0))
         assert err.value.reason == "conflict"
-        assert len(err.value.region_ids) == 2
+        assert len(err.value.lock_ids) == 2
         doc.recompute()
         assert top.Placement.Base.z == pytest.approx(before)
         resize_unit(container, Vec3(700.0, 300.0, 900.0))

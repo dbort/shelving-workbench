@@ -24,12 +24,13 @@ from freecad.Shelving.container import write_container
 from freecad.Shelving.core.geometry import Vec3
 from freecad.Shelving.core.layout import (
     Axis,
-    Basis,
     Bay,
     Board,
     Division,
+    Lock,
     Region,
     Unit,
+    is_locked,
 )
 from freecad.Shelving.editor import panel as panel_module
 from freecad.Shelving.init_gui import TOOLBAR_COMMANDS
@@ -164,9 +165,9 @@ def _fixed_shelf_unit() -> Unit:
                         Division(
                             axis=Axis.Z,
                             items=[
-                                Bay(size_mm=300.0, lock=Basis.CLEAR),
+                                Bay(size_mm=300.0, id="lower"),
                                 Board(thickness_mm=18.0, role="shelf"),
-                                Bay(size_mm=546.0, lock=Basis.CLEAR),
+                                Bay(size_mm=546.0, id="upper"),
                             ],
                             size_mm=564.0,
                         ),
@@ -178,6 +179,7 @@ def _fixed_shelf_unit() -> Unit:
             ],
         ),
         depth_axis=Axis.Y,
+        constraints=(Lock("lower"), Lock("upper")),
     )
 
 
@@ -213,11 +215,12 @@ def test_edit_unit_opens_locked_openings_at_the_size_hand_moves_left_them(
 
     panel = panel_module.EditUnitPanel(container)
     try:
-        bays = _bays(panel.session.unit.root)
+        unit = panel.session.unit
+        bays = _bays(unit.root)
     finally:
         panel.reject()
 
-    assert [bay.lock for bay in bays] == [Basis.CLEAR, Basis.CLEAR]
+    assert [is_locked(unit, bay.id) for bay in bays] == [True, True]
     assert sorted(bay.size_mm for bay in bays) == pytest.approx([300.0, 446.0])
     assert _board_snapshot(doc) == before
 

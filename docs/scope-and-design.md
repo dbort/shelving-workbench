@@ -62,12 +62,19 @@ a sub-region; two adjacent boards are two boards face to face.
 
 A board contributes its thickness along the run, and a region its current
 size. A region may be locked, holding its size through every edit until it
-is unlocked; locking or unlocking moves nothing. Every edit solves the
+is unlocked; locking or unlocking moves nothing. A lock is a constraint
+like the two below, with an id, a basis and an active flag, and a region
+holds at most one. It stores no size: turning one on holds its region at
+the size the boards give it then, so it moves nothing and never
+conflicts, and a deactivated lock holds nothing until it is turned back
+on. The Sketcher keeps a dimension the same way, as one constraint among
+the others that can be turned off. Every edit solves the
 layout the way the Sketcher does: the boards move as little as possible
 from where they are, within the locks and a 5 mm minimum opening. A resize
 changes the openings beside the outer faces that move, and pushes inward
-once one reaches the minimum. A typed size locks the opening and moves the
-boards either side of it, half the change each when both are free. An edit
+once one reaches the minimum. A typed size locks the opening, turning its
+lock back on when it is off, and moves the boards either side of it, half
+the change each when both are free. An edit
 the locks and the minimum cannot allow is refused, where the Sketcher would
 leave the sketch in error: an unsolvable layout has no panels to write.
 The refusal outlines the locks it names, and any opening held at the
@@ -91,8 +98,9 @@ Sketcher's Equal does. Even spacing holds every opening between two ends
 of one row the same size, the ends being boards or the row's own ends, and
 reads its openings afresh at every solve, so an opening added inside the
 span joins it. Both measure the clear opening. The solve counts them after
-the locks, so one the locks already imply is accepted as redundant with a
-warning, and one they contradict is refused as a conflict. Each draws the
+the active locks, so one the locks already imply is accepted as redundant
+with a warning, and one they contradict is refused as a conflict naming
+those locks and itself. Each draws the
 Sketcher's style of icon beside each of its openings' dimensions, in the
 Sketcher's constraint icon color on a small tile of the 3D view's
 background color; clicking an icon selects the constraint, and Delete
@@ -104,9 +112,16 @@ line they cut; an even spacing is dropped only with an end. Geometry wins
 when a unit opens: a constraint the boards miss by more than the joint
 clearance comes in deactivated, its icons marked with a corner X and
 never solved, and one naming boards or openings that are gone is
-dropped, each said once in a notification. The constraint commands sit
+dropped, a lock included, each said once in a notification. A lock always
+meets the boards, so it never comes in deactivated. The constraint
+commands sit
 on a toolbar shown only while Edit Unit is open, as the Sketcher's
 edit-mode toolbars are.
+
+A split carries a bay's lock to both halves, or to the division that
+takes its place when the board runs across the bay's run; a merge of two
+locked openings keeps one lock, and a lock whose region an edit removes
+goes with it, as an Equal does.
 
 A drag moves a board and every board joined to it through locked regions;
 every other board moves only when an opening ahead of it reaches the
@@ -172,8 +187,8 @@ Geometry cannot say two things, so both are stored once set:
   bay is locked, and a void is locked only beside a bay, so a plinth gap
   holds still. Sizes always
   come from the boards, so a board moved by hand stays where it was moved;
-  the record keeps only whether each region is locked and what its size
-  measures.
+  the record keeps only each lock's region, whether it is on, and what its
+  size measures.
 - **Facing**: which end of the depth axis is the front, which decides what
   is called left. Two hints exist (a back or front panel, an inset front
   with a flush rear) and both fire rarely. Unknown is the normal state,
@@ -263,23 +278,29 @@ deactivated color: that color gives way to the selection color, so a
 selected Sketcher icon cannot show whether its constraint is on. The X
 keeps activation in the glyph's shape, visible selected or not, and
 leaves the icon's color rules the Sketcher's.
-Clicking a padlock locks or unlocks the opening, and typing a size locks
-it. A selected board held in place shows a closed padlock where its arrow
-would be and outlines the locked openings holding it; clicking that padlock
-unlocks them, and the arrow takes its place. Like the Sketcher's constraint
-icons, the padlocks are drawn in the view and carry no tooltip. Besides the
-padlock, only a lock's row in the constraint list unlocks. A refused
+Clicking a closed padlock deletes the opening's lock; clicking an open one
+locks the opening, turning its deactivated lock back on when it has one,
+and typing a size locks it. A deactivated lock shows an open padlock and
+an unlocked dimension, since it holds nothing. A selected board held in
+place shows a closed padlock where its arrow would be and outlines the
+locked openings holding it; clicking that padlock deletes their locks,
+and the arrow takes its place. Like the Sketcher's constraint icons, the
+padlocks are drawn in the view and carry no tooltip. Besides the padlock,
+only a lock's row in the constraint list unlocks. A refused
 edit's or a redundant lock's outline uses the same color, and lasts until
 the next edit or selection change.
 
-The constraint list follows the Sketcher's: one list holding every lock
-and every Equal and Even spacing, locks first in tree order and then
-constraints in the order they were made, each with its kind's icon and its
-size in the user's unit system, and selection shared with the 3D view in
-both directions. It departs from the Sketcher in four places. A
-deactivated constraint's icon carries the 3D view's corner X where the
-Sketcher's list grays it in Qt's disabled mode, so the list and the view
-mark it the same way. A constraint's checkbox means active, since the
+The constraint list follows the Sketcher's: one list holding every
+constraint, locks included, in the order they were made, each with its
+kind's icon, its checkbox and its size in the user's unit system, and
+selection shared with the 3D view in both directions; selecting a lock's
+row selects that lock. A deactivated lock's icon is grayed in Qt's
+disabled mode, as the Sketcher's list grays a deactivated constraint. It
+departs from the Sketcher in four places. A deactivated Equal's or even
+spacing's icon carries the 3D view's corner X where the Sketcher's list
+grays it, so the list and the view mark it the same way; the view has no
+padlock with an X, since its open padlock already marks a deactivated
+lock. A constraint's checkbox means active, since the
 editor has no virtual space for the Sketcher's visibility box to choose.
 Each row has a delete button and one button deletes every deactivated
 constraint, because opening a unit can deactivate several at once, which
@@ -290,11 +311,12 @@ or constraint is redundant when removing it alone leaves its axis's
 freedom unchanged, so every member of an overlapping group is marked.
 Turning a constraint on solves it in as making it new would, moving the
 boards least, and is refused, leaving it off, when locks and constraints
-rule it out; turning one off moves nothing. With one Equal or Even spacing
-selected, Opening size measures switches it between clear sizes and
-spacings through the next board, and re-solves it, since the relation
-itself changes; the spacing choice is offered only when every opening it
-names has a board after it.
+rule it out; turning one off moves nothing, and so does turning a lock
+on. With one lock, Equal or Even spacing selected, Opening size measures
+switches it between clear sizes and spacings through the next board, and
+re-solves an Equal or even spacing, since the relation itself changes; a
+lock's switch moves nothing. The spacing choice is offered only when every
+opening it names has a board after it.
 
 The unit's container cannot enter FreeCAD's edit mode without workbench
 state in the document, so the editor adds its drawing and input handling
@@ -324,10 +346,12 @@ one a copied object can carry wrongly.
   another document is a relocation.
 - **On the container:** the unit's id, depth axis, facing, fixed side on
   each model axis (`min`, `center` or `max`; a container without it reads
-  as `min`), and a record of the locked regions and what each lock
-  measures, keyed by their bounding boards, and of the constraints between
-  openings: each Equal by its two openings' keys and each even spacing by
-  its row's key and its end boards, with whether it is active.
+  as `min`), and a record of the constraints in the order they were made,
+  each with whether it is active and what it measures: each lock by its
+  opening's key, which is its bounding boards, each Equal by its two
+  openings' keys, and each even spacing by its row's key and its end
+  boards. A record from before locks were constraints reads as its locks,
+  on and in tree order, ahead of its constraints.
   Positions always come from the solids, the unit's own size and position
   included; a missing or stale record falls back to inference.
 - **Named values** shared between units will live in an ordinary

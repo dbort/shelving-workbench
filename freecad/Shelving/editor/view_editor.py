@@ -1426,17 +1426,6 @@ class ViewEditor:
         select_in_freecad(self._doc_name, list(dict.fromkeys(board_ids)))
         self._on_change()
 
-    def select_items(self, node_ids: Sequence[str]) -> None:
-        """Select exactly the openings ``node_ids``, as the constraint list
-        picks lock rows, clearing FreeCAD's selection, which holds no
-        opening."""
-        if self._closed:
-            return
-        self._close_field()
-        self.session.select_items(node_ids)
-        select_in_freecad(self._doc_name, [])
-        self._on_change()
-
     def select_constraints(self, constraint_ids: Sequence[ConstraintId]) -> None:
         """Select exactly the constraints ``constraint_ids``, as the
         constraint list picks rows, clearing FreeCAD's selection."""
@@ -1554,8 +1543,8 @@ class ViewEditor:
 
     def _sort_press(self, position: QtCore.QPointF, adding: bool) -> PressKind:
         """A press on the drag arrow is the dragger's; one on the held
-        board's padlock unlocks the openings holding it; one on a
-        dimension's padlock locks or unlocks its opening; one on a
+        board's padlock deletes the locks holding it; one on a dimension's
+        padlock locks or unlocks its opening; one on a
         constraint's icon selects the constraint, or adds it for an
         ``adding`` press; one on a dimension's text tile opens that
         dimension's field."""
@@ -1710,7 +1699,9 @@ class ViewEditor:
         self._place_widgets()
 
     def _toggle_lock(self, padlock: PadlockIcon) -> None:
-        """Lock ``padlock``'s opening, or unlock it when it is locked."""
+        """Delete the active lock on ``padlock``'s opening when it is
+        closed; otherwise turn the opening's deactivated lock on, or add
+        one."""
         if self._closed:
             return
         self._close_field()

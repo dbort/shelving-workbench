@@ -70,9 +70,11 @@ from freecad.Shelving.core.layout import (
     Division,
     Equal,
     FixedSide,
+    Lock,
     Region,
     Unit,
     constraint_regions,
+    region_lock,
     renamed_constraint_boards,
 )
 from freecad.Shelving.core.record import (
@@ -87,7 +89,6 @@ from freecad.Shelving.core.solver import (
     constraint_axis,
     describe_solve_error,
     duplicated_constraint,
-    duplicated_locks,
     measured_mm,
     redundant_rules,
     size_fixed_by,
@@ -146,12 +147,12 @@ class EditFailure:
     # caller asked to edit, or the node a re-solve refused at. None only when
     # nothing was selected to act on.
     node_id: str | None
-    # The regions a refused re-solve holds responsible, in tree order: the
-    # locks in conflict and any opening held at its minimum. Empty for every
-    # other refusal.
+    # The openings a refused re-solve holds at their minimum, in tree order.
+    # Empty for every other refusal.
     region_ids: tuple[str, ...] = ()
-    # The constraints a refused re-solve holds responsible, in the unit's
-    # order; a constraint the refused edit was making is named too.
+    # The constraints a refused re-solve holds responsible, locks included,
+    # in the unit's order; a constraint the refused edit was making is named
+    # too.
     constraint_ids: tuple[ConstraintId, ...] = ()
 
 
@@ -163,7 +164,8 @@ class EditWarning:
     message: str
     # The regions the warning is about, in tree order.
     region_ids: tuple[str, ...]
-    # The constraints the warning is about, in the unit's order.
+    # The constraints the warning is about, locks included, in the unit's
+    # order.
     constraint_ids: tuple[ConstraintId, ...] = ()
 
 
@@ -201,50 +203,46 @@ def open_message(report: OpenReport) -> str | None:
     return "\n".join(lines) if lines else None
 
 
-@dataclasses.dataclass(frozen=True)
-class LockRow:
-    """A locked opening's row in the constraint list."""
-
-    region_id: str
-    # The opening's size in its lock's basis.
-    size_mm: float
-    # Whether removing the lock alone would leave the layout's freedom as
-    # it is: redundant_rules in freecad.Shelving.core.solver.
-    redundant: bool
+# What a constraint list row holds: a lock, or a constraint between openings.
+RowKind = Literal["lock"] | ConstraintKind
 
 
 @dataclasses.dataclass(frozen=True)
 class ConstraintRow:
-    """An Equal's or an even spacing's row in the constraint list."""
+    """A constraint's row in the constraint list."""
 
     constraint_id: ConstraintId
-    kind: ConstraintKind
+    kind: RowKind
     active: bool
     # The first opening's size in the constraint's basis; None while the
-    # constraint is deactivated, since its openings may differ.
+    # constraint is deactivated, since it holds no size then.
     size_mm: float | None
-    # As LockRow.redundant; a deactivated constraint never is.
+    # Whether removing the constraint alone would leave the layout's freedom
+    # as it is: redundant_rules in freecad.Shelving.core.solver. A
+    # deactivated constraint never is.
     redundant: bool
 
 
-ListRow = LockRow | ConstraintRow
+def _row_kind(constraint: Constraint) -> RowKind:
+    if isinstance(constraint, Lock):
+        return "lock"
+    return "equal" if isinstance(constraint, Equal) else "even_spacing"
 
 
 def _structure_key(region: Region) -> tuple[object, ...]:
     """What the redundant set depends on in ``region``'s subtree: ids,
-    nesting, axes and locks, leaving out every size, so a drag that only
-    moves boards keeps the key."""
+    nesting and axes, leaving out every size, so a drag that only moves
+    boards keeps the key."""
     if isinstance(region, Division):
         return (
             region.id,
-            region.lock,
             region.axis,
             tuple(
                 item.id if isinstance(item, Board) else _structure_key(item)
                 for item in region.items
             ),
         )
-    return (region.id, region.lock)
+    return (region.id,)
 
 
 def _solve_failure(err: LayoutSolveError) -> EditFailure:
@@ -301,17 +299,20 @@ def _regions(region: Region) -> Iterator[Region]:
                 yield from _regions(item)
 
 
-def _duplicated(
+def _duplicated_lock(
     unit: Unit, spaces: Mapping[str, Space], region_id: str
-) -> tuple[str, ...] | None:
-    """:func:`~freecad.Shelving.core.solver.duplicated_locks` for the region
-    ``region_id`` on its own run; ``None`` too when ``unit`` holds no such
-    region."""
+) -> tuple[ConstraintId, ...] | None:
+    """:func:`~freecad.Shelving.core.solver.duplicated_constraint` for the
+    active Lock on the region ``region_id``; ``None`` too when ``unit``
+    holds no such Lock."""
+    found = region_lock(unit, region_id)
+    if found is None or not found.active:
+        return None
     try:
         axis = run_axis(unit, region_id)
     except EditError:
         return None
-    return duplicated_locks(unit, spaces, region_id, axis)
+    return duplicated_constraint(unit, spaces, found.id, axis)
 
 
 def _boards(region: Region) -> Iterator[Board]:
@@ -457,7 +458,9 @@ class Session:
         # lock and constraint on each axis: measured at about 50 ms on a unit
         # of four columns of six openings with 8 locks and 5 constraints,
         # three frames at 60 Hz added to every step without the cache.
-        self._redundant: tuple[tuple[object, ...], frozenset[str]] | None = None
+        self._redundant: tuple[tuple[object, ...], frozenset[ConstraintId]] | None = (
+            None
+        )
 
     def open(self, schedule: Schedule | None = None) -> None:
         """Add the size fields' properties to the container and start
@@ -602,32 +605,25 @@ class Session:
         were made."""
         return self.unit.constraints
 
-    def constraint_rows(self) -> tuple[ListRow, ...]:
-        """The constraint list's rows: every lock, in tree order, then every
-        constraint, active or deactivated, in the order they were made."""
+    def constraint_rows(self) -> tuple[ConstraintRow, ...]:
+        """The constraint list's rows: every constraint, locks included,
+        active or deactivated, in the order they were made."""
         redundant = self._redundant_rules()
-        rows: list[ListRow] = []
-        for region in _regions(self.unit.root):
-            if region.lock is None or region.id == self.unit.root.id:
-                continue
-            rows.append(
-                LockRow(
-                    region_id=region.id,
-                    size_mm=measure(self.unit, region.id, self.spaces).size_mm,
-                    redundant=region.id in redundant,
-                )
-            )
+        rows: list[ConstraintRow] = []
         for constraint in self.unit.constraints:
             regions = constraint_regions(self.unit, constraint)
             size_mm = None
-            if constraint.active and regions:
+            if isinstance(constraint, Lock) and constraint.active:
+                # As the opening's dimension shows it, so the two agree.
+                size_mm = measure(self.unit, constraint.region_id, self.spaces).size_mm
+            elif constraint.active and regions:
                 size_mm = measured_mm(
                     self.unit, self.spaces, regions[0], constraint.basis
                 )
             rows.append(
                 ConstraintRow(
                     constraint_id=constraint.id,
-                    kind="equal" if isinstance(constraint, Equal) else "even_spacing",
+                    kind=_row_kind(constraint),
                     active=constraint.active,
                     size_mm=size_mm,
                     redundant=constraint.id in redundant,
@@ -635,7 +631,7 @@ class Session:
             )
         return tuple(rows)
 
-    def _redundant_rules(self) -> frozenset[str]:
+    def _redundant_rules(self) -> frozenset[ConstraintId]:
         key = (
             _structure_key(self.unit.root),
             self.unit.constraints,
@@ -797,10 +793,13 @@ class Session:
             return vertical
         return next(axis for axis in Axis if axis not in (horizontal, vertical))
 
-    def size_fixed_by(self, dimension: UnitDimension) -> tuple[str, ...] | None:
-        """The locked regions whose locks determine the unit's size along
-        ``dimension``, making it a reference that :meth:`resize` refuses to
-        change; ``None`` when the size is free, as the depth always is."""
+    def size_fixed_by(
+        self, dimension: UnitDimension
+    ) -> tuple[ConstraintId, ...] | None:
+        """The constraints, locks included, that determine the unit's size
+        along ``dimension``, making it a reference that :meth:`resize`
+        refuses to change; ``None`` when the size is free, as the depth
+        always is."""
         return size_fixed_by(self.unit, self.spaces, self._unit_axis(dimension))
 
     def unit_dimension_mm(self, dimension: UnitDimension) -> float:
@@ -1104,21 +1103,28 @@ class Session:
 
     @_edit
     def set_lock(self, region_id: str, locked: bool) -> EditFailure | None:
-        """Lock ``region_id`` when ``locked``, else unlock it, as one undo
-        step that moves nothing and keeps the selection. Returns an
+        """When ``locked``, lock ``region_id``: turn its deactivated Lock on
+        or add one. Otherwise delete its active Lock. One undo step that
+        moves nothing and keeps the selection. Returns an
         :class:`EditFailure` on refusal, such as for an id that names no
         region, leaving the session and document untouched."""
         self.settle()
         name = "Lock Opening" if locked else "Unlock Opening"
-        return self._set_locks(name, [region_id], locked)
+        try:
+            candidate = (lock if locked else unlock)(self.unit, region_id)
+        except EditError as err:
+            return EditFailure(str(err), err.node_id)
+        return self._locking_step(
+            name, candidate, [region_id] if locked else [], select=self._selection
+        )
 
     @_edit
     def unlock_holders(self, board_id: str) -> EditFailure | None:
-        """Unlock every region :meth:`held_by` names for ``board_id``, as one
+        """Delete every Lock :meth:`held_by` names for ``board_id``, as one
         undo step that moves nothing and keeps the selection, so a drag may
         move the board. Returns an :class:`EditFailure`, changing nothing,
-        when no region holds the board, a constraint holds it, or no unlock
-        would free it."""
+        when no Lock holds the board, another constraint holds it, or no
+        unlock would free it."""
         self.settle()
         held = self.held_by(board_id)
         if held is None or not held.locks:
@@ -1129,21 +1135,9 @@ class Session:
                 board_id,
                 constraint_ids=held.constraints,
             )
-        return self._set_locks("Unlock Board", held.locks, False)
-
-    def _set_locks(
-        self, name: str, region_ids: Sequence[str], locked: bool
-    ) -> EditFailure | None:
-        """Lock or unlock ``region_ids`` as the one undo step ``name``. The
-        caller settles first."""
-        candidate = self.unit
-        try:
-            for region_id in region_ids:
-                candidate = (lock if locked else unlock)(candidate, region_id)
-        except EditError as err:
-            return EditFailure(str(err), err.node_id)
-        return self._locking_step(
-            name, candidate, region_ids if locked else (), select=self._selection
+        candidate = remove_constraints(self.unit, held.locks)
+        return self._step(
+            "Unlock Board", lambda: self._apply(candidate, select=self._selection)
         )
 
     def _locking_step(
@@ -1154,18 +1148,18 @@ class Session:
         select: Sequence[str],
     ) -> EditFailure | None:
         """Apply ``candidate`` as the undo step ``name``, selecting
-        ``select``, then warn through :attr:`on_warning` and flag the
-        duplicated locks when the lock on a region ``locking`` names is
-        redundant after the step and was not before, as the Sketcher accepts
-        and flags a redundant constraint."""
+        ``select``, then warn through :attr:`on_warning` and flag what it
+        duplicates when the Lock on a region ``locking`` names is redundant
+        after the step and was not before, as the Sketcher accepts and flags
+        a redundant constraint."""
         before_unit, before_spaces = self.unit, self.spaces
         failure = self._step(name, lambda: self._apply(candidate, select=select))
         if failure is not None:
             return failure
-        duplicated: dict[str, None] = {}
+        duplicated: dict[ConstraintId, None] = {}
         for region_id in locking:
-            found = _duplicated(self.unit, self.spaces, region_id)
-            if found and not _duplicated(before_unit, before_spaces, region_id):
+            found = _duplicated_lock(self.unit, self.spaces, region_id)
+            if found and not _duplicated_lock(before_unit, before_spaces, region_id):
                 duplicated.update(dict.fromkeys(found))
         if duplicated:
             self._warn(_REDUNDANT_LOCK, duplicated)
@@ -1194,8 +1188,8 @@ class Session:
 
     def held_by(self, board_id: str) -> Held | None:
         """:func:`~freecad.Shelving.core.edit.held_by` for this session's
-        unit: the locked regions to unlock so a drag may move ``board_id``
-        and the constraints that hold it whatever is unlocked, free when it
+        unit: the Locks to delete so a drag may move ``board_id`` and the
+        other constraints that hold it whatever is unlocked, free when it
         may move, ``None`` when the boards alone hold it."""
         return held_by(self.unit, board_id)
 
@@ -1241,7 +1235,7 @@ class Session:
         failure = self._step(name, lambda: self._apply(candidate))
         if failure is not None:
             return failure
-        duplicated: dict[str, None] = {}
+        duplicated: dict[ConstraintId, None] = {}
         for constraint in self.unit.constraints:
             if constraint.id in before:
                 continue
@@ -1338,8 +1332,8 @@ class Session:
         ``grab_mm``; each :meth:`drag_to` keeps that point under the pointer.
         Leaves the selection alone, so a press that never moves still
         selects the board. Returns an :class:`EditFailure`, starting no
-        drag, when a drag may not move the board: a locked region holds it,
-        or no unlock would free it."""
+        drag, when a drag may not move the board: a Lock holds it, or no
+        unlock would free it."""
         self.settle()
         try:
             require_movable(self.unit, board_id)

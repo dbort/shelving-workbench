@@ -19,7 +19,6 @@ from freecad.Shelving.core.edit import (
     EditError,
     Held,
     held_by,
-    is_locked,
     measure,
     region_before,
     run_axis,
@@ -36,6 +35,7 @@ from freecad.Shelving.core.layout import (
     Equal,
     FixedSide,
     Insets,
+    Lock,
     Region,
     Unit,
     Void,
@@ -557,8 +557,8 @@ class _Planner:
                 continue
             rect = frame.rect(self.spaces[item.id])
             span = rect
-            spacing = item.lock is Basis.WITH_NEXT
-            if spacing and index + 1 < len(division.items):
+            measured = measure(self.unit, item.id, self.spaces)
+            if measured.basis is Basis.WITH_NEXT and index + 1 < len(division.items):
                 after = division.items[index + 1]
                 if isinstance(after, Board):
                     after_rect = frame.rect(self.spaces[after.id])
@@ -597,14 +597,15 @@ class _Planner:
             else:
                 start_mm, end_mm = (cross_mm, low_mm), (cross_mm, high_mm)
             # A selected region keeps its lock color, as the Sketcher's
-            # constraints keep theirs when their geometry is selected.
-            locked = is_locked(item)
-            color: LabelColor = "locked" if locked else "unlocked"
+            # constraints keep theirs when their geometry is selected. A
+            # deactivated lock holds nothing, so its region takes the
+            # unlocked color.
+            color: LabelColor = "locked" if measured.fixed else "unlocked"
             yield DimensionLabel(
                 region_id=item.id,
                 start_mm=start_mm,
                 end_mm=end_mm,
-                size_mm=measure(self.unit, item.id, self.spaces).size_mm,
+                size_mm=measured.size_mm,
                 color=color,
                 text_fraction=text_fraction,
             )
@@ -632,15 +633,15 @@ def plan_overlay(
     ``selected_id`` is the single selection, ``selected_items`` every
     selected board and opening, and ``selected_constraints`` the selected
     constraints, whose openings take the selected outline and whose icons
-    are marked selected. A board is held by the locked regions
-    :func:`held_padlock` gives a padlock, or by constraints, whose openings
+    are marked selected. A board is held by the locks :func:`held_padlock`
+    gives a padlock, or by other constraints, and the openings of either
     then take the holding outline. The selected outline wins over a holding
     one, and an id in ``flagged`` that names nothing draws nothing.
     ``spaces`` must hold every node of ``unit``. A dimension outside the
     unit sits a whole number of ``outer_row_mm`` rows out from its outer
     face, so resizing the unit moves only the rows past the faces that
     move. Icons at one opening sit in a row after its padlock in the order
-    the constraints were made."""
+    the constraints were made; a lock draws as the padlock, not an icon."""
     planner = _Planner(unit, spaces, frame, outer_row_mm)
     held: Held | None = None
     if selected_id is not None:
@@ -648,8 +649,7 @@ def plan_overlay(
     by_id = {constraint.id: constraint for constraint in unit.constraints}
     holding: set[str] = set()
     if held is not None:
-        holding.update(held.locks)
-        for constraint_id in held.constraints:
+        for constraint_id in (*held.locks, *held.constraints):
             holding.update(constraint_regions(unit, by_id[constraint_id]))
     for flag in flagged:
         constraint = by_id.get(ConstraintId(flag))
@@ -689,6 +689,8 @@ def plan_overlay(
     slots: dict[str, int] = {}
     icons: list[ConstraintIcon] = []
     for constraint in unit.constraints:
+        if isinstance(constraint, Lock):
+            continue
         constraint_selected = constraint.id in selected_constraints
         kind_name: ConstraintKind = (
             "equal" if isinstance(constraint, Equal) else "even_spacing"
@@ -871,18 +873,18 @@ class HeldPadlock:
     board_id: str
     # Where the board's arrow would sit.
     at_mm: tuple[float, float]
-    # The locked regions holding the board, low side first: what clicking
-    # the padlock unlocks.
-    holders: tuple[str, ...]
+    # The locks holding the board, low side first: what clicking the
+    # padlock deletes.
+    holders: tuple[ConstraintId, ...]
 
 
 def held_padlock(
     unit: Unit, spaces: Mapping[str, Space], frame: ElevationFrame, board_id: str
 ) -> HeldPadlock | None:
-    """The padlock for ``board_id`` when locked regions alone hold it, so
-    unlocking them would give it an arrow; ``None`` for a board a drag may
-    move, a board a constraint holds, which no unlock frees, a carcass
-    board, a board whose run runs through the depth, and a region."""
+    """The padlock for ``board_id`` when locks alone hold it, so deleting
+    them would give it an arrow; ``None`` for a board a drag may move, a
+    board another constraint holds, which no unlock frees, a carcass board,
+    a board whose run runs through the depth, and a region."""
     held = held_by(unit, board_id)
     if held is None or not held.locks or held.constraints:
         return None
