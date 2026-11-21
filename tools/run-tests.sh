@@ -6,8 +6,8 @@
 # themselves instead of failing on an unreachable service. `--smoke` is the
 # quick pass for use while working: in tests/freecad_gui and
 # tests/freecad_view it runs only the tests marked `smoke`
-# (tests/smoke_marks.py), every other check whole, and it stops and fails
-# the run once it passes a hard 90 s limit (tools/smoke_limit.py). The full
+# (tests/smoke_marks.py) and every other check whole, and it stops and fails
+# the run once the run passes a hard 90 s limit (tools/smoke_limit.py). The full
 # run has no limit and stays the merge gate. Pass either option or both
 # after `--`: `pixi run tests -- --smoke --offline`.
 #
