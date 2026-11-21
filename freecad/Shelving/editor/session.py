@@ -96,7 +96,16 @@ from freecad.Shelving.core.solver import (
 )
 from freecad.Shelving.core.stock import BoardStock, Color, StockGroup, group_stocks
 from freecad.Shelving.debug_log import Stopwatch
-from freecad.Shelving.editor.elevation import ConstraintKind, FixedChoice, fixed_choices
+from freecad.Shelving.editor.elevation import (
+    ConstraintKind,
+    ElevationDirection,
+    ElevationFrame,
+    FixedChoice,
+    elevation_frame,
+    fixed_choices,
+    region_along,
+    run_direction,
+)
 from freecad.Shelving.editor.history import EditHistory, Schedule
 
 SplitDirection = Literal["horizontal", "vertical"]
@@ -180,6 +189,25 @@ _REDUNDANT_ACTIVATED = (
     "The outlined locks and constraints already fix these sizes, so the "
     "constraint turned on is redundant."
 )
+_LOCK_STEPS: Mapping[ElevationDirection, str] = {
+    "horizontal": "Lock Width",
+    "vertical": "Lock Height",
+}
+# Whole sentences per direction, so each translates on its own.
+_SELECT_TO_LOCK: Mapping[ElevationDirection, str] = {
+    "horizontal": "Select one or more openings to lock their widths.",
+    "vertical": "Select one or more openings to lock their heights.",
+}
+_UNIT_SIZE_TO_LOCK: Mapping[ElevationDirection, str] = {
+    "horizontal": (
+        "A selected opening's width is the unit's width. Set it in the panel's "
+        "Width field."
+    ),
+    "vertical": (
+        "A selected opening's height is the unit's height. Set it in the "
+        "panel's Height field."
+    ),
+}
 # Worded without a count, so the text reads the same for one constraint as
 # for several and stays one string to translate.
 _DEACTIVATED_AT_OPEN = (
@@ -203,8 +231,10 @@ def open_message(report: OpenReport) -> str | None:
     return "\n".join(lines) if lines else None
 
 
-# What a constraint list row holds: a lock, or a constraint between openings.
-RowKind = Literal["lock"] | ConstraintKind
+# What a constraint list row holds: a Lock on a width or a height as Lock
+# Width and Lock Height make them, a Lock on a size through the depth, which
+# only a scan makes, or a constraint between openings.
+RowKind = Literal["lock_width", "lock_height", "lock"] | ConstraintKind
 
 
 @dataclasses.dataclass(frozen=True)
@@ -223,9 +253,12 @@ class ConstraintRow:
     redundant: bool
 
 
-def _row_kind(constraint: Constraint) -> RowKind:
+def _row_kind(constraint: Constraint, unit: Unit, frame: ElevationFrame) -> RowKind:
     if isinstance(constraint, Lock):
-        return "lock"
+        direction = run_direction(unit, frame, constraint.region_id)
+        if direction is None:
+            return "lock"
+        return "lock_width" if direction == "horizontal" else "lock_height"
     return "equal" if isinstance(constraint, Equal) else "even_spacing"
 
 
@@ -366,10 +399,10 @@ class Untagged:
 def _read_unit(
     container: FreeCAD.DocumentObject,
 ) -> tuple[Unit, Mapping[str, str], OpenReport]:
-    """``container`` read fresh and scanned, with its stored locks,
-    constraints and unit id reapplied, the reason each part the scan did not
-    place in the tree was set aside, keyed by ``Name``, and what reapplying
-    the constraints deactivated and dropped.
+    """``container`` read fresh and scanned, with its stored constraints and
+    unit id reapplied, the reason each part the scan did not place in the
+    tree was set aside, keyed by ``Name``, and what reapplying the
+    constraints deactivated and dropped.
 
     Mirrors :func:`freecad.Shelving.unit_ops._rescanned_unit`; kept as its
     own copy here rather than imported, the way every other small
@@ -395,7 +428,7 @@ def _read_unit(
     if record.unit_id is not None:
         unit = dataclasses.replace(unit, id=record.unit_id)
     unit = dataclasses.replace(unit, fixed_point=record.fixed_point)
-    watch.lap("stored locks")
+    watch.lap("stored constraints")
     reasons = {entry.name: entry.reason for entry in scan_result.skipped}
     reasons.update((panel.name, _PANEL_REASON) for panel in scan_result.panels)
     reasons.update((back.name, _BACK_REASON) for back in unit.backs)
@@ -609,6 +642,7 @@ class Session:
         """The constraint list's rows: every constraint, locks included,
         active or deactivated, in the order they were made."""
         redundant = self._redundant_rules()
+        frame = elevation_frame(self.unit)
         rows: list[ConstraintRow] = []
         for constraint in self.unit.constraints:
             regions = constraint_regions(self.unit, constraint)
@@ -623,7 +657,7 @@ class Session:
             rows.append(
                 ConstraintRow(
                     constraint_id=constraint.id,
-                    kind=_row_kind(constraint),
+                    kind=_row_kind(constraint, self.unit, frame),
                     active=constraint.active,
                     size_mm=size_mm,
                     redundant=constraint.id in redundant,
@@ -1119,25 +1153,39 @@ class Session:
         )
 
     @_edit
-    def unlock_holders(self, board_id: str) -> EditFailure | None:
-        """Delete every Lock :meth:`held_by` names for ``board_id``, as one
-        undo step that moves nothing and keeps the selection, so a drag may
-        move the board. Returns an :class:`EditFailure`, changing nothing,
-        when no Lock holds the board, another constraint holds it, or no
-        unlock would free it."""
+    def lock_axis(self, direction: ElevationDirection) -> EditFailure | None:
+        """Lock, at its current size, the region each selected opening's
+        size along the elevation's ``direction`` belongs to, as
+        :func:`~freecad.Shelving.editor.elevation.region_along` finds it:
+        openings that resolve to one region make one Lock, a region whose
+        Lock is active is left alone, and a deactivated Lock is turned on.
+        One undo step that moves nothing and keeps the selection, adding no
+        step when every region is already locked; a redundant Lock is kept
+        with a warning through :attr:`on_warning`. Returns an
+        :class:`EditFailure`, changing nothing, when nothing or a board is
+        selected, or when any selected opening's size along ``direction``
+        is the unit's own."""
         self.settle()
-        held = self.held_by(board_id)
-        if held is None or not held.locks:
-            return EditFailure("no locked opening holds this board", board_id)
-        if held.constraints:
-            return EditFailure(
-                "a constraint holds this board, so no unlock frees it",
-                board_id,
-                constraint_ids=held.constraints,
-            )
-        candidate = remove_constraints(self.unit, held.locks)
-        return self._step(
-            "Unlock Board", lambda: self._apply(candidate, select=self._selection)
+        selection = self._selection
+        boards = {board.id for board in _boards(self.unit.root)}
+        if not selection or any(node_id in boards for node_id in selection):
+            first = next((n for n in selection if n in boards), None)
+            return EditFailure(_SELECT_TO_LOCK[direction], first)
+        horizontal, vertical = self._elevation_axes()
+        axis = horizontal if direction == "horizontal" else vertical
+        targets: dict[str, None] = {}
+        for node_id in selection:
+            target = region_along(self.unit, node_id, axis)
+            if target is None:
+                return EditFailure(_UNIT_SIZE_TO_LOCK[direction], node_id)
+            targets[target] = None
+        candidate = self.unit
+        for target in targets:
+            candidate = lock(candidate, target)
+        if candidate is self.unit:
+            return None
+        return self._locking_step(
+            _LOCK_STEPS[direction], candidate, list(targets), select=selection
         )
 
     def _locking_step(

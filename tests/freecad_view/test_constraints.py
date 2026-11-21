@@ -14,7 +14,7 @@ from PySide6 import QtCore, QtGui, QtSvg
 from freecad.Shelving.container import write_container
 from freecad.Shelving.editor import overlay
 from freecad.Shelving.editor.constraint_list import TEXT_COLUMN
-from freecad.Shelving.editor.elevation import ConstraintIcon, RowIcon
+from freecad.Shelving.editor.elevation import ConstraintIcon
 from freecad.Shelving.editor.overlay import (
     ICON_SOURCES,
     RGB,
@@ -68,7 +68,7 @@ def _icons(editor: ViewEditor) -> list[ConstraintIcon]:
     return [node.icon for node in editor.icon_nodes]
 
 
-def _icon_rect(editor: ViewEditor, icon: RowIcon) -> QtCore.QRectF:
+def _icon_rect(editor: ViewEditor, icon: ConstraintIcon) -> QtCore.QRectF:
     side_px, _gap_px = editor._icon_metrics_px()
     side_px /= editor.viewport.devicePixelRatioF()
     center = editor.icon_center(icon)
@@ -78,7 +78,7 @@ def _icon_rect(editor: ViewEditor, icon: RowIcon) -> QtCore.QRectF:
     )
 
 
-def _icon_part(node: IconNode[ConstraintIcon], side_px: int) -> QtGui.QImage:
+def _icon_part(node: IconNode, side_px: int) -> QtGui.QImage:
     """The icon at the far end of ``node``'s padded image."""
     image = node.drawn
     if node.icon.label.horizontal:
@@ -87,7 +87,7 @@ def _icon_part(node: IconNode[ConstraintIcon], side_px: int) -> QtGui.QImage:
 
 
 def _glyph_mismatches(
-    editor: ViewEditor, node: IconNode[ConstraintIcon], rgb: tuple[int, int, int]
+    editor: ViewEditor, node: IconNode, rgb: tuple[int, int, int]
 ) -> list[tuple[int, int]]:
     """The pixels of ``node``'s glyph that differ from its SVG drawn in
     ``rgb`` over the editor's tile, each pixel blended by the SVG's own
@@ -173,7 +173,7 @@ def test_ctrl_click_adds_openings_in_order(
     click_task_button("Close", driver)
 
 
-def test_icons_sit_at_each_constrained_opening_clear_of_text_padlocks_and_each_other(
+def test_icons_sit_at_each_constrained_opening_clear_of_text_and_each_other(
     unit: FreeCAD.DocumentObject, driver: ViewDriver
 ) -> None:
     panel, (a, b, c) = _column_panel(unit, driver)
@@ -189,7 +189,7 @@ def test_icons_sit_at_each_constrained_opening_clear_of_text_padlocks_and_each_o
     assert sorted(
         i.label.region_id for i in icons if i.constraint_id == spacing.id
     ) == sorted([a, b, c])
-    rects = [_icon_rect(editor, icon) for icon in editor.overlay.row_icons]
+    rects = [_icon_rect(editor, icon) for icon in editor.overlay.icons]
     taken = [editor.text_tile_rect(label) for label in editor.overlay.labels]
     for index, rect in enumerate(rects):
         for other in rects[index + 1 :] + taken:
@@ -428,7 +428,7 @@ def _blend_of(
 
 def _assert_marked_as(
     editor: ViewEditor,
-    node: IconNode[ConstraintIcon],
+    node: IconNode,
     rgb: tuple[int, int, int],
     active: bool,
 ) -> None:
@@ -556,8 +556,7 @@ def test_a_shelf_an_even_spacing_holds_shows_no_arrow_and_outlines_the_group(
     panel._refresh()
     driver.pump()
     assert editor.arrow is None
-    assert editor.held is None
-    holding = editor.style.locked_rgb
+    holding = editor.style.driving_rgb
     for region in (a, b, c):
         assert any(_close_rgb(rgb, holding) for rgb in _outline_rgbs(editor, region))
     click_task_button("Close", driver)

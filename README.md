@@ -86,13 +86,39 @@ The vocabulary the documentation and the code share.
   each when both can move; a size under 5 mm is refused, and so is any
   edit the locked openings leave no room for. Typing a size into an opening
   whose lock is off turns that lock back on. Locking or unlocking moves
-  nothing, and any opening may lock. When the locked openings fix the
+  nothing. Any region may lock but the whole unit, whose size the panel's
+  Width, Depth and Height fields set. When the locked openings fix the
   unit's width or height, that size is a **reference**, as a Sketcher
   reference dimension is: its field in the panel shows it read-only, and
   it follows the other edits with the fixed point staying put. A lock that
   repeats what other locks already fix is accepted with a warning, and the
   locks it repeats are outlined. A refused edit outlines the locked
   openings, and any opening held at 5 mm, that stand in its way.
+- **Lock Width and Lock Height**: the commands that lock sizes, as the
+  Sketcher's horizontal and vertical distance constraints fix a distance.
+  Select one or more openings and run one: each opening locks, at its
+  current size, the width or height it shares with the region around it.
+  In a column of bays, a bay's width is the column's, so Lock Width on it
+  locks the column, and its height is its own. Openings that share one
+  size make one lock, a size already locked is left alone, and a lock that
+  is off is turned back on. Nothing moves, and Undo takes the whole
+  command back. A selected panel or an empty selection is refused, and so
+  is a size that is the unit's own, which the Width or Height field of the
+  Edit Unit task panel sets. A lock is drawn as a red dimension, gray while
+  it is off: click its text to select the lock, Ctrl-click to select more,
+  and press Delete to remove them. Double-click any dimension's text to
+  type a size. The commands sit on the toolbar Edit Unit shows and in the
+  Shelving menu.
+- **Reference dimension**: a size drawn in blue with its value in
+  parentheses, as the Sketcher draws a reference dimension: it shows the
+  size and holds nothing. A selected opening shows its own, and the one it
+  shares along the other direction, such as its column's width, so you see
+  what Lock Width and Lock Height would lock. An opening an Equal or Even
+  spacing holds shows its dimension too, so a constraint's icon always sits
+  on one. Click a reference dimension's text to select its opening,
+  Ctrl-click to add it to the selected openings, and double-click to type
+  a size, which locks it. A size nothing locks, constrains or selects
+  shows no dimension.
 - **Measurement basis**: what a locked size measures. **Clear opening** is
   the region alone; **Spacing** runs through the next board, as a shelf
   spacing is quoted top face to top face. Switching basis moves nothing.
@@ -129,15 +155,14 @@ The vocabulary the documentation and the code share.
   when a unit is opened, as after a shelf was moved by hand. Nothing moves,
   the constraint stays, and it holds nothing. An Equal's or Even spacing's
   icons in the view and the constraint list carry an X in the corner; a
-  lock's row shows its padlock grayed, and its opening shows an open
-  padlock and an unlocked dimension. Check its box in the constraint list
-  to turn it back on, which moves the boards to meet it again, or delete
-  it there or with Delete. A lock holds its opening at whatever size it
-  has, so it never comes in deactivated and turning it on moves nothing.
-  One the boards miss by no more than the joint clearance stays active,
-  and the next edit makes it exact. A constraint whose openings or end
-  boards are gone is removed, a lock included. A notification says so
-  once, when Edit Unit opens.
+  lock's row shows its icon grayed, and its dimension turns gray. Check
+  its box in the constraint list to turn it back on, which moves the boards
+  to meet it again, or delete it there or with Delete. A lock holds its
+  opening at whatever size it has, so it never comes in deactivated and
+  turning it on moves nothing. One the boards miss by no more than the
+  joint clearance stays active, and the next edit makes it exact. A
+  constraint whose openings or end boards are gone is removed, a lock
+  included. A notification says so once, when Edit Unit opens.
 - **Constraint list**: the Constraints group in the Edit Unit panel. It
   lists every constraint, locks included, in the order they were made, as
   the Sketcher lists its constraints, each with its icon, its name and its

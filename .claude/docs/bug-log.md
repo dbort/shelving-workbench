@@ -1,5 +1,5 @@
 ---
-next_id: bug-026
+next_id: bug-029
 ---
 
 # Bug log
@@ -144,3 +144,23 @@ log happens only when the user asks.
   agree. Found in sh-054's review round 1 (N1). Fix: `sh-XXX task`; it
   needs a key that tells those openings apart, a change to the record
   format.
+- `bug-026` - **the add buttons cover a selected opening's dimensions**:
+  selecting an opening centers its add-shelf and add-divider buttons on the
+  opening, over the reference dimensions selecting it now draws, so the
+  dimensions can be read and double-clicked only when zoomed far in.
+  Found in sh-055's manual QA (`editor.dimensions`, step select). Fix:
+  `sh-XXX task`; where the buttons go instead is a design decision.
+- `bug-027` - **a constraint deactivated at open looks like one turned
+  off by hand**: its row in the constraint list carries no warning icon
+  and no tooltip saying the boards no longer met it, or that turning it
+  back on moves the boards it holds. The open notification says so once
+  and is gone. The user asked for the redundant constraint's warning icon,
+  with such a tooltip. Found in sh-055's manual QA (`editor.constraints`,
+  step reopen). Fix: `sh-XXX task`; the session must remember why each
+  constraint was deactivated, which nothing records today.
+- `bug-028` - **QA steps name Ctrl where a Mac uses Cmd**: steps such as
+  "Press Ctrl+Z" in `freecad/Shelving/qa/cases/` read wrong on a Mac,
+  where FreeCAD's shortcuts and add-to-selection use Cmd; one step already
+  says "(Command-click on a Mac)" and the rest do not. Found in sh-055's
+  manual QA (`editor.constraints`, step undo). Fix: `ad hoc`; a wording
+  pass over the case files, plus a line in `.claude/docs/qa-wizard.md`.

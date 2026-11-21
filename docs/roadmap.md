@@ -100,7 +100,7 @@ size changes, and scans back as the same treatment.
 - [x] sh-049: the constraint list in the task panel (blocked on sh-048)
 - [ ] sh-050: Aligned faces, picked by a board's face edges (blocked on sh-049)
 - [x] sh-054: a lock is a constraint you can turn off
-- [ ] sh-055: locks drawn as dimensions, made with Lock Width and Lock Height (blocked on sh-053, sh-054)
+- [x] sh-055: locks drawn as dimensions, made with Lock Width and Lock Height (blocked on sh-053, sh-054)
 - [ ] sh-056: Equal and Even spacing choose their axis (blocked on sh-055)
 - [ ] sh-057: fully constrained boards in color, and degrees of freedom in the panel (blocked on sh-055)
 
@@ -161,6 +161,8 @@ Each of these is its own task when it comes up.
   plain-number preference. The reader must keep it above the joint
   clearance plus the snap tolerance, or a minimum opening vanishes on the
   next read, checking it as it checks the snap against the clearance.
+- **Moving several boards together:** Ctrl-click (Cmd-click on a Mac)
+  several shelves, then drag them all at once.
 - **Typed moves and a drag step** in the 3D view: type how far to move the
   selected board, and set the drag increment, in the style of FreeCAD's
   own transform arrows. FreeCAD's `SoLinearDragger` has the fields for it

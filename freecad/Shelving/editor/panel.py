@@ -27,6 +27,7 @@ from freecad.Shelving.core.layout import Basis, ConstraintId
 from freecad.Shelving.core.stock import Color, StockGroup
 from freecad.Shelving.debug_log import Stopwatch
 from freecad.Shelving.editor.constraint_list import ConstraintList, ListActions
+from freecad.Shelving.editor.elevation import ElevationDirection
 from freecad.Shelving.editor.fields import DimensionField, WheelFilter
 from freecad.Shelving.editor.overlay import RGB, marker_rgb
 from freecad.Shelving.editor.session import (
@@ -63,6 +64,8 @@ _REFERENCE_TIP = "Locked openings fix this size. Unlock one of them to change it
 # The commands on the toolbar the panel shows while it is open; the Shelving
 # menu lists the same ones (freecad/Shelving/init_gui.py).
 CONSTRAINT_TOOLBAR_COMMANDS = (
+    "Shelving_LockWidth",
+    "Shelving_LockHeight",
     "Shelving_ConstrainEqual",
     "Shelving_ConstrainEvenSpacing",
 )
@@ -750,6 +753,11 @@ class EditUnitPanel:
         if failure is None and self.editor is not None:
             select_in_freecad(self.session.container.Document.Name, [])
         self._show_result(failure)
+
+    def lock(self, direction: ElevationDirection) -> None:
+        """Lock the selection's sizes along the elevation's ``direction``,
+        reporting a refusal through the Notification Area."""
+        self._show_result(self.session.lock_axis(direction))
 
     def _end(self) -> None:
         global _active

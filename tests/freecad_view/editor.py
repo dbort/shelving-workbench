@@ -167,7 +167,7 @@ _CLEAR_PX = 4
 
 def clear_of_labels(editor: ViewEditor, point: FreeCAD.Vector) -> bool:
     """Whether a press at ``point`` lands clear of every dimension's text
-    tile, padlock and constraint icon, by a margin."""
+    tile and constraint icon, by a margin."""
     x_px, y_px = device_point(editor, point)
 
     def grown_tile(label: DimensionLabel) -> tuple[float, float]:
@@ -176,7 +176,7 @@ def clear_of_labels(editor: ViewEditor, point: FreeCAD.Vector) -> bool:
 
     side_px, gap_px = editor._icon_metrics_px()
     reach_px = side_px / 2 + _CLEAR_PX
-    for icon in editor.overlay.row_icons:
+    for icon in editor.overlay.icons:
         center_x_px, center_y_px = icon_center_px(
             icon,
             editor._project(*icon.label.text_at_mm),

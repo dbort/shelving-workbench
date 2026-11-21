@@ -40,16 +40,12 @@ from freecad.Shelving.editor.elevation import (
     ConstraintIcon,
     DimensionLabel,
     ElevationFrame,
-    HeldPadlock,
     Overlay,
-    PadlockIcon,
     Rect,
-    RowIcon,
     arrow_for,
     board_ids,
     dragged_to_mm,
     elevation_frame,
-    held_padlock,
     icon_at,
     icon_center_px,
     label_at,
@@ -74,9 +70,8 @@ from freecad.Shelving.editor.overlay import (
     constraint_icon_image,
     drawing_node,
     icon_side_px,
-    length_text,
+    label_text,
     padded_icon_image,
-    padlock_image,
     text_tile_image,
     view_style,
 )
@@ -87,9 +82,9 @@ from freecad.Shelving.editor.session import (
 )
 from freecad.Shelving.refusals import report_error
 
-# A padlock image's cache key: its dimension's color name, its color, tile
-# and side; a constraint icon's: its kind, color, activation, tile and side.
-IconImageKey = tuple[str, RGB, Tile, int] | tuple[str, RGB, bool, Tile, int]
+# A constraint icon image's cache key: its kind, color, activation, tile and
+# side.
+IconImageKey = tuple[str, RGB, bool, Tile, int]
 
 # The add buttons' icon side, in logical pixels.
 _ICON_PX = 24
@@ -99,8 +94,8 @@ _ICON_PX = 24
 _ROW_GAP_PX = 8
 # The fixed point marker's side, in logical pixels.
 _MARKER_PX = 16
-# The clear gap between a dimension's text tile and its padlock, and
-# between the tiles of the row after it, in logical pixels.
+# The clear gap between a dimension's text tile and its first constraint
+# icon, and between the tiles of the row after it, in logical pixels.
 _ICON_GAP_PX = 3
 # Inkscape's rotation-center marker on its 8.81 mm square: a plus whose arms
 # meet in a chamfered hub, with a round hole at the center.
@@ -334,11 +329,21 @@ class _FieldKeys(QtCore.QObject):
 
     @override
     def eventFilter(self, watched: QtCore.QObject, event: QtCore.QEvent) -> bool:
-        if event.type() == QtCore.QEvent.Type.KeyPress:
-            if cast("QtGui.QKeyEvent", event).key() == QtCore.Qt.Key.Key_Escape:
-                self._on_escape()
-                return True
-        return False
+        kind = event.type()
+        if kind not in (
+            QtCore.QEvent.Type.ShortcutOverride,
+            QtCore.QEvent.Type.KeyPress,
+        ):
+            return False
+        if cast("QtGui.QKeyEvent", event).key() != QtCore.Qt.Key.Key_Escape:
+            return False
+        if kind == QtCore.QEvent.Type.ShortcutOverride:
+            # Claimed here, an Escape shortcut elsewhere in FreeCAD cannot
+            # take the key before it arrives as a press.
+            event.accept()
+            return True
+        self._on_escape()
+        return True
 
 
 class _DeleteKeys(QtCore.QObject):
@@ -445,15 +450,16 @@ _ADD_MODIFIER = QtCore.Qt.KeyboardModifier.ControlModifier
 class _ViewportClicks(QtCore.QObject):
     """Reads left clicks on the 3D view's viewport before navigation and
     FreeCAD's selection see them. ``on_press`` sorts each press, told
-    whether it carries FreeCAD's add-to-selection modifier; a press taken
-    is consumed with its release, so no board beneath it is picked, and a
-    click is reported to ``on_click`` once FreeCAD has handled it, with
-    whether it carried that modifier."""
+    whether it carries FreeCAD's add-to-selection modifier and whether it
+    is a double-click's second press; a press taken is consumed with its
+    release, so no board beneath it is picked, and a click is reported to
+    ``on_click`` once FreeCAD has handled it, with whether it carried that
+    modifier."""
 
     def __init__(
         self,
         viewport: QtWidgets.QWidget,
-        on_press: Callable[[QtCore.QPointF, bool], PressKind],
+        on_press: Callable[[QtCore.QPointF, bool, bool], PressKind],
         on_click: Callable[[QtCore.QPointF, bool], None],
     ) -> None:
         super().__init__(viewport)
@@ -465,8 +471,11 @@ class _ViewportClicks(QtCore.QObject):
     @override
     def eventFilter(self, watched: QtCore.QObject, event: QtCore.QEvent) -> bool:
         kind = event.type()
+        # Qt sends a double-click's second press as MouseButtonDblClick in
+        # place of a press, and FreeCAD's selection acts on it as one.
         if kind not in (
             QtCore.QEvent.Type.MouseButtonPress,
+            QtCore.QEvent.Type.MouseButtonDblClick,
             QtCore.QEvent.Type.MouseButtonRelease,
         ):
             return False
@@ -474,9 +483,11 @@ class _ViewportClicks(QtCore.QObject):
         if mouse.button() != QtCore.Qt.MouseButton.LeftButton:
             return False
         position = mouse.position()
-        if kind == QtCore.QEvent.Type.MouseButtonPress:
+        if kind != QtCore.QEvent.Type.MouseButtonRelease:
             press_kind = self._on_press(
-                position, bool(mouse.modifiers() & _ADD_MODIFIER)
+                position,
+                bool(mouse.modifiers() & _ADD_MODIFIER),
+                kind == QtCore.QEvent.Type.MouseButtonDblClick,
             )
             self._consumed = press_kind == "take"
             self._press = position if press_kind == "click" else None
@@ -631,11 +642,9 @@ class ViewEditor:
         self._field_region: str | None = None
         self._field_applied = False
         self._add_anchor: tuple[float, float] | None = None
-        self.held: HeldPadlock | None = None
-        # The drawn padlocks, constraint icons and text tiles, rebuilt with
-        # the drawing.
-        self.padlock_nodes: list[IconNode[PadlockIcon]] = []
-        self.icon_nodes: list[IconNode[ConstraintIcon]] = []
+        # The drawn constraint icons and text tiles, rebuilt with the
+        # drawing.
+        self.icon_nodes: list[IconNode] = []
         self.text_tiles: list[TextTileNode] = []
         self._icon_images: dict[IconImageKey, QtGui.QImage] = {}
         self._tile_images: dict[tuple[Tile, int, int], QtGui.QImage] = {}
@@ -711,10 +720,6 @@ class ViewEditor:
         self._draw_marker(ratio)
         self._icons: Coin = coin.SoSeparator()
         self.root.addChild(self._icons)
-        self.held_marker = PointMarker()
-        self.held_marker.show(False)
-        self.root.addChild(self.held_marker.root)
-        self._draw_held()
         scene_graph = self.view.getSceneGraph()
         scene_graph.addChild(self.root)
         self._installed.append((lambda: scene_graph.removeChild(self.root), True))
@@ -1060,15 +1065,15 @@ class ViewEditor:
         self._place_widgets()
 
     def _icon_metrics_px(self) -> tuple[int, int]:
-        """The side of a padlock's or constraint icon's tile, and the gap
-        around it, in device pixels at the view's ratio now."""
+        """The side of a constraint icon's tile, and the gap around it, in
+        device pixels at the view's ratio now."""
         ratio = self._viewer.devicePixelRatioF()
         side_px = round(icon_side_px() * ratio) + 2 * self.icon_tile().pad_px
         return side_px, round(_ICON_GAP_PX * ratio)
 
     def icon_tile(self) -> Tile:
-        """The tile under each padlock, constraint icon and dimension text,
-        in device pixels at the view's ratio now."""
+        """The tile under each constraint icon and dimension text, in device
+        pixels at the view's ratio now."""
         ratio = self._viewer.devicePixelRatioF()
         return Tile(
             self.style.tile_rgb, round(TILE_PAD_PX * ratio), TILE_RADIUS_PX * ratio
@@ -1081,7 +1086,7 @@ class ViewEditor:
         pad_px = self.icon_tile().pad_px
         metrics = self._label_metrics
         return (
-            float(metrics.horizontalAdvance(length_text(label.size_mm)) + 2 * pad_px),
+            float(metrics.horizontalAdvance(label_text(label)) + 2 * pad_px),
             float(metrics.height() + 2 * pad_px),
         )
 
@@ -1106,57 +1111,36 @@ class ViewEditor:
                 self._tile_images[key] = image
             self.text_tiles.append(TextTileNode(label, z_mm, image))
 
-    def _row_image(self, icon: RowIcon, tile: Tile, side_px: int) -> QtGui.QImage:
-        """``icon``'s image: a padlock in its dimension's color, a
-        constraint's icon in its selection's color and marked when
+    def _icon_image(
+        self, icon: ConstraintIcon, tile: Tile, side_px: int
+    ) -> QtGui.QImage:
+        """``icon``'s image, in its selection's color and marked when
         deactivated."""
-        key: IconImageKey
-        if isinstance(icon, PadlockIcon):
-            rgb = self.style.label_rgb(icon.label.color)
-            key = (icon.label.color, rgb, tile, side_px)
-        else:
-            rgb = self.style.constraint_icon_rgb(icon.selected)
-            key = (icon.kind, rgb, icon.active, tile, side_px)
+        rgb = self.style.constraint_icon_rgb(icon.selected)
+        key: IconImageKey = (icon.kind, rgb, icon.active, tile, side_px)
         image = self._icon_images.get(key)
-        if image is not None:
-            return image
-        if isinstance(icon, PadlockIcon):
-            image = padlock_image(icon.locked, rgb, tile, side_px)
-        else:
+        if image is None:
             image = constraint_icon_image(icon.kind, rgb, tile, side_px, icon.active)
-        self._icon_images[key] = image
+            self._icon_images[key] = image
         return image
 
     def _draw_icons(self) -> None:
-        """Draw each dimension's padlock and each constraint icon the
-        overlay plans, in the row past its dimension's text tile."""
+        """Draw each constraint icon the overlay plans, in the row past its
+        dimension's text tile."""
         side_px, gap_px = self._icon_metrics_px()
         tile = self.icon_tile()
         self._icons.removeAllChildren()
-        self.padlock_nodes = [IconNode(padlock) for padlock in self.overlay.padlocks]
         self.icon_nodes = [IconNode(icon) for icon in self.overlay.icons]
-        nodes: list[IconNode[PadlockIcon] | IconNode[ConstraintIcon]] = [
-            *self.padlock_nodes,
-            *self.icon_nodes,
-        ]
-        for node in nodes:
+        for node in self.icon_nodes:
             icon = node.icon
             lead_px = round(
                 self._tile_along_px(icon.label) / 2
                 + gap_px
                 + icon.slot * (side_px + gap_px)
             )
-            image = self._row_image(icon, tile, side_px)
+            image = self._icon_image(icon, tile, side_px)
             node.set_image(padded_icon_image(image, icon.label.horizontal, lead_px))
             self._icons.addChild(node.root)
-
-    def _draw_held(self) -> None:
-        """Give the held board's padlock its image, closed and in the locked
-        dimension color on the row icons' tile, at the view's ratio now."""
-        side_px, _gap_px = self._icon_metrics_px()
-        self.held_marker.set_image(
-            padlock_image(True, self.style.locked_rgb, self.icon_tile(), side_px)
-        )
 
     def _logical_from_device(self, x_px: float, y_px: float) -> QtCore.QPointF:
         """A device point, y up, in the viewport's logical pixels."""
@@ -1164,7 +1148,7 @@ class ViewEditor:
         height_px = self.view.getSize()[1]
         return QtCore.QPointF(x_px / ratio, (height_px - y_px - 1) / ratio)
 
-    def icon_center(self, icon: RowIcon) -> QtCore.QPointF:
+    def icon_center(self, icon: ConstraintIcon) -> QtCore.QPointF:
         """Where ``icon``'s center is drawn, in the viewport's logical
         pixels."""
         side_px, gap_px = self._icon_metrics_px()
@@ -1211,14 +1195,6 @@ class ViewEditor:
             else None
         )
         self.arrow = arrow
-        self.held = (
-            held_padlock(session.unit, session.spaces, self.frame, selected)
-            if selected is not None and session.can_merge()
-            else None
-        )
-        if self.held is not None:
-            self.held_marker.place((*self.held.at_mm, 0.0))
-        self.held_marker.show(self.held is not None)
         if arrow is None:
             self._dragger_switch.whichChild.setValue(coin.SO_SWITCH_NONE)
             return
@@ -1529,56 +1505,73 @@ class ViewEditor:
             <= _ARROW_HIT_PX
         )
 
-    def _on_held(self, device: tuple[int, int]) -> bool:
-        """Whether the device point lies on the held board's padlock."""
-        held = self.held
-        if held is None:
-            return False
-        side_px, _gap_px = self._icon_metrics_px()
-        x_px, y_px = self._project(*held.at_mm)
-        return (
-            abs(device[0] - x_px) <= side_px / 2
-            and abs(device[1] - y_px) <= side_px / 2
-        )
-
-    def _sort_press(self, position: QtCore.QPointF, adding: bool) -> PressKind:
-        """A press on the drag arrow is the dragger's; one on the held
-        board's padlock deletes the locks holding it; one on a dimension's
-        padlock locks or unlocks its opening; one on a constraint's icon
-        selects the constraint, or adds it for an ``adding`` press; one on a
-        dimension's text tile opens that dimension's field."""
+    def _sort_press(
+        self, position: QtCore.QPointF, adding: bool, double: bool
+    ) -> PressKind:
+        """A press on the drag arrow is the dragger's. One on a constraint's
+        icon selects the constraint, or adds it for an ``adding`` press;
+        one on a dimension's text tile does what :meth:`click_label` does.
+        A ``double`` press, a double-click's second, on a text tile opens
+        that dimension's field, and on an icon does nothing more. Both
+        presses on an icon or tile are taken, so FreeCAD's selection sees
+        neither, as the Sketcher's own dimensions take theirs."""
         if self._closed:
             return "leave"
         device = self._device_point(position)
         if self._on_arrow(device):
             return "leave"
-        if self._on_held(device):
-            QtCore.QTimer.singleShot(0, self._unlock_held)
-            return "take"
         side_px, gap_px = self._icon_metrics_px()
         icon = icon_at(
-            self.overlay.row_icons,
+            self.overlay.icons,
             self._project,
             self._tile_along_px,
             side_px,
             gap_px,
             *device,
         )
-        if isinstance(icon, PadlockIcon):
-            padlock = icon
-            QtCore.QTimer.singleShot(0, lambda: self._toggle_lock(padlock))
-            return "take"
         if icon is not None:
-            constraint_id = icon.constraint_id
-            QtCore.QTimer.singleShot(
-                0, lambda: self.click_constraint(constraint_id, adding)
-            )
+            if not double:
+                constraint_id = icon.constraint_id
+                QtCore.QTimer.singleShot(
+                    0, lambda: self.click_constraint(constraint_id, adding)
+                )
             return "take"
         label = label_at(self.overlay.labels, self._project, self.text_tile_px, *device)
         if label is None:
-            return "click"
-        QtCore.QTimer.singleShot(0, lambda: self.open_field(label))
+            return "leave" if double else "click"
+        if double:
+            QtCore.QTimer.singleShot(0, lambda: self.open_field(label))
+        else:
+            QtCore.QTimer.singleShot(0, lambda: self.click_label(label, adding))
         return "take"
+
+    def click_label(self, label: DimensionLabel, adding: bool) -> None:
+        """A click on ``label``'s text, as one on a Sketcher dimension: a
+        driving or deactivated dimension's Lock is selected as
+        :meth:`click_constraint` selects it, and a reference dimension's
+        region is selected alone, or, ``adding``, added to the selected
+        openings or taken back out. An ``adding`` click on a reference
+        dimension leaves a board selection alone, as :meth:`_click` does."""
+        if self._closed:
+            return
+        if label.lock_id is not None:
+            self.click_constraint(label.lock_id, adding)
+            return
+        self._close_field()
+        if not adding:
+            self.select(label.region_id)
+            return
+        session = self.session
+        if session.selected_boards:
+            return
+        items = list(session.selected_items)
+        if label.region_id in items:
+            items.remove(label.region_id)
+        else:
+            items.append(label.region_id)
+        session.select_items(items)
+        select_in_freecad(self._doc_name, [])
+        self._on_change()
 
     def click_constraint(self, constraint_id: ConstraintId, adding: bool) -> None:
         """Select the constraint ``constraint_id`` alone, or, ``adding``, add
@@ -1667,7 +1660,7 @@ class ViewEditor:
     def field_host(self) -> QtWidgets.QFrame | None:
         return self._field_host
 
-    # Padlocks and the fixed point marker
+    # The fixed point marker
 
     def _draw_marker(self, ratio: float) -> None:
         """Give the fixed point marker its image drawn at the device pixel
@@ -1692,32 +1685,9 @@ class ViewEditor:
             self._drawn_ratio = ratio
             self.add_bar.draw_icons(ratio)
             self._draw_marker(ratio)
-            self._draw_held()
-            # Redraws the padlocks, constraint icons and text tiles.
+            # Redraws the constraint icons and text tiles.
             self.rebuild()
         self._place_widgets()
-
-    def _toggle_lock(self, padlock: PadlockIcon) -> None:
-        """Delete the active lock on ``padlock``'s opening when it is
-        closed; otherwise turn the opening's deactivated lock on, or add
-        one."""
-        if self._closed:
-            return
-        self._close_field()
-        failure = self.session.set_lock(padlock.label.region_id, not padlock.locked)
-        if failure is not None:
-            report_error(failure.message)
-        self._on_change()
-
-    def _unlock_held(self) -> None:
-        held = self.held
-        if self._closed or held is None:
-            return
-        self._close_field()
-        failure = self.session.unlock_holders(held.board_id)
-        if failure is not None:
-            report_error(failure.message)
-        self._on_change()
 
     # The add buttons
 

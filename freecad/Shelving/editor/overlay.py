@@ -16,7 +16,7 @@ import os
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Generic, Protocol, TypeAlias, TypeVar
+from typing import Any, Protocol, TypeAlias
 
 import FreeCAD
 from pivy import coin
@@ -24,14 +24,14 @@ from PySide6 import QtCore, QtGui, QtSvg, QtWidgets
 
 from freecad.Shelving.editor.elevation import (
     LIFT_MM,
+    ConstraintIcon,
     ConstraintKind,
     DimensionLabel,
+    ElevationDirection,
     ElevationFrame,
-    LabelColor,
     OutlineRole,
     Overlay,
     Rect,
-    RowIcon,
 )
 
 # pivy ships no type information, so every Coin node and field is untyped.
@@ -107,21 +107,31 @@ class Style:
     """The colors and text size the drawing uses."""
 
     selected_rgb: RGB
-    locked_rgb: RGB
-    unlocked_rgb: RGB
+    driving_rgb: RGB
+    deactivated_rgb: RGB
+    reference_rgb: RGB
     marker_rgb: RGB
     label_size_pt: int
     # A constraint's icon, whether it is active or deactivated: a
     # deactivated one carries a corner X instead of another color.
     icon_rgb: RGB = (1.0, 38 / 255, 0.0)
-    # The tile under each dimension's text, padlock and constraint icon:
+    # The tile under each dimension's text and constraint icon:
     # the view's own background, which the theme picks the dimension and
     # icon colors to stand out against, where an opening's fill would blur
     # them.
     tile_rgb: RGB = (247 / 255, 247 / 255, 247 / 255)
 
-    def label_rgb(self, color: LabelColor) -> RGB:
-        return self.locked_rgb if color == "locked" else self.unlocked_rgb
+    def label_rgb(self, label: DimensionLabel) -> RGB:
+        """The selection color for a dimension whose Lock is selected,
+        otherwise its role's color. A selected deactivated dimension thus
+        hides its state, as the Sketcher's does."""
+        if label.selected:
+            return self.selected_rgb
+        if label.role == "driving":
+            return self.driving_rgb
+        if label.role == "deactivated":
+            return self.deactivated_rgb
+        return self.reference_rgb
 
     def constraint_icon_rgb(self, selected: bool) -> RGB:
         """The selection color for a selected constraint's icon, the icon
@@ -131,13 +141,13 @@ class Style:
         return self.selected_rgb if selected else self.icon_rgb
 
     def outline_rgb(self, role: OutlineRole) -> RGB:
-        """The selection color for "selected", the locked dimension color
-        for "holding", so a holding region reads as the lock it is, and a
-        dark gray for "region"."""
+        """The selection color for "selected", the driving dimension color
+        for "holding", so a holding region reads as the constraint it is,
+        and a dark gray for "region"."""
         if role == "selected":
             return self.selected_rgb
         if role == "holding":
-            return self.locked_rgb
+            return self.driving_rgb
         return _OUTLINE_RGB
 
 
@@ -150,15 +160,16 @@ def marker_rgb() -> RGB:
 def view_style(label_size_pt: int) -> Style:
     """FreeCAD's selection color and the Sketcher's dimension and
     constraint icon colors, read from the View preferences now: red for a
-    size that drives (a locked opening), blue for one that only reports,
-    and the fixed point's marker in the color of the Sketcher's own
-    billboard icons. A constraint's icon takes the Sketcher's icon color
-    and sits with each padlock and dimension text on a tile of the view's
-    background. Defaults from FreeCAD 1.1."""
+    size an active Lock drives, gray for a deactivated Lock's, blue for a
+    reference size that only reports, and the fixed point's marker in the
+    color of the Sketcher's own billboard icons. A constraint's icon takes
+    the Sketcher's icon color and sits with each dimension's text on a tile
+    of the view's background. Defaults from FreeCAD 1.1."""
     return Style(
         selected_rgb=_view_color("SelectionColor", 0x1CAD1CFF),
-        locked_rgb=_view_color("ConstrainedDimColor", 0xFF2600FF),
-        unlocked_rgb=_view_color("NonDrivingConstrDimColor", 0x0026FFFF),
+        driving_rgb=_view_color("ConstrainedDimColor", 0xFF2600FF),
+        deactivated_rgb=_view_color("DeactivatedConstrDimColor", 0x7F7F7FFF),
+        reference_rgb=_view_color("NonDrivingConstrDimColor", 0x0026FFFF),
         marker_rgb=marker_rgb(),
         label_size_pt=label_size_pt,
         icon_rgb=_view_color("ConstrainedIcoColor", 0xFF2600FF),
@@ -175,6 +186,12 @@ ICON_SOURCES: Mapping[ConstraintKind, str] = {
     "equal": os.path.join(_RESOURCES, "Constraint_Equal.svg"),
     "even_spacing": os.path.join(_RESOURCES, "Constraint_EvenSpacing.svg"),
 }
+# Lock Width's and Lock Height's icons, after the Sketcher's horizontal and
+# vertical distance constraints'.
+LOCK_ICON_SOURCES: Mapping[ElevationDirection, str] = {
+    "horizontal": os.path.join(_RESOURCES, "Constraint_HorizontalDistance.svg"),
+    "vertical": os.path.join(_RESOURCES, "Constraint_VerticalDistance.svg"),
+}
 
 
 # The tile's margin around a glyph or a dimension's text, and its corner
@@ -185,8 +202,8 @@ TILE_RADIUS_PX = 3
 
 @dataclass(frozen=True)
 class Tile:
-    """The tile a padlock's or constraint icon's glyph, or a dimension's
-    text, sits on, in device pixels."""
+    """The tile a constraint icon's glyph, or a dimension's text, sits on,
+    in device pixels."""
 
     rgb: RGB
     pad_px: int
@@ -287,6 +304,22 @@ def _draw_corner_x(painter: QtGui.QPainter, glyph_px: int) -> None:
     painter.restore()
 
 
+def _icon_image(
+    source: str, rgb: RGB, tile: Tile, side_px: int, active: bool
+) -> QtGui.QImage:
+    glyph_px = side_px - 2 * tile.pad_px
+    glyph = QtGui.QImage(glyph_px, glyph_px, QtGui.QImage.Format.Format_RGBA8888)
+    glyph.fill(QtCore.Qt.GlobalColor.transparent)
+    painter = QtGui.QPainter(glyph)
+    QtSvg.QSvgRenderer(source).render(painter)
+    if not active:
+        _draw_corner_x(painter, glyph_px)
+    painter.setCompositionMode(QtGui.QPainter.CompositionMode.CompositionMode_SourceIn)
+    painter.fillRect(glyph.rect(), QtGui.QColor.fromRgbF(*rgb))
+    painter.end()
+    return _on_tile(glyph, tile, side_px)
+
+
 def constraint_icon_image(
     kind: ConstraintKind, rgb: RGB, tile: Tile, side_px: int, active: bool = True
 ) -> QtGui.QImage:
@@ -296,80 +329,15 @@ def constraint_icon_image(
     Sketcher's ``renderConstrIcon`` recolors its icons with a source-in
     fill, so the X takes ``rgb`` as well; the tile's rounded corners stay
     transparent."""
-    glyph_px = side_px - 2 * tile.pad_px
-    glyph = QtGui.QImage(glyph_px, glyph_px, QtGui.QImage.Format.Format_RGBA8888)
-    glyph.fill(QtCore.Qt.GlobalColor.transparent)
-    painter = QtGui.QPainter(glyph)
-    QtSvg.QSvgRenderer(ICON_SOURCES[kind]).render(painter)
-    if not active:
-        _draw_corner_x(painter, glyph_px)
-    painter.setCompositionMode(QtGui.QPainter.CompositionMode.CompositionMode_SourceIn)
-    painter.fillRect(glyph.rect(), QtGui.QColor.fromRgbF(*rgb))
-    painter.end()
-    return _on_tile(glyph, tile, side_px)
+    return _icon_image(ICON_SOURCES[kind], rgb, tile, side_px, active)
 
 
-# The padlock glyph's proportions on its square, designed at 14 pixels:
-# the body's inset from the left and right edges and its top and height,
-# the stroke, the shackle's box, and how far an open shackle swings.
-_PADLOCK_DESIGN_PX = 14.0
-_PADLOCK_INSET = 2 / _PADLOCK_DESIGN_PX
-_PADLOCK_BODY_TOP = 0.45
-_PADLOCK_BODY_HEIGHT = 0.5
-_PADLOCK_STROKE = 1.6 / _PADLOCK_DESIGN_PX
-_PADLOCK_SHACKLE_LEFT = 4 / _PADLOCK_DESIGN_PX
-_PADLOCK_SHACKLE_TOP = 1.5 / _PADLOCK_DESIGN_PX
-_PADLOCK_SHACKLE_HEIGHT = 0.6
-_PADLOCK_SWING_RIGHT = 0.18
-_PADLOCK_SWING_UP = 1 / _PADLOCK_DESIGN_PX
-
-
-def padlock_image(locked: bool, rgb: RGB, tile: Tile, side_px: int) -> QtGui.QImage:
-    """A padlock in ``rgb`` on ``tile``, ``side_px`` device pixels square: a
-    filled body under a shackle, closed when ``locked``, swung open off the
-    body's left side otherwise. The glyph sits ``tile.pad_px`` in from each
-    edge, as :func:`constraint_icon_image` places its own, and the tile's
-    rounded corners stay transparent."""
-    glyph_px = side_px - 2 * tile.pad_px
-    glyph = QtGui.QImage(glyph_px, glyph_px, QtGui.QImage.Format.Format_RGBA8888)
-    glyph.fill(QtCore.Qt.GlobalColor.transparent)
-    painter = QtGui.QPainter(glyph)
-    painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
-    color = QtGui.QColor.fromRgbF(*rgb)
-    pen = QtGui.QPen(color)
-    pen.setWidthF(_PADLOCK_STROKE * glyph_px)
-    painter.setPen(pen)
-    inset_px = _PADLOCK_INSET * glyph_px
-    body = QtCore.QRectF(
-        inset_px,
-        _PADLOCK_BODY_TOP * glyph_px,
-        glyph_px - 2 * inset_px,
-        _PADLOCK_BODY_HEIGHT * glyph_px,
-    )
-    shackle_left_px = _PADLOCK_SHACKLE_LEFT * glyph_px
-    shackle = QtCore.QRectF(
-        shackle_left_px,
-        _PADLOCK_SHACKLE_TOP * glyph_px,
-        glyph_px - 2 * shackle_left_px,
-        _PADLOCK_SHACKLE_HEIGHT * glyph_px,
-    )
-    if not locked:
-        shackle.translate(
-            _PADLOCK_SWING_RIGHT * glyph_px, -_PADLOCK_SWING_UP * glyph_px
-        )
-    painter.drawArc(shackle, 0, 180 * 16)
-    painter.drawLine(
-        QtCore.QPointF(shackle.right(), shackle.center().y()),
-        QtCore.QPointF(shackle.right(), body.top()),
-    )
-    if locked:
-        painter.drawLine(
-            QtCore.QPointF(shackle.left(), shackle.center().y()),
-            QtCore.QPointF(shackle.left(), body.top()),
-        )
-    painter.fillRect(body, color)
-    painter.end()
-    return _on_tile(glyph, tile, side_px)
+def lock_icon_image(
+    direction: ElevationDirection, rgb: RGB, tile: Tile, side_px: int
+) -> QtGui.QImage:
+    """The icon of the command locking sizes along ``direction``, placed and
+    colored as :func:`constraint_icon_image` places and colors its own."""
+    return _icon_image(LOCK_ICON_SOURCES[direction], rgb, tile, side_px, True)
 
 
 def coin_rgba(image: QtGui.QImage) -> tuple[int, int, bytes]:
@@ -458,6 +426,18 @@ def length_text(length_mm: float) -> str:
     )
 
 
+# A reference dimension's text, its value in parentheses as the Sketcher
+# writes a reference constraint's: one format string to translate.
+_REFERENCE_TEXT = "({size})"
+
+
+def label_text(label: DimensionLabel) -> str:
+    """``label``'s text: its size as :func:`length_text` writes it, in
+    parentheses for a reference dimension."""
+    size = length_text(label.size_mm)
+    return _REFERENCE_TEXT.format(size=size) if label.role == "reference" else size
+
+
 def datum_label_node(
     label: DimensionLabel, z_mm: float, style: Style, normal: FreeCAD.Vector
 ) -> Coin:
@@ -465,12 +445,12 @@ def datum_label_node(
     front face's normal in document coordinates on either face: the node
     compares it with the camera's direction to decide which way its text
     reads, so a normal in the local frame would mirror the text."""
-    rgb = style.label_rgb(label.color)
+    rgb = style.label_rgb(label)
     node = coin.SoType.fromName("SoDatumLabel").createInstance()
     (h0_mm, v0_mm), (h1_mm, v1_mm) = label.start_mm, label.end_mm
     node.getField("pnts").setValues(0, 2, [[h0_mm, v0_mm, z_mm], [h1_mm, v1_mm, z_mm]])
     node.getField("norm").setValue(normal.x, normal.y, normal.z)
-    node.getField("string").setValue(length_text(label.size_mm))
+    node.getField("string").setValue(label_text(label))
     node.getField("textColor").setValue(*rgb)
     node.getField("size").setValue(style.label_size_pt)
     node.getField("param2").setValue(label.text_shift_mm)
@@ -637,14 +617,11 @@ class PointMarker:
         return int(self._switch.whichChild.getValue()) == 0
 
 
-IconT = TypeVar("IconT", bound=RowIcon)
+class IconNode:
+    """A constraint's icon, drawn as :class:`PointMarker` draws its image,
+    after its dimension's text along the line."""
 
-
-class IconNode(Generic[IconT]):
-    """A padlock's or constraint's icon, drawn as :class:`PointMarker`
-    draws its image, after its dimension's text along the line."""
-
-    def __init__(self, icon: IconT) -> None:
+    def __init__(self, icon: ConstraintIcon) -> None:
         self.icon = icon
         self.root, translation = _image_group()
         h_mm, v_mm = icon.label.text_at_mm

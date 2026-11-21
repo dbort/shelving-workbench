@@ -309,6 +309,18 @@ def _openings(region: Region) -> list[str]:
     ]
 
 
+def _region_ids(region: Region) -> list[str]:
+    """Every region below ``region``, in tree order."""
+    if not isinstance(region, Division):
+        return []
+    found: list[str] = []
+    for item in region.items:
+        if not isinstance(item, Board):
+            found.append(item.id)
+            found.extend(_region_ids(item))
+    return found
+
+
 def _assert_faces_on(
     container: FreeCAD.DocumentObject, panel: EditUnitPanel, side: str
 ) -> None:
@@ -381,8 +393,8 @@ def test_each_region_in_a_run_has_a_sketcher_dimension(
     session = panel.session
     lower = bay_ids(session.unit.root)[0]
     assert session.set_lock(lower, locked=True) is None
-    upper = bay_ids(session.unit.root)[1]
-    session.select(upper)
+    # Every region selected draws every dimension.
+    session.select_items(_region_ids(session.unit.root))
     panel._refresh()
     viewer = driver.graphics_view
     size_pt = label_size_pt(
@@ -399,12 +411,14 @@ def test_each_region_in_a_run_has_a_sketcher_dimension(
             for item in region.items:
                 if isinstance(item, Board):
                     continue
+                size_mm = measure(session.unit, item.id, session.spaces).size_mm
                 if is_locked(session.unit, item.id):
                     rgb = _rgb("ConstrainedDimColor", 0)
+                    text = length_text(size_mm)
                 else:
                     rgb = _rgb("NonDrivingConstrDimColor", 0)
-                size_mm = measure(session.unit, item.id, session.spaces).size_mm
-                found.append((length_text(size_mm), rgb))
+                    text = f"({length_text(size_mm)})"
+                found.append((text, rgb))
                 walk(item)
 
         walk(session.unit.root)
@@ -488,9 +502,10 @@ def test_dimensions_follow_the_users_unit_system(
         placed_unit.Document.UnitSystem = "Imperial decimal (in, lb)"
         panel = edit_unit(placed_unit, driver)
         add_board(panel, "vertical", driver)
+        editor_of(panel).select(bay_ids(panel.session.unit.root)[0])
         drawn = overlay_nodes.labels(editor_of(panel).root)
         assert drawn
-        assert all(label.text.endswith(" in") for label in drawn), drawn
+        assert all(label.text.endswith(" in)") for label in drawn), drawn
         click_task_button("Close", driver)
 
 
@@ -504,8 +519,9 @@ def test_dimensions_follow_a_unit_change_while_the_editor_is_open(
     params = FreeCAD.ParamGet(_UNITS_PARAMS)
     panel = edit_unit(placed_unit, driver)
     add_board(panel, "vertical", driver)
+    editor_of(panel).select(bay_ids(panel.session.unit.root)[0])
     assert all(
-        label.text.endswith(" mm")
+        label.text.endswith(" mm)")
         for label in overlay_nodes.labels(editor_of(panel).root)
     )
     imperial = FreeCAD.Units.listSchemas().index("ImperialDecimal")
@@ -520,7 +536,7 @@ def test_dimensions_follow_a_unit_change_while_the_editor_is_open(
             driver.pump()
             drawn = overlay_nodes.labels(editor_of(panel).root)
             assert drawn
-            assert all(label.text.endswith(" in") for label in drawn), drawn
+            assert all(label.text.endswith(" in)") for label in drawn), drawn
         finally:
             params.RemBool("IgnoreProjectSchema")
             params.RemInt("UserSchema")
@@ -529,11 +545,12 @@ def test_dimensions_follow_a_unit_change_while_the_editor_is_open(
 
 def _layered(placed_unit: FreeCAD.DocumentObject, driver: ViewDriver) -> EditUnitPanel:
     """Edit Unit open on the unit split four times, which stacks two rows
-    of dimensions left of it and two below it."""
+    of dimensions left of it and two below it, with every region selected
+    so each draws its dimension."""
     panel = edit_unit(placed_unit, driver)
     for direction in ("horizontal", "vertical", "horizontal", "vertical"):
         add_board(panel, direction, driver)
-    editor_of(panel).select(None)
+    panel.session.select_items(_region_ids(panel.session.unit.root))
     panel._refresh()
     driver.pump()
     return panel

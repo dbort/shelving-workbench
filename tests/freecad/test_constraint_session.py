@@ -593,7 +593,7 @@ def test_rows_list_every_constraint_locks_included_as_made(
             _lock_id(session, c),
             _lock_id(session, a),
         )
-        assert (lock_a.kind, lock_a.active) == ("lock", True)
+        assert (lock_a.kind, lock_a.active) == ("lock_height", True)
         assert lock_a.size_mm == pytest.approx(_BAY_MM)
         assert (spacing.kind, spacing.active, spacing.size_mm) == (
             "even_spacing",
@@ -611,7 +611,7 @@ def test_rows_list_every_constraint_locks_included_as_made(
         assert session.set_constraint_active(_lock_id(session, c), False) is None
         off = session.constraint_rows()[2]
         assert (off.kind, off.active, off.size_mm, off.redundant) == (
-            "lock",
+            "lock_height",
             False,
             None,
             False,
@@ -858,5 +858,72 @@ def test_delete_deactivated_removes_deactivated_locks_with_the_rest(
         doc.undo()
         session.settle()
         assert [c.active for c in session.constraints] == [False, False, True]
+    finally:
+        session.close()
+
+
+def test_lock_height_locks_each_selected_opening_as_one_step_moving_nothing(
+    doc: FreeCAD.Document,
+) -> None:
+    container = _written(doc, Lock(_COLUMN.b.id, active=False))
+    session = _opened(container)
+    try:
+        doc.recompute()
+        snapshot = _snapshot(doc)
+        a, b, _c = _bays(session)
+        session.select_items([a, b])
+        steps = doc.UndoCount
+        assert session.lock_axis("vertical") is None
+        doc.recompute()
+        assert doc.UndoCount == steps + 1
+        assert doc.UndoNames[0] == "Lock Height"
+        assert _snapshot(doc) == snapshot
+        locks = [c for c in session.constraints if isinstance(c, Lock)]
+        # B's deactivated Lock is turned on rather than joined by another.
+        assert [(c.region_id, c.active) for c in locks] == [
+            (b, True),
+            (a, True),
+        ]
+        assert session.selected_items == (a, b)
+        # Locking what is already locked adds no step.
+        assert session.lock_axis("vertical") is None
+        assert doc.UndoCount == steps + 1
+        doc.undo()
+        session.settle()
+        assert [c.active for c in session.constraints] == [False]
+    finally:
+        session.close()
+
+
+def test_lock_width_refuses_a_width_that_is_the_units_own(
+    doc: FreeCAD.Document,
+) -> None:
+    session = _opened(_written(doc))
+    try:
+        session.select(_bays(session)[0])
+        steps = doc.UndoCount
+        failure = session.lock_axis("horizontal")
+        assert isinstance(failure, EditFailure)
+        assert "Width field" in failure.message
+        assert session.constraints == ()
+        assert doc.UndoCount == steps
+    finally:
+        session.close()
+
+
+def test_lock_width_and_height_refuse_a_board_or_nothing_selected(
+    doc: FreeCAD.Document,
+) -> None:
+    session = _opened(_written(doc))
+    try:
+        a = _bays(session)[0]
+        selections: list[list[str]] = [[], ["shelf_a"], [a, "shelf_a"]]
+        for selection in selections:
+            session.select_items(selection)
+            for direction in ("horizontal", "vertical"):
+                failure = session.lock_axis(direction)
+                assert isinstance(failure, EditFailure), (selection, direction)
+                assert "Select one or more openings" in failure.message
+        assert session.constraints == ()
     finally:
         session.close()

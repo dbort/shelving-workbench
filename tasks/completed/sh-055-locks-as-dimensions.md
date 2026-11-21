@@ -18,10 +18,10 @@ that holds it. A click on a dimension selects it and a double-click
 types a size.
 
 ## Must Have
-- [ ] `pixi run tests` green; `pyrefly check` clean over the changed code.
-- [ ] `grep -rni padlock freecad tests README.md docs/scope-and-design.md`
+- [x] `pixi run tests` green; `pyrefly check` clean over the changed code.
+- [x] `grep -rni padlock freecad tests README.md docs/scope-and-design.md`
       prints nothing.
-- [ ] Elevation plan (`tests/test_editor_elevation.py`), on sh-050's unit:
+- [x] Elevation plan (`tests/test_editor_elevation.py`), on sh-050's unit:
       654 mm tall of 18 mm boards, fixed point `min`, split by two
       dividers into three columns L, M, R, with left A1 300, shelf s1,
       A2 300; middle B1 200, shelf t1, B2 400; right C1 250, shelf u1,
@@ -35,7 +35,7 @@ types a size.
       - with an Equal on A1 and B1, A1's and B1's dimensions are planned
         reference, each followed by its Equal icon at the row's first
         slot.
-- [ ] 3D view (`tests/freecad_view/`):
+- [x] 3D view (`tests/freecad_view/`):
       - a driving dimension takes `ConstrainedDimColor`, a deactivated one
         `DeactivatedConstrDimColor`, a reference one
         `NonDrivingConstrDimColor`, and a dimension whose Lock is selected
@@ -52,7 +52,7 @@ types a size.
         place, and outlines the regions holding it;
       - no icon overlaps another icon or a dimension's text tile in device
         pixels.
-- [ ] GUI (`tests/freecad_gui/`): `Shelving_LockWidth` and
+- [x] GUI (`tests/freecad_gui/`): `Shelving_LockWidth` and
       `Shelving_LockHeight` sit on the edit toolbar beside Constrain Equal
       and in the Shelving menu, and `IsActive` is false outside an edit.
       On the unit above:
@@ -63,12 +63,12 @@ types a size.
         `report_error` with text saying to select openings;
       - on a unit with no divider, a bay selected, Lock Width is refused
         through `report_error` with text naming the panel's Width field.
-- [ ] GUI (`tests/freecad_gui/test_constraint_list.py`): a Lock row shows
+- [x] GUI (`tests/freecad_gui/test_constraint_list.py`): a Lock row shows
       the icon of the command that makes its axis's Lock, and its text
       names Lock Width or Lock Height.
-- [ ] `README.md`'s glossary has entries **Lock Width and Lock Height**
+- [x] `README.md`'s glossary has entries **Lock Width and Lock Height**
       and **Reference dimension**.
-- [ ] `freecad/Shelving/qa/cases/30-editor.toml` has a case with id
+- [x] `freecad/Shelving/qa/cases/30-editor.toml` has a case with id
       `editor.dimensions` and none with id `editor.padlocks`.
 
 ## Advice
@@ -88,8 +88,11 @@ types a size.
 - **Selected opening, both axes** (user decision): a selected opening
   draws its own reference dimension and the reference dimension of the
   region owning its size on the other elevation axis, unless that one is
-  already drawn or is the unit's own size. It shows what Lock Width and
-  Lock Height would lock and gives both sizes a click target.
+  already drawn. It shows what Lock Width and Lock Height would lock and
+  gives both sizes a click target. That region is drawn even when its size
+  is the unit's own, such as the width of a column alone between the two
+  sides, which Lock Width still refuses (user decision 2026-11-21, from
+  manual QA: the user expected a selected bay to show its width).
 - **Direction stays visible** (user decision): a constrained region draws
   its dimension, so an Equal or Even spacing icon always sits on a line
   and arrowheads that say which way it holds. Icons keep their place in
@@ -154,29 +157,47 @@ types a size.
   reference one, the parentheses read plainly, a double-click opens the
   field reliably, and Lock Width on a bay visibly locks its column. Start
   from an existing setup action; add none.
+- **Rows keep their places** (user decision, 2026-11-20): a region's
+  dimension outside the unit takes the row it would have with every
+  dimension drawn, so one appearing or disappearing moves no other. A gap
+  can show only where nested rows both reach an edge.
+- **A Lock through the depth** (user decision, 2026-11-20: handle it in
+  the least complex way): a scan locks a void in a run along the depth
+  axis when that run holds a compartment, as in a unit stepped front to
+  back. The view draws no dimension for it, no command makes it, and its
+  list row reads "Lock" with an empty icon tile.
+- **The unit's own size** (implementer reading of the Must Have,
+  2026-11-20): a size is the unit's own when no enclosing region's run
+  lies along that axis, or when the region found is alone among boards in
+  a run spanning the unit, as a column between the two sides is. That is
+  what makes Lock Width on a bay with no divider refuse.
+- **bug-026 ships deferred** (user decision 2026-11-21, from manual QA):
+  the add buttons over a selected opening cover the reference dimensions
+  this task makes selection draw. The user filed it as bug-026 to plan as
+  its own task after this one, rather than fix it here.
 
 ## Plan
-- [ ] **Step 1** (`editor/elevation.py`, `tests/test_editor_elevation.py`):
+- [x] **Step 1** (`editor/elevation.py`, `tests/test_editor_elevation.py`):
       the dimension visibility rule, the label role and selection, the
       other-axis owner of a selected opening, the axis resolution for Lock
       Width and Lock Height as a pure function, and icon slots without the
       padlock.
-- [ ] **Step 2** (`editor/session.py`, `tests/freecad/test_editor_session.py`,
+- [x] **Step 2** (`editor/session.py`, `tests/freecad/test_editor_session.py`,
       `tests/freecad/test_constraint_session.py`): `lock_axis(axis)` over
       the selection with its refusals, one undo step; remove
       `unlock_holders`.
-- [ ] **Step 3** (`editor/overlay.py`, `editor/view_editor.py`,
+- [x] **Step 3** (`editor/overlay.py`, `editor/view_editor.py`,
       `tests/freecad_view/editor.py`, `test_editor_drawing.py`,
       `test_editor_input.py`, `test_constraints.py`,
       `test_constraint_list.py`; delete `test_padlocks.py` and move what
       still applies into a `test_dimensions.py`): colors and parenthesized
       text, click and double-click on text tiles, removal of the padlocks
       and the held padlock.
-- [ ] **Step 4** (`commands/lock_width.py`, `commands/lock_height.py`,
+- [x] **Step 4** (`commands/lock_width.py`, `commands/lock_height.py`,
       `resources/`, `init_gui.py`, `editor/constraint_list.py`,
       `tests/freecad_gui/`): the two commands on the edit toolbar and in
       the menu, their icons, and Lock rows showing them.
-- [ ] **Step 5** (`README.md`, `docs/scope-and-design.md`,
+- [x] **Step 5** (`README.md`, `docs/scope-and-design.md`,
       `.claude/docs/freecad-notes.md`, `freecad/Shelving/qa/cases/30-editor.toml`):
       glossary entries for the commands and reference dimensions, and the
       Size rule, Even spacing and Constraint list entries without padlocks;
@@ -188,3 +209,22 @@ types a size.
       `editor.constraint_list` rewritten for dimensions and the commands.
 
 ## Review log
+
+### Round 1: REJECTED
+- **F1: "Rows keep their places" has no test** (`freecad/Shelving/editor/elevation.py:679`): every outer-row test selects every region first, so they pass whether rows are planned over every label or only the drawn ones. Add a test in `tests/test_editor_elevation.py` that an outer dimension keeps its row and `start_mm` with only it drawn, on a unit with nested outer rows on one edge.
+- **F2: The depth-axis Lock row is untested** (`freecad/Shelving/editor/session.py:260`, `freecad/Shelving/editor/constraint_list.py:95`): the `_row_kind` fallback, the "Lock" text and the bare-tile icon are reached by no test. Add a session test where a scan locks a void in a depth run and its row's kind is `"lock"`, and a list test that its text is "Lock" and its icon the bare tile.
+- **N1: `Session.set_lock` has no production caller left** (`freecad/Shelving/editor/session.py:1141`): keep it on purpose as the tests' way to lock a region, or drop it.
+- **N2: "panel" means two things in one sentence** (`README.md:105`): a board and the task panel.
+- **N3: Comment doesn't fit the constant below it** (`freecad/Shelving/editor/session.py:189`): `_LOCK_STEPS` holds undo names, not sentences.
+- **N4: Double-click test uses a different unit** (`tests/freecad_view/test_dimensions.py:268`): equivalent check; noted only.
+- **N5: Task id in a section header** (`tests/test_editor_elevation.py:716`): drop "(sh-055)".
+- **N6: Overlong line after the rewrap** (`docs/scope-and-design.md:336`), and a few short README and 30-editor.toml lines; `doc-hygiene` can fix these.
+
+### Round 2: APPROVED
+- **N1: Re-wrapping left lines too long** (`README.md:107`, `README.md:158`, `docs/scope-and-design.md:336`): two README lines run to 86 and 103 columns and the scope-and-design line to 89; cosmetic, for `doc-hygiene` in `/ship`.
+- **N2: The depth-Lock row is tested without a scan** (`tests/freecad_gui/test_constraint_list.py`, `freecad/Shelving/editor/elevation.py:758`): accepted, since a scan cannot build a run through the depth from boards; the kind decision lives in the pure `run_direction`, tested on a hand-built depth run, and the list test checks the "Lock" text and bare-tile icon.
+
+### Round 3: APPROVED
+- **N1: Decision to ship bug-026 is missing from the Advice** (`.claude/docs/bug-log.md:147`): this branch causes bug-026, so merging without a fix is a user decision for `## Advice`.
+- **N2: The field and Lock Width now treat a unit-size dimension differently** (`freecad/Shelving/editor/elevation.py:806`): a lone column's drawn width refuses Lock Width but locks through a typed size, as `main` already allowed; now easier to reach. Raise with the user.
+- **N3: Doc line wrapping still uneven** (`docs/scope-and-design.md:277`, `.claude/docs/qa-wizard.md:31`, `README.md:107`, `README.md:158`, `docs/scope-and-design.md:336`): for `doc-hygiene` in `/ship`.

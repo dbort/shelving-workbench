@@ -8,7 +8,7 @@ from typing import Literal, Protocol, cast
 import FreeCAD
 import FreeCADGui
 import pytest
-from PySide6 import QtCore, QtTest, QtWidgets
+from PySide6 import QtCore, QtGui, QtTest, QtWidgets
 
 from freecad.Shelving.core.layout import (
     Basis,
@@ -22,6 +22,7 @@ from freecad.Shelving.editor.elevation import (
     DimensionLabel,
     board_space,
     label_at,
+    plan_overlay,
     split_preview,
 )
 from freecad.Shelving.editor.view_editor import ViewEditor
@@ -168,6 +169,15 @@ def _label_of(editor: ViewEditor, region_id: str) -> DimensionLabel:
     return label
 
 
+def _open_field(editor: ViewEditor, driver: ViewDriver, region_id: str) -> None:
+    """Select ``region_id``, which draws its dimension, and double-click the
+    dimension's text, as a user opens its size field."""
+    editor.select(region_id)
+    driver.pump()
+    driver.double_click(editor.to_document(*_label_of(editor, region_id).text_at_mm))
+    driver.pump()
+
+
 def _field_center(editor: ViewEditor) -> QtCore.QPoint:
     host = editor.field_host
     assert host is not None and host.isVisible()
@@ -211,7 +221,7 @@ def _lock(unit: Unit, region_id: str) -> tuple[Basis | None, float] | None:
     return (held.basis if held is not None and held.active else None), found_mm
 
 
-def test_a_click_on_a_dimension_opens_a_field_that_sets_the_size(
+def test_a_double_click_on_a_dimension_opens_a_field_that_sets_the_size(
     unit: FreeCAD.DocumentObject, driver: ViewDriver, reported: list[str]
 ) -> None:
     panel = edit_unit(unit, driver)
@@ -219,9 +229,8 @@ def test_a_click_on_a_dimension_opens_a_field_that_sets_the_size(
     add_board(panel, "vertical", driver)
     session = panel.session
     lower = bay_ids(session.unit.root)[0]
+    _open_field(editor, driver, lower)
     label = _label_of(editor, lower)
-    driver.click(editor.to_document(*label.text_at_mm))
-    driver.pump()
     field = editor.field
     assert field is not None and field.quantity_widget is not None
     measurement = session.selected_measurement()
@@ -252,8 +261,7 @@ def test_a_refused_size_is_reported_once_and_changes_nothing(
     editor = editor_of(panel)
     add_board(panel, "vertical", driver)
     lower = bay_ids(panel.session.unit.root)[0]
-    driver.click(editor.to_document(*_label_of(editor, lower).text_at_mm))
-    driver.pump()
+    _open_field(editor, driver, lower)
     field = editor.field
     assert field is not None
     names = list(unit.Document.UndoNames)
@@ -278,8 +286,7 @@ def test_a_size_under_the_minimum_is_reported_once_and_changes_nothing(
     editor = editor_of(panel)
     add_board(panel, "vertical", driver)
     lower = bay_ids(panel.session.unit.root)[0]
-    driver.click(editor.to_document(*_label_of(editor, lower).text_at_mm))
-    driver.pump()
+    _open_field(editor, driver, lower)
     field = editor.field
     assert field is not None
     names = list(unit.Document.UndoNames)
@@ -302,13 +309,7 @@ def test_escape_closes_the_field_and_not_the_edit(
 ) -> None:
     panel = edit_unit(unit, driver)
     editor = editor_of(panel)
-    (label,) = [
-        x
-        for x in editor.overlay.labels
-        if x.region_id == bay_ids(panel.session.unit.root)[0]
-    ]
-    driver.click(editor.to_document(*label.text_at_mm))
-    driver.pump()
+    _open_field(editor, driver, bay_ids(panel.session.unit.root)[0])
     field = editor.field
     assert field is not None
     QtTest.QTest.keyClick(field.line_edit, QtCore.Qt.Key.Key_Escape)
@@ -321,14 +322,43 @@ def test_escape_closes_the_field_and_not_the_edit(
     click_task_button("Close", driver)
 
 
+def test_escape_closes_the_field_ahead_of_an_escape_shortcut(
+    unit: FreeCAD.DocumentObject, driver: ViewDriver
+) -> None:
+    """A FreeCAD build can bind Escape to a shortcut, which would take the
+    key before the field sees it as a press."""
+    panel = edit_unit(unit, driver)
+    editor = editor_of(panel)
+    window = cast("QtWidgets.QMainWindow", FreeCADGui.getMainWindow())
+    fired: list[bool] = []
+    shortcut = QtGui.QShortcut(QtGui.QKeySequence(QtCore.Qt.Key.Key_Escape), window)
+    shortcut.setContext(QtCore.Qt.ShortcutContext.ApplicationShortcut)
+    shortcut.activated.connect(lambda: fired.append(True))
+    try:
+        _open_field(editor, driver, bay_ids(panel.session.unit.root)[0])
+        field = editor.field
+        assert field is not None
+        focus = QtWidgets.QApplication.focusWidget()
+        assert focus is not None
+        QtTest.QTest.keyClick(focus, QtCore.Qt.Key.Key_Escape)
+        driver.pump()
+        assert editor.field is None
+        assert fired == []
+    finally:
+        shortcut.setEnabled(False)
+        shortcut.deleteLater()
+        driver.pump()
+    click_task_button("Close", driver)
+
+
 def test_the_field_follows_its_dimension_when_the_camera_moves(
     unit: FreeCAD.DocumentObject, driver: ViewDriver
 ) -> None:
     panel = edit_unit(unit, driver)
     editor = editor_of(panel)
-    label = _label_of(editor, bay_ids(panel.session.unit.root)[0])
-    driver.click(editor.to_document(*label.text_at_mm))
-    driver.pump()
+    bay = bay_ids(panel.session.unit.root)[0]
+    _open_field(editor, driver, bay)
+    label = _label_of(editor, bay)
     before = _field_center(editor)
     camera = editor.view.getCameraNode()
     x, y, z = camera.position.getValue().getValue()
@@ -344,11 +374,18 @@ def test_the_field_follows_its_dimension_when_the_camera_moves(
 def test_a_dimension_over_a_board_opens_its_field_rather_than_the_board(
     unit: FreeCAD.DocumentObject, driver: ViewDriver
 ) -> None:
-    """A click on a board under a dimension's text tile opens that
+    """A double-click on a board under a dimension's text tile opens that
     dimension's field and picks no board."""
     panel = edit_unit(unit, driver)
     editor = editor_of(panel)
     session = panel.session
+    # The row's Lock draws its dimension left of the unit, outside it.
+    root = session.unit.root
+    assert isinstance(root, Division)
+    row = next(item for item in root.items if isinstance(item, Division))
+    assert session.set_lock(row.id, locked=True) is None
+    editor.select(None)
+    driver.pump()
     # Far enough out that the text tile of the dimension left of the unit
     # reaches over the side board.
     height_px = editor.view.getSize()[1]
@@ -384,7 +421,7 @@ def test_a_dimension_over_a_board_opens_its_field_rather_than_the_board(
             break
     assert found is not None
     label, point = found
-    driver.click(point)
+    driver.double_click(point)
     driver.pump()
     assert editor.field is not None
     assert session.selected_id == label.region_id
@@ -440,7 +477,14 @@ def test_a_selected_board_drags_by_its_arrow_under_each_navigation_style(
     arrow = editor.arrow
     assert arrow is not None and arrow.board_id == shelf and arrow.vertical
     lower = bay_ids(session.unit.root)[0]
-    lower_label = _label_of(editor, lower)
+    # Where the dimension of the opening before the board goes when drawn.
+    (lower_label,) = [
+        x
+        for x in plan_overlay(
+            session.unit, session.spaces, editor.frame, lower, editor._outer_row_mm
+        ).labels
+        if x.region_id == lower
+    ]
     # Beside the dimension of the opening before the board, just past it.
     assert arrow.at_mm[0] > lower_label.start_mm[0]
     z_before_mm = session.spaces[shelf].origin.z_mm
@@ -575,7 +619,13 @@ def test_a_board_deleted_from_the_tree_rescans_and_one_undo_restores_it(
     editor = editor_of(panel)
     doc = unit.Document
     shelf = add_board(panel, "vertical", driver)
+    session = panel.session
+    # The lower bay's Lock draws a dimension, which the delete drops.
+    assert session.set_lock(bay_ids(session.unit.root)[0], locked=True) is None
+    panel._refresh()
+    driver.pump()
     labels = len(editor.overlay.labels)
+    assert labels > 0
     # What Std_Delete does with focus in the tree.
     doc.openTransaction("Delete")
     doc.removeObject(shelf)
@@ -619,8 +669,7 @@ def test_fx_in_the_size_fields_leaves_close_adding_nothing(
     editor = editor_of(panel)
     add_board(panel, "vertical", driver)
     lower = bay_ids(panel.session.unit.root)[0]
-    driver.click(editor.to_document(*_label_of(editor, lower).text_at_mm))
-    driver.pump()
+    _open_field(editor, driver, lower)
     field = editor.field
     assert field is not None and field.quantity_widget is not None
     field.quantity_widget.setFocus()
@@ -691,8 +740,7 @@ def test_the_dimension_field_works_on_every_container(
     editor = editor_of(panel)
     add_board(panel, "vertical", driver)
     bay = bay_ids(panel.session.unit.root)[0]
-    driver.click(editor.to_document(*_label_of(editor, bay).text_at_mm))
-    driver.pump()
+    _open_field(editor, driver, bay)
     field = editor.field
     assert field is not None and field.quantity_widget is not None
     assert not field.line_edit.isReadOnly()

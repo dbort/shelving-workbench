@@ -22,24 +22,24 @@ from freecad.Shelving.core.layout import (
 )
 from freecad.Shelving.core.solver import solve
 from freecad.Shelving.editor.elevation import (
-    PADLOCK_SLOT,
+    FIRST_CONSTRAINT_SLOT,
     DimensionLabel,
     FixedChoice,
     Overlay,
     Rect,
     Side,
     arrow_for,
-    board_space,
     dragged_to_mm,
     elevation_frame,
     fixed_choices,
-    held_padlock,
     icon_at,
     icon_center_px,
     label_at,
     label_size_pt,
     plan_overlay,
+    region_along,
     region_at,
+    run_direction,
     split_preview,
 )
 
@@ -268,34 +268,62 @@ def _labels(selected: str | None = None, unit: Unit = _UNIT) -> list[DimensionLa
     )
 
 
-def test_a_dimension_per_region_in_each_run() -> None:
-    ids = sorted(label.region_id for label in _labels())
+def _region_ids(unit: Unit) -> list[str]:
+    ids: list[str] = []
+
+    def visit(region: Division | Bay | Void) -> None:
+        if region is not unit.root:
+            ids.append(region.id)
+        if isinstance(region, Division):
+            for item in region.items:
+                if not isinstance(item, Board):
+                    visit(item)
+
+    visit(unit.root)
+    return ids
+
+
+def _every_label(unit: Unit = _UNIT) -> list[DimensionLabel]:
+    """The labels with every region selected, so each one draws its
+    dimension wherever it goes."""
+    return list(
+        plan_overlay(
+            unit,
+            solve(unit),
+            elevation_frame(unit),
+            None,
+            _ROW_MM,
+            selected_items=_region_ids(unit),
+        ).labels
+    )
+
+
+def test_a_dimension_per_region_in_each_run_when_every_region_is_selected() -> None:
+    ids = sorted(label.region_id for label in _every_label())
     assert ids == sorted(["row", "column", "void", "lower", "upper"])
 
 
-def test_a_dimension_reads_its_size_and_color() -> None:
-    by_id = {label.region_id: label for label in _labels()}
+def test_a_dimension_reads_its_size_and_role() -> None:
+    by_id = {label.region_id: label for label in _every_label()}
     assert by_id["lower"].size_mm == pytest.approx(200.0)
-    assert by_id["lower"].color == "locked"
-    assert by_id["upper"].color == "unlocked"
+    assert by_id["lower"].role == "driving"
+    assert by_id["lower"].lock_id == _LOWER_LOCK
+    assert by_id["upper"].role == "reference"
+    assert by_id["upper"].lock_id is None
     assert by_id["upper"].size_mm == pytest.approx(346.0)
-    selected = {label.region_id: label for label in _labels("upper")}
-    assert selected["upper"].color == "unlocked"
+    assert not any(label.selected for label in by_id.values())
 
 
-def test_a_deactivated_lock_draws_unlocked_and_holds_no_board() -> None:
+def test_a_deactivated_lock_draws_deactivated_and_holds_no_board() -> None:
     off = dataclasses.replace(
         _UNIT, constraints=(Lock("lower", active=False, id=_LOWER_LOCK),)
     )
-    by_id = {label.region_id: label for label in _labels(unit=off)}
-    assert by_id["lower"].color == "unlocked"
+    (label,) = _labels(unit=off)
+    assert (label.region_id, label.role) == ("lower", "deactivated")
     frame = elevation_frame(off)
     overlay = plan_overlay(off, solve(off), frame, None, _ROW_MM)
-    (padlock,) = [p for p in overlay.padlocks if p.label.region_id == "lower"]
-    assert not padlock.locked
     assert overlay.icons == []
     assert arrow_for(off, solve(off), frame, "shelf") is not None
-    assert held_padlock(off, solve(off), frame, "shelf") is None
 
 
 def test_a_spacing_spans_through_the_next_board() -> None:
@@ -313,7 +341,7 @@ def test_a_spacing_spans_through_the_next_board() -> None:
         depth_axis=Axis.Y,
         constraints=(Lock("lower", Basis.WITH_NEXT),),
     )
-    (label,) = [x for x in _labels(unit=spacing) if x.region_id == "lower"]
+    (label,) = [x for x in _every_label(spacing) if x.region_id == "lower"]
     assert label.size_mm == pytest.approx(218.0)
     assert label.length_mm == pytest.approx(218.0)
 
@@ -332,7 +360,7 @@ def test_a_region_holding_others_dimensions_outside_the_unit() -> None:
     their dimensions go one row out from the unit's outer face on their own
     side: the row's left of the unit, the column's below it, the bottom
     board's thickness no nearer than the row's."""
-    by_id = {label.region_id: label for label in _labels()}
+    by_id = {label.region_id: label for label in _every_label()}
     assert by_id["row"].start_mm[0] == pytest.approx(-_ROW_MM)
     assert by_id["column"].start_mm[1] == pytest.approx(-_ROW_MM)
 
@@ -341,8 +369,8 @@ def test_resizing_the_unit_leaves_its_outer_dimensions_rows_in_place() -> None:
     """Only a dimension's length follows the unit's size: the rows keep
     their spacing whatever the unit's longer side."""
     taller = set_unit_size(_UNIT, Vec3(_UNIT.size_mm.x_mm, _UNIT.size_mm.y_mm, 1800.0))
-    before = {label.region_id: label for label in _labels()}
-    after = {label.region_id: label for label in _labels(unit=taller)}
+    before = {label.region_id: label for label in _every_label()}
+    after = {label.region_id: label for label in _every_label(taller)}
     assert after["row"].start_mm[0] == pytest.approx(before["row"].start_mm[0])
     assert after["column"].start_mm[1] == pytest.approx(before["column"].start_mm[1])
     assert after["row"].length_mm > before["row"].length_mm
@@ -361,7 +389,7 @@ def test_a_run_through_the_depth_draws_no_dimension() -> None:
         ),
         depth_axis=Axis.Y,
     )
-    assert _labels(unit=unit) == []
+    assert _every_label(unit) == []
 
 
 @pytest.mark.parametrize(
@@ -383,13 +411,13 @@ def test_region_at_finds_the_opening_under_a_point(
 
 
 def _label(region_id: str, at_mm: tuple[float, float]) -> DimensionLabel:
-    return DimensionLabel(region_id, at_mm, at_mm, 1.0, "unlocked", 0.5)
+    return DimensionLabel(region_id, at_mm, at_mm, 1.0, "reference", 0.5)
 
 
 def _upright_label(region_id: str, at_mm: tuple[float, float]) -> DimensionLabel:
     h_mm, v_mm = at_mm
     return DimensionLabel(
-        region_id, (h_mm, v_mm - 1.0), (h_mm, v_mm + 1.0), 2.0, "unlocked", 0.5
+        region_id, (h_mm, v_mm - 1.0), (h_mm, v_mm + 1.0), 2.0, "reference", 0.5
     )
 
 
@@ -456,28 +484,10 @@ def test_held_and_carcass_boards_get_no_arrow() -> None:
     assert arrow_for(relocked, solve(relocked), frame, "shelf") is None
 
 
-def test_every_region_in_a_run_gets_a_dimension_even_alone() -> None:
-    """The row is the only region in its run, and still gets a dimension,
-    and with it a padlock: any opening may lock."""
-    regions = {label.region_id for label in _labels()}
-    assert regions == {"row", "column", "void", "lower", "upper"}
-
-
-def test_a_held_board_gets_a_padlock_where_its_arrow_would_be() -> None:
-    frame = elevation_frame(_UNIT)
-    padlock = held_padlock(_UNIT, _SPACES, frame, "shelf")
-    assert padlock is not None
-    assert padlock.holders == (_LOWER_LOCK,)
-    # Beside the lower bay's dimension, level with the shelf, where an arrow would sit.
-    unlocked = _bookcase(locked=False)
-    arrow = arrow_for(unlocked, solve(unlocked), frame, "shelf")
-    assert arrow is not None
-    assert padlock.at_mm[0] == pytest.approx(arrow.at_mm[0])
-    shelf = board_space(_UNIT, _SPACES, "shelf")
-    assert shelf is not None
-    assert padlock.at_mm[1] == pytest.approx(frame.rect(shelf).center_mm[1])
-    for movable_or_carcass in ("divider", "top", "lower"):
-        assert held_padlock(_UNIT, _SPACES, frame, movable_or_carcass) is None
+def test_a_region_alone_in_its_run_gets_a_dimension_when_selected() -> None:
+    """The row is the only region in its run, and selecting it still draws
+    its dimension: any region but the whole unit may lock."""
+    assert "row" in {label.region_id for label in _labels("row")}
 
 
 def test_flagged_regions_get_the_holding_outline_unless_selected() -> None:
@@ -555,8 +565,8 @@ def test_an_equal_draws_an_icon_at_each_of_its_openings() -> None:
     assert [
         (i.label.region_id, i.kind, i.slot, i.active, i.selected) for i in icons
     ] == [
-        ("A", "equal", 1, True, False),
-        ("C", "equal", 1, True, False),
+        ("A", "equal", 0, True, False),
+        ("C", "equal", 0, True, False),
     ]
     assert {i.constraint_id for i in icons} == {equal.id}
 
@@ -565,27 +575,27 @@ def test_an_even_spacing_draws_an_icon_at_every_opening_of_its_group() -> None:
     unit = add_even_spacing(add_equal(_column(), ["A", "B"]), ["A", "C"])
     icons = _overlay(unit).icons
     assert [(i.label.region_id, i.kind, i.slot) for i in icons] == [
-        ("A", "equal", 1),
-        ("B", "equal", 1),
-        ("A", "even_spacing", 2),
-        ("B", "even_spacing", 2),
-        ("C", "even_spacing", 1),
+        ("A", "equal", 0),
+        ("B", "equal", 0),
+        ("A", "even_spacing", 1),
+        ("B", "even_spacing", 1),
+        ("C", "even_spacing", 0),
     ]
 
 
-def test_every_dimension_leads_its_row_with_its_padlock() -> None:
+def test_icons_lead_the_row_after_the_text_and_a_lock_draws_none() -> None:
     unit = add_equal(_column(), ["A", "C"])
     unit = lock(unit, "B")
     overlay = _overlay(unit)
-    assert [p.label for p in overlay.padlocks] == list(overlay.labels)
-    assert {p.slot for p in overlay.padlocks} == {PADLOCK_SLOT}
-    assert {i.slot for i in overlay.icons} == {PADLOCK_SLOT + 1}
-    assert {p.label.region_id: p.locked for p in overlay.padlocks} == {
-        "A": False,
-        "B": True,
-        "C": False,
+    assert {label.region_id: label.role for label in overlay.labels} == {
+        "A": "reference",
+        "B": "driving",
+        "C": "reference",
     }
-    assert overlay.row_icons == (*overlay.padlocks, *overlay.icons)
+    assert [(i.label.region_id, i.slot) for i in overlay.icons] == [
+        ("A", FIRST_CONSTRAINT_SLOT),
+        ("C", FIRST_CONSTRAINT_SLOT),
+    ]
 
 
 def test_an_icon_reports_selection_and_activation_independently() -> None:
@@ -633,7 +643,7 @@ def test_icons_sit_past_the_text_clear_of_it_and_of_each_other() -> None:
         boxes.append(
             (h_mm - half_w_px, v_mm - half_h_px, h_mm + half_w_px, v_mm + half_h_px)
         )
-    for icon in overlay.row_icons:
+    for icon in overlay.icons:
         x_px, y_px = icon_center_px(
             icon, icon.label.text_at_mm, text_width_px, icon_px, gap_px
         )
@@ -644,22 +654,23 @@ def test_icons_sit_past_the_text_clear_of_it_and_of_each_other() -> None:
             assert a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1]
 
 
-def test_icon_at_finds_the_padlock_or_icon_under_a_point() -> None:
-    unit = add_equal(_column(), ["A", "B"])
+def test_icon_at_finds_the_icon_under_a_point() -> None:
+    unit = add_even_spacing(add_equal(_column(), ["A", "B"]), ["A", "C"])
     overlay = _overlay(unit)
-    row = overlay.row_icons
+    row = overlay.icons
 
     def project(h_mm: float, v_mm: float) -> tuple[float, float]:
         return (h_mm, v_mm)
 
-    for entry in (overlay.padlocks[0], overlay.icons[0]):
+    for entry in row:
         x_px, y_px = icon_center_px(entry, entry.label.text_at_mm, 40.0, 16.0, 3.0)
         assert icon_at(row, project, lambda _: 40.0, 16.0, 3.0, x_px, y_px) == entry
-    padlock = overlay.padlocks[0]
-    x0_px, y0_px = padlock.label.text_at_mm
+    first = row[0]
+    x0_px, y0_px = first.label.text_at_mm
     assert icon_at(row, project, lambda _: 40.0, 16.0, 3.0, x0_px, y0_px) is None
-    # The padlock sits right after the text, the first icon one place on.
-    for entry, along_px in ((padlock, 31.0), (overlay.icons[0], 50.0)):
+    # The first icon sits right after the text, the second one place on.
+    second = next(i for i in row if i.label == first.label and i is not first)
+    for entry, along_px in ((first, 31.0), (second, 50.0)):
         x_px, y_px = icon_center_px(entry, (0.0, 0.0), 40.0, 16.0, 3.0)
         assert x_px + y_px == pytest.approx(along_px)
 
@@ -693,7 +704,6 @@ def test_a_board_an_even_spacing_holds_shows_its_group_and_no_arrow() -> None:
         assert _roles(overlay, region_id, unit) == ["holding"]
     frame = elevation_frame(unit)
     assert arrow_for(unit, solve(unit), frame, "s1") is None
-    assert held_padlock(unit, solve(unit), frame, "s1") is None
 
 
 def test_a_flagged_constraint_outlines_its_openings() -> None:
@@ -702,3 +712,262 @@ def test_a_flagged_constraint_outlines_its_openings() -> None:
     overlay = _overlay(unit, flagged=[equal.id])
     assert _roles(overlay, "A", unit) == ["holding"]
     assert _roles(overlay, "B", unit) == ["region"]
+
+
+# --- dimensions as the Sketcher draws them ----------------------------------
+
+
+def _columns() -> Unit:
+    """A unit 654 mm tall of 18 mm boards, split by two dividers into three
+    300 mm columns L, M and R, each split by one shelf: A1 300, s1, A2 300;
+    B1 200, t1, B2 400; C1 250, u1, C2 350, bottom to top."""
+
+    def column(
+        name: str, lower: str, upper: str, shelf: str, sizes_mm: tuple[float, float]
+    ) -> Division:
+        return Division(
+            axis=Axis.Z,
+            id=name,
+            items=[
+                Bay(size_mm=sizes_mm[0], id=lower),
+                Board(thickness_mm=_T_MM, id=shelf),
+                Bay(size_mm=sizes_mm[1], id=upper),
+            ],
+            size_mm=300.0,
+        )
+
+    row = Division(
+        axis=Axis.X,
+        id="row",
+        items=[
+            Board(thickness_mm=_T_MM, id="left"),
+            column("L", "A1", "A2", "s1", (300.0, 300.0)),
+            Board(thickness_mm=_T_MM, id="d1"),
+            column("M", "B1", "B2", "t1", (200.0, 400.0)),
+            Board(thickness_mm=_T_MM, id="d2"),
+            column("R", "C1", "C2", "u1", (250.0, 350.0)),
+            Board(thickness_mm=_T_MM, id="right"),
+        ],
+        size_mm=618.0,
+    )
+    return Unit(
+        size_mm=Vec3(972.0, 300.0, 654.0),
+        root=Division(
+            axis=Axis.Z,
+            id="root",
+            items=[
+                Board(thickness_mm=_T_MM, id="bottom"),
+                row,
+                Board(thickness_mm=_T_MM, id="top"),
+            ],
+        ),
+        depth_axis=Axis.Y,
+    )
+
+
+def _drawn(overlay: Overlay) -> dict[str, tuple[str, bool]]:
+    return {label.region_id: (label.role, label.selected) for label in overlay.labels}
+
+
+def test_nothing_locked_constrained_or_selected_draws_no_dimension() -> None:
+    assert _overlay(_columns()).labels == []
+
+
+def test_a_lock_draws_its_dimension_driving_deactivated_or_selected() -> None:
+    unit = lock(_columns(), "A1")
+    (a1_lock,) = unit.constraints
+    assert _drawn(_overlay(unit)) == {"A1": ("driving", False)}
+    off = dataclasses.replace(
+        unit, constraints=(dataclasses.replace(a1_lock, active=False),)
+    )
+    assert _drawn(_overlay(off)) == {"A1": ("deactivated", False)}
+    assert _drawn(_overlay(unit, selected_constraints=[a1_lock.id])) == {
+        "A1": ("driving", True)
+    }
+
+
+def test_a_selected_opening_draws_both_sizes_as_reference() -> None:
+    unit = _columns()
+    expected = {"A1": ("reference", False), "L": ("reference", False)}
+    assert _drawn(_overlay(unit, selected_id="A1")) == expected
+    assert _drawn(_overlay(unit, selected_items=["A1"])) == expected
+
+
+def test_a_selected_region_keeps_its_lock_drawn_unselected() -> None:
+    """Selecting the region recolors nothing, as selecting Sketcher
+    geometry leaves its dimensions' colors alone."""
+    unit = lock(_columns(), "L")
+    assert _drawn(_overlay(unit, selected_id="A1")) == {
+        "A1": ("reference", False),
+        "L": ("driving", False),
+    }
+
+
+def test_a_selected_column_draws_the_lone_row_spanning_the_unit_height() -> None:
+    """The row is alone between the bottom and top, so its height is the
+    unit's own: Lock Height refuses it, but a selected column still shows
+    it."""
+    assert _drawn(_overlay(_columns(), selected_id="L")) == {
+        "L": ("reference", False),
+        "row": ("reference", False),
+    }
+
+
+def test_a_bay_in_a_lone_column_shows_the_columns_width() -> None:
+    unit = dataclasses.replace(
+        _column(),
+        root=Division(
+            axis=Axis.X,
+            id="root",
+            items=[
+                Board(thickness_mm=_T_MM, id="left"),
+                dataclasses.replace(_column().root, size_mm=564.0),
+                Board(thickness_mm=_T_MM, id="right"),
+            ],
+        ),
+    )
+    assert region_along(unit, "A", Axis.X) is None
+    assert set(_drawn(_overlay(unit, selected_id="A"))) == {"A", "column"}
+
+
+def test_an_equal_draws_its_openings_as_reference_with_its_icon_first() -> None:
+    unit = add_equal(_columns(), ["A1", "B1"])
+    (equal,) = unit.constraints
+    overlay = _overlay(unit)
+    assert _drawn(overlay) == {
+        "A1": ("reference", False),
+        "B1": ("reference", False),
+    }
+    assert [(i.label.region_id, i.constraint_id, i.slot) for i in overlay.icons] == [
+        ("A1", equal.id, 0),
+        ("B1", equal.id, 0),
+    ]
+    off = dataclasses.replace(
+        unit, constraints=(dataclasses.replace(equal, active=False),)
+    )
+    assert set(_drawn(_overlay(off))) == {"A1", "B1"}
+
+
+@pytest.mark.parametrize(
+    ("node_id", "axis", "expected"),
+    [
+        ("A1", Axis.X, "L"),
+        ("A2", Axis.X, "L"),
+        ("A1", Axis.Z, "A1"),
+        ("L", Axis.X, "L"),
+        ("L", Axis.Z, None),
+        ("row", Axis.Z, None),
+        ("s1", Axis.X, None),
+        ("root", Axis.X, None),
+        ("nothing", Axis.X, None),
+        ("A1", Axis.Y, None),
+    ],
+)
+def test_region_along_finds_the_region_owning_a_size(
+    node_id: str, axis: Axis, expected: str | None
+) -> None:
+    assert region_along(_columns(), node_id, axis) == expected
+
+
+def test_a_bay_with_no_divider_has_no_width_of_its_own() -> None:
+    unit = _column()
+    assert region_along(unit, "A", Axis.X) is None
+    assert region_along(unit, "A", Axis.Z) == "A"
+    # Between two sides, the column is alone in a run spanning the unit.
+    sided = dataclasses.replace(
+        unit,
+        root=Division(
+            axis=Axis.X,
+            id="root",
+            items=[
+                Board(thickness_mm=_T_MM, id="left"),
+                dataclasses.replace(unit.root, size_mm=564.0),
+                Board(thickness_mm=_T_MM, id="right"),
+            ],
+        ),
+    )
+    assert region_along(sided, "A", Axis.X) is None
+    assert region_along(sided, "B", Axis.Z) == "B"
+
+
+def test_a_run_direction_names_the_lock_command_and_none_through_the_depth() -> None:
+    unit = _columns()
+    frame = elevation_frame(unit)
+    assert run_direction(unit, frame, "L") == "horizontal"
+    assert run_direction(unit, frame, "A1") == "vertical"
+    for none in ("root", "s1", "nothing"):
+        assert run_direction(unit, frame, none) is None
+    depth = Unit(
+        size_mm=Vec3(900.0, 300.0, 600.0),
+        root=Division(
+            axis=Axis.Y,
+            items=[
+                Bay(size_mm=141.0, id="front"),
+                Board(thickness_mm=_T_MM),
+                Bay(size_mm=141.0, id="rear"),
+            ],
+        ),
+        depth_axis=Axis.Y,
+    )
+    assert run_direction(depth, elevation_frame(depth), "front") is None
+
+
+def _nested() -> Unit:
+    """A unit whose left column holds a lower row of two openings, SA and
+    SB, so SA's width and the column's both reach the unit's bottom past
+    boards alone: the column's width takes the first row below the unit,
+    SA's the second."""
+    sub = Division(
+        axis=Axis.X,
+        id="sub",
+        items=[
+            Division(
+                axis=Axis.Z, id="SA", items=[Bay(size_mm=300.0, id="a1")], size_mm=200.0
+            ),
+            Board(thickness_mm=_T_MM, id="sub_board"),
+            Bay(size_mm=182.0, id="SB"),
+        ],
+        size_mm=300.0,
+    )
+    left = Division(
+        axis=Axis.Z,
+        id="colL",
+        items=[sub, Board(thickness_mm=_T_MM, id="shelf"), Bay(size_mm=246.0)],
+        size_mm=400.0,
+    )
+    return Unit(
+        size_mm=Vec3(900.0, 300.0, 600.0),
+        root=Division(
+            axis=Axis.Z,
+            id="root",
+            items=[
+                Board(thickness_mm=_T_MM, id="bottom"),
+                Division(
+                    axis=Axis.X,
+                    id="row",
+                    items=[
+                        Board(thickness_mm=_T_MM, id="left"),
+                        left,
+                        Board(thickness_mm=_T_MM, id="divider"),
+                        Bay(size_mm=446.0, id="colR"),
+                        Board(thickness_mm=_T_MM, id="right"),
+                    ],
+                    size_mm=564.0,
+                ),
+                Board(thickness_mm=_T_MM, id="top"),
+            ],
+        ),
+        depth_axis=Axis.Y,
+    )
+
+
+def test_an_outer_dimension_keeps_its_row_when_the_one_inside_it_is_hidden() -> None:
+    unit = _nested()
+    every = {label.region_id: label for label in _every_label(unit)}
+    assert every["colL"].start_mm[1] == pytest.approx(-_ROW_MM)
+    assert every["SA"].start_mm[1] == pytest.approx(-2 * _ROW_MM)
+    alone = {
+        label.region_id: label for label in _overlay(unit, selected_id="SA").labels
+    }
+    assert "colL" not in alone
+    assert alone["SA"].start_mm == every["SA"].start_mm

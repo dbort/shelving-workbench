@@ -1128,8 +1128,8 @@ def test_dimensions_drag_basis_and_untagged() -> None:
             doc.recompute()
             assert _board_snapshot(container) == boards_before_toggle
 
-            # The locked lower bay holds the shelf until it is unlocked, and
-            # unlocking moves nothing.
+            # The locked lower bay holds the shelf until its Lock is deleted,
+            # and deleting it moves nothing.
             shelf_z_mm = _z_mm(container, left_shelf_id)
             grab_mm = Vec3(100.0, 0.0, shelf_z_mm + 5.0)
             assert session.held_by(left_shelf_id) == Held(
@@ -1138,12 +1138,13 @@ def test_dimensions_drag_basis_and_untagged() -> None:
             held = session.begin_drag(left_shelf_id, grab_mm)
             assert isinstance(held, EditFailure), held
             assert held.node_id == left_lower_id
-            assert session.unlock_holders(left_shelf_id) is None
+            session.select_constraints([_lock_id(session.unit, left_lower_id)])
+            assert session.delete_constraints() is None
             doc.recompute()
             assert _board_snapshot(container) == boards_before_toggle
             assert _lock_of(session.unit, left_lower_id) is None
             assert session.held_by(left_shelf_id) == Held()
-            assert isinstance(session.unlock_holders(left_shelf_id), EditFailure)
+            session.select(left_lower_id)
 
             # Locking both bays of the column is accepted, moves nothing,
             # and makes the unit's height a reference.
@@ -1324,9 +1325,9 @@ def _void_locks(unit: Unit) -> list[Basis | None]:
 
 
 def test_an_unlocked_plinth_gap_stays_unlocked_when_reopened(tmp_path: Path) -> None:
-    """The scan locks Magic Start's plinth gap; once unlocked with its
-    padlock, the stored record keeps it unlocked through a save and a fresh
-    open of the file."""
+    """The scan locks Magic Start's plinth gap; once its Lock is deleted,
+    the stored record keeps it unlocked through a save and a fresh open of
+    the file."""
     path = tmp_path / _MAGIC_START.name
     shutil.copyfile(_MAGIC_START, path)
     doc = FreeCAD.openDocument(str(path))
