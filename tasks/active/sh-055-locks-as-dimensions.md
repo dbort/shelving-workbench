@@ -203,3 +203,13 @@ types a size.
       `editor.constraint_list` rewritten for dimensions and the commands.
 
 ## Review log
+
+### Round 1: REJECTED
+- **F1: "Rows keep their places" has no test** (`freecad/Shelving/editor/elevation.py:679`): every outer-row test selects every region first, so they pass whether rows are planned over every label or only the drawn ones. Add a test in `tests/test_editor_elevation.py` that an outer dimension keeps its row and `start_mm` with only it drawn, on a unit with nested outer rows on one edge.
+- **F2: The depth-axis Lock row is untested** (`freecad/Shelving/editor/session.py:260`, `freecad/Shelving/editor/constraint_list.py:95`): the `_row_kind` fallback, the "Lock" text and the bare-tile icon are reached by no test. Add a session test where a scan locks a void in a depth run and its row's kind is `"lock"`, and a list test that its text is "Lock" and its icon the bare tile.
+- **N1: `Session.set_lock` has no production caller left** (`freecad/Shelving/editor/session.py:1141`): keep it on purpose as the tests' way to lock a region, or drop it.
+- **N2: "panel" means two things in one sentence** (`README.md:105`): a board and the task panel.
+- **N3: Comment doesn't fit the constant below it** (`freecad/Shelving/editor/session.py:189`): `_LOCK_STEPS` holds undo names, not sentences.
+- **N4: Double-click test uses a different unit** (`tests/freecad_view/test_dimensions.py:268`): equivalent check; noted only.
+- **N5: Task id in a section header** (`tests/test_editor_elevation.py:716`): drop "(sh-055)".
+- **N6: Overlong line after the rewrap** (`docs/scope-and-design.md:336`), and a few short README and 30-editor.toml lines; `doc-hygiene` can fix these.
