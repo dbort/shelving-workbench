@@ -161,13 +161,14 @@ The vocabulary the documentation and the code share.
   height it shares as with Equal: a bay in the first and last column of a
   row spaces the row's columns, and a column's top and bottom openings
   space the whole column. Its ends stay where they are and the openings
-  between them share the space, unless locks or constraints move them. An opening a new board
-  adds inside the span joins it, and a deleted board's openings merge
-  within it; deleting an end board removes the even spacing. A board an
-  even spacing holds shows no drag arrow, and selecting it outlines the
-  openings holding it. Click a constraint's icon to select it, Ctrl-click
-  to select more, and press Delete to remove them. The commands sit on a
-  toolbar shown only while Edit Unit is open, and in the Shelving menu.
+  between them share the space, unless locks or constraints move them.
+  An opening a new board adds inside the span joins it, and a deleted
+  board's openings merge within it; deleting an end board removes the
+  even spacing. A board an even spacing holds shows no drag arrow, and
+  selecting it outlines the openings holding it. Click a constraint's icon
+  to select it, Ctrl-click to select more, and press Delete to remove
+  them. The commands sit on a toolbar shown only while Edit Unit is open,
+  and in the Shelving menu.
 - **Deactivated constraint**: one turned off with its box in the
   constraint list, or an Equal or Even spacing the boards no longer meet
   when a unit is opened, as after a shelf was moved by hand. Nothing moves,

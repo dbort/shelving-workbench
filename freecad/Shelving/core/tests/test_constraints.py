@@ -236,6 +236,15 @@ def test_equal_changes_the_first_opening_when_locks_rule_out_keeping_it() -> Non
     assert [type(c) for c in unit.constraints] == [Lock, Equal]
 
 
+def test_equal_keeps_the_units_size_when_locks_fill_the_rest_of_the_run() -> None:
+    # Holding A with C locked would shrink the column to 772 mm; the hold is
+    # refused instead and the boards move as little as possible.
+    before = lock(_a200_b400(), "C")
+    unit = add_equal(before, ["A", "B"])
+    assert unit.size_mm == before.size_mm
+    assert _bay_mm(unit) == pytest.approx({"A": 300.0, "B": 300.0, "C": 300.0})
+
+
 def test_equal_needs_two_openings() -> None:
     selections: list[list[str]] = [["A"], ["A", "A"], []]
     for selection in selections:
@@ -540,6 +549,59 @@ def test_even_width_between_two_boards_keeps_its_ends() -> None:
     assert _widths_mm(unit) == pytest.approx({"L": 300.0, "M": 300.0, "R": 300.0})
     unit = add_even_spacing_along(_three_columns(), ["B1", "C1"], Axis.X)
     assert _widths_mm(unit) == pytest.approx({"L": 300.0, "M": 300.0, "R": 300.0})
+
+
+def test_equal_width_keeps_the_units_width_when_locks_fill_the_rest() -> None:
+    before = lock(_three_columns(), "R")
+    unit = add_equal_along(before, ["A1", "B1"], Axis.X)
+    assert unit.size_mm == before.size_mm
+    assert _widths_mm(unit) == pytest.approx({"L": 250.0, "M": 250.0, "R": 400.0})
+
+
+def test_even_width_keeps_the_units_width_when_locks_fill_the_rest() -> None:
+    # R's Lock rules out holding L, so L gives up the room and the unit
+    # keeps 972 mm.
+    before = lock(_three_columns(), "R")
+    unit = add_even_spacing_along(before, ["B1", "C1"], Axis.X)
+    assert unit.size_mm == before.size_mm
+    assert _widths_mm(unit) == pytest.approx({"L": 100.0, "M": 400.0, "R": 400.0})
+
+
+def test_even_width_in_a_nested_run_keeps_its_ends() -> None:
+    # M's top opening B2 is split along X into P and Q; spacing them must
+    # leave d1 and d2, which bound B2, where they stand.
+    before = _three_columns()
+    root = before.root
+    assert isinstance(root, Division)
+    left, middle, right = root.items[1], root.items[3], root.items[5]
+    assert isinstance(left, Division)
+    assert isinstance(middle, Division)
+    assert isinstance(right, Division)
+    split = Division(
+        axis=Axis.X,
+        id="B2",
+        items=[
+            Bay(size_mm=100.0, id="P"),
+            Board(thickness_mm=18.0, id="pq"),
+            Bay(size_mm=200.0, id="Q"),
+        ],
+        size_mm=400.0,
+    )
+    middle_items = list(middle.items)
+    middle_items[3] = split
+    root_items = list(root.items)
+    root_items[1] = dataclasses.replace(left, size_mm=300.0)
+    root_items[3] = dataclasses.replace(middle, items=middle_items, size_mm=318.0)
+    root_items[5] = dataclasses.replace(right, size_mm=282.0)
+    nested = dataclasses.replace(
+        before, root=dataclasses.replace(root, items=root_items)
+    )
+    unit = add_even_spacing_along(nested, ["P", "Q"], Axis.X)
+    spaces = solve(unit)
+    assert (spaces["P"].size.x_mm, spaces["Q"].size.x_mm) == pytest.approx(
+        (150.0, 150.0)
+    )
+    assert _widths_mm(unit) == pytest.approx({"L": 300.0, "M": 318.0, "R": 282.0})
 
 
 def test_equal_height_on_two_bays_makes_them_equal() -> None:

@@ -93,14 +93,18 @@ and run Equal Width; today you'd have to select the columns themselves.
   manual QA, following the Sketcher): a new Equal solves with the first
   distinct region held at its current size, so the others change to match
   it and any free region absorbs the difference. Hold it with a temporary
-  Lock dropped after the solve; when the locks and constraints rule that
-  out, solve as before, moving the boards as little as possible.
+  Lock dropped after the solve, with the unit's size along the axis pinned
+  so a hold that would resize the unit counts as ruled out; when the locks
+  and constraints rule the hold out, solve without it, moving the boards
+  as little as possible.
 - **Even spacing holds its span** (user decision 2026-11-21, from manual
   QA): a new Even spacing keeps its two ends where they stand and
   redistributes the openings between them. Every region of the run outside
-  the span, and the run itself unless it is the root, is held at its
-  current size by temporary Locks during the solve, falling back as Equal
-  does.
+  the span, and every region of each enclosing run along the same axis, is
+  held at its current size by temporary Locks during the solve, falling
+  back as Equal does. A Lock on the nested run itself measures across its
+  axis, and holding only the enclosing region's size still lets the solve
+  slide the whole run.
 - **Icons read on a dark theme** (user decision 2026-11-21, from manual
   QA): the double arrow's shaft on the four toolbar icons is drawn as a
   filled red bar with the dark outline, as the glyphs' bars are, so it

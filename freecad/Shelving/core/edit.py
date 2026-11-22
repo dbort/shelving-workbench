@@ -56,6 +56,7 @@ from freecad.Shelving.core.layout import (
     constraint_regions,
     find_division,
     is_locked,
+    parent_divisions,
     region_along,
     region_lock,
     spacing_group,
@@ -1108,9 +1109,11 @@ def add_equal(unit: Unit, region_ids: Sequence[str]) -> Unit:
     each two openings next to each other in ``region_ids``, so N openings
     make N-1 constraints chained in that order, appended after its others.
     The first opening keeps its size and the others change to match it, as
-    the Sketcher's Equal takes the first selection's size, the boards
-    moving as little as possible otherwise; when the locks and constraints
-    rule out keeping that size, the boards move as little as possible.
+    the Sketcher's Equal takes the first selection's size, with the unit's
+    size unchanged and the other boards moving as little as possible. When
+    the locks and constraints rule out keeping both sizes, the openings meet
+    wherever moving the boards least puts them, and the unit's size changes
+    only where the locks and constraints fix it.
 
     Raises :class:`EditError` when ``region_ids`` holds fewer than two
     distinct openings, names a board, the whole unit or nothing, or names
@@ -1140,10 +1143,11 @@ def add_equal(unit: Unit, region_ids: Sequence[str]) -> Unit:
 
 def _solved_holding(unit: Unit, edited: Unit, axis: Axis, held: Sequence[str]) -> Unit:
     """``edited``, ``unit`` with constraints added, solved along ``axis``
-    from where ``unit``'s boards stand, each region ``held`` names keeping
-    its current size, as a Lock would hold it, wherever the locks and
-    constraints allow; when they rule that out, solved moving the boards as
-    little as possible. ``edited``'s constraints come back unchanged.
+    from where ``unit``'s boards stand, each region ``held`` names and the
+    unit itself keeping its current size there, as a Lock would hold it,
+    wherever the locks and constraints allow. When they rule that out, it
+    is solved as :func:`~freecad.Shelving.core.solver.solve_axis` solves
+    ``edited`` alone. ``edited``'s constraints come back unchanged.
     Raises a ``"conflict"``
     :class:`~freecad.Shelving.core.solver.LayoutSolveError` only when
     ``edited`` itself has no layout."""
@@ -1152,8 +1156,16 @@ def _solved_holding(unit: Unit, edited: Unit, axis: Axis, held: Sequence[str]) -
     for region_id in held:
         holding = lock(holding, region_id)
     if holding is not edited:
+        # Without size_mm a hold whose Locks fill the run would resize the
+        # unit; pinning the size makes that a conflict, so it falls back.
         try:
-            solved = solve_axis(holding, spaces, axis, MIN_DRAG_GAP_MM)
+            solved = solve_axis(
+                holding,
+                spaces,
+                axis,
+                MIN_DRAG_GAP_MM,
+                size_mm=unit.size_mm.component_mm(axis.component_index),
+            )
         except LayoutSolveError:
             pass
         else:
@@ -1175,10 +1187,11 @@ def _spacing_end(run: Division, index: int, step: int) -> SpacingEnd | None:
 
 def add_even_spacing(unit: Unit, node_ids: Sequence[str]) -> Unit:
     """``unit`` with an :class:`~freecad.Shelving.core.layout.EvenSpacing`
-    appended after its other constraints. Its ends stay where they stand
-    and the openings between them share the span, the boards moving as
-    little as possible otherwise; when the locks and constraints rule out
-    holding the ends, the boards move as little as possible.
+    appended after its other constraints. Its ends and the unit's size stay
+    as they are and the openings between them share the span. When the
+    locks and constraints rule out holding the ends, the openings share
+    whatever span moving the boards least leaves them, and the unit's size
+    changes only where the locks and constraints fix it.
 
     ``node_ids`` names two boards of one run, which become its ends, or two
     or more openings of one run: then its group runs from the first opening
@@ -1237,13 +1250,21 @@ def _add_even_spacing(unit: Unit, node_ids: Sequence[str], what: str) -> Unit:
             "Select ends with two or more openings between them to space evenly.",
         )
     # Holding everything outside the span keeps its ends where they stand.
+    # In a nested run the ends also move when an enclosing run along the
+    # same axis shifts the run, which the least-movement solve does to
+    # spare the boards inside the span, so every enclosing run along
+    # run.axis is held too.
     held = [
         item.id
         for item in run.items
         if not isinstance(item, Board) and item.id not in group
     ]
-    if run is not unit.root:
-        held.append(run.id)
+    parents = parent_divisions(unit.root)
+    parent = parents.get(run.id)
+    while parent is not None:
+        if parent.axis == run.axis:
+            held.extend(item.id for item in parent.items if not isinstance(item, Board))
+        parent = parents.get(parent.id)
     return _solved_holding(unit, edited, run.axis, held)
 
 
