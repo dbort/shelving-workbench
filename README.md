@@ -114,7 +114,8 @@ The vocabulary the documentation and the code share.
   and press Delete to remove them. Double-click any dimension's text to
   type a size. The commands sit on the toolbar Edit Unit shows, in the
   3D view's right-click menu while Edit Unit is open, and in the Shelving
-  menu, as do Add Shelf, Add Divider, Equal and Even spacing.
+  menu, as do Add Shelf, Add Divider, Equal Width, Equal Height, Even
+  Width and Even Height.
 - **Reference dimension**: a size drawn in blue with its value in
   parentheses, as the Sketcher draws a reference dimension: it shows the
   size and holds nothing. A selected opening shows its own, and the one it
@@ -139,23 +140,35 @@ The vocabulary the documentation and the code share.
   anything. A board with nothing but boards and locked openings between it
   and the end of its row is held until one of those openings is unlocked,
   so locking every opening of a row holds all its boards.
-- **Equal**: a constraint that keeps two openings the same size. Select two
-  or more widths, or two or more heights, in any rows or columns, and run
-  Constrain Equal: each opening is made equal to the next in the order you
-  selected them, as the Sketcher chains its Equal. Each shows an equals
-  sign icon beside its dimension. Deleting a board beside an
-  opening, or adding a board along its row that splits it, removes its
-  Equal; a board added across it keeps the Equal.
+- **Equal**: a constraint that keeps two widths, or two heights, the same.
+  Select two or more openings and run Equal Width or Equal Height: each
+  opening stands for the width or height it shares with the region around
+  it, as with Lock Width and Lock Height, so a bay picked in each of two
+  columns makes the columns equal in width. Each is made equal to the
+  next in the order you selected them, as the Sketcher chains its Equal,
+  and the first keeps its size while the others change to match it,
+  unless locks or constraints hold it to another.
+  Two openings that share one size count once, and a selected panel, or a
+  size that is the unit's own, refuses the command. Each shows an equals
+  sign icon beside its dimension. Deleting a board beside an opening, or
+  adding a board along its row that splits it, removes its Equal; a board
+  added across it keeps the Equal.
 - **Even spacing**: a constraint that keeps every opening between two ends
-  of one row or column the same size. Select the two boards at its ends,
-  or its first and last openings, and run Constrain Even Spacing; a column's
-  top and bottom openings space the whole column. An opening a new board
-  adds inside the span joins it, and a deleted board's openings merge
-  within it; deleting an end board removes the even spacing. A board an
-  even spacing holds shows no drag arrow, and selecting it outlines the
-  openings holding it. Click a constraint's icon to select it, Ctrl-click
-  to select more, and press Delete to remove them. The commands sit on a
-  toolbar shown only while Edit Unit is open, and in the Shelving menu.
+  of one row or column the same size. Run Even Width to space the columns
+  of a row, or Even Height to space the openings of a column. Select the
+  two boards at its ends, dividers for Even Width and shelves for Even
+  Height, or its first and last openings, each standing for the width or
+  height it shares as with Equal: a bay in the first and last column of a
+  row spaces the row's columns, and a column's top and bottom openings
+  space the whole column. Its ends stay where they are and the openings
+  between them share the space, unless locks or constraints move them.
+  An opening a new board adds inside the span joins it, and a deleted
+  board's openings merge within it; deleting an end board removes the
+  even spacing. A board an even spacing holds shows no drag arrow, and
+  selecting it outlines the openings holding it. Click a constraint's icon
+  to select it, Ctrl-click to select more, and press Delete to remove
+  them. The commands sit on a toolbar shown only while Edit Unit is open,
+  and in the Shelving menu.
 - **Deactivated constraint**: one turned off with its box in the
   constraint list, or an Equal or Even spacing the boards no longer meet
   when a unit is opened, as after a shelf was moved by hand. Nothing moves,

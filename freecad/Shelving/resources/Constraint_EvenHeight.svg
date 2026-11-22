@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Even Height: Constraint_EvenSpacing.svg's uprights beside a vertical
+     double arrow whose shaft is a filled bar, so it shows on a dark
+     toolbar too. -->
+<svg
+   xmlns="http://www.w3.org/2000/svg"
+   width="64"
+   height="64"
+   viewBox="0 0 64 64"
+   version="1.1"
+   id="svg2816">
+  <g
+     id="layer1">
+    <rect
+       style="fill:#cc0000;fill-opacity:1;stroke:#280000;stroke-width:2;stroke-linecap:square;stroke-linejoin:round"
+       id="upright1"
+       width="6"
+       height="30"
+       x="4"
+       y="17" />
+    <rect
+       style="fill:#cc0000;fill-opacity:1;stroke:#280000;stroke-width:2;stroke-linecap:square;stroke-linejoin:round"
+       id="upright2"
+       width="6"
+       height="30"
+       x="18"
+       y="17" />
+    <rect
+       style="fill:#cc0000;fill-opacity:1;stroke:#280000;stroke-width:2;stroke-linecap:square;stroke-linejoin:round"
+       id="upright3"
+       width="6"
+       height="30"
+       x="32"
+       y="17" />
+    <path
+       style="fill:none;stroke:#ef2929;stroke-width:2;stroke-linecap:square;stroke-linejoin:round"
+       d="M 6,19 V 45 M 20,19 V 45 M 34,19 V 45"
+       id="highlights" />
+    <path
+       style="fill:none;stroke:#280000;stroke-width:2;stroke-linecap:square;stroke-linejoin:round"
+       d="M 12,32 H 16 M 26,32 H 30"
+       id="gaps" />
+    <rect
+       style="fill:#cc0000;fill-opacity:1;stroke:#280000;stroke-width:2;stroke-linecap:square;stroke-linejoin:round"
+       id="shaft"
+       width="6"
+       height="32"
+       x="50"
+       y="16" />
+    <path
+       style="fill:#cc0000;fill-opacity:1;stroke:#280000;stroke-width:2;stroke-linejoin:round"
+       d="M 53,8 46,18 H 60 Z M 53,56 46,46 H 60 Z"
+       id="arrowheads" />
+  </g>
+</svg>

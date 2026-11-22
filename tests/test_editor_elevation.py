@@ -19,6 +19,7 @@ from freecad.Shelving.core.layout import (
     Lock,
     Unit,
     Void,
+    region_along,
 )
 from freecad.Shelving.core.solver import solve
 from freecad.Shelving.editor.elevation import (
@@ -37,7 +38,6 @@ from freecad.Shelving.editor.elevation import (
     label_at,
     label_size_pt,
     plan_overlay,
-    region_along,
     region_at,
     run_direction,
 )

@@ -33,9 +33,9 @@ def _column(
     assert session.split("vertical") is None
     a, b, c = bay_ids(session.unit.root)
     session.select_items([a, b])
-    panel.constrain("equal")
+    panel.constrain("equal_height")
     session.select_items([a, c])
-    panel.constrain("even_spacing")
+    panel.constrain("even_height")
     assert session.set_lock(a, locked=True) is None
     session.select(None)
     panel._refresh()

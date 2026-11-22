@@ -28,6 +28,7 @@ from freecad.Shelving.core.layout import (
     constraint_regions,
     region_lock,
 )
+from freecad.Shelving.core.record import rules_to_json
 from freecad.Shelving.editor.session import (
     EditFailure,
     EditWarning,
@@ -182,6 +183,28 @@ def _stored(container: FreeCAD.DocumentObject) -> list[dict[str, object]]:
     assert text is not None
     constraints: list[dict[str, object]] = json.loads(text)["constraints"]
     return constraints
+
+
+def test_a_record_of_equals_and_even_spacings_opens_unchanged(
+    doc: FreeCAD.Document,
+) -> None:
+    """A stored Equal or Even spacing carries no axis of its own, so
+    opening the unit keeps it as written."""
+    column = _COLUMN.column.id
+    container = _written(
+        doc,
+        _equal(_COLUMN.a, _COLUMN.b),
+        EvenSpacing(run_id=column, start=RunEnd.START, end=RunEnd.END),
+        _equal(_COLUMN.b, _COLUMN.c, active=False),
+    )
+    before = properties.read_container_rules_json(container)
+    session = _opened(container)
+    try:
+        assert len(session.constraints) == 3
+        assert rules_to_json(session.unit) == before
+        assert properties.read_container_rules_json(container) == before
+    finally:
+        session.close()
 
 
 def test_an_equal_the_boards_miss_comes_in_deactivated_and_stays_so(
@@ -419,7 +442,7 @@ def _bays(session: Session) -> list[str]:
     return [item.id for item in column.items if not isinstance(item, Board)]
 
 
-def test_constrain_equal_chains_the_selected_openings_as_one_step(
+def test_equal_height_chains_the_selected_openings_as_one_step(
     doc: FreeCAD.Document,
 ) -> None:
     container = _written(doc)
@@ -429,7 +452,7 @@ def test_constrain_equal_chains_the_selected_openings_as_one_step(
         steps = doc.UndoCount
         session.select_items([c, a, b])
         assert session.selected_items == (c, a, b)
-        assert session.constrain_equal() is None
+        assert session.equal_axis("vertical") is None
         assert doc.UndoCount == steps + 1
         assert [
             constraint.region_ids
@@ -438,11 +461,31 @@ def test_constrain_equal_chains_the_selected_openings_as_one_step(
         ] == [(c, a), (a, b)]
         assert session.selected_items == ()
         assert [entry["kind"] for entry in _stored(container)] == ["equal", "equal"]
+        assert doc.UndoNames[0] == "Equal Height"
     finally:
         session.close()
 
 
-def test_constrain_even_spacing_spaces_the_column_and_refuses_one_opening(
+def test_width_commands_on_bays_of_one_column_are_refused(
+    doc: FreeCAD.Document,
+) -> None:
+    container = _written(doc)
+    session = _opened(container)
+    try:
+        a, _b, c = _bays(session)
+        session.select_items([a, c])
+        for refused in (
+            session.equal_axis("horizontal"),
+            session.even_axis("horizontal"),
+        ):
+            assert isinstance(refused, EditFailure)
+            assert "Select" in refused.message
+        assert session.constraints == ()
+    finally:
+        session.close()
+
+
+def test_even_height_spaces_the_column_and_refuses_one_opening(
     doc: FreeCAD.Document,
 ) -> None:
     container = _written(doc)
@@ -450,7 +493,7 @@ def test_constrain_even_spacing_spaces_the_column_and_refuses_one_opening(
     try:
         a, b, c = _bays(session)
         session.select_items([b])
-        refused = session.constrain_even_spacing()
+        refused = session.even_axis("vertical")
         assert isinstance(refused, EditFailure)
         assert "Select" in refused.message
         assert session.constraints == ()
@@ -458,7 +501,7 @@ def test_constrain_even_spacing_spaces_the_column_and_refuses_one_opening(
         assert session.set_size(200.0) is None
         assert session.set_lock(a, locked=False) is None
         session.select_items([a, c])
-        assert session.constrain_even_spacing() is None
+        assert session.even_axis("vertical") is None
         doc.recompute()
         assert _heights_mm(doc) == pytest.approx((_BAY_MM, _BAY_MM, _BAY_MM))
     finally:
@@ -478,7 +521,7 @@ def test_a_conflicting_equal_is_refused_naming_its_locks_and_itself(
         snapshot = _snapshot(doc)
         locks = {_lock_id(session, a), _lock_id(session, c)}
         session.select_items([a, c])
-        refused = session.constrain_equal()
+        refused = session.equal_axis("vertical")
         assert isinstance(refused, EditFailure)
         *named_locks, equal = refused.constraint_ids
         assert set(named_locks) == locks
@@ -501,7 +544,7 @@ def test_a_redundant_equal_is_kept_with_a_warning(doc: FreeCAD.Document) -> None
         assert session.set_lock(a, locked=True) is None
         assert session.set_lock(b, locked=True) is None
         session.select_items([a, b])
-        assert session.constrain_equal() is None
+        assert session.equal_axis("vertical") is None
         (equal,) = _others(session)
         (warning,) = warnings
         assert "redundant" in warning.message
@@ -523,7 +566,7 @@ def test_a_lock_an_equal_implies_is_kept_with_a_warning_naming_it(
     try:
         a, b, _c = _bays(session)
         session.select_items([a, b])
-        assert session.constrain_equal() is None
+        assert session.equal_axis("vertical") is None
         (equal,) = session.constraints
         assert session.set_lock(a, locked=True) is None
         assert warnings == []
@@ -596,11 +639,11 @@ def test_rows_list_every_constraint_locks_included_as_made(
         assert (lock_a.kind, lock_a.active) == ("lock_height", True)
         assert lock_a.size_mm == pytest.approx(_BAY_MM)
         assert (spacing.kind, spacing.active, spacing.size_mm) == (
-            "even_spacing",
+            "even_height",
             False,
             None,
         )
-        assert (equal.kind, equal.active) == ("equal", True)
+        assert (equal.kind, equal.active) == ("equal_height", True)
         assert equal.size_mm == pytest.approx(_BAY_MM)
         assert not any(row.redundant for row in rows)
         # C's lock alone fixes the column's height, so only A's, B's and

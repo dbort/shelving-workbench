@@ -424,6 +424,69 @@ def find_division(region: Region, division_id: str) -> Division | None:
     return None
 
 
+def parent_divisions(region: Region) -> dict[str, Division]:
+    """The division holding each region and board under ``region``, by id;
+    ``region`` itself has none."""
+    found: dict[str, Division] = {}
+    if isinstance(region, Division):
+        for item in region.items:
+            found[item.id] = region
+            if not isinstance(item, Board):
+                found.update(parent_divisions(item))
+    return found
+
+
+def _spans_unit(
+    parents: Mapping[str, Division], division: Division, axis: Axis
+) -> bool:
+    """Whether ``division`` reaches across the whole unit along ``axis``:
+    it is the root, or it fills a run across ``axis`` that does."""
+    parent = parents.get(division.id)
+    if parent is None:
+        return True
+    return parent.axis != axis and _spans_unit(parents, parent, axis)
+
+
+def owner_along(
+    parents: Mapping[str, Division], node_id: str, axis: Axis
+) -> str | None:
+    """The nearest of ``node_id`` and its enclosing regions whose parent
+    division runs along ``axis``, in the tree ``parents`` maps as
+    :func:`parent_divisions` does; ``None`` for a board, the root, an
+    unknown id, or when no enclosing run lies along ``axis``."""
+    parent = parents.get(node_id)
+    if parent is None or any(
+        isinstance(item, Board) and item.id == node_id for item in parent.items
+    ):
+        return None
+    current = node_id
+    while parent is not None:
+        if parent.axis == axis:
+            return current
+        current = parent.id
+        parent = parents.get(current)
+    return None
+
+
+def region_along(unit: Unit, node_id: str, axis: Axis) -> str | None:
+    """The region whose size along ``axis`` holds ``node_id``'s: the nearest
+    of ``node_id`` and its enclosing regions whose parent division runs
+    along ``axis``, as the Sketcher's distance constraints act on the
+    geometry spanning that direction. ``None`` for a board, the root or an
+    unknown id, and when the size along ``axis`` is the unit's own: no such
+    region exists, or the one found is alone among boards in a run that
+    spans the unit, so only the unit's size changes it."""
+    parents = parent_divisions(unit.root)
+    found = owner_along(parents, node_id, axis)
+    if found is None:
+        return None
+    parent = parents[found]
+    alone = all(isinstance(item, Board) or item.id == found for item in parent.items)
+    if alone and _spans_unit(parents, parent, axis):
+        return None
+    return found
+
+
 def spacing_group(unit: Unit, spacing: EvenSpacing) -> tuple[str, ...] | None:
     """The ids of the regions of ``spacing``'s run between its ends, in run
     order; ``None`` when its run or an end board is no longer in ``unit``,

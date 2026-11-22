@@ -2,7 +2,8 @@
 <!-- Lock Width, drawn on the 64 px grid in the fills and strokes of the
      Sketcher's constraint icons, as Constraint_Equal.svg is, after the
      Sketcher's Constraint_HorizontalDistance: two uprights with a
-     dimension line between them, an arrowhead at each end. -->
+     dimension line between them, an arrowhead at each end, its shaft a
+     filled bar so it shows on a dark toolbar too. -->
 <svg
    xmlns="http://www.w3.org/2000/svg"
    width="64"
@@ -30,10 +31,13 @@
        style="fill:none;stroke:#ef2929;stroke-width:2;stroke-linecap:square;stroke-linejoin:round"
        d="M 7,15 V 49 M 55,15 V 49"
        id="highlights" />
-    <path
-       style="fill:none;stroke:#280000;stroke-width:4;stroke-linecap:butt;stroke-linejoin:round"
-       d="M 22,32 H 42"
-       id="line" />
+    <rect
+       style="fill:#cc0000;fill-opacity:1;stroke:#280000;stroke-width:2;stroke-linecap:square;stroke-linejoin:round"
+       id="shaft"
+       width="24"
+       height="6"
+       x="20"
+       y="29" />
     <path
        style="fill:#cc0000;fill-opacity:1;stroke:#280000;stroke-width:2;stroke-linejoin:round"
        d="M 14,32 24,24 V 40 Z M 50,32 40,24 V 40 Z"

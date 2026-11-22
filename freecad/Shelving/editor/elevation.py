@@ -40,6 +40,8 @@ from freecad.Shelving.core.layout import (
     Unit,
     Void,
     constraint_regions,
+    owner_along,
+    parent_divisions,
     region_lock,
 )
 from freecad.Shelving.core.scan import elevation_axes
@@ -62,6 +64,18 @@ _RESOURCES = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources
 ICON_SOURCES: Mapping[ConstraintKind, str] = {
     "equal": os.path.join(_RESOURCES, "Constraint_Equal.svg"),
     "even_spacing": os.path.join(_RESOURCES, "Constraint_EvenSpacing.svg"),
+}
+# Equal Width's, Equal Height's, Even Width's and Even Height's icons, by
+# the constraint they make and the elevation direction it holds sizes
+# along. The view draws the axis-free icons above, since the dimension
+# line an icon sits on already shows the direction.
+AXIS_ICON_SOURCES: Mapping[tuple[ConstraintKind, ElevationDirection], str] = {
+    ("equal", "horizontal"): os.path.join(_RESOURCES, "Constraint_EqualWidth.svg"),
+    ("equal", "vertical"): os.path.join(_RESOURCES, "Constraint_EqualHeight.svg"),
+    ("even_spacing", "horizontal"): os.path.join(
+        _RESOURCES, "Constraint_EvenWidth.svg"
+    ),
+    ("even_spacing", "vertical"): os.path.join(_RESOURCES, "Constraint_EvenHeight.svg"),
 }
 # Lock Width's and Lock Height's icons, after the Sketcher's horizontal and
 # vertical distance constraints'.
@@ -727,64 +741,6 @@ def plan_overlay(
     return Overlay(faces=faces, outlines=outlines, labels=labels, icons=icons)
 
 
-def _parents(unit: Unit) -> dict[str, Division]:
-    """The division holding each region and board of ``unit``, by id; the
-    root has none."""
-    return {
-        node.id: parent
-        for node, _depth, parent in _walk(unit.root)
-        if parent is not None
-    }
-
-
-def _spans_unit(
-    parents: Mapping[str, Division], division: Division, axis: Axis
-) -> bool:
-    """Whether ``division`` reaches across the whole unit along ``axis``:
-    it is the root, or it fills a run across ``axis`` that does."""
-    parent = parents.get(division.id)
-    if parent is None:
-        return True
-    return parent.axis != axis and _spans_unit(parents, parent, axis)
-
-
-def _owner_along(
-    parents: Mapping[str, Division], unit: Unit, node_id: str, axis: Axis
-) -> str | None:
-    """The nearest of ``node_id`` and its enclosing regions whose parent
-    division runs along ``axis``; ``None`` for a board, the root, an unknown
-    id, or when no enclosing run lies along ``axis``."""
-    parent = parents.get(node_id)
-    if parent is None or node_id in board_ids(unit):
-        return None
-    current = node_id
-    while parent is not None:
-        if parent.axis == axis:
-            return current
-        current = parent.id
-        parent = parents.get(current)
-    return None
-
-
-def region_along(unit: Unit, node_id: str, axis: Axis) -> str | None:
-    """The region whose size along ``axis`` holds ``node_id``'s: the nearest
-    of ``node_id`` and its enclosing regions whose parent division runs
-    along ``axis``, as the Sketcher's distance constraints act on the
-    geometry spanning that direction. ``None`` for a board, the root or an
-    unknown id, and when the size along ``axis`` is the unit's own: no such
-    region exists, or the one found is alone among boards in a run that
-    spans the unit, so only the unit's size changes it."""
-    parents = _parents(unit)
-    found = _owner_along(parents, unit, node_id, axis)
-    if found is None:
-        return None
-    parent = parents[found]
-    alone = all(isinstance(item, Board) or item.id == found for item in parent.items)
-    if alone and _spans_unit(parents, parent, axis):
-        return None
-    return found
-
-
 def run_direction(
     unit: Unit, frame: ElevationFrame, region_id: str
 ) -> ElevationDirection | None:
@@ -792,7 +748,7 @@ def run_direction(
     ``frame``: what Lock Width or Lock Height its Lock would be. ``None``
     for a run through the depth, which neither makes, and for the root, a
     board or an unknown id."""
-    parent = _parents(unit).get(region_id)
+    parent = parent_divisions(unit.root).get(region_id)
     if parent is None or region_id in board_ids(unit):
         return None
     if parent.axis == frame.horizontal:
@@ -808,14 +764,15 @@ def drawn_dimensions(
     deactivated, every region an Equal or Even spacing holds, active or
     deactivated, and every region in ``selected`` together with the region
     owning its size along the other elevation axis, found as
-    :func:`region_along` finds it but kept when it spans the unit between
-    boards, so a bay in a lone column shows the column's width. Ids in
-    ``selected`` naming boards or nothing add nothing. A region whose run
-    lies along the depth axis is in the set but has no dimension to draw."""
+    :func:`~freecad.Shelving.core.layout.region_along` finds it but kept
+    when it spans the unit between boards, so a bay in a lone column shows
+    the column's width. Ids in ``selected`` naming boards or nothing add
+    nothing. A region whose run lies along the depth axis is in the set but
+    has no dimension to draw."""
     drawn: set[str] = set()
     for constraint in unit.constraints:
         drawn.update(constraint_regions(unit, constraint))
-    parents = _parents(unit)
+    parents = parent_divisions(unit.root)
     boards = board_ids(unit)
     for node_id in selected:
         parent = parents.get(node_id)
@@ -824,7 +781,7 @@ def drawn_dimensions(
         drawn.add(node_id)
         across = frame.vertical if parent.axis == frame.horizontal else frame.horizontal
         if parent.axis in (frame.horizontal, frame.vertical):
-            other = _owner_along(parents, unit, node_id, across)
+            other = owner_along(parents, node_id, across)
             if other is not None:
                 drawn.add(other)
     return frozenset(drawn)

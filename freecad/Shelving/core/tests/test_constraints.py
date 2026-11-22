@@ -11,7 +11,9 @@ from freecad.Shelving.core.edit import (
     EditError,
     Held,
     add_equal,
+    add_equal_along,
     add_even_spacing,
+    add_even_spacing_along,
     carry_constraints,
     held_by,
     lock,
@@ -220,11 +222,27 @@ def test_equal_on_three_openings_chains_two_constraints_in_selection_order() -> 
     assert len(unit.constraints) == 2
 
 
-def test_equal_makes_unequal_openings_equal_moving_the_boards_least() -> None:
-    # s1 and s2 share the move as least squares share it: s1 up 80 mm, s2
-    # down 40 mm.
+def test_equal_keeps_the_first_openings_size() -> None:
+    # A keeps 200 mm, so s2 comes down 200 mm and C takes the difference.
     unit = add_equal(_a200_b400(), ["A", "B"])
-    assert _bay_mm(unit) == pytest.approx({"A": 280.0, "B": 280.0, "C": 340.0})
+    assert _bay_mm(unit) == pytest.approx({"A": 200.0, "B": 200.0, "C": 500.0})
+
+
+def test_equal_changes_the_first_opening_when_locks_rule_out_keeping_it() -> None:
+    # A's Lock fixes it at 200 mm, so B cannot keep 400 mm; the boards then
+    # move as little as possible.
+    unit = add_equal(lock(_a200_b400(), "A"), ["B", "A"])
+    assert _bay_mm(unit) == pytest.approx({"A": 200.0, "B": 200.0, "C": 500.0})
+    assert [type(c) for c in unit.constraints] == [Lock, Equal]
+
+
+def test_equal_keeps_the_units_size_when_locks_fill_the_rest_of_the_run() -> None:
+    # Holding A with C locked would shrink the column to 772 mm; the hold is
+    # refused instead and the boards move as little as possible.
+    before = lock(_a200_b400(), "C")
+    unit = add_equal(before, ["A", "B"])
+    assert unit.size_mm == before.size_mm
+    assert _bay_mm(unit) == pytest.approx({"A": 300.0, "B": 300.0, "C": 300.0})
 
 
 def test_equal_needs_two_openings() -> None:
@@ -335,8 +353,8 @@ def test_even_spacing_on_two_boards_spaces_the_openings_between() -> None:
     (spacing,) = even.constraints
     assert isinstance(spacing, EvenSpacing)
     assert (spacing.start, spacing.end) == ("s1", "top")
-    # s1 up 20 mm and s2 down 40 mm: the least motion that evens B and C.
-    assert _bay_mm(even) == pytest.approx({"A": 220.0, "B": 340.0, "C": 340.0})
+    # The ends s1 and top stay put, so only s2 moves, down 50 mm.
+    assert _bay_mm(even) == pytest.approx({"A": 200.0, "B": 350.0, "C": 350.0})
 
 
 def test_even_spacing_with_one_opening_between_is_refused() -> None:
@@ -449,6 +467,205 @@ def test_a_deactivated_constraint_plays_no_part() -> None:
     assert _bay_mm(set_size(off, "C", 400.0, Basis.CLEAR)) == pytest.approx(
         {"A": 300.0, "B": 200.0, "C": 400.0}
     )
+
+
+# --- Equal and Even spacing along an axis -----------------------------------
+
+
+def _three_columns() -> Unit:
+    """A unit 972 mm wide and 654 mm tall of 18 mm boards, fixed point
+    ``min``, split by dividers ``d1`` and ``d2`` into columns L 300, M 200
+    and R 400, each split by one shelf: A1 300, A2 300; B1 200, B2 400;
+    C1 250, C2 350, bottom to top."""
+
+    def column(
+        name: str, width_mm: float, bays: tuple[str, str], sizes_mm: tuple[float, float]
+    ) -> Division:
+        return Division(
+            axis=Axis.Z,
+            id=name,
+            items=[
+                Board(thickness_mm=18.0, id=f"{name}-bottom"),
+                Bay(size_mm=sizes_mm[0], id=bays[0]),
+                Board(thickness_mm=18.0, id=f"{name}-shelf"),
+                Bay(size_mm=sizes_mm[1], id=bays[1]),
+                Board(thickness_mm=18.0, id=f"{name}-top"),
+            ],
+            size_mm=width_mm,
+        )
+
+    return Unit(
+        size_mm=Vec3(972.0, 300.0, 654.0),
+        root=Division(
+            axis=Axis.X,
+            id="root",
+            items=[
+                Board(thickness_mm=18.0, id="left"),
+                column("L", 300.0, ("A1", "A2"), (300.0, 300.0)),
+                Board(thickness_mm=18.0, id="d1"),
+                column("M", 200.0, ("B1", "B2"), (200.0, 400.0)),
+                Board(thickness_mm=18.0, id="d2"),
+                column("R", 400.0, ("C1", "C2"), (250.0, 350.0)),
+                Board(thickness_mm=18.0, id="right"),
+            ],
+        ),
+        depth_axis=Axis.Y,
+        fixed_point=FixedPoint(x="min", z="min"),
+    )
+
+
+def _widths_mm(unit: Unit) -> dict[str, float]:
+    spaces = solve(unit)
+    return {name: spaces[name].size.x_mm for name in "LMR"}
+
+
+def _bay_heights_mm(unit: Unit) -> dict[str, float]:
+    spaces = solve(unit)
+    return {
+        name: spaces[name].size.z_mm for name in ("A1", "A2", "B1", "B2", "C1", "C2")
+    }
+
+
+def test_equal_width_on_two_bays_makes_their_columns_equal() -> None:
+    before = _three_columns()
+    unit = add_equal_along(before, ["A1", "B1"], Axis.X)
+    (equal,) = unit.constraints
+    assert isinstance(equal, Equal) and equal.region_ids == ("L", "M")
+    widths_mm = _widths_mm(unit)
+    assert abs(widths_mm["L"] - widths_mm["M"]) < 0.001
+    assert _bay_heights_mm(unit) == pytest.approx(_bay_heights_mm(before), abs=0.001)
+
+
+def test_equal_width_keeps_the_first_columns_width_and_moves_free_columns() -> None:
+    # M, picked first, keeps 200 mm; R narrows to it and L, which nothing
+    # holds, takes up the difference.
+    unit = add_equal_along(_three_columns(), ["B1", "C1"], Axis.X)
+    assert _widths_mm(unit) == pytest.approx({"L": 500.0, "M": 200.0, "R": 200.0})
+
+
+def test_even_width_between_two_boards_keeps_its_ends() -> None:
+    # The ends d1 and right stay put, so L keeps 300 mm and only d2 moves.
+    unit = add_even_spacing_along(_three_columns(), ["d1", "right"], Axis.X)
+    assert _widths_mm(unit) == pytest.approx({"L": 300.0, "M": 300.0, "R": 300.0})
+    unit = add_even_spacing_along(_three_columns(), ["B1", "C1"], Axis.X)
+    assert _widths_mm(unit) == pytest.approx({"L": 300.0, "M": 300.0, "R": 300.0})
+
+
+def test_equal_width_keeps_the_units_width_when_locks_fill_the_rest() -> None:
+    before = lock(_three_columns(), "R")
+    unit = add_equal_along(before, ["A1", "B1"], Axis.X)
+    assert unit.size_mm == before.size_mm
+    assert _widths_mm(unit) == pytest.approx({"L": 250.0, "M": 250.0, "R": 400.0})
+
+
+def test_even_width_keeps_the_units_width_when_locks_fill_the_rest() -> None:
+    # R's Lock rules out holding L, so L gives up the room and the unit
+    # keeps 972 mm.
+    before = lock(_three_columns(), "R")
+    unit = add_even_spacing_along(before, ["B1", "C1"], Axis.X)
+    assert unit.size_mm == before.size_mm
+    assert _widths_mm(unit) == pytest.approx({"L": 100.0, "M": 400.0, "R": 400.0})
+
+
+def test_even_width_in_a_nested_run_keeps_its_ends() -> None:
+    # M's top opening B2 is split along X into P and Q; spacing them must
+    # leave d1 and d2, which bound B2, where they stand.
+    before = _three_columns()
+    root = before.root
+    assert isinstance(root, Division)
+    left, middle, right = root.items[1], root.items[3], root.items[5]
+    assert isinstance(left, Division)
+    assert isinstance(middle, Division)
+    assert isinstance(right, Division)
+    split = Division(
+        axis=Axis.X,
+        id="B2",
+        items=[
+            Bay(size_mm=100.0, id="P"),
+            Board(thickness_mm=18.0, id="pq"),
+            Bay(size_mm=200.0, id="Q"),
+        ],
+        size_mm=400.0,
+    )
+    middle_items = list(middle.items)
+    middle_items[3] = split
+    root_items = list(root.items)
+    root_items[1] = dataclasses.replace(left, size_mm=300.0)
+    root_items[3] = dataclasses.replace(middle, items=middle_items, size_mm=318.0)
+    root_items[5] = dataclasses.replace(right, size_mm=282.0)
+    nested = dataclasses.replace(
+        before, root=dataclasses.replace(root, items=root_items)
+    )
+    unit = add_even_spacing_along(nested, ["P", "Q"], Axis.X)
+    spaces = solve(unit)
+    assert (spaces["P"].size.x_mm, spaces["Q"].size.x_mm) == pytest.approx(
+        (150.0, 150.0)
+    )
+    assert _widths_mm(unit) == pytest.approx({"L": 300.0, "M": 318.0, "R": 282.0})
+
+
+def test_equal_height_on_two_bays_makes_them_equal() -> None:
+    unit = add_equal_along(_three_columns(), ["A1", "B1"], Axis.Z)
+    (equal,) = unit.constraints
+    assert isinstance(equal, Equal) and equal.region_ids == ("A1", "B1")
+
+
+def test_equal_width_on_three_columns_chains_two_equals() -> None:
+    unit = add_equal_along(_three_columns(), ["A1", "B1", "C1"], Axis.X)
+    assert [c.region_ids for c in unit.constraints if isinstance(c, Equal)] == [
+        ("L", "M"),
+        ("M", "R"),
+    ]
+    assert len(unit.constraints) == 2
+
+
+def test_equal_width_on_bays_of_one_column_is_refused() -> None:
+    with pytest.raises(EditError, match="two or more columns"):
+        add_equal_along(_three_columns(), ["A1", "A2"], Axis.X)
+
+
+def test_equal_along_refuses_boards_and_the_unit() -> None:
+    with pytest.raises(EditError, match="not boards"):
+        add_equal_along(_three_columns(), ["A1", "d1"], Axis.X)
+    with pytest.raises(EditError):
+        add_equal_along(_three_columns(), ["A1", "root"], Axis.X)
+    with pytest.raises(EditError):
+        add_equal_along(_three_columns(), [], Axis.X)
+
+
+def test_even_width_on_the_outer_bays_spaces_the_root_run() -> None:
+    unit = add_even_spacing_along(_three_columns(), ["A1", "C1"], Axis.X)
+    (even,) = unit.constraints
+    assert isinstance(even, EvenSpacing)
+    assert (even.run_id, even.start, even.end) == ("root", "left", "right")
+    widths_mm = _widths_mm(unit)
+    assert max(widths_mm.values()) - min(widths_mm.values()) < 0.001
+
+
+def test_even_height_on_two_bays_spaces_their_column() -> None:
+    unit = add_even_spacing_along(_three_columns(), ["A1", "A2"], Axis.Z)
+    (even,) = unit.constraints
+    assert isinstance(even, EvenSpacing) and even.run_id == "L"
+
+
+def test_even_spacing_along_takes_boards_only_on_its_axis() -> None:
+    with pytest.raises(EditError, match="two shelves"):
+        add_even_spacing_along(_three_columns(), ["d1", "d2"], Axis.Z)
+    unit = add_even_spacing_along(_three_columns(), ["left", "d2"], Axis.X)
+    (even,) = unit.constraints
+    assert isinstance(even, EvenSpacing) and (even.start, even.end) == ("left", "d2")
+
+
+def test_even_spacing_along_refuses_a_mixed_selection() -> None:
+    with pytest.raises(EditError):
+        add_even_spacing_along(_three_columns(), ["A1", "d1"], Axis.X)
+
+
+def test_width_commands_on_a_unit_with_no_divider_are_refused() -> None:
+    with pytest.raises(EditError, match="unit's width"):
+        add_equal_along(_column(), ["A", "B"], Axis.X)
+    with pytest.raises(EditError, match="unit's width"):
+        add_even_spacing_along(_column(), ["A", "C"], Axis.X)
 
 
 # --- removing and carrying ------------------------------------------------
