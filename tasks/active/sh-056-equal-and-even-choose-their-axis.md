@@ -147,3 +147,6 @@ and run Equal Width; today you'd have to select the columns themselves.
 - **F2: Nested Even spacing does not hold its ends** (`freecad/Shelving/core/edit.py:1245-1246`): `held.append(run.id)` is inert, because a Lock on a nested run measures across `run.axis` and `_add_constraints` skips it (`core/solver.py:312-313`). Even Width on P, Q inside a column's opening moves d1 from 318 to 301.3 and d2 from 654 to 637.3. Hold the nearest enclosing region whose parent runs along `run.axis`; add a nested-run core test.
 - **N1: Unwrapped README line** (`README.md:164`): 93 characters; reflow to the paragraph's width.
 - **N2: Muddled contract** (`freecad/Shelving/core/edit.py:1110-1113`, `1178-1181`): "boards move as little as possible" said twice; state the two cases distinctly, and that the unit's size stays unless the constraints fix it.
+
+### Round 3: APPROVED
+- **N1: Nested-run test checks the ends indirectly** (`freecad/Shelving/core/tests/test_constraints.py:603`): `test_even_width_in_a_nested_run_keeps_its_ends` asserts L, M and R keep their widths instead of where d1 and d2 sit; equivalent with fixed point `min`, so cosmetic.
