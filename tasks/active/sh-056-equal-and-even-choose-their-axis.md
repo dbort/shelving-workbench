@@ -137,3 +137,9 @@ and run Equal Width; today you'd have to select the columns themselves.
 ### Round 1: APPROVED
 - **N1: Unwrapped paragraph line** (`docs/scope-and-design.md:111`): the new constraints prose joins "Both measure the clear opening. The solve counts them after" on one 116-character line; reflow it to the file's wrap width.
 - **N2: Over-long QA expected line** (`freecad/Shelving/qa/cases/30-editor.toml:191`): the 85-character "Equal Width, Equal Height, Even Width and Even Height above Fit All. Two shelves, and" line was not rewrapped; cosmetic.
+
+### Round 2: REJECTED
+- **F1: Temporary hold resizes the unit** (`freecad/Shelving/core/edit.py:1141-1161`): `_solved_holding` calls `solve_axis` without `size_mm`, so when the other regions of the run are locked the temporary Lock changes the unit's outer size instead of raising and falling back. `add_equal(lock(_a200_b400(), "C"), ["A", "B"])` drops the height from 972 to 772 mm; `add_equal_along(lock(_three_columns(), "R"), ["A1", "B1"], Axis.X)` widens to 1072 mm; `add_even_spacing_along(..., ["B1", "C1"], Axis.X)` widens to 1172 mm. Pass the current size along `axis` as `size_mm` on the hold attempt; add core tests for Equal and Even.
+- **F2: Nested Even spacing does not hold its ends** (`freecad/Shelving/core/edit.py:1245-1246`): `held.append(run.id)` is inert, because a Lock on a nested run measures across `run.axis` and `_add_constraints` skips it (`core/solver.py:312-313`). Even Width on P, Q inside a column's opening moves d1 from 318 to 301.3 and d2 from 654 to 637.3. Hold the nearest enclosing region whose parent runs along `run.axis`; add a nested-run core test.
+- **N1: Unwrapped README line** (`README.md:164`): 93 characters; reflow to the paragraph's width.
+- **N2: Muddled contract** (`freecad/Shelving/core/edit.py:1110-1113`, `1178-1181`): "boards move as little as possible" said twice; state the two cases distinctly, and that the unit's size stays unless the constraints fix it.
