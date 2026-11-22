@@ -102,7 +102,7 @@ size changes, and scans back as the same treatment.
 - [x] sh-054: a lock is a constraint you can turn off
 - [x] sh-055: locks drawn as dimensions, made with Lock Width and Lock Height (blocked on sh-053, sh-054)
 - [x] sh-059: Add Shelf and Add Divider become editor commands
-- [ ] sh-056: Equal and Even spacing choose their axis (blocked on sh-055, sh-059)
+- [x] sh-056: Equal and Even spacing choose their axis (blocked on sh-055, sh-059)
 - [ ] sh-057: fully constrained boards in color, and degrees of freedom in the panel (blocked on sh-055)
 
 Relations between the openings and boards of one unit, in the Sketcher's

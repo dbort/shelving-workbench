@@ -14,10 +14,10 @@ Height do. To make two columns the same width, select one bay in each
 and run Equal Width; today you'd have to select the columns themselves.
 
 ## Must Have
-- [ ] `pixi run tests` green; `pyrefly check` clean over the changed code.
-- [ ] `grep -rnE "Shelving_ConstrainEqual\b|Shelving_ConstrainEvenSpacing\b|constrain_equal\b|constrain_even_spacing\b" freecad tests README.md docs`
+- [x] `pixi run tests` green; `pyrefly check` clean over the changed code.
+- [x] `grep -rnE "Shelving_ConstrainEqual\b|Shelving_ConstrainEvenSpacing\b|constrain_equal\b|constrain_even_spacing\b" freecad tests README.md docs`
       prints nothing.
-- [ ] Core suite, on a unit 972 mm wide and 654 mm tall of 18 mm boards,
+- [x] Core suite, on a unit 972 mm wide and 654 mm tall of 18 mm boards,
       fixed point `min`, split by two dividers into columns L 300, M 200,
       R 400 (left to right), each split by one shelf: left A1 300, A2 300;
       middle B1 200, B2 400; right C1 250, C2 350 (bottom to top):
@@ -36,19 +36,19 @@ and run Equal Width; today you'd have to select the columns themselves.
         a run along the width axis;
       - on a unit with no divider, Equal Width or Even Width on bays is
         refused.
-- [ ] GUI (`tests/freecad_gui/test_edit_commands.py`):
+- [x] GUI (`tests/freecad_gui/test_edit_commands.py`):
       `Shelving_ConstrainEqualWidth`, `Shelving_ConstrainEqualHeight`,
       `Shelving_ConstrainEvenWidth` and `Shelving_ConstrainEvenHeight` sit
       on the edit toolbar and in the Shelving menu, each with its own icon,
       and `IsActive` is false outside an edit. Every refusal goes through
       `report_error`, with text naming what to select.
-- [ ] GUI (`tests/freecad_gui/test_constraint_list.py`): an Equal row's
+- [x] GUI (`tests/freecad_gui/test_constraint_list.py`): an Equal row's
       text names Equal Width or Equal Height, and an Even spacing row's
       Even Width or Even Height, by its regions' axis.
-- [ ] A unit whose record holds Equals and Even spacings made before this
+- [x] A unit whose record holds Equals and Even spacings made before this
       task opens with them unchanged: `rules_to_json` output is identical
       before and after opening it.
-- [ ] `README.md`'s glossary entries **Equal** and **Even spacing** name
+- [x] `README.md`'s glossary entries **Equal** and **Even spacing** name
       the four commands and do not contain "Constrain Equal" or
       "Constrain Even Spacing".
 
