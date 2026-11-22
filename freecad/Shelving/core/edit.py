@@ -1147,10 +1147,9 @@ def _solved_holding(unit: Unit, edited: Unit, axis: Axis, held: Sequence[str]) -
     unit itself keeping its current size there, as a Lock would hold it,
     wherever the locks and constraints allow. When they rule that out, it
     is solved as :func:`~freecad.Shelving.core.solver.solve_axis` solves
-    ``edited`` alone. ``edited``'s constraints come back unchanged.
-    Raises a ``"conflict"``
-    :class:`~freecad.Shelving.core.solver.LayoutSolveError` only when
-    ``edited`` itself has no layout."""
+    ``edited`` alone. ``edited``'s constraints come back unchanged. Raises a
+    ``"conflict"`` :class:`~freecad.Shelving.core.solver.LayoutSolveError`
+    only when ``edited`` itself has no layout."""
     spaces = solve(unit)
     holding = edited
     for region_id in held:

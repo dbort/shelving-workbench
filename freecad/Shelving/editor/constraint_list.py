@@ -96,8 +96,8 @@ def kind_icon(
     mode unless ``active``, and the bare tile for a Lock through the depth,
     which no command makes; for another constraint the icon of the command
     making it, or its axis-free icon through the depth, with the view's
-    corner X unless ``active``. Each glyph takes the view's
-    constraint icon color."""
+    corner X unless ``active``. Each glyph takes the view's constraint icon
+    color."""
     device_px = round(side_px * ratio)
     tile = Tile(
         (base.redF(), base.greenF(), base.blueF()), round(TILE_PAD_PX * ratio), 0.0

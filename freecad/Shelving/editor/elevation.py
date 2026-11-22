@@ -766,9 +766,9 @@ def drawn_dimensions(
     owning its size along the other elevation axis, found as
     :func:`~freecad.Shelving.core.layout.region_along` finds it but kept
     when it spans the unit between boards, so a bay in a lone column shows
-    the column's width. Ids in
-    ``selected`` naming boards or nothing add nothing. A region whose run
-    lies along the depth axis is in the set but has no dimension to draw."""
+    the column's width. Ids in ``selected`` naming boards or nothing add
+    nothing. A region whose run lies along the depth axis is in the set but
+    has no dimension to draw."""
     drawn: set[str] = set()
     for constraint in unit.constraints:
         drawn.update(constraint_regions(unit, constraint))
