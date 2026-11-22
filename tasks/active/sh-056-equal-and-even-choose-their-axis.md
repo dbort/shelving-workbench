@@ -89,6 +89,24 @@ and run Equal Width; today you'd have to select the columns themselves.
   on the columns' dimensions. No test judges that the icons and the
   toolbar read plainly as width or height; this step does. Add no setup
   action.
+- **Equal keeps the first pick's size** (user decision 2026-11-21, from
+  manual QA, following the Sketcher): a new Equal solves with the first
+  distinct region held at its current size, so the others change to match
+  it and any free region absorbs the difference. Hold it with a temporary
+  Lock dropped after the solve; when the locks and constraints rule that
+  out, solve as before, moving the boards as little as possible.
+- **Even spacing holds its span** (user decision 2026-11-21, from manual
+  QA): a new Even spacing keeps its two ends where they stand and
+  redistributes the openings between them. Every region of the run outside
+  the span, and the run itself unless it is the root, is held at its
+  current size by temporary Locks during the solve, falling back as Equal
+  does.
+- **Icons read on a dark theme** (user decision 2026-11-21, from manual
+  QA): the double arrow's shaft on the four toolbar icons is drawn as a
+  filled red bar with the dark outline, as the glyphs' bars are, so it
+  shows on a dark toolbar.
+- **The 3D view keeps the axis-free icons** (user confirmed 2026-11-21,
+  from manual QA): no arrows in the view, as the Advice above says.
 
 ## Plan
 - [x] **Step 1** (`core/edit.py`, `core/tests/test_edit.py`,

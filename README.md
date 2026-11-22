@@ -145,7 +145,9 @@ The vocabulary the documentation and the code share.
   opening stands for the width or height it shares with the region around
   it, as with Lock Width and Lock Height, so a bay picked in each of two
   columns makes the columns equal in width. Each is made equal to the
-  next in the order you selected them, as the Sketcher chains its Equal.
+  next in the order you selected them, as the Sketcher chains its Equal,
+  and the first keeps its size while the others change to match it,
+  unless locks or constraints hold it to another.
   Two openings that share one size count once, and a selected panel, or a
   size that is the unit's own, refuses the command. Each shows an equals
   sign icon beside its dimension. Deleting a board beside an opening, or
@@ -158,7 +160,8 @@ The vocabulary the documentation and the code share.
   Height, or its first and last openings, each standing for the width or
   height it shares as with Equal: a bay in the first and last column of a
   row spaces the row's columns, and a column's top and bottom openings
-  space the whole column. An opening a new board
+  space the whole column. Its ends stay where they are and the openings
+  between them share the space, unless locks or constraints move them. An opening a new board
   adds inside the span joins it, and a deleted board's openings merge
   within it; deleting an end board removes the even spacing. A board an
   even spacing holds shows no drag arrow, and selecting it outlines the

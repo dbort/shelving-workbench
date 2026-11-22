@@ -98,25 +98,30 @@ selected openings make N-1 of them, chained in selection order, as the
 Sketcher's Equal does. Even spacing holds every opening between two ends
 of one row the same size, the ends being boards or the row's own ends, and
 reads its openings afresh at every solve, so an opening added inside the
-span joins it. Each is made by a width command and a height command,
-Equal Width and Equal Height, Even Width and Even Height, as the Sketcher
-keeps separate horizontal and vertical tools. The command gives the
-direction and the selection never does: each selected opening stands for
-the region Lock Width or Lock Height would lock, so a bay in each of two
-columns makes the columns equal. Openings standing for one region count
-once. A selected board refuses Equal, and Even spacing takes two boards
-only when their row runs along the command's direction. A stored
-constraint carries no direction of its own, since its regions imply it,
-and the 3D view draws the same Equal and Even spacing icons for both
-directions, the dimension line under them showing which. Both measure the clear opening. The solve counts them after
+span joins it. Each is made by a width command and a height command, Equal
+Width and Equal Height, Even Width and Even Height, as the Sketcher keeps
+separate horizontal and vertical tools. The command gives the direction
+and the selection never does: each selected opening stands for the region
+Lock Width or Lock Height would lock, so a bay in each of two columns
+makes the columns equal. Openings standing for one region count once. A
+new Equal keeps the first region's size and changes the others to match,
+as the Sketcher's Equal takes the first selection's size, and a new Even
+spacing keeps its ends where they stand; each holds that with temporary
+locks during its solve and, when the locks and constraints rule it out,
+moves the boards as little as possible instead. A selected board refuses
+Equal, and Even spacing takes two boards only when their row runs along
+the command's direction. A stored constraint carries no direction of its
+own, since its regions imply it, and the 3D view draws the same Equal and
+Even spacing icons for both directions, the dimension line under them
+showing which. Both measure the clear opening. The solve counts them after
 the active locks, so one the locks already imply is accepted as redundant
 with a warning, and one they contradict is refused as a conflict naming
 those locks and itself. Each draws the Sketcher's style of icon beside
-each of its openings' dimensions, in the
-Sketcher's constraint icon color on a small tile of the 3D view's
-background color; clicking an icon selects the constraint, and Delete
-removes it. A board any constraint holds, a lock included, shows no arrow
-and outlines the openings holding it.
+each of its openings' dimensions, in the Sketcher's constraint icon color
+on a small tile of the 3D view's background color; clicking an icon
+selects the constraint, and Delete removes it. A board any constraint
+holds, a lock included, shows no arrow and outlines the openings holding
+it.
 A board deleted beside an Equal's opening, or added along its row through
 it, drops the Equal, as the Sketcher's Split and Trim drop an Equal on the
 line they cut; an even spacing is dropped only with an end. Geometry wins

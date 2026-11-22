@@ -188,8 +188,8 @@ title = "Undo and Redo inside Edit Unit"
   ]
   expected = """
 The right-click menu lists Add Shelf, Add Divider, Lock Width, Lock Height,
-Equal Width, Equal Height, Even Width and Even Height above Fit All. Two shelves, and
-the panel stays open."""
+Equal Width, Equal Height, Even Width and Even Height above Fit All. Two
+shelves, and the panel stays open."""
 
   [[case.step]]
   id = "keyboard-undo"
@@ -510,8 +510,8 @@ text and clear of the text's tile."""
   [[case.step]]
   id = "equal"
   instruction = [
-    "Click the bottom opening of the second column.",
-    "Ctrl-click the bottom opening of the leftmost column.",
+    "Click the bottom opening of the leftmost column.",
+    "Ctrl-click the bottom opening of the second column.",
     "Click Equal Height on the toolbar.",
   ]
   expected = """
@@ -530,9 +530,10 @@ neither covering the other."""
     "Click Equal Width on the toolbar.",
   ]
   expected = """
-The two rightmost columns come back to one width, and nothing in the
-leftmost two columns moves. Each of the two columns shows its width as a
-blue dimension in parentheses, with the Equal icon on it, and no opening's
+The third column keeps the width the drag gave it, and the rightmost
+column widens to match it, the two leftmost columns narrowing to make
+room. Each of the two rightmost columns shows its width as a blue
+dimension in parentheses, with the Equal icon on it, and no opening's
 height dimension carries that icon."""
 
   [[case.step]]

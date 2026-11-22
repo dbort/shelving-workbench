@@ -222,11 +222,18 @@ def test_equal_on_three_openings_chains_two_constraints_in_selection_order() -> 
     assert len(unit.constraints) == 2
 
 
-def test_equal_makes_unequal_openings_equal_moving_the_boards_least() -> None:
-    # s1 and s2 share the move as least squares share it: s1 up 80 mm, s2
-    # down 40 mm.
+def test_equal_keeps_the_first_openings_size() -> None:
+    # A keeps 200 mm, so s2 comes down 200 mm and C takes the difference.
     unit = add_equal(_a200_b400(), ["A", "B"])
-    assert _bay_mm(unit) == pytest.approx({"A": 280.0, "B": 280.0, "C": 340.0})
+    assert _bay_mm(unit) == pytest.approx({"A": 200.0, "B": 200.0, "C": 500.0})
+
+
+def test_equal_changes_the_first_opening_when_locks_rule_out_keeping_it() -> None:
+    # A's Lock fixes it at 200 mm, so B cannot keep 400 mm; the boards then
+    # move as little as possible.
+    unit = add_equal(lock(_a200_b400(), "A"), ["B", "A"])
+    assert _bay_mm(unit) == pytest.approx({"A": 200.0, "B": 200.0, "C": 500.0})
+    assert [type(c) for c in unit.constraints] == [Lock, Equal]
 
 
 def test_equal_needs_two_openings() -> None:
@@ -337,8 +344,8 @@ def test_even_spacing_on_two_boards_spaces_the_openings_between() -> None:
     (spacing,) = even.constraints
     assert isinstance(spacing, EvenSpacing)
     assert (spacing.start, spacing.end) == ("s1", "top")
-    # s1 up 20 mm and s2 down 40 mm: the least motion that evens B and C.
-    assert _bay_mm(even) == pytest.approx({"A": 220.0, "B": 340.0, "C": 340.0})
+    # The ends s1 and top stay put, so only s2 moves, down 50 mm.
+    assert _bay_mm(even) == pytest.approx({"A": 200.0, "B": 350.0, "C": 350.0})
 
 
 def test_even_spacing_with_one_opening_between_is_refused() -> None:
@@ -518,6 +525,21 @@ def test_equal_width_on_two_bays_makes_their_columns_equal() -> None:
     widths_mm = _widths_mm(unit)
     assert abs(widths_mm["L"] - widths_mm["M"]) < 0.001
     assert _bay_heights_mm(unit) == pytest.approx(_bay_heights_mm(before), abs=0.001)
+
+
+def test_equal_width_keeps_the_first_columns_width_and_moves_free_columns() -> None:
+    # M, picked first, keeps 200 mm; R narrows to it and L, which nothing
+    # holds, takes up the difference.
+    unit = add_equal_along(_three_columns(), ["B1", "C1"], Axis.X)
+    assert _widths_mm(unit) == pytest.approx({"L": 500.0, "M": 200.0, "R": 200.0})
+
+
+def test_even_width_between_two_boards_keeps_its_ends() -> None:
+    # The ends d1 and right stay put, so L keeps 300 mm and only d2 moves.
+    unit = add_even_spacing_along(_three_columns(), ["d1", "right"], Axis.X)
+    assert _widths_mm(unit) == pytest.approx({"L": 300.0, "M": 300.0, "R": 300.0})
+    unit = add_even_spacing_along(_three_columns(), ["B1", "C1"], Axis.X)
+    assert _widths_mm(unit) == pytest.approx({"L": 300.0, "M": 300.0, "R": 300.0})
 
 
 def test_equal_height_on_two_bays_makes_them_equal() -> None:

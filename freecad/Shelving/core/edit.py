@@ -65,6 +65,7 @@ from freecad.Shelving.core.scan import elevation_axes
 from freecad.Shelving.core.solver import (
     EPS_MM,
     FIXED_FRACTION,
+    LayoutSolveError,
     board_extent_mm,
     constraint_axis,
     constraint_spread_mm,
@@ -1105,8 +1106,11 @@ def _opening(unit: Unit, region_id: str) -> tuple[Division, int]:
 def add_equal(unit: Unit, region_ids: Sequence[str]) -> Unit:
     """``unit`` with an :class:`~freecad.Shelving.core.layout.Equal` between
     each two openings next to each other in ``region_ids``, so N openings
-    make N-1 constraints chained in that order, appended after its others
-    and solved by moving the boards as little as possible.
+    make N-1 constraints chained in that order, appended after its others.
+    The first opening keeps its size and the others change to match it, as
+    the Sketcher's Equal takes the first selection's size, the boards
+    moving as little as possible otherwise; when the locks and constraints
+    rule out keeping that size, the boards move as little as possible.
 
     Raises :class:`EditError` when ``region_ids`` holds fewer than two
     distinct openings, names a board, the whole unit or nothing, or names
@@ -1131,7 +1135,30 @@ def add_equal(unit: Unit, region_ids: Sequence[str]) -> Unit:
         for first, second in zip(distinct, distinct[1:], strict=False)
     )
     edited = dataclasses.replace(unit, constraints=(*unit.constraints, *added))
-    return solve_axis(edited, solve(unit), axes.pop(), MIN_DRAG_GAP_MM)
+    return _solved_holding(unit, edited, axes.pop(), distinct[:1])
+
+
+def _solved_holding(unit: Unit, edited: Unit, axis: Axis, held: Sequence[str]) -> Unit:
+    """``edited``, ``unit`` with constraints added, solved along ``axis``
+    from where ``unit``'s boards stand, each region ``held`` names keeping
+    its current size, as a Lock would hold it, wherever the locks and
+    constraints allow; when they rule that out, solved moving the boards as
+    little as possible. ``edited``'s constraints come back unchanged.
+    Raises a ``"conflict"``
+    :class:`~freecad.Shelving.core.solver.LayoutSolveError` only when
+    ``edited`` itself has no layout."""
+    spaces = solve(unit)
+    holding = edited
+    for region_id in held:
+        holding = lock(holding, region_id)
+    if holding is not edited:
+        try:
+            solved = solve_axis(holding, spaces, axis, MIN_DRAG_GAP_MM)
+        except LayoutSolveError:
+            pass
+        else:
+            return dataclasses.replace(solved, constraints=edited.constraints)
+    return solve_axis(edited, spaces, axis, MIN_DRAG_GAP_MM)
 
 
 def _spacing_end(run: Division, index: int, step: int) -> SpacingEnd | None:
@@ -1148,8 +1175,10 @@ def _spacing_end(run: Division, index: int, step: int) -> SpacingEnd | None:
 
 def add_even_spacing(unit: Unit, node_ids: Sequence[str]) -> Unit:
     """``unit`` with an :class:`~freecad.Shelving.core.layout.EvenSpacing`
-    appended after its other constraints and solved by moving the boards as
-    little as possible.
+    appended after its other constraints. Its ends stay where they stand
+    and the openings between them share the span, the boards moving as
+    little as possible otherwise; when the locks and constraints rule out
+    holding the ends, the boards move as little as possible.
 
     ``node_ids`` names two boards of one run, which become its ends, or two
     or more openings of one run: then its group runs from the first opening
@@ -1207,7 +1236,15 @@ def _add_even_spacing(unit: Unit, node_ids: Sequence[str], what: str) -> Unit:
             distinct[0],
             "Select ends with two or more openings between them to space evenly.",
         )
-    return solve_axis(edited, solve(unit), run.axis, MIN_DRAG_GAP_MM)
+    # Holding everything outside the span keeps its ends where they stand.
+    held = [
+        item.id
+        for item in run.items
+        if not isinstance(item, Board) and item.id not in group
+    ]
+    if run is not unit.root:
+        held.append(run.id)
+    return _solved_holding(unit, edited, run.axis, held)
 
 
 # The elevation word an axis-taking command's messages use. Whole sentences
