@@ -104,7 +104,8 @@ and run Equal Width; today you'd have to select the columns themselves.
 - **Icons read on a dark theme** (user decision 2026-11-21, from manual
   QA): the double arrow's shaft on the four toolbar icons is drawn as a
   filled red bar with the dark outline, as the glyphs' bars are, so it
-  shows on a dark toolbar.
+  shows on a dark toolbar. Lock Width's and Lock Height's icons take the
+  same shaft, for consistency (user request 2026-11-21).
 - **The 3D view keeps the axis-free icons** (user confirmed 2026-11-21,
   from manual QA): no arrows in the view, as the Advice above says.
 
