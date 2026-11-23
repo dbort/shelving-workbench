@@ -38,7 +38,7 @@ from freecad.Shelving.core.edit import (
     Held,
     Measurement,
     add_equal_along,
-    add_even_spacing_along,
+    add_even_spacing,
     held_by,
     lock,
     measure,
@@ -121,8 +121,7 @@ EDIT_COMMANDS = (
     "Shelving_LockHeight",
     "Shelving_ConstrainEqualWidth",
     "Shelving_ConstrainEqualHeight",
-    "Shelving_ConstrainEvenWidth",
-    "Shelving_ConstrainEvenHeight",
+    "Shelving_ConstrainEvenSpacing",
 )
 
 
@@ -256,9 +255,9 @@ def open_message(report: OpenReport) -> str | None:
 
 
 # What a constraint list row holds: a constraint on widths or on heights,
-# named for the command making it, or one on sizes through the depth, which
-# no command makes but a scan's Lock or a stored Equal or Even spacing can
-# hold.
+# named for the direction it holds, as the Lock and Equal commands are, or
+# one on sizes through the depth, which no command makes but a scan's Lock
+# or a stored Equal or Even spacing can hold.
 RowKind = Literal[
     "lock_width",
     "lock_height",
@@ -1318,24 +1317,26 @@ class Session:
         return self._constraining_step(_EQUAL_STEPS[direction], candidate)
 
     @_edit
-    def even_axis(self, direction: ElevationDirection) -> EditFailure | None:
-        """Space evenly, along the elevation's ``direction``, the openings
-        between the two selected boards, or from the first selected
-        opening to the last, as
-        :func:`~freecad.Shelving.core.edit.add_even_spacing_along` resolves
-        them, as one undo step that clears the selection, warning as
-        :meth:`equal_axis` does. Returns an :class:`EditFailure`, changing
-        nothing, for a selection ``add_even_spacing_along`` refuses or one
-        that conflicts."""
+    def even_spacing(self) -> EditFailure | None:
+        """Space evenly the openings between the two selected boards, or
+        those of the run the selected openings part ways in, as
+        :func:`~freecad.Shelving.core.edit.add_even_spacing` resolves them,
+        as one undo step that clears the selection, warning as
+        :meth:`equal_axis` does. The step is named Even Width or Even
+        Height for the direction the new spacing holds, matching its list
+        row. Returns an :class:`EditFailure`, changing nothing, for a
+        selection ``add_even_spacing`` refuses or one that conflicts."""
         self.settle()
         try:
-            candidate = add_even_spacing_along(
-                self.unit, self._selection, self._direction_axis(direction)
-            )
+            candidate = add_even_spacing(self.unit, self._selection)
         except EditError as err:
             return EditFailure(str(err), err.node_id)
         except LayoutSolveError as err:
             return _solve_failure(err)
+        axis = constraint_axis(candidate, candidate.constraints[-1])
+        direction: ElevationDirection = (
+            "horizontal" if axis is self._direction_axis("horizontal") else "vertical"
+        )
         return self._constraining_step(_EVEN_STEPS[direction], candidate)
 
     def _constraining_step(self, name: str, candidate: Unit) -> EditFailure | None:

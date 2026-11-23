@@ -114,8 +114,8 @@ The vocabulary the documentation and the code share.
   and press Delete to remove them. Double-click any dimension's text to
   type a size. The commands sit on the toolbar Edit Unit shows, in the
   3D view's right-click menu while Edit Unit is open, and in the Shelving
-  menu, as do Add Shelf, Add Divider, Equal Width, Equal Height, Even
-  Width and Even Height.
+  menu, as do Add Shelf, Add Divider, Equal Width, Equal Height and Even
+  Spacing.
 - **Reference dimension**: a size drawn in blue with its value in
   parentheses, as the Sketcher draws a reference dimension: it shows the
   size and holds nothing. A selected opening shows its own, and the one it
@@ -154,14 +154,18 @@ The vocabulary the documentation and the code share.
   adding a board along its row that splits it, removes its Equal; a board
   added across it keeps the Equal.
 - **Even spacing**: a constraint that keeps every opening between two ends
-  of one row or column the same size. Run Even Width to space the columns
-  of a row, or Even Height to space the openings of a column. Select the
-  two boards at its ends, dividers for Even Width and shelves for Even
-  Height, or its first and last openings, each standing for the width or
-  height it shares as with Equal: a bay in the first and last column of a
-  row spaces the row's columns, and a column's top and bottom openings
-  space the whole column. Its ends stay where they are and the openings
-  between them share the space, unless locks or constraints move them.
+  of one row or column the same size. Run Even Spacing, and what you
+  select gives the direction: openings in one column space its heights,
+  and openings in different columns space the columns' widths, so a bay in
+  the first and last column of a row spaces the row's columns and a
+  column's top and bottom openings space the whole column. Or select the
+  two boards at its ends: two dividers of one row space it across, two
+  shelves of one column space it up. The constraint list names the result
+  Even Width or Even Height for the direction it spaces. Mixing panels
+  with openings, panels of different rows or columns, and openings one
+  behind another through the depth refuse the command. Its ends stay where
+  they are and the openings between them share the space, unless locks or
+  constraints move them.
   An opening a new board adds inside the span joins it, and a deleted
   board's openings merge within it; deleting an end board removes the
   even spacing. A board an even spacing holds shows no drag arrow, and

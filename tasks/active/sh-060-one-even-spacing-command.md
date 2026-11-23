@@ -119,7 +119,7 @@ could mean either size for them.
   their names. No new case or setup action.
 
 ## Plan
-- [ ] **Step 1** (`freecad/Shelving/core/edit.py`,
+- [x] **Step 1** (`freecad/Shelving/core/edit.py`,
       `freecad/Shelving/core/tests/test_constraints.py`): `add_even_spacing`
       takes the axis from the picks as above; `add_even_spacing_along` and
       its message maps go. Rewrite the tests that call
@@ -130,7 +130,7 @@ could mean either size for them.
       `add_even_spacing`; `test_even_spacing_refuses_a_mixed_or_scattered_selection`'s
       sub-bay-and-B case now succeeds and becomes a positive test. Add the
       Must Have cases.
-- [ ] **Step 2** (`freecad/Shelving/editor/session.py`,
+- [x] **Step 2** (`freecad/Shelving/editor/session.py`,
       `freecad/Shelving/editor/panel.py`,
       `tests/freecad/test_constraint_session.py`,
       `tests/freecad_gui/test_constraint_list.py`): `Session.even_spacing`
@@ -141,7 +141,7 @@ could mean either size for them.
       Equal Width and the one-column Even case becomes Even Height success;
       `test_even_height_spaces_the_column_and_refuses_one_opening` calls
       `even_spacing`.
-- [ ] **Step 3** (`freecad/Shelving/commands/edit_commands.py`,
+- [x] **Step 3** (`freecad/Shelving/commands/edit_commands.py`,
       `freecad/Shelving/editor/elevation.py`,
       `tests/freecad_gui/test_edit_commands.py`,
       `tests/freecad_view/test_editor_input.py`,
@@ -152,7 +152,7 @@ could mean either size for them.
       `AXIS_ICON_SOURCES` comment say the axis icons serve Even's list
       rows. GUI and view tests call `"even_spacing"`; the board-refusal
       cases for Even become the different-runs refusal.
-- [ ] **Step 4** (`README.md`, `docs/scope-and-design.md`,
+- [x] **Step 4** (`README.md`, `docs/scope-and-design.md`,
       `freecad/Shelving/qa/cases/30-editor.toml`): glossary entries
       (the command list under the lock entry, **Even spacing**) and the
       constraints paragraph describe Even Spacing and the axis rule; the

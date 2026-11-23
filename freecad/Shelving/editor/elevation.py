@@ -65,10 +65,12 @@ ICON_SOURCES: Mapping[ConstraintKind, str] = {
     "equal": os.path.join(_RESOURCES, "Constraint_Equal.svg"),
     "even_spacing": os.path.join(_RESOURCES, "Constraint_EvenSpacing.svg"),
 }
-# Equal Width's, Equal Height's, Even Width's and Even Height's icons, by
-# the constraint they make and the elevation direction it holds sizes
-# along. The view draws the axis-free icons above, since the dimension
-# line an icon sits on already shows the direction.
+# Equal Width's and Equal Height's command icons and the constraint list
+# rows' icons, Even Width and Even Height rows included, by the constraint
+# and the elevation direction it holds sizes along. The view and the Even
+# Spacing command draw the axis-free icons above: the dimension line an
+# icon sits on already shows the direction, and the command's picks give
+# it.
 AXIS_ICON_SOURCES: Mapping[tuple[ConstraintKind, ElevationDirection], str] = {
     ("equal", "horizontal"): os.path.join(_RESOURCES, "Constraint_EqualWidth.svg"),
     ("equal", "vertical"): os.path.join(_RESOURCES, "Constraint_EqualHeight.svg"),

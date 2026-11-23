@@ -466,7 +466,7 @@ def test_equal_height_chains_the_selected_openings_as_one_step(
         session.close()
 
 
-def test_width_commands_on_bays_of_one_column_are_refused(
+def test_bays_of_one_column_refuse_equal_width_and_space_their_heights(
     doc: FreeCAD.Document,
 ) -> None:
     container = _written(doc)
@@ -474,13 +474,16 @@ def test_width_commands_on_bays_of_one_column_are_refused(
     try:
         a, _b, c = _bays(session)
         session.select_items([a, c])
-        for refused in (
-            session.equal_axis("horizontal"),
-            session.even_axis("horizontal"),
-        ):
-            assert isinstance(refused, EditFailure)
-            assert "Select" in refused.message
+        refused = session.equal_axis("horizontal")
+        assert isinstance(refused, EditFailure)
+        assert "Select" in refused.message
         assert session.constraints == ()
+        steps = doc.UndoCount
+        assert session.even_spacing() is None
+        assert doc.UndoCount == steps + 1
+        assert doc.UndoNames[0] == "Even Height"
+        (spacing,) = session.constraints
+        assert isinstance(spacing, EvenSpacing)
     finally:
         session.close()
 
@@ -493,7 +496,7 @@ def test_even_height_spaces_the_column_and_refuses_one_opening(
     try:
         a, b, c = _bays(session)
         session.select_items([b])
-        refused = session.even_axis("vertical")
+        refused = session.even_spacing()
         assert isinstance(refused, EditFailure)
         assert "Select" in refused.message
         assert session.constraints == ()
@@ -501,7 +504,7 @@ def test_even_height_spaces_the_column_and_refuses_one_opening(
         assert session.set_size(200.0) is None
         assert session.set_lock(a, locked=False) is None
         session.select_items([a, c])
-        assert session.even_axis("vertical") is None
+        assert session.even_spacing() is None
         doc.recompute()
         assert _heights_mm(doc) == pytest.approx((_BAY_MM, _BAY_MM, _BAY_MM))
     finally:

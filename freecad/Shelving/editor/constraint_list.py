@@ -94,9 +94,9 @@ def kind_icon(
     ratio ``ratio``, on a tile of ``base``, the list's own background: for
     a Lock, the icon of the command that makes it, grayed in Qt's disabled
     mode unless ``active``, and the bare tile for a Lock through the depth,
-    which no command makes; for another constraint the icon of the command
-    making it, or its axis-free icon through the depth, with the view's
-    corner X unless ``active``. Each glyph takes the view's constraint icon
+    which no command makes; for another constraint its width or height
+    icon, or its axis-free icon through the depth, with the view's corner X
+    unless ``active``. Each glyph takes the view's constraint icon
     color."""
     device_px = round(side_px * ratio)
     tile = Tile(
