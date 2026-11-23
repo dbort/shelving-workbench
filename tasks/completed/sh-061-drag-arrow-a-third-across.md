@@ -15,21 +15,21 @@ any column wide enough to hold it. The same holds for a divider's arrow
 in a short row. The arrow keeps its size.
 
 ## Must Have
-- [ ] `pixi run tests` green; `pyrefly check` clean over the changed code.
-- [ ] `grep -rn "_ARROW_BESIDE_FRACTION" freecad tests` prints nothing.
-- [ ] `tests/test_editor_elevation.py`: on `_UNIT`, the divider's arrow
+- [x] `pixi run tests` green; `pyrefly check` clean over the changed code.
+- [x] `grep -rn "_ARROW_BESIDE_FRACTION" freecad tests` prints nothing.
+- [x] `tests/test_editor_elevation.py`: on `_UNIT`, the divider's arrow
       has `at_mm[1]` within 1e-6 mm of `v0_mm + (v1_mm - v0_mm) / 3` of
       the rect of `column`, the region before the divider; on `_bookcase(locked=False)`, the shelf's arrow has
       `at_mm[0]` within 1e-6 mm of the lower bay's `h0_mm + width / 3`.
       Both keep `length_mm == 0.08 * 900`.
-- [ ] `tests/test_editor_elevation.py`: on a 900 mm wide unit split into
+- [x] `tests/test_editor_elevation.py`: on a 900 mm wide unit split into
       four columns about 128 mm wide (the `large_unit` QA unit's
       proportions), a free shelf's arrow, whose heads reach
       `0.15 * length_mm` either side of `at_mm` across the run, has both
       heads inside the opening before it and clear of that opening's
       dimension line at two thirds across.
-- [ ] `.claude/docs/bug-log.md` has no `bug-029` entry.
-- [ ] `freecad/Shelving/qa/cases/30-editor.toml`, case "Equal and even
+- [x] `.claude/docs/bug-log.md` has no `bug-029` entry.
+- [x] `freecad/Shelving/qa/cases/30-editor.toml`, case "Equal and even
       spacing, from icons to a hand-moved shelf" (`editor.constraints`),
       step `drag`: its expected text says the second column's shelf's
       arrow sits about a third of the way across the column, clear of
