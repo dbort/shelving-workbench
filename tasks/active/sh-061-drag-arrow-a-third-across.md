@@ -59,23 +59,29 @@ in a short row. The arrow keeps its size.
 - Standing obligations: Typed Python applies to the changed code. Shell,
   Users never read the log: not touched. Smoke set: no main user path is
   added, changed or removed, and no `smoke` test is touched.
+- 2026-11-22, user, during `/work`: the narrow-column test builds the
+  `large_unit` QA unit's actual proportions, 600 mm wide and 900 mm tall
+  (four 127.5 mm columns, arrow `0.08 * 900` mm), where the Must Have's
+  "900 mm wide" contradicts its own "about 128 mm" columns.
 
 ## Plan
-- [ ] **Step 1** (`freecad/Shelving/editor/elevation.py`): `arrow_for`
+- [x] **Step 1** (`freecad/Shelving/editor/elevation.py`): `arrow_for`
       places `at_mm` one third across `before`; delete
       `_ARROW_BESIDE_FRACTION` and its comment; rewrite the docstring's
       last sentence for the new placement.
-- [ ] **Step 2** (`freecad/Shelving/core/edit.py`): `region_before`'s
+- [x] **Step 2** (`freecad/Shelving/core/edit.py`): `region_before`'s
       docstring stops saying the arrow sits beside that region's
       dimension; it is the region the arrow is placed across.
-- [ ] **Step 3** (`tests/test_editor_elevation.py`): replace
+- [x] **Step 3** (`tests/test_editor_elevation.py`): replace
       `test_a_movable_board_gets_an_arrow_beside_the_dimension_before_it`
       (its `> 2/3` assertion and its name) with the third-across checks
-      for the divider and the shelf; add the four-column narrow test.
-- [ ] **Step 4** (`freecad/Shelving/qa/cases/30-editor.toml`): extend the
+      for the divider and the shelf; add the four-column narrow test. Also
+      `tests/freecad_view/test_editor_input.py`'s drag-by-arrow test,
+      whose past-the-line assertion the plan missed, asserts the third.
+- [x] **Step 4** (`freecad/Shelving/qa/cases/30-editor.toml`): extend the
       `editor.constraints` `drag` step's expected text as the Must Have
       says.
-- [ ] **Step 5** (`.claude/docs/bug-log.md`): delete the `bug-029` entry
+- [x] **Step 5** (`.claude/docs/bug-log.md`): delete the `bug-029` entry
       in the fixing commit.
 
 ## Review log

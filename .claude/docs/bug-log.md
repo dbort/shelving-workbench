@@ -158,13 +158,3 @@ log happens only when the user asks.
   says "(Command-click on a Mac)" and the rest do not. Found in sh-055's
   manual QA (`editor.constraints`, step undo). Fix: `ad hoc`; a wording
   pass over the case files, plus a line in `.claude/docs/qa-wizard.md`.
-- `bug-029` - **a shelf's drag arrow sits at the shelf's right end in a
-  narrow column**: in the `large_unit` QA unit, four columns about 128 mm
-  wide, a selected shelf's arrow appears at its right edge instead of
-  partway along it clear of the dimension line. Found in sh-056's manual
-  QA (`editor.constraints`, drag step). Likely cause: `arrow_for` in
-  `editor/elevation.py` places the arrow two thirds along the region
-  before the board plus an offset that is a fraction of the unit's longest
-  side (36 mm on a 900 mm unit), which a narrow column cannot absorb. Fix:
-  `sh-XXX task`, at the user's request, since where the arrow goes relative
-  to the dimensions is a design question.

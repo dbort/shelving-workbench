@@ -768,7 +768,7 @@ def _board_and_region_before(unit: Unit, board_id: str) -> tuple[Division, int]:
 
 def region_before(unit: Unit, board_id: str) -> str:
     """The id of the region immediately before the board ``board_id`` in its
-    run, the one whose dimension a drag's arrow sits beside. Raises
+    run, the one a drag's arrow is placed across. Raises
     :class:`EditError` naming ``board_id`` when it names no board, or a board
     with no region immediately before it."""
     parent, index = _board_and_region_before(unit, board_id)

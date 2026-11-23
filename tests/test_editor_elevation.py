@@ -16,6 +16,7 @@ from freecad.Shelving.core.layout import (
     ConstraintId,
     Division,
     FixedSide,
+    Item,
     Lock,
     Unit,
     Void,
@@ -446,16 +447,81 @@ def test_label_at_takes_a_point_on_a_text_tile_and_the_later_of_two() -> None:
     assert label_at(labels, project, tile_px, 19.0, 100.0) is None
 
 
-def test_a_movable_board_gets_an_arrow_beside_the_dimension_before_it() -> None:
+def test_a_movable_board_gets_an_arrow_a_third_across_the_region_before_it() -> None:
     frame = elevation_frame(_UNIT)
     arrow = arrow_for(_UNIT, _SPACES, frame, "divider")
     assert arrow is not None
     assert not arrow.vertical
-    row = frame.rect(_SPACES["row"])
-    assert arrow.at_mm[1] > row.v0_mm + 2 / 3 * (row.v1_mm - row.v0_mm)
+    column = frame.rect(_SPACES["column"])
+    assert arrow.at_mm[1] == pytest.approx(
+        column.v0_mm + (column.v1_mm - column.v0_mm) / 3, abs=1e-6
+    )
     assert arrow.length_mm == pytest.approx(0.08 * 900.0)
     moved = dragged_to_mm(arrow, 10.0)
     assert moved.x_mm == pytest.approx(arrow.grab_mm.x_mm + 10.0)
+    unlocked = _bookcase(locked=False)
+    spaces = solve(unlocked)
+    shelf_arrow = arrow_for(unlocked, spaces, frame, "shelf")
+    assert shelf_arrow is not None
+    lower = frame.rect(spaces["lower"])
+    assert shelf_arrow.at_mm[0] == pytest.approx(
+        lower.h0_mm + (lower.h1_mm - lower.h0_mm) / 3, abs=1e-6
+    )
+    assert shelf_arrow.length_mm == pytest.approx(0.08 * 900.0)
+
+
+def _four_columns() -> Unit:
+    """The ``large_unit`` QA unit's proportions: 600 mm wide and 900 mm tall,
+    four 127.5 mm columns, each split by one free shelf into two openings,
+    ``lower2`` and ``upper2`` around ``shelf2`` in the second."""
+    items: list[Item] = [Board(thickness_mm=_T_MM, id="left")]
+    for index in range(1, 5):
+        if index > 1:
+            items.append(Board(thickness_mm=_T_MM, id=f"divider{index - 1}"))
+        items.append(
+            Division(
+                axis=Axis.Z,
+                id=f"column{index}",
+                items=[
+                    Bay(size_mm=423.0, id=f"lower{index}"),
+                    Board(thickness_mm=_T_MM, id=f"shelf{index}"),
+                    Bay(size_mm=423.0, id=f"upper{index}"),
+                ],
+                size_mm=127.5,
+            )
+        )
+    items.append(Board(thickness_mm=_T_MM, id="right"))
+    return Unit(
+        size_mm=Vec3(600.0, 300.0, 900.0),
+        root=Division(
+            axis=Axis.Z,
+            id="root",
+            items=[
+                Board(thickness_mm=_T_MM, id="bottom"),
+                Division(axis=Axis.X, id="row", items=items, size_mm=864.0),
+                Board(thickness_mm=_T_MM, id="top"),
+            ],
+        ),
+        depth_axis=Axis.Y,
+    )
+
+
+def test_a_shelf_arrow_in_a_narrow_column_stays_inside_its_opening() -> None:
+    unit = _four_columns()
+    spaces = solve(unit)
+    frame = elevation_frame(unit)
+    arrow = arrow_for(unit, spaces, frame, "shelf2")
+    assert arrow is not None
+    lower = frame.rect(spaces["lower2"])
+    assert lower.h1_mm - lower.h0_mm == pytest.approx(127.5)
+    # The cone's bottomRadius in ``arrow_geometry`` (editor/overlay.py) is 0.3
+    # on an arrow spanning -1 to 1, scaled by half the arrow's length.
+    half_width_mm = 0.15 * arrow.length_mm
+    (line,) = [label for label in _every_label(unit) if label.region_id == "lower2"]
+    line_h_mm = line.start_mm[0]
+    assert line_h_mm == pytest.approx(lower.h0_mm + 2 / 3 * (lower.h1_mm - lower.h0_mm))
+    assert lower.h0_mm < arrow.at_mm[0] - half_width_mm
+    assert arrow.at_mm[0] + half_width_mm < line_h_mm
 
 
 def test_held_and_carcass_boards_get_no_arrow() -> None:
