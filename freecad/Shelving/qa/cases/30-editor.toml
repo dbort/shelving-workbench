@@ -561,10 +561,12 @@ the second column's bottom opening stays equal to them."""
     "Click a shelf of the leftmost column.",
   ]
   expected = """
-During the drag both relations hold: the leftmost column stays evenly
-spaced and the second column's bottom opening keeps its size. The
-leftmost column's shelf shows no arrow, nothing takes the arrow's place,
-and the column's openings are outlined as the openings holding it."""
+The second column's shelf's arrow sits about a third of the way across
+the column, clear of the dimension line and of the dividers. During the
+drag both relations hold: the leftmost column stays evenly spaced and the
+second column's bottom opening keeps its size. The leftmost column's shelf
+shows no arrow, nothing takes the arrow's place, and the column's openings
+are outlined as the openings holding it."""
 
   [[case.step]]
   id = "reopen"

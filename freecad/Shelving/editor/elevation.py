@@ -96,9 +96,6 @@ ADD_ICON_SOURCES: Mapping[ElevationDirection, str] = {
 LIFT_MM = 0.5
 # The drag arrow's length, as a fraction of the unit's longer elevation side.
 _ARROW_FRACTION = 0.08
-# How far past the dimension line of the opening it resizes the arrow sits,
-# as a fraction of the unit's longer elevation side.
-_ARROW_BESIDE_FRACTION = 0.04
 _EPSILON_MM = 1e-6
 
 
@@ -862,9 +859,10 @@ def arrow_for(
     """The arrow for ``board_id`` when a drag may move it along a run in the
     elevation plane; ``None`` for a board any constraint holds, Locks
     included, a carcass board, a board whose run runs through the depth,
-    and a region. The arrow sits beside where the dimension of the region
-    before the board goes, just past its line, so a view zoomed in on that
-    region shows both."""
+    and a region. The arrow sits a third of the way across the region before
+    the board, at the board's center along the run, so it stays inside any
+    region wide enough to hold it and clear of that region's dimension line
+    at two thirds across."""
     held = held_by(unit, board_id)
     if held is None or not held.free:
         return None
@@ -881,19 +879,18 @@ def arrow_for(
     rect = frame.rect(space)
     before = frame.rect(spaces[before_id])
     longest_mm = _longest_mm(unit, frame)
-    beside_mm = _ARROW_BESIDE_FRACTION * longest_mm
     vertical = axis == frame.vertical
     center_h_mm, center_v_mm = rect.center_mm
     if vertical:
         at_mm = (
-            before.h0_mm + 2 / 3 * (before.h1_mm - before.h0_mm) + beside_mm,
+            before.h0_mm + (before.h1_mm - before.h0_mm) / 3,
             center_v_mm,
         )
         direction = frame.v_dir
     else:
         at_mm = (
             center_h_mm,
-            before.v0_mm + 2 / 3 * (before.v1_mm - before.v0_mm) + beside_mm,
+            before.v0_mm + (before.v1_mm - before.v0_mm) / 3,
         )
         direction = frame.h_dir
     origin, top = space.origin, space.max_corner()

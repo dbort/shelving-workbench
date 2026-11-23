@@ -483,8 +483,13 @@ def test_a_selected_board_drags_by_its_arrow_under_each_navigation_style(
         ).labels
         if x.region_id == lower
     ]
-    # Beside the dimension of the opening before the board, just past it.
-    assert arrow.at_mm[0] > lower_label.start_mm[0]
+    # A third across the opening before the board, short of its dimension
+    # line at two thirds.
+    lower_rect = editor.frame.rect(session.spaces[lower])
+    assert arrow.at_mm[0] == pytest.approx(
+        lower_rect.h0_mm + (lower_rect.h1_mm - lower_rect.h0_mm) / 3
+    )
+    assert arrow.at_mm[0] < lower_label.start_mm[0]
     z_before_mm = session.spaces[shelf].origin.z_mm
     names = list(unit.Document.UndoNames)
     start = driver.qt_point(_arrow_point(editor))
