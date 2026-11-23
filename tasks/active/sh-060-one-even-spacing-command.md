@@ -161,3 +161,7 @@ could mean either size for them.
       Advice.
 
 ## Review log
+
+### Round 1: APPROVED
+- **N1: Test name still calls Even Width a command** (`tests/freecad_gui/test_constraint_list.py:323`): `test_width_rows_name_and_draw_the_width_commands` now checks an Even Width row, and no command by that name exists anymore; a name like `..._draw_the_width_icons` would fit.
+- **N2: Unreflowed paragraph lines** (`docs/scope-and-design.md:124`, `docs/scope-and-design.md:360`): the edited constraints paragraph has a line of about 100 characters and the constraint-list paragraph a short one; rewrap both to match the surrounding text.
