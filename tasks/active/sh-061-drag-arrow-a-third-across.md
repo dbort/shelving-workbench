@@ -85,3 +85,7 @@ in a short row. The arrow keeps its size.
       in the fixing commit.
 
 ## Review log
+
+### Round 1: APPROVED
+- **N1: Shelf check reuses `_UNIT`'s frame** (`tests/test_editor_elevation.py:463`): the `_bookcase(locked=False)` shelf arrow is computed with the frame built from `_UNIT`; correct because both units share size and facing, but `elevation_frame(unlocked)` would make the test independent of that coincidence.
+- **N2: A divider's arrow can land on a shelf crossing the column at a third of its height** (`freecad/Shelving/editor/elevation.py:884`): nothing in the region before the board is excluded, so a board crossing it at that height can overlap the arrow. On `_UNIT` they clear by about 1.2 mm. The old placement had the same kind of exposure and the Advice settled the placement; a possible follow-up only.
