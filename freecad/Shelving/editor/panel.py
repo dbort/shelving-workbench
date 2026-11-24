@@ -65,7 +65,7 @@ _REFERENCE_TIP = "Locked openings fix this size. Unlock one of them to change it
 
 EDIT_TOOLBAR_NAME = "ShelvingEdit"
 
-ConstraintCommand = Literal["equal_width", "equal_height", "even_width", "even_height"]
+ConstraintCommand = Literal["equal_width", "equal_height", "even_spacing"]
 
 # The panel open now, which the editor's commands act through; at most one
 # task panel is open at a time.
@@ -779,13 +779,12 @@ class EditUnitPanel:
     def constrain(self, command: ConstraintCommand) -> None:
         """Make the constraint ``command`` names from the selection,
         reporting a refusal through the Notification Area."""
-        direction: ElevationDirection = (
-            "horizontal" if command.endswith("_width") else "vertical"
-        )
-        if command.startswith("equal_"):
-            failure = self.session.equal_axis(direction)
+        if command == "even_spacing":
+            failure = self.session.even_spacing()
         else:
-            failure = self.session.even_axis(direction)
+            failure = self.session.equal_axis(
+                "horizontal" if command == "equal_width" else "vertical"
+            )
         if failure is None and self.editor is not None:
             select_in_freecad(self.session.container.Document.Name, [])
         self._show_result(failure)

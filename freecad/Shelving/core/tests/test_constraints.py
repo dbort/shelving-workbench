@@ -13,7 +13,6 @@ from freecad.Shelving.core.edit import (
     add_equal,
     add_equal_along,
     add_even_spacing,
-    add_even_spacing_along,
     carry_constraints,
     held_by,
     lock,
@@ -364,18 +363,25 @@ def test_even_spacing_with_one_opening_between_is_refused() -> None:
         add_even_spacing(_column(), ["B"])
 
 
-def test_even_spacing_refuses_a_mixed_or_scattered_selection() -> None:
+def test_even_spacing_refuses_a_mixed_selection_or_three_boards() -> None:
     with pytest.raises(EditError):
         add_even_spacing(_column(), ["A", "s2"])
     with pytest.raises(EditError):
         add_even_spacing(_column(), ["s1", "s2", "top"])
+
+
+def test_even_spacing_on_a_sub_bay_and_a_bay_spaces_their_column() -> None:
+    # A's left half stands for the side-by-side region that replaced A.
     split = split_region(_column(), "A", Axis.X)
     root = split.root
     assert isinstance(root, Division)
     wrap = root.items[1]
     assert isinstance(wrap, Division)
-    with pytest.raises(EditError):
-        add_even_spacing(split, [wrap.items[0].id, "B"])
+    even = add_even_spacing(split, [wrap.items[0].id, "B"])
+    (spacing,) = even.constraints
+    assert isinstance(spacing, EvenSpacing)
+    assert (spacing.run_id, spacing.start, spacing.end) == ("column", "bottom", "s2")
+    assert spacing_group(even, spacing) == (wrap.id, "B")
 
 
 def test_even_spacing_on_a_nested_column_ends_at_the_run_ends() -> None:
@@ -469,7 +475,7 @@ def test_a_deactivated_constraint_plays_no_part() -> None:
     )
 
 
-# --- Equal and Even spacing along an axis -----------------------------------
+# --- Equal along an axis, Even along the picks' axis ------------------------
 
 
 def _three_columns() -> Unit:
@@ -545,9 +551,9 @@ def test_equal_width_keeps_the_first_columns_width_and_moves_free_columns() -> N
 
 def test_even_width_between_two_boards_keeps_its_ends() -> None:
     # The ends d1 and right stay put, so L keeps 300 mm and only d2 moves.
-    unit = add_even_spacing_along(_three_columns(), ["d1", "right"], Axis.X)
+    unit = add_even_spacing(_three_columns(), ["d1", "right"])
     assert _widths_mm(unit) == pytest.approx({"L": 300.0, "M": 300.0, "R": 300.0})
-    unit = add_even_spacing_along(_three_columns(), ["B1", "C1"], Axis.X)
+    unit = add_even_spacing(_three_columns(), ["B1", "C1"])
     assert _widths_mm(unit) == pytest.approx({"L": 300.0, "M": 300.0, "R": 300.0})
 
 
@@ -562,14 +568,14 @@ def test_even_width_keeps_the_units_width_when_locks_fill_the_rest() -> None:
     # R's Lock rules out holding L, so L gives up the room and the unit
     # keeps 972 mm.
     before = lock(_three_columns(), "R")
-    unit = add_even_spacing_along(before, ["B1", "C1"], Axis.X)
+    unit = add_even_spacing(before, ["B1", "C1"])
     assert unit.size_mm == before.size_mm
     assert _widths_mm(unit) == pytest.approx({"L": 100.0, "M": 400.0, "R": 400.0})
 
 
-def test_even_width_in_a_nested_run_keeps_its_ends() -> None:
-    # M's top opening B2 is split along X into P and Q; spacing them must
-    # leave d1 and d2, which bound B2, where they stand.
+def _nested() -> Unit:
+    """:func:`_three_columns` with M's top bay B2 split side by side into P
+    100 and Q 200 by board ``pq``, and the columns L 300, M 318, R 282."""
     before = _three_columns()
     root = before.root
     assert isinstance(root, Division)
@@ -593,15 +599,30 @@ def test_even_width_in_a_nested_run_keeps_its_ends() -> None:
     root_items[1] = dataclasses.replace(left, size_mm=300.0)
     root_items[3] = dataclasses.replace(middle, items=middle_items, size_mm=318.0)
     root_items[5] = dataclasses.replace(right, size_mm=282.0)
-    nested = dataclasses.replace(
-        before, root=dataclasses.replace(root, items=root_items)
-    )
-    unit = add_even_spacing_along(nested, ["P", "Q"], Axis.X)
+    return dataclasses.replace(before, root=dataclasses.replace(root, items=root_items))
+
+
+def test_even_width_in_a_nested_run_keeps_its_ends() -> None:
+    # Spacing P and Q must leave d1 and d2, which bound B2, where they stand.
+    unit = add_even_spacing(_nested(), ["P", "Q"])
+    (even,) = unit.constraints
+    assert isinstance(even, EvenSpacing) and even.run_id == "B2"
     spaces = solve(unit)
     assert (spaces["P"].size.x_mm, spaces["Q"].size.x_mm) == pytest.approx(
         (150.0, 150.0)
     )
     assert _widths_mm(unit) == pytest.approx({"L": 300.0, "M": 318.0, "R": 282.0})
+
+
+def test_even_spacing_on_a_sub_bay_and_another_columns_bay_spaces_the_columns() -> None:
+    unit = add_even_spacing(_nested(), ["P", "C1"])
+    (even,) = unit.constraints
+    assert isinstance(even, EvenSpacing)
+    assert (even.run_id, even.start, even.end) == ("root", "d1", "right")
+    assert spacing_group(unit, even) == ("M", "R")
+    widths_mm = _widths_mm(unit)
+    assert widths_mm["L"] == pytest.approx(300.0)
+    assert widths_mm["M"] == pytest.approx(widths_mm["R"], abs=0.001)
 
 
 def test_equal_height_on_two_bays_makes_them_equal() -> None:
@@ -633,8 +654,8 @@ def test_equal_along_refuses_boards_and_the_unit() -> None:
         add_equal_along(_three_columns(), [], Axis.X)
 
 
-def test_even_width_on_the_outer_bays_spaces_the_root_run() -> None:
-    unit = add_even_spacing_along(_three_columns(), ["A1", "C1"], Axis.X)
+def test_even_spacing_on_bays_of_two_columns_spaces_the_root_run() -> None:
+    unit = add_even_spacing(_three_columns(), ["A1", "C1"])
     (even,) = unit.constraints
     assert isinstance(even, EvenSpacing)
     assert (even.run_id, even.start, even.end) == ("root", "left", "right")
@@ -642,30 +663,66 @@ def test_even_width_on_the_outer_bays_spaces_the_root_run() -> None:
     assert max(widths_mm.values()) - min(widths_mm.values()) < 0.001
 
 
-def test_even_height_on_two_bays_spaces_their_column() -> None:
-    unit = add_even_spacing_along(_three_columns(), ["A1", "A2"], Axis.Z)
+def test_even_spacing_on_two_bays_of_one_column_spaces_its_heights() -> None:
+    unit = add_even_spacing(_three_columns(), ["A1", "A2"])
     (even,) = unit.constraints
     assert isinstance(even, EvenSpacing) and even.run_id == "L"
 
 
-def test_even_spacing_along_takes_boards_only_on_its_axis() -> None:
-    with pytest.raises(EditError, match="two shelves"):
-        add_even_spacing_along(_three_columns(), ["d1", "d2"], Axis.Z)
-    unit = add_even_spacing_along(_three_columns(), ["left", "d2"], Axis.X)
+def test_even_spacing_counts_a_column_once_for_its_bays() -> None:
+    unit = add_even_spacing(_three_columns(), ["A1", "A2", "C1"])
     (even,) = unit.constraints
-    assert isinstance(even, EvenSpacing) and (even.start, even.end) == ("left", "d2")
+    assert isinstance(even, EvenSpacing)
+    assert (even.run_id, even.start, even.end) == ("root", "left", "right")
+    assert spacing_group(unit, even) == ("L", "M", "R")
 
 
-def test_even_spacing_along_refuses_a_mixed_selection() -> None:
-    with pytest.raises(EditError):
-        add_even_spacing_along(_three_columns(), ["A1", "d1"], Axis.X)
+def test_even_spacing_on_two_boards_takes_their_run() -> None:
+    unit = add_even_spacing(_three_columns(), ["left", "d2"])
+    (even,) = unit.constraints
+    assert isinstance(even, EvenSpacing)
+    assert (even.run_id, even.start, even.end) == ("root", "left", "d2")
 
 
-def test_width_commands_on_a_unit_with_no_divider_are_refused() -> None:
+@pytest.mark.parametrize(
+    "picks",
+    [
+        pytest.param(["L-shelf", "M-shelf"], id="boards-of-two-runs"),
+        pytest.param(["A1"], id="one-bay"),
+        pytest.param(["A1", "A1"], id="one-bay-twice"),
+        pytest.param(["A1", "d1"], id="mixed"),
+        pytest.param(["L", "A1"], id="column-and-its-bay"),
+        pytest.param(["A1", "root"], id="whole-unit"),
+        pytest.param([], id="nothing"),
+    ],
+)
+def test_even_spacing_refuses_a_selection_with_no_run_to_space(
+    picks: list[str],
+) -> None:
+    with pytest.raises(EditError, match="Select"):
+        add_even_spacing(_three_columns(), picks)
+
+
+def test_even_spacing_on_a_column_with_no_divider_spaces_its_heights() -> None:
+    unit = add_even_spacing(_column(), ["A", "C"])
+    (even,) = unit.constraints
+    assert isinstance(even, EvenSpacing) and even.run_id == "column"
+
+
+def test_even_spacing_through_the_depth_is_refused() -> None:
+    split = split_region(_column(), "B", Axis.Y)
+    root = split.root
+    assert isinstance(root, Division)
+    depth = root.items[3]
+    assert isinstance(depth, Division) and depth.axis is Axis.Y
+    front, back = (item.id for item in depth.items if not isinstance(item, Board))
+    with pytest.raises(EditError, match="side by side"):
+        add_even_spacing(split, [front, back])
+
+
+def test_equal_width_on_a_unit_with_no_divider_is_refused() -> None:
     with pytest.raises(EditError, match="unit's width"):
         add_equal_along(_column(), ["A", "B"], Axis.X)
-    with pytest.raises(EditError, match="unit's width"):
-        add_even_spacing_along(_column(), ["A", "C"], Axis.X)
 
 
 # --- removing and carrying ------------------------------------------------

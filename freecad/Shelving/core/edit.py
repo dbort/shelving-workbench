@@ -1184,51 +1184,70 @@ def _spacing_end(run: Division, index: int, step: int) -> SpacingEnd | None:
     return item.id if isinstance(item, Board) else None
 
 
+_SELECT_TO_SPACE = (
+    "Select two shelves of one column or two dividers of one row, or openings "
+    "in two or more columns or rows, to space evenly."
+)
+_NO_SPACING_IN_DEPTH = (
+    "Even spacing works across the width or the height only. Select openings "
+    "side by side or one above another to space evenly."
+)
+
+
 def add_even_spacing(unit: Unit, node_ids: Sequence[str]) -> Unit:
     """``unit`` with an :class:`~freecad.Shelving.core.layout.EvenSpacing`
-    appended after its other constraints. Its ends and the unit's size stay
-    as they are and the openings between them share the span. When the
-    locks and constraints rule out holding the ends, the openings share
-    whatever span moving the boards least leaves them, and the unit's size
-    changes only where the locks and constraints fix it.
+    appended after its other constraints, along the axis the picks give.
+    Its ends and the unit's size stay as they are and the openings between
+    them share the span. When the locks and constraints rule out holding
+    the ends, the openings share whatever span moving the boards least
+    leaves them, and the unit's size changes only where the locks and
+    constraints fix it.
 
     ``node_ids`` names two boards of one run, which become its ends, or two
-    or more openings of one run: then its group runs from the first opening
+    or more openings. Openings space the innermost run holding them all,
+    each standing for itself or its enclosing region that is a child of
+    that run, as the Sketcher's Constrain horizontal/vertical takes its
+    direction from the selection. The group runs from the first such region
     to the last in run order, and each end is the board bounding it there
-    or the run's own end. Raises :class:`EditError` for any other
-    selection, for an opening bounded there by another opening, and when
-    fewer than two openings lie between the ends. Raises a ``"conflict"``
+    or the run's own end.
+
+    Raises :class:`EditError` for any other selection: fewer than two
+    distinct picks, boards mixed with openings, boards of different runs,
+    openings that stand for one region, the whole unit or an unknown id.
+    Raises it too for a run along the unit's depth axis, for an end region
+    bounded by another region, and when fewer than two regions lie between
+    the ends. Raises a ``"conflict"``
     :class:`~freecad.Shelving.core.solver.LayoutSolveError` naming the
     locks and constraints that rule it out.
     """
-    return _add_even_spacing(
-        unit,
-        node_ids,
-        "Select two boards of one row or column, or two or more openings of "
-        "one row or column, to space evenly.",
-    )
-
-
-def _add_even_spacing(unit: Unit, node_ids: Sequence[str], what: str) -> Unit:
-    """:func:`add_even_spacing`, refusing a selection of the wrong shape
-    with the message ``what``."""
     distinct = list(dict.fromkeys(node_ids))
     if len(distinct) < 2:
-        raise EditError(distinct[0] if distinct else unit.id, what)
+        raise EditError(distinct[0] if distinct else unit.id, _SELECT_TO_SPACE)
     found = [_locate(unit.root, node_id) for node_id in distinct]
-    if any(place is None for place in found) or unit.root.id in distinct:
-        raise EditError(distinct[0], what)
     places = [place for place in found if place is not None]
-    run = places[0][0]
-    if any(place[0] is not run for place in places):
-        raise EditError(distinct[0], what)
-    indices = sorted(index for _run, index in places)
-    boards = [isinstance(run.items[index], Board) for index in indices]
+    if len(places) < len(distinct):
+        raise EditError(distinct[0], _SELECT_TO_SPACE)
+    boards = [isinstance(run.items[index], Board) for run, index in places]
+    if all(boards):
+        run = places[0][0]
+        if len(places) != 2 or places[1][0] is not run:
+            raise EditError(distinct[0], _SELECT_TO_SPACE)
+        indices = sorted(index for _run, index in places)
+    elif any(boards):
+        raise EditError(distinct[0], _SELECT_TO_SPACE)
+    else:
+        run, regions = _parting_run(unit, distinct)
+        if len(regions) < 2:
+            raise EditError(distinct[0], _SELECT_TO_SPACE)
+        position = {item.id: index for index, item in enumerate(run.items)}
+        indices = sorted(position[region_id] for region_id in regions)
+    if run.axis is _depth_axis(unit):
+        raise EditError(distinct[0], _NO_SPACING_IN_DEPTH)
     start: SpacingEnd | None
     end: SpacingEnd | None
-    if all(boards) and len(indices) == 2:
+    if all(boards):
         start, end = run.items[indices[0]].id, run.items[indices[1]].id
-    elif not any(boards):
+    else:
         start = _spacing_end(run, indices[0], -1)
         end = _spacing_end(run, indices[-1], 1)
         if start is None or end is None:
@@ -1238,8 +1257,6 @@ def _add_even_spacing(unit: Unit, node_ids: Sequence[str], what: str) -> Unit:
                 "of this selection has another opening beside it, with no "
                 "board between them.",
             )
-    else:
-        raise EditError(distinct[0], what)
     spacing = EvenSpacing(run_id=run.id, start=start, end=end)
     edited = dataclasses.replace(unit, constraints=(*unit.constraints, spacing))
     group = spacing_group(edited, spacing)
@@ -1267,6 +1284,30 @@ def _add_even_spacing(unit: Unit, node_ids: Sequence[str], what: str) -> Unit:
     return _solved_holding(unit, edited, run.axis, held)
 
 
+def _parting_run(unit: Unit, region_ids: Sequence[str]) -> tuple[Division, list[str]]:
+    """The innermost run holding every opening ``region_ids`` names, and the
+    distinct children of that run they stand for, in selection order: each
+    the opening itself or its enclosing region that is a child of the run.
+    Every id must name a region of ``unit`` other than its root, so the
+    root's run always qualifies."""
+    parents = parent_divisions(unit.root)
+
+    def lineage(region_id: str) -> list[str]:
+        found = [region_id]
+        parent = parents.get(region_id)
+        while parent is not None:
+            found.append(parent.id)
+            parent = parents.get(parent.id)
+        return found
+
+    lineages = [lineage(region_id) for region_id in region_ids]
+    # A pick encloses no run that holds it, so only strict ancestors count.
+    shared = set(lineages[0][1:]).intersection(*(line[1:] for line in lineages[1:]))
+    run_id = next(node_id for node_id in lineages[0][1:] if node_id in shared)
+    children = list(dict.fromkeys(line[line.index(run_id) - 1] for line in lineages))
+    return parents[children[0]], children
+
+
 # The elevation word an axis-taking command's messages use. Whole sentences
 # per word follow, so each translates on its own.
 _Elevation = Literal["width", "height"]
@@ -1289,35 +1330,18 @@ _UNIT_SIZE_TO_EQUAL: Mapping[_Elevation, str] = {
         "two or more rows to make their heights equal."
     ),
 }
-_SELECT_TO_SPACE: Mapping[_Elevation, str] = {
-    "width": (
-        "Select two dividers of one row, or openings in two or more columns "
-        "of one row, to space their widths evenly."
-    ),
-    "height": (
-        "Select two shelves of one column, or openings in two or more rows "
-        "of one column, to space their heights evenly."
-    ),
-}
-_UNIT_SIZE_TO_SPACE: Mapping[_Elevation, str] = {
-    "width": (
-        "A selected opening's width is the unit's width. Select two dividers "
-        "of one row, or openings in two or more columns of one row, to space "
-        "their widths evenly."
-    ),
-    "height": (
-        "A selected opening's height is the unit's height. Select two shelves "
-        "of one column, or openings in two or more rows of one column, to "
-        "space their heights evenly."
-    ),
-}
 
 
 def _elevation(unit: Unit, axis: Axis) -> _Elevation:
     """Whether ``axis`` is ``unit``'s elevation height or, for any other
-    axis, its width; a unit with no depth axis stands upright along Z."""
-    depth_axis = Axis.Y if unit.depth_axis is None else unit.depth_axis
-    return "height" if axis is elevation_axes(depth_axis)[1] else "width"
+    axis, its width."""
+    return "height" if axis is elevation_axes(_depth_axis(unit))[1] else "width"
+
+
+def _depth_axis(unit: Unit) -> Axis:
+    """``unit``'s depth axis; a unit with none stands upright along Z, so
+    its depth runs along Y."""
+    return Axis.Y if unit.depth_axis is None else unit.depth_axis
 
 
 def _is_board(unit: Unit, node_id: str) -> bool:
@@ -1366,31 +1390,6 @@ def add_equal_along(unit: Unit, node_ids: Sequence[str], axis: Axis) -> Unit:
     if len(regions) < 2:
         raise EditError(node_ids[0] if node_ids else unit.id, _SELECT_TO_EQUAL[word])
     return add_equal(unit, regions)
-
-
-def add_even_spacing_along(unit: Unit, node_ids: Sequence[str], axis: Axis) -> Unit:
-    """:func:`add_even_spacing` along ``axis``: openings resolve as
-    :func:`add_equal_along` resolves them, and boards must lie in a run
-    along ``axis``.
-
-    Raises :class:`EditError` for a selection mixing boards and openings,
-    for boards whose run lies along another axis, for an opening whose
-    size along ``axis`` is the unit's own, and for anything
-    :func:`add_even_spacing` refuses; a ``"conflict"``
-    :class:`~freecad.Shelving.core.solver.LayoutSolveError` as it raises.
-    """
-    word = _elevation(unit, axis)
-    what = _SELECT_TO_SPACE[word]
-    boards = [_is_board(unit, node_id) for node_id in node_ids]
-    if any(boards):
-        if not all(boards):
-            raise EditError(node_ids[0], what)
-        across = next((n for n in node_ids if run_axis(unit, n) is not axis), None)
-        if across is not None:
-            raise EditError(across, what)
-        return _add_even_spacing(unit, node_ids, what)
-    regions = _openings_along(unit, node_ids, axis, _UNIT_SIZE_TO_SPACE[word])
-    return _add_even_spacing(unit, regions, what)
 
 
 def remove_constraints(unit: Unit, constraint_ids: Collection[ConstraintId]) -> Unit:

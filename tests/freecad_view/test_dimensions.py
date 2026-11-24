@@ -662,7 +662,7 @@ def _equal_ends(panel: EditUnitPanel, driver: ViewDriver) -> tuple[str, str]:
     session.select_items([bottom, top])
     panel.constrain("equal_height")
     session.select_items([bottom, top])
-    panel.constrain("even_height")
+    panel.constrain("even_spacing")
     editor_of(panel).select(None)
     driver.pump()
     return shelves

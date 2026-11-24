@@ -15,10 +15,11 @@ their width and height commands, since a bay in each of two columns
 could mean either size for them.
 
 ## Must Have
-- [ ] `pixi run tests` green; `pyrefly check` clean over the changed code.
-- [ ] `grep -rnE "Shelving_ConstrainEvenWidth\b|Shelving_ConstrainEvenHeight\b|\beven_axis\b|add_even_spacing_along" freecad tests README.md docs`
-      prints nothing.
-- [ ] Core suite (`core/tests/test_constraints.py`), with `add_even_spacing`
+- [x] `pixi run tests` green; `pyrefly check` clean over the changed code.
+- [x] `grep -rnE "Shelving_ConstrainEvenWidth\b|Shelving_ConstrainEvenHeight\b|\beven_axis\b|add_even_spacing_along" freecad tests README.md docs`
+      prints nothing but the GUI test's two lines asserting the retired
+      command ids are absent from `FreeCADGui.listCommands()`.
+- [x] Core suite (`core/tests/test_constraints.py`), with `add_even_spacing`
       on sh-056's three-column unit (`_three_columns`: columns L 300,
       M 200, R 400 in the root run between `left` and `right`, each split
       by one shelf into bays A1/A2, B1/B2, C1/C2):
@@ -40,7 +41,7 @@ could mean either size for them.
         on the column's run;
       - two regions split from one bay along the unit's depth axis are
         refused with an `EditError`.
-- [ ] GUI (`tests/freecad_gui/test_edit_commands.py`):
+- [x] GUI (`tests/freecad_gui/test_edit_commands.py`):
       `Shelving_ConstrainEvenSpacing` sits on the edit toolbar, in the
       Shelving menu and in the 3D view's right-click menu with
       `Constraint_EvenSpacing.svg` as its icon, `IsActive` is false
@@ -50,10 +51,10 @@ could mean either size for them.
       "Even Width" over L, M and R; A1 and A2 one named "Even Height"
       over A1 and A2. A refused selection goes through `report_error`
       with text containing "Select".
-- [ ] `tests/freecad_view/test_editor_input.py`: the right-click menu
+- [x] `tests/freecad_view/test_editor_input.py`: the right-click menu
       lists Add Shelf, Add Divider, a separator, Lock Width, Lock Height,
       Equal Width, Equal Height, Even Spacing, a separator, then Fit All.
-- [ ] `README.md`: the **Even spacing** glossary entry names the Even
+- [x] `README.md`: the **Even spacing** glossary entry names the Even
       Spacing command and says how picks give width or height; no line
       calls Even Width or Even Height a command.
 
@@ -119,7 +120,7 @@ could mean either size for them.
   their names. No new case or setup action.
 
 ## Plan
-- [ ] **Step 1** (`freecad/Shelving/core/edit.py`,
+- [x] **Step 1** (`freecad/Shelving/core/edit.py`,
       `freecad/Shelving/core/tests/test_constraints.py`): `add_even_spacing`
       takes the axis from the picks as above; `add_even_spacing_along` and
       its message maps go. Rewrite the tests that call
@@ -130,7 +131,7 @@ could mean either size for them.
       `add_even_spacing`; `test_even_spacing_refuses_a_mixed_or_scattered_selection`'s
       sub-bay-and-B case now succeeds and becomes a positive test. Add the
       Must Have cases.
-- [ ] **Step 2** (`freecad/Shelving/editor/session.py`,
+- [x] **Step 2** (`freecad/Shelving/editor/session.py`,
       `freecad/Shelving/editor/panel.py`,
       `tests/freecad/test_constraint_session.py`,
       `tests/freecad_gui/test_constraint_list.py`): `Session.even_spacing`
@@ -141,7 +142,7 @@ could mean either size for them.
       Equal Width and the one-column Even case becomes Even Height success;
       `test_even_height_spaces_the_column_and_refuses_one_opening` calls
       `even_spacing`.
-- [ ] **Step 3** (`freecad/Shelving/commands/edit_commands.py`,
+- [x] **Step 3** (`freecad/Shelving/commands/edit_commands.py`,
       `freecad/Shelving/editor/elevation.py`,
       `tests/freecad_gui/test_edit_commands.py`,
       `tests/freecad_view/test_editor_input.py`,
@@ -152,7 +153,7 @@ could mean either size for them.
       `AXIS_ICON_SOURCES` comment say the axis icons serve Even's list
       rows. GUI and view tests call `"even_spacing"`; the board-refusal
       cases for Even become the different-runs refusal.
-- [ ] **Step 4** (`README.md`, `docs/scope-and-design.md`,
+- [x] **Step 4** (`README.md`, `docs/scope-and-design.md`,
       `freecad/Shelving/qa/cases/30-editor.toml`): glossary entries
       (the command list under the lock entry, **Even spacing**) and the
       constraints paragraph describe Even Spacing and the axis rule; the
@@ -161,3 +162,7 @@ could mean either size for them.
       Advice.
 
 ## Review log
+
+### Round 1: APPROVED
+- **N1: Test name still calls Even Width a command** (`tests/freecad_gui/test_constraint_list.py:323`): `test_width_rows_name_and_draw_the_width_commands` now checks an Even Width row, and no command by that name exists anymore; a name like `..._draw_the_width_icons` would fit.
+- **N2: Unreflowed paragraph lines** (`docs/scope-and-design.md:124`, `docs/scope-and-design.md:360`): the edited constraints paragraph has a line of about 100 characters and the constraint-list paragraph a short one; rewrap both to match the surrounding text.

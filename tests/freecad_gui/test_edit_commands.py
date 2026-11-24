@@ -3,6 +3,7 @@ Edit Unit shows while it is open, the Shelving menu, when the commands are
 active, what the add, Lock, Equal and Even commands do, and how the commands
 refuse a selection they cannot use."""
 
+import os
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import cast
@@ -37,8 +38,7 @@ from freecad.Shelving.unit_ops import create_unit
 _COMMANDS = (
     "Shelving_ConstrainEqualWidth",
     "Shelving_ConstrainEqualHeight",
-    "Shelving_ConstrainEvenWidth",
-    "Shelving_ConstrainEvenHeight",
+    "Shelving_ConstrainEvenSpacing",
 )
 _LOCK_COMMANDS = ("Shelving_LockWidth", "Shelving_LockHeight")
 _ADD_COMMANDS = (
@@ -53,8 +53,7 @@ _MENU_TEXTS = [
     "Lock Height",
     "Equal Width",
     "Equal Height",
-    "Even Width",
-    "Even Height",
+    "Even Spacing",
 ]
 _T_MM = 18.0
 
@@ -280,6 +279,16 @@ def test_each_constraint_command_has_its_own_icon() -> None:
         assert not FreeCADGui.getIcon(pixmap).isNull(), pixmap
 
 
+def test_even_spacing_replaces_even_width_and_even_height() -> None:
+    FreeCADGui.activateWorkbench("ShelvingWorkbench")
+    info = FreeCADGui.Command.get("Shelving_ConstrainEvenSpacing").getInfo()
+    assert os.path.basename(info["pixmap"]) == "Constraint_EvenSpacing.svg"
+    # The FreeCADGui stubs leave out listCommands, which FreeCAD itself has.
+    commands = FreeCADGui.listCommands()  # pyrefly: ignore[missing-attribute]
+    assert "Shelving_ConstrainEvenWidth" not in commands
+    assert "Shelving_ConstrainEvenHeight" not in commands
+
+
 # Indices into the columns unit's bays A1, A2, B1, B2, C1, C2.
 @pytest.mark.parametrize(
     ("name", "step", "picks", "regions"),
@@ -292,8 +301,8 @@ def test_each_constraint_command_has_its_own_icon() -> None:
             marks=pytest.mark.smoke("make the widths of two columns equal"),
         ),
         ("Shelving_ConstrainEqualHeight", "Equal Height", (0, 2), ("A1", "B1")),
-        ("Shelving_ConstrainEvenWidth", "Even Width", (0, 4), ("L", "M", "R")),
-        ("Shelving_ConstrainEvenHeight", "Even Height", (0, 1), ("A1", "A2")),
+        ("Shelving_ConstrainEvenSpacing", "Even Width", (0, 4), ("L", "M", "R")),
+        ("Shelving_ConstrainEvenSpacing", "Even Height", (0, 1), ("A1", "A2")),
     ],
 )
 def test_a_constraint_command_resolves_each_pick_along_its_axis(
@@ -335,11 +344,11 @@ def test_a_constraint_command_resolves_each_pick_along_its_axis(
     [
         ("Shelving_ConstrainEqualWidth", ("s1",), "not boards"),
         ("Shelving_ConstrainEqualHeight", ("s1",), "not boards"),
-        ("Shelving_ConstrainEvenHeight", ("d1", "d2"), "two shelves"),
-        ("Shelving_ConstrainEvenWidth", ("s1", "t1"), "two dividers"),
+        # Shelves of two columns lie in different runs.
+        ("Shelving_ConstrainEvenSpacing", ("s1", "t1"), "two shelves of one column"),
     ],
 )
-def test_a_constraint_command_refuses_boards_off_its_axis(
+def test_a_constraint_command_refuses_boards_it_cannot_use(
     columns: EditUnitPanel,
     reported: list[str],
     name: str,

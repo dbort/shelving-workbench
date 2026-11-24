@@ -60,7 +60,7 @@ def _column_panel(
 
 def _constrain(panel: EditUnitPanel, kind: str, items: list[str]) -> None:
     panel.session.select_items(items)
-    panel.constrain("equal_height" if kind == "equal" else "even_height")
+    panel.constrain("equal_height" if kind == "equal" else "even_spacing")
 
 
 def _icons(editor: ViewEditor) -> list[ConstraintIcon]:

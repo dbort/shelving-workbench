@@ -1,5 +1,5 @@
 """The commands that edit the open unit: Add Shelf, Add Divider, Lock Width,
-Lock Height, Equal Width, Equal Height, Even Width and Even Height.
+Lock Height, Equal Width, Equal Height and Even Spacing.
 
 Each is active only while Edit Unit is open, on the toolbar the editor
 shows then, in the 3D view's right-click menu and in the Shelving menu. A
@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Literal, NamedTuple, TypedDict
 from freecad.Shelving.editor.elevation import (
     ADD_ICON_SOURCES,
     AXIS_ICON_SOURCES,
+    ICON_SOURCES,
     LOCK_ICON_SOURCES,
     ElevationDirection,
 )
@@ -90,19 +91,15 @@ _SPECS: Mapping[str, _Spec] = {
         AXIS_ICON_SOURCES["equal", "vertical"],
         _constrain("equal_height"),
     ),
-    "Shelving_ConstrainEvenWidth": _Spec(
-        "Even Width",
-        "Space the columns of one row evenly: select a bay in its first and "
-        "last column, or the two boards at its ends",
-        AXIS_ICON_SOURCES["even_spacing", "horizontal"],
-        _constrain("even_width"),
-    ),
-    "Shelving_ConstrainEvenHeight": _Spec(
-        "Even Height",
-        "Space the openings of one column evenly: select its first and last "
-        "opening, or the two boards at its ends",
-        AXIS_ICON_SOURCES["even_spacing", "vertical"],
-        _constrain("even_height"),
+    # One command for both directions, as the Sketcher's Constrain
+    # horizontal/vertical is: the picks always say which way to space.
+    "Shelving_ConstrainEvenSpacing": _Spec(
+        "Even Spacing",
+        "Space openings evenly in the direction the picks give: bays in "
+        "different columns space the columns' widths, openings of one "
+        "column space its heights; or select the two boards at the ends",
+        ICON_SOURCES["even_spacing"],
+        _constrain("even_spacing"),
     ),
 }
 

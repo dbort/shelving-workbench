@@ -320,7 +320,7 @@ def test_a_lock_no_command_makes_reads_lock_on_a_bare_tile(bare: _Editing) -> No
     )
 
 
-def test_width_rows_name_and_draw_the_width_commands(bare: _Editing) -> None:
+def test_width_rows_name_and_draw_the_width_icons(bare: _Editing) -> None:
     session = bare.panel.session
     session.select(bare.bays()[0])
     assert session.split("horizontal") is None
@@ -333,7 +333,7 @@ def test_width_rows_name_and_draw_the_width_commands(bare: _Editing) -> None:
     session.select_items([left, right])
     assert session.equal_axis("horizontal") is None
     session.select_items([left, right])
-    assert session.even_axis("horizontal") is None
+    assert session.even_spacing() is None
     bare.panel._refresh()
     tree = bare.rows.tree
     equal, spacing = bare.item(0), bare.item(1)

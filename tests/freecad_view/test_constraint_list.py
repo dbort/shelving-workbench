@@ -35,7 +35,7 @@ def _column(
     session.select_items([a, b])
     panel.constrain("equal_height")
     session.select_items([a, c])
-    panel.constrain("even_height")
+    panel.constrain("even_spacing")
     assert session.set_lock(a, locked=True) is None
     session.select(None)
     panel._refresh()
