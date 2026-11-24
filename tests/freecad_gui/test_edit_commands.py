@@ -285,9 +285,8 @@ def test_even_spacing_replaces_even_width_and_even_height() -> None:
     assert os.path.basename(info["pixmap"]) == "Constraint_EvenSpacing.svg"
     # The FreeCADGui stubs leave out listCommands, which FreeCAD itself has.
     commands = FreeCADGui.listCommands()  # pyrefly: ignore[missing-attribute]
-    # Built from parts, so a grep for the retired ids finds only real uses.
-    for direction in ("Width", "Height"):
-        assert f"Shelving_ConstrainEven{direction}" not in commands
+    assert "Shelving_ConstrainEvenWidth" not in commands
+    assert "Shelving_ConstrainEvenHeight" not in commands
 
 
 # Indices into the columns unit's bays A1, A2, B1, B2, C1, C2.

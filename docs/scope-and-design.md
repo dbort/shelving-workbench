@@ -122,15 +122,15 @@ instead. A selected board refuses Equal, and Even spacing refuses boards
 mixed with openings or boards of different rows. A stored constraint
 carries no direction of its own, since its regions imply it, and the 3D
 view draws the same Equal and Even spacing icons for both directions, the
-dimension line under them showing which. Both measure the clear opening. The solve counts them after
-the active locks, so one the locks already imply is accepted as redundant
-with a warning, and one they contradict is refused as a conflict naming
-those locks and itself. Each draws the Sketcher's style of icon beside
-each of its openings' dimensions, in the Sketcher's constraint icon color
-on a small tile of the 3D view's background color; clicking an icon
-selects the constraint, and Delete removes it. A board any constraint
-holds, a lock included, shows no arrow and outlines the openings holding
-it.
+dimension line under them showing which. Both measure the clear opening.
+The solve counts them after the active locks, so one the locks already
+imply is accepted as redundant with a warning, and one they contradict is
+refused as a conflict naming those locks and itself. Each draws the
+Sketcher's style of icon beside each of its openings' dimensions, in the
+Sketcher's constraint icon color on a small tile of the 3D view's
+background color; clicking an icon selects the constraint, and Delete
+removes it. A board any constraint holds, a lock included, shows no arrow
+and outlines the openings holding it.
 A board deleted beside an Equal's opening, or added along its row through
 it, drops the Equal, as the Sketcher's Split and Trim drop an Equal on the
 line they cut; an even spacing is dropped only with an end. Geometry wins
@@ -353,16 +353,15 @@ The constraint list follows the Sketcher's: one list holding every
 constraint, locks included, in the order they were made, each with its
 kind's icon, its checkbox and its size in the user's unit system, and
 selection shared with the 3D view in both directions; selecting a lock's
-row selects that lock. A row is named for its constraint and the
-direction it holds, such as Lock Width or Even Height, and shows that
-pair's icon, the Lock and Equal commands' own; an Equal or even spacing
-through the depth, which no command makes, keeps the plain name and the
-view's icon. A deactivated lock's icon
-is grayed in Qt's disabled mode, as the Sketcher's list grays a
-deactivated constraint. It departs from the Sketcher in four places. A
-deactivated Equal's or even spacing's icon carries the 3D view's corner X
-where the Sketcher's list grays it, so the list and the view mark it the
-same way; a lock has no icon in the view to match, since its gray
+row selects that lock. A row is named for its constraint and the direction
+it holds, such as Lock Width or Even Height, and shows that pair's icon,
+the Lock and Equal commands' own; an Equal or even spacing through the
+depth, which no command makes, keeps the plain name and the view's icon. A
+deactivated lock's icon is grayed in Qt's disabled mode, as the Sketcher's
+list grays a deactivated constraint. It departs from the Sketcher in four
+places. A deactivated Equal's or even spacing's icon carries the 3D view's
+corner X where the Sketcher's list grays it, so the list and the view mark
+it the same way; a lock has no icon in the view to match, since its gray
 dimension already marks it. A constraint's checkbox means active, since the
 editor has no virtual space for the Sketcher's visibility box to choose.
 Each row has a delete button and one button deletes every deactivated

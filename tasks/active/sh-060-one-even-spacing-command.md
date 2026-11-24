@@ -17,7 +17,8 @@ could mean either size for them.
 ## Must Have
 - [ ] `pixi run tests` green; `pyrefly check` clean over the changed code.
 - [ ] `grep -rnE "Shelving_ConstrainEvenWidth\b|Shelving_ConstrainEvenHeight\b|\beven_axis\b|add_even_spacing_along" freecad tests README.md docs`
-      prints nothing.
+      prints nothing but the GUI test's two lines asserting the retired
+      command ids are absent from `FreeCADGui.listCommands()`.
 - [ ] Core suite (`core/tests/test_constraints.py`), with `add_even_spacing`
       on sh-056's three-column unit (`_three_columns`: columns L 300,
       M 200, R 400 in the root run between `left` and `right`, each split
