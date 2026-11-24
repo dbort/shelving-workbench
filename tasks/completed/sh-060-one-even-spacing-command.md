@@ -15,11 +15,11 @@ their width and height commands, since a bay in each of two columns
 could mean either size for them.
 
 ## Must Have
-- [ ] `pixi run tests` green; `pyrefly check` clean over the changed code.
-- [ ] `grep -rnE "Shelving_ConstrainEvenWidth\b|Shelving_ConstrainEvenHeight\b|\beven_axis\b|add_even_spacing_along" freecad tests README.md docs`
+- [x] `pixi run tests` green; `pyrefly check` clean over the changed code.
+- [x] `grep -rnE "Shelving_ConstrainEvenWidth\b|Shelving_ConstrainEvenHeight\b|\beven_axis\b|add_even_spacing_along" freecad tests README.md docs`
       prints nothing but the GUI test's two lines asserting the retired
       command ids are absent from `FreeCADGui.listCommands()`.
-- [ ] Core suite (`core/tests/test_constraints.py`), with `add_even_spacing`
+- [x] Core suite (`core/tests/test_constraints.py`), with `add_even_spacing`
       on sh-056's three-column unit (`_three_columns`: columns L 300,
       M 200, R 400 in the root run between `left` and `right`, each split
       by one shelf into bays A1/A2, B1/B2, C1/C2):
@@ -41,7 +41,7 @@ could mean either size for them.
         on the column's run;
       - two regions split from one bay along the unit's depth axis are
         refused with an `EditError`.
-- [ ] GUI (`tests/freecad_gui/test_edit_commands.py`):
+- [x] GUI (`tests/freecad_gui/test_edit_commands.py`):
       `Shelving_ConstrainEvenSpacing` sits on the edit toolbar, in the
       Shelving menu and in the 3D view's right-click menu with
       `Constraint_EvenSpacing.svg` as its icon, `IsActive` is false
@@ -51,10 +51,10 @@ could mean either size for them.
       "Even Width" over L, M and R; A1 and A2 one named "Even Height"
       over A1 and A2. A refused selection goes through `report_error`
       with text containing "Select".
-- [ ] `tests/freecad_view/test_editor_input.py`: the right-click menu
+- [x] `tests/freecad_view/test_editor_input.py`: the right-click menu
       lists Add Shelf, Add Divider, a separator, Lock Width, Lock Height,
       Equal Width, Equal Height, Even Spacing, a separator, then Fit All.
-- [ ] `README.md`: the **Even spacing** glossary entry names the Even
+- [x] `README.md`: the **Even spacing** glossary entry names the Even
       Spacing command and says how picks give width or height; no line
       calls Even Width or Even Height a command.
 
