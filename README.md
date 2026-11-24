@@ -161,11 +161,11 @@ The vocabulary the documentation and the code share.
   column's top and bottom openings space the whole column. Or select the
   two boards at its ends: two dividers of one row space it across, two
   shelves of one column space it up. The constraint list names the result
-  Even Width or Even Height for the direction it spaces. Mixing panels
-  with openings, panels of different rows or columns, and openings one
-  behind another through the depth refuse the command. Its ends stay where
-  they are and the openings between them share the space, unless locks or
-  constraints move them.
+  Even Width or Even Height for the direction it spaces. The command
+  refuses panels mixed with openings, panels of different rows or columns,
+  and openings one behind another through the depth. An even spacing's
+  ends stay where they are and the openings between them share the space,
+  unless locks or constraints move them.
   An opening a new board adds inside the span joins it, and a deleted
   board's openings merge within it; deleting an end board removes the
   even spacing. A board an even spacing holds shows no drag arrow, and
