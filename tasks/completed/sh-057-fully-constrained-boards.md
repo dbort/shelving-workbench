@@ -15,8 +15,8 @@ constrained", or how many degrees of freedom are left, and updates after
 every edit.
 
 ## Must Have
-- [ ] `pixi run tests` green; `pyrefly check` clean over the changed code.
-- [ ] Core suite, on sh-046's column of 18 mm boards with fixed point
+- [x] `pixi run tests` green; `pyrefly check` clean over the changed code.
+- [x] Core suite, on sh-046's column of 18 mm boards with fixed point
       `min`: bottom, A 300, shelf s1, B 300, shelf s2, C 300, top (972 mm
       tall):
       - with no Lock or constraint, the degrees of freedom are 2, and
@@ -25,21 +25,21 @@ every edit.
       - with A and B locked: 0, with every board counted;
       - with an Equal on A and B and another on B and C, and no Lock: 0;
       - with A locked and its Lock deactivated: 2.
-- [ ] Elevation plan (`tests/test_editor_elevation.py`): every board
+- [x] Elevation plan (`tests/test_editor_elevation.py`): every board
       counted as fully constrained has an outline with role
       `"constrained"`, unless it is selected, when it keeps the
       `"selected"` outline. No other board has one.
-- [ ] 3D view (`tests/freecad_view/`): a `"constrained"` outline is
+- [x] 3D view (`tests/freecad_view/`): a `"constrained"` outline is
       drawn in the View preference `FullyConstraintElementColor`, read
       with the Sketcher's default, and selecting the board replaces it
       with the selection color. The board's own `ShapeAppearance` is
       unchanged throughout the edit.
-- [ ] GUI (`tests/freecad_gui/test_panel.py`): the panel's constraint
+- [x] GUI (`tests/freecad_gui/test_panel.py`): the panel's constraint
       status reads "Fully constrained" for the A-and-B-locked unit and
       "Degrees of freedom: 2" for the unconstrained one. It updates after
       an edit, after Undo inside the edit, and after a constraint is
       turned off in the list.
-- [ ] `README.md`'s glossary has an entry **Fully constrained**.
+- [x] `README.md`'s glossary has an entry **Fully constrained**.
 
 ## Advice
 - **What counts** (user decision): a board is fully constrained when
