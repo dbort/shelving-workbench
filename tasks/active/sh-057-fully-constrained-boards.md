@@ -114,3 +114,6 @@ every edit.
 - **N2: The holding-over-constrained precedence has no test** (`freecad/Shelving/editor/elevation.py:702`): unreachable for boards on `main` today; sh-050 should add the test when boards can hold.
 - **N3: No Smoke set entry in `## Advice`** (`tasks/active/sh-057-fully-constrained-boards.md:79`): the plan predates the obligation; no smoke mark changed, which looks right, but a one-line entry would meet the never-skipped-silently rule.
 - **N4: Line wrap in scope-and-design** (`docs/scope-and-design.md:390`): one line runs past the paragraph's wrap width; re-wrap it.
+
+### Round 2: APPROVED
+- **N1: Ragged docstring wrap** (`freecad/Shelving/core/edit.py:905`): the round 1 N1 rewording left `constraint_status`'s docstring with short broken lines; re-wrap it to the docstring's normal width.
