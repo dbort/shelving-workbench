@@ -665,8 +665,8 @@ def plan_overlay(
     :func:`~freecad.Shelving.core.edit.constraint_status` finds them, takes
     a "constrained" outline. The selected outline wins over a holding one,
     and a holding one over a constrained one; an id in ``flagged`` that
-    names nothing draws nothing. ``spaces`` must hold
-    every node of ``unit``. A dimension outside the unit sits a whole
+    names nothing draws nothing. ``spaces`` must hold every node of
+    ``unit``. A dimension outside the unit sits a whole
     number of ``outer_row_mm`` rows out from its outer face, so resizing
     the unit moves only the rows past the faces that move; each region
     keeps its place whether its dimension is drawn or not, so one

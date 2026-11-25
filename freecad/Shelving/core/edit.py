@@ -904,8 +904,7 @@ class ConstraintStatus:
 def constraint_status(unit: Unit) -> ConstraintStatus:
     """How constrained ``unit``'s elevation is, with its outer faces held:
     one freedom query, a single solve, per elevation axis, whatever the
-    number of boards. A board on
-    a run through the depth is never in
+    number of boards. A board on a run through the depth is never in
     :attr:`ConstraintStatus.fully_constrained` and adds no freedom."""
     spaces = solve(unit)
     degrees_of_freedom = 0

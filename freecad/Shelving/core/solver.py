@@ -729,10 +729,10 @@ def fixing_locks(
     ``spaces`` is ``unit`` laid out. A constraint ``without`` names is left
     out, as though it were deactivated. An empty set means the boards and
     outer faces alone fix the face, as for a carcass board, and is also the
-    answer when the layout misses its own locks by more than the engine's
-    tolerance, so a caller treats the board as immovable rather than
-    failing. When several sets fix it, the result is one of them, preferring
-    locks to other constraints.
+    answer when the layout misses its own constraints by more than the
+    engine's tolerance, so a caller treats the board as immovable rather
+    than failing. When several sets fix it, the result is one of them,
+    preferring locks to other constraints.
     Never raises for a board of ``unit`` on a run along ``axis``.
     """
     system, result = _held_solve(unit, spaces, axis, without)
