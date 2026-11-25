@@ -687,3 +687,79 @@ as an even spacing."""
 The Equal Height row goes, and with it the warning icons on the two Lock
 Height rows. Then the Even Height row goes. Only the two Lock Height rows
 remain, no board moved, and Delete Deactivated is grayed again."""
+
+[[case]]
+id = "editor.fully_constrained"
+title = "Fully constrained boards in color, on light and dark themes"
+
+  [[case.step]]
+  id = "start"
+  action = "large_unit"
+  instruction = [
+    "Keep FreeCAD on a standard-resolution screen with its default light theme.",
+    "Select the container (ShelvingUnit).",
+    "Run Edit Unit.",
+  ]
+  expected = """
+The four outer boards are outlined in light green, as the Sketcher colors
+a fully constrained edge, and no shelf or divider is. The line above the
+Constraints list reads "Degrees of freedom: 23". At the default zoom the
+light green outlines read plainly against the boards and are plainly
+different from the thin gray outlines around the openings."""
+
+  [[case.step]]
+  id = "lock_column"
+  instruction = [
+    "Click the bottom opening of the leftmost column.",
+    "Ctrl-click each of the four openings above it, leaving the top one.",
+    "Click Lock Height on the toolbar.",
+  ]
+  expected = """
+Every shelf of the leftmost column gains a light green outline, and the
+line above the Constraints list reads "Degrees of freedom: 18". The five
+selected openings keep their selection outlines, and the light green on
+the shelves between them is plainly a different color from the selection
+color at a glance."""
+
+  [[case.step]]
+  id = "select_shelf"
+  instruction = ["Click the middle shelf of the leftmost column."]
+  expected = """
+The shelf's outline turns the selection color and the other shelves of the
+column stay light green. The openings holding the shelf are outlined in
+red. Selection, red and light green are three plainly different colors,
+and none of them is mistaken for an opening's thin gray outline."""
+
+  [[case.step]]
+  id = "hidpi"
+  instruction = [
+    "Move FreeCAD to a HiDPI screen, such as a Mac's built-in display.",
+    "Click the shelf above it, then click the middle shelf again.",
+  ]
+  expected = """
+On the HiDPI screen the selection, red and light green outlines are as
+plainly different as before, and each light green outline is sharp and
+as easy to see as the selection outline."""
+
+  [[case.step]]
+  id = "dark"
+  instruction = [
+    "Choose Edit > Preferences, then General.",
+    "Apply a dark preference pack, such as FreeCAD Dark, and close Preferences.",
+    "Click the middle shelf of the leftmost column.",
+    "Move FreeCAD back to the standard-resolution screen.",
+  ]
+  expected = """
+On the dark theme, on both screens, the light green outlines still read
+plainly against the boards and the view's background, and the selection,
+red and light green outlines and the openings' gray outlines are still
+four plainly different colors."""
+
+  [[case.step]]
+  id = "restore"
+  instruction = [
+    "Choose Edit > Preferences, then General.",
+    "Apply the preference pack you started with, and close Preferences.",
+  ]
+  expected = """
+FreeCAD's colors are as they were when this case began."""

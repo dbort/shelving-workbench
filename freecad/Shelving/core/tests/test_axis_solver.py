@@ -158,6 +158,23 @@ def test_freedom_counts_an_active_bound() -> None:
     assert held.fixed_by == _ids("floor", "min")
 
 
+def test_degrees_of_freedom_count_positions_less_independent_constraints() -> None:
+    assert _solved(solve(CURRENT_MM, [], [])).degrees_of_freedom == 4
+    chained = [_fix("floor", X0, 0.0), _diff("a", X0, X1, 10.0)]
+    assert _solved(solve(CURRENT_MM, chained, [])).degrees_of_freedom == 2
+    implied = [*chained, _diff("b", X1, X2, 15.0), _diff("sum", X0, X2, 25.0)]
+    assert _solved(solve(CURRENT_MM, implied, [])).degrees_of_freedom == 1
+    bounded = _solved(
+        solve(
+            CURRENT_MM,
+            [_fix("floor", X0, 0.0)],
+            [_bound("min", X0, X1, 10.0)],
+            [Target(X1, 2.0)],
+        )
+    )
+    assert bounded.degrees_of_freedom == 2
+
+
 def test_freedom_rejects_an_unknown_position() -> None:
     result = _solved(solve(CURRENT_MM, [], []))
     with pytest.raises(ValueError, match="nowhere"):

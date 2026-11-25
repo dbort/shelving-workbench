@@ -35,6 +35,7 @@ from freecad.Shelving.core.layout import (
     region_lock,
 )
 from freecad.Shelving.editor import panel as panel_module
+from freecad.Shelving.editor.constraint_list import TEXT_COLUMN
 from freecad.Shelving.editor.fields import DimensionField
 from freecad.Shelving.editor.panel import AncestorWatch, EditUnitPanel
 from freecad.Shelving.editor.session import Session, UnitDimension
@@ -1135,3 +1136,38 @@ def test_a_unit_placed_by_an_expression_keeps_its_fields_editable() -> None:
         ]
     finally:
         FreeCAD.closeDocument(doc.Name)
+
+
+def _status(unit_panel: _Fixture) -> str:
+    return unit_panel.panel.constraint_list.status.text()
+
+
+def test_the_constraint_status_follows_edits_undo_and_the_list(
+    unit_panel: _Fixture,
+) -> None:
+    """A column of three openings has a freedom for each shelf; locking two
+    of its openings fully constrains it, as the Sketcher reports a sketch."""
+    unit_panel.select(unit_panel.upper)
+    assert unit_panel.session.split("vertical") is None
+    unit_panel.panel._refresh()
+    first, second, _third = _bay_ids(unit_panel.session.unit.root)
+    assert _status(unit_panel) == "Degrees of freedom: 2"
+
+    doc = unit_panel.doc
+    for region_id in (first, second):
+        unit_panel.select(region_id)
+        unit_panel.panel.lock("vertical")
+    assert _status(unit_panel) == "Fully constrained"
+
+    doc.undo()
+    _process_events()
+    assert _status(unit_panel) == "Degrees of freedom: 1"
+    doc.redo()
+    _process_events()
+    assert _status(unit_panel) == "Fully constrained"
+
+    item = unit_panel.panel.constraint_list.tree.topLevelItem(0)
+    assert item is not None
+    item.setCheckState(TEXT_COLUMN, QtCore.Qt.CheckState.Unchecked)
+    _process_events()
+    assert _status(unit_panel) == "Degrees of freedom: 1"

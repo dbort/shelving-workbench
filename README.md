@@ -202,6 +202,15 @@ The vocabulary the documentation and the code share.
   the same size. It is kept, and its row in the constraint list carries a
   warning icon for as long as it stays redundant; every member of the
   group is marked, so you can choose which to remove.
+- **Fully constrained**: a board whose place the locks and constraints
+  fix, with the unit's outer faces where they are, so no drag can move
+  it. While Edit Unit is open each one is outlined in the color the
+  Sketcher gives a fully constrained edge, light green by default; a
+  carcass board always is, since the unit's size places it. Selecting a
+  board outlines it in the selection color instead. The line above the
+  constraint list reads "Fully constrained" when every board is, as the
+  Sketcher reports a sketch, and otherwise "Degrees of freedom" and how
+  many independent board positions are still free to move.
 - **Local frame**: origin at the unit's front-bottom-left corner, +X right,
   +Y back, +Z up, in millimeters. A container's own placement is excluded,
   so a unit reads the same wherever it sits.

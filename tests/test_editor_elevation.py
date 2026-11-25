@@ -6,7 +6,13 @@ from collections.abc import Collection
 
 import pytest
 
-from freecad.Shelving.core.edit import add_equal, add_even_spacing, lock, set_unit_size
+from freecad.Shelving.core.edit import (
+    add_equal,
+    add_even_spacing,
+    constraint_status,
+    lock,
+    set_unit_size,
+)
 from freecad.Shelving.core.geometry import Vec3
 from freecad.Shelving.core.layout import (
     Axis,
@@ -31,6 +37,7 @@ from freecad.Shelving.editor.elevation import (
     Rect,
     Side,
     arrow_for,
+    board_space,
     dragged_to_mm,
     elevation_frame,
     fixed_choices,
@@ -599,6 +606,7 @@ def _overlay(
     flagged: Collection[str] = (),
     selected_items: Collection[str] = (),
     selected_constraints: Collection[ConstraintId] = (),
+    fully_constrained: Collection[str] = (),
 ) -> Overlay:
     return plan_overlay(
         unit,
@@ -609,6 +617,7 @@ def _overlay(
         flagged,
         selected_items=selected_items,
         selected_constraints=selected_constraints,
+        fully_constrained=fully_constrained,
     )
 
 
@@ -766,6 +775,45 @@ def test_a_flagged_constraint_outlines_its_openings() -> None:
     overlay = _overlay(unit, flagged=[equal.id])
     assert _roles(overlay, "A", unit) == ["holding"]
     assert _roles(overlay, "B", unit) == ["region"]
+
+
+def _board_roles(overlay: Overlay, unit: Unit) -> dict[str, list[str]]:
+    """Each board's outline roles, by board id."""
+    frame = elevation_frame(unit)
+    spaces = solve(unit)
+    roles: dict[str, list[str]] = {}
+    for board_id in ("bottom", "s1", "s2", "top"):
+        space = board_space(unit, spaces, board_id)
+        assert space is not None
+        rect = frame.rect(space)
+        roles[board_id] = [o.role for o in overlay.outlines if o.rect == rect]
+    return roles
+
+
+def test_fully_constrained_boards_take_the_constrained_outline() -> None:
+    unit = lock(_column(), "A")
+    constrained = constraint_status(unit).fully_constrained
+    assert _board_roles(_overlay(unit, fully_constrained=constrained), unit) == {
+        "bottom": ["constrained"],
+        "s1": ["constrained"],
+        "s2": [],
+        "top": ["constrained"],
+    }
+
+
+def test_a_selected_constrained_board_keeps_the_selected_outline() -> None:
+    unit = lock(_column(), "A")
+    constrained = constraint_status(unit).fully_constrained
+    for selected in ("s1", "bottom"):
+        roles = _board_roles(
+            _overlay(unit, selected_id=selected, fully_constrained=constrained), unit
+        )
+        assert roles[selected] == ["selected"]
+        assert [r for board_id, r in roles.items() if board_id != selected] == [
+            ["constrained"] if board_id in constrained else []
+            for board_id in roles
+            if board_id != selected
+        ]
 
 
 # --- dimensions as the Sketcher draws them ----------------------------------

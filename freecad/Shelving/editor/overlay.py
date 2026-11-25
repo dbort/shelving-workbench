@@ -121,6 +121,9 @@ class Style:
     # icon colors to stand out against, where an opening's fill would blur
     # them.
     tile_rgb: RGB = (247 / 255, 247 / 255, 247 / 255)
+    # A fully constrained board's outline: the Sketcher's color for a fully
+    # constrained edge.
+    constrained_rgb: RGB = (128 / 255, 207 / 255, 158 / 255)
 
     def label_rgb(self, label: DimensionLabel) -> RGB:
         """The selection color for a dimension whose Lock is selected,
@@ -144,11 +147,14 @@ class Style:
     def outline_rgb(self, role: OutlineRole) -> RGB:
         """The selection color for "selected", the driving dimension color
         for "holding", so a holding region reads as the constraint it is,
+        the Sketcher's fully constrained element color for "constrained",
         and a dark gray for "region"."""
         if role == "selected":
             return self.selected_rgb
         if role == "holding":
             return self.driving_rgb
+        if role == "constrained":
+            return self.constrained_rgb
         return _OUTLINE_RGB
 
 
@@ -165,7 +171,8 @@ def view_style(label_size_pt: int) -> Style:
     reference size that only reports, and the fixed point's marker in the
     color of the Sketcher's own billboard icons. A constraint's icon takes
     the Sketcher's icon color and sits with each dimension's text on a tile
-    of the view's background. Defaults from FreeCAD 1.1."""
+    of the view's background, and a fully constrained board's outline the
+    Sketcher's fully constrained element color. Defaults from FreeCAD 1.1."""
     return Style(
         selected_rgb=_view_color("SelectionColor", 0x1CAD1CFF),
         driving_rgb=_view_color("ConstrainedDimColor", 0xFF2600FF),
@@ -175,6 +182,9 @@ def view_style(label_size_pt: int) -> Style:
         label_size_pt=label_size_pt,
         icon_rgb=_view_color("ConstrainedIcoColor", 0xFF2600FF),
         tile_rgb=background_rgb(FreeCAD.ParamGet(_VIEW_PARAMS)),
+        # The Sketcher's DrawingParameters default, SbColor(0.50, 0.81,
+        # 0.62), packed as its preference observer packs it.
+        constrained_rgb=_view_color("FullyConstraintElementColor", 0x80CF9EFF),
     )
 
 

@@ -931,6 +931,7 @@ class ViewEditor:
             session.flagged,
             selected_items=session.selected_items,
             selected_constraints=session.selected_constraints,
+            fully_constrained=session.constraint_status().fully_constrained,
         )
         self._draw_text_tiles()
         self._drawing.removeAllChildren()

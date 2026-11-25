@@ -200,6 +200,14 @@ class Solved:
     redundant: Mapping[ConstraintId, frozenset[ConstraintId]]
     _basis: _Basis = field(repr=False, compare=False)
 
+    @property
+    def degrees_of_freedom(self) -> int:
+        """How many independent directions the relations and active bounds
+        leave the positions free to move in near this solution: the number
+        of positions less the rank of those constraints. Zero exactly when
+        :meth:`freedom` reports every position determined."""
+        return len(self._basis.index) - len(self._basis.ids)
+
     def freedom(self, expression: Mapping[PositionId, float]) -> Freedom:
         """Whether the relations and active bounds determine ``expression``.
 

@@ -324,3 +324,18 @@ keys, and FreeCAD's first start writes the FreeCAD Light pack's plain
 (247, 247, 247). `freecad/Shelving/editor/overlay.py`'s `background_rgb`
 reads them the same way for the tiles under dimension text and
 constraint icons.
+
+## The Sketcher's fully constrained element color
+
+The Sketcher colors an edge whose place its constraints fix with the View
+preference `FullyConstraintElementColor`
+(`User parameter:BaseApp/Preferences/View`), a packed 0xRRGGBBAA. Its
+default is `DrawingParameters::FullyConstraintElementColor`,
+`SbColor(0.50, 0.81, 0.62)`, which the Sketcher's preference observer
+packs with `SbColor::getPackedValue` as `0x80CF9EFF`. Verified in FreeCAD
+1.1.3 by disassembling the static initializer in `lib/SketcherGui.so`,
+which constructs that color from those three floats; nothing writes the
+preference until the Sketcher's color page is saved, so a fresh
+configuration reads the default. `FullyConstrainedColor` (pure green) is a
+different preference: the whole sketch's color once it is fully
+constrained.

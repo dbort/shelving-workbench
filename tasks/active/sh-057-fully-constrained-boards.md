@@ -85,18 +85,18 @@ every edit.
   its shelves. Add no setup action.
 
 ## Plan
-- [ ] **Step 1** (`core/axis_solver.py`, `core/solver.py`, `core/edit.py`,
+- [x] **Step 1** (`core/axis_solver.py`, `core/solver.py`, `core/edit.py`,
       their tests): the degrees-of-freedom count and the per-board fully
       constrained set, from one freedom query per axis.
-- [ ] **Step 2** (`editor/elevation.py`, `tests/test_editor_elevation.py`):
+- [x] **Step 2** (`editor/elevation.py`, `tests/test_editor_elevation.py`):
       the `"constrained"` outline role and its precedence.
-- [ ] **Step 3** (`editor/overlay.py`, `editor/view_editor.py`,
+- [x] **Step 3** (`editor/overlay.py`, `editor/view_editor.py`,
       `tests/freecad_view/test_editor_drawing.py`): the color read from
       the View preferences and the outline drawn in it.
-- [ ] **Step 4** (`editor/session.py`, `editor/panel.py`,
+- [x] **Step 4** (`editor/session.py`, `editor/panel.py`,
       `editor/constraint_list.py`, `tests/freecad_gui/test_panel.py`): the
       status line and its refreshes.
-- [ ] **Step 5** (`README.md`, `docs/scope-and-design.md`,
+- [x] **Step 5** (`README.md`, `docs/scope-and-design.md`,
       `.claude/docs/freecad-notes.md`,
       `freecad/Shelving/qa/cases/30-editor.toml`): the glossary entry, the
       Editing section, the preference note, and the
