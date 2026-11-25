@@ -103,3 +103,10 @@ every edit.
       `editor.fully_constrained` case.
 
 ## Review log
+
+### Round 1: REJECTED
+- **F1: The degrees-of-freedom count includes seams, which disagrees with the Advice and the docs and has no test** (`freecad/Shelving/core/solver.py:786`, `README.md:205`, `docs/scope-and-design.md:389`): `axis_freedom` returns the solve's `degrees_of_freedom`, which counts every engine position, a seam where two regions meet with no board between them included. The Advice counts "independent interior board positions", and the README and scope-and-design say the same. On a unit of bottom, plinth `Void`, `Bay`, top with no constraints, `constraint_status` gives 1 with every board fully constrained, so the panel reports a freedom nothing visible shows. Count only freedom that reaches board positions, or get a user decision to keep seams and correct the docs; either way add a core test pinning the plinth-seam case.
+- **N1: One `freedom()` projection per board** (`freecad/Shelving/core/solver.py:786`): the Advice says one freedom query per axis, not one per board; the code makes one solve per axis and one projection per board, and the `constraint_status` docstring says "one solve". Say which reading applies.
+- **N2: The holding-over-constrained precedence has no test** (`freecad/Shelving/editor/elevation.py:702`): unreachable for boards on `main` today; sh-050 should add the test when boards can hold.
+- **N3: No Smoke set entry in `## Advice`** (`tasks/active/sh-057-fully-constrained-boards.md:79`): the plan predates the obligation; no smoke mark changed, which looks right, but a one-line entry would meet the never-skipped-silently rule.
+- **N4: Line wrap in scope-and-design** (`docs/scope-and-design.md:390`): one line runs past the paragraph's wrap width; re-wrap it.
