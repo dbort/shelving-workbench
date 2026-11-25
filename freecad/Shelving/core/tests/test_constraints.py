@@ -14,6 +14,7 @@ from freecad.Shelving.core.edit import (
     add_equal_along,
     add_even_spacing,
     carry_constraints,
+    constraint_status,
     held_by,
     lock,
     merge_at,
@@ -44,6 +45,7 @@ from freecad.Shelving.core.layout import (
     Region,
     RunEnd,
     Unit,
+    Void,
     constraint_regions,
     is_locked,
     region_lock,
@@ -893,3 +895,84 @@ def test_a_deactivated_constraint_changes_basis_without_moving() -> None:
     spaced = set_constraint_basis(unit, equal.id, Basis.WITH_NEXT)
     assert [c.basis for c in spaced.constraints] == [Basis.WITH_NEXT]
     assert solve(spaced) == solve(unit)
+
+
+# --- fully constrained boards and degrees of freedom ----------------------
+
+_CARCASS = {"bottom", "top"}
+
+
+def _fully_constrained_by_held_by(unit: Unit) -> set[str]:
+    """The boards the drag arrow treats as fully constrained."""
+    boards = {"bottom", "s1", "s2", "top"}
+    return {
+        board_id
+        for board_id in boards
+        if (held := held_by(unit, board_id)) is None or not held.free
+    }
+
+
+def _status(unit: Unit) -> tuple[int, set[str]]:
+    status = constraint_status(unit)
+    assert status.fully_constrained == _fully_constrained_by_held_by(unit)
+    return status.degrees_of_freedom, set(status.fully_constrained)
+
+
+def test_an_unconstrained_column_keeps_a_freedom_per_shelf() -> None:
+    assert _status(_column()) == (2, _CARCASS)
+
+
+def test_a_lock_fixes_the_shelf_it_reaches() -> None:
+    assert _status(lock(_column(), "A")) == (1, _CARCASS | {"s1"})
+
+
+def test_two_locks_fully_constrain_the_column() -> None:
+    assert _status(lock(lock(_column(), "A"), "B")) == (
+        0,
+        _CARCASS | {"s1", "s2"},
+    )
+
+
+def test_two_equals_fully_constrain_the_column_with_no_lock() -> None:
+    unit = add_equal(add_equal(_column(), ["A", "B"]), ["B", "C"])
+    assert _status(unit) == (0, _CARCASS | {"s1", "s2"})
+
+
+def test_a_deactivated_lock_constrains_nothing() -> None:
+    locked = lock(_column(), "A")
+    off = set_constraint_active(locked, _lock_id(locked, "A"), False)
+    assert _status(off) == (2, _CARCASS)
+
+
+def test_degrees_of_freedom_sum_over_both_elevation_axes() -> None:
+    status = constraint_status(_three_columns())
+    # The dividers d1 and d2 across, and one shelf in each column up.
+    assert status.degrees_of_freedom == 5
+    assert status.fully_constrained == {
+        "left",
+        "right",
+        *(f"{column}-{board}" for column in "LMR" for board in ("bottom", "top")),
+    }
+
+
+def test_a_seam_between_openings_adds_no_freedom() -> None:
+    """A plinth void and a bay meet with no board between them: the seam
+    can move, but it moves no board, so nothing is left to report."""
+    unit = Unit(
+        size_mm=Vec3(600.0, 300.0, 436.0),
+        root=Division(
+            axis=Axis.Z,
+            id="column",
+            items=[
+                Board(thickness_mm=18.0, id="bottom"),
+                Void(size_mm=100.0, id="plinth"),
+                Bay(size_mm=300.0, id="A"),
+                Board(thickness_mm=18.0, id="top"),
+            ],
+        ),
+        depth_axis=Axis.Y,
+        fixed_point=FixedPoint(z="min"),
+    )
+    status = constraint_status(unit)
+    assert status.degrees_of_freedom == 0
+    assert status.fully_constrained == {"bottom", "top"}

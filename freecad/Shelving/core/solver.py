@@ -729,12 +729,31 @@ def fixing_locks(
     ``spaces`` is ``unit`` laid out. A constraint ``without`` names is left
     out, as though it were deactivated. An empty set means the boards and
     outer faces alone fix the face, as for a carcass board, and is also the
-    answer when the layout misses its own locks by more than the engine's
-    tolerance, so a caller treats the board as immovable rather than
-    failing. When several sets fix it, the result is one of them, preferring
-    locks to other constraints.
+    answer when the layout misses its own constraints by more than the
+    engine's tolerance, so a caller treats the board as immovable rather
+    than failing. When several sets fix it, the result is one of them,
+    preferring locks to other constraints.
     Never raises for a board of ``unit`` on a run along ``axis``.
     """
+    system, result = _held_solve(unit, spaces, axis, without)
+    if result is None:
+        return frozenset()
+    freedom = result.freedom({system.board_low[board_id].position: 1.0})
+    if not freedom.determined:
+        return None
+    return frozenset(system.constraint_ids(freedom.fixed_by))
+
+
+def _held_solve(
+    unit: Unit,
+    spaces: Mapping[str, Space],
+    axis: Axis,
+    without: Collection[ConstraintId] = (),
+) -> tuple[_System, axis_solver.Solved | None]:
+    """The system for ``axis`` and its solve with the unit's outer faces
+    held, the active constraints but those ``without`` names, and no
+    minimum widths; ``None`` in place of the solve when the layout misses
+    its own constraints by more than the engine's tolerance."""
     system = _build(unit, spaces, axis)
     relations = [
         *system.structural,
@@ -744,13 +763,49 @@ def fixing_locks(
     ]
     result = axis_solver.solve(system.current_mm, relations, [])
     if isinstance(result, axis_solver.Conflict):
-        # The current layout meets every lock, so only rounding beyond the
-        # engine's tolerance gets here.
-        return frozenset()
-    freedom = result.freedom({system.board_low[board_id].position: 1.0})
-    if not freedom.determined:
-        return None
-    return frozenset(system.constraint_ids(freedom.fixed_by))
+        # The current layout meets every constraint, so only rounding beyond
+        # the engine's tolerance gets here.
+        return system, None
+    return system, result
+
+
+@dataclasses.dataclass(frozen=True)
+class AxisFreedom:
+    """How constrained one axis of a unit is, as :func:`axis_freedom`
+    finds it."""
+
+    # The independent board positions along the axis the active
+    # constraints leave free. A seam where two regions meet with no board
+    # between them counts only through the boards its freedom moves.
+    degrees_of_freedom: int
+    # Every board on a run along the axis whose low face is fixed: exactly
+    # those for which fixing_locks gives a set rather than None.
+    fixed_boards: frozenset[str]
+
+
+def axis_freedom(unit: Unit, spaces: Mapping[str, Space], axis: Axis) -> AxisFreedom:
+    """How constrained ``unit`` is along ``axis``, with the unit's outer
+    faces held and every region free to take any size, from the one solve
+    :func:`fixing_locks` makes, so the two always agree. Each board then
+    costs one projection against that solve's factorization, not a solve of
+    its own.
+
+    ``spaces`` is ``unit`` laid out. A layout that misses its own
+    constraints beyond the engine's tolerance counts as fully constrained,
+    as :func:`fixing_locks` treats it.
+    """
+    system, result = _held_solve(unit, spaces, axis)
+    if result is None:
+        return AxisFreedom(0, frozenset(system.board_low))
+    faces = [{edge.position: 1.0} for edge in system.board_low.values()]
+    return AxisFreedom(
+        result.free_count(faces),
+        frozenset(
+            board_id
+            for board_id, edge in system.board_low.items()
+            if result.freedom({edge.position: 1.0}).determined
+        ),
+    )
 
 
 def _parent_of(region: Region, node_id: str) -> tuple[Division, int] | None:

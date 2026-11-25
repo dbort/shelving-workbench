@@ -48,7 +48,9 @@ from freecad.Shelving.core.scan import elevation_axes
 
 Side = Literal["front", "back"]
 FaceKind = Literal["bay", "void"]
-OutlineRole = Literal["region", "selected", "holding"]
+# "constrained" outlines a fully constrained board, as the Sketcher colors
+# a fully constrained edge.
+OutlineRole = Literal["region", "selected", "holding", "constrained"]
 # A driving dimension is an active Lock's, a deactivated one a deactivated
 # Lock's, and a reference one shows a size nothing locks.
 LabelRole = Literal["driving", "deactivated", "reference"]
@@ -644,6 +646,7 @@ def plan_overlay(
     *,
     selected_items: Collection[str] = (),
     selected_constraints: Collection[ConstraintId] = (),
+    fully_constrained: Collection[str] = (),
 ) -> Overlay:
     """What to draw for ``unit`` solved as ``spaces`` on ``frame``'s face:
     a face per bay and void, an outline per opening and for each selected
@@ -658,9 +661,12 @@ def plan_overlay(
     marked selected, and whose Locks' dimensions are marked selected. A
     board is held by the constraints :func:`~freecad.Shelving.core.edit.held_by`
     names, Locks included, and their openings then take the holding
-    outline. The selected outline wins over a holding one, and an id in
-    ``flagged`` that names nothing draws nothing. ``spaces`` must hold
-    every node of ``unit``. A dimension outside the unit sits a whole
+    outline. Each board ``fully_constrained`` names, as
+    :func:`~freecad.Shelving.core.edit.constraint_status` finds them, takes
+    a "constrained" outline. The selected outline wins over a holding one,
+    and a holding one over a constrained one; an id in ``flagged`` that
+    names nothing draws nothing. ``spaces`` must hold every node of
+    ``unit``. A dimension outside the unit sits a whole
     number of ``outer_row_mm`` rows out from its outer face, so resizing
     the unit moves only the rows past the faces that move; each region
     keeps its place whether its dimension is drawn or not, so one
@@ -693,9 +699,16 @@ def plan_overlay(
     for node, _depth, parent in _walk(unit.root):
         is_selected = node.id in selected
         if isinstance(node, Board):
-            if is_selected and parent is not None:
+            role: OutlineRole | None = None
+            if is_selected:
+                role = "selected"
+            elif node.id in holding:
+                role = "holding"
+            elif node.id in fully_constrained:
+                role = "constrained"
+            if role is not None and parent is not None:
                 inset = _apply_insets(parent.axis, spaces[node.id], node.insets)
-                outlines.append(Outline(frame.rect(inset), "selected"))
+                outlines.append(Outline(frame.rect(inset), role))
             continue
         rect = frame.rect(spaces[node.id])
         if isinstance(node, Bay | Void):

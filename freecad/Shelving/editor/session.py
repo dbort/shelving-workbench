@@ -34,11 +34,13 @@ from freecad.Shelving.container import (
 )
 from freecad.Shelving.core.backs import BackFitError, renamed_back_boards
 from freecad.Shelving.core.edit import (
+    ConstraintStatus,
     EditError,
     Held,
     Measurement,
     add_equal_along,
     add_even_spacing,
+    constraint_status,
     held_by,
     lock,
     measure,
@@ -310,9 +312,9 @@ def _row_kind(constraint: Constraint, unit: Unit, frame: ElevationFrame) -> RowK
 
 
 def _structure_key(region: Region) -> tuple[object, ...]:
-    """What the redundant set depends on in ``region``'s subtree: ids,
-    nesting and axes, leaving out every size, so a drag that only moves
-    boards keeps the key."""
+    """What the redundant set and the constraint status depend on in
+    ``region``'s subtree: ids, nesting and axes, leaving out every size, so
+    a drag that only moves boards keeps the key."""
     if isinstance(region, Division):
         return (
             region.id,
@@ -541,6 +543,10 @@ class Session:
         self._redundant: tuple[tuple[object, ...], frozenset[ConstraintId]] | None = (
             None
         )
+        # The last constraint status, keyed as the redundant set is: the
+        # panel's status line and the view's outlines each read it at every
+        # drag step.
+        self._status: tuple[tuple[object, ...], ConstraintStatus] | None = None
 
     def open(self, schedule: Schedule | None = None) -> None:
         """Add the size fields' properties to the container and start
@@ -712,15 +718,27 @@ class Session:
             )
         return tuple(rows)
 
-    def _redundant_rules(self) -> frozenset[ConstraintId]:
-        key = (
+    def _freedom_key(self) -> tuple[object, ...]:
+        return (
             _structure_key(self.unit.root),
             self.unit.constraints,
             self.unit.fixed_point,
         )
+
+    def _redundant_rules(self) -> frozenset[ConstraintId]:
+        key = self._freedom_key()
         if self._redundant is None or self._redundant[0] != key:
             self._redundant = (key, redundant_rules(self.unit, self.spaces))
         return self._redundant[1]
+
+    def constraint_status(self) -> ConstraintStatus:
+        """:func:`~freecad.Shelving.core.edit.constraint_status` for this
+        session's unit: the degrees of freedom the panel reports and the
+        fully constrained boards the view outlines."""
+        key = self._freedom_key()
+        if self._status is None or self._status[0] != key:
+            self._status = (key, constraint_status(self.unit))
+        return self._status[1]
 
     def constraint_regions(self, constraint_id: ConstraintId) -> tuple[str, ...]:
         """The openings the constraint ``constraint_id`` holds, empty when

@@ -67,6 +67,7 @@ from freecad.Shelving.core.solver import (
     EPS_MM,
     FIXED_FRACTION,
     LayoutSolveError,
+    axis_freedom,
     board_extent_mm,
     constraint_axis,
     constraint_spread_mm,
@@ -883,6 +884,36 @@ def held_by(unit: Unit, board_id: str) -> Held | None:
                     key=lambda c: held_region[c].origin_mm(axis_index) - high_face_mm,
                 )
             )
+
+
+@dataclasses.dataclass(frozen=True)
+class ConstraintStatus:
+    """How constrained a unit's elevation is, as :func:`constraint_status`
+    finds it."""
+
+    # The independent board positions the active constraints leave free,
+    # summed over the elevation's two axes; 0 when the unit is fully
+    # constrained.
+    degrees_of_freedom: int
+    # Every board on a run along the elevation's two axes that held_by
+    # finds held: it gives None, as for every carcass board, or a Held that
+    # is not free.
+    fully_constrained: frozenset[str]
+
+
+def constraint_status(unit: Unit) -> ConstraintStatus:
+    """How constrained ``unit``'s elevation is, with its outer faces held:
+    one freedom query, a single solve, per elevation axis, whatever the
+    number of boards. A board on a run through the depth is never in
+    :attr:`ConstraintStatus.fully_constrained` and adds no freedom."""
+    spaces = solve(unit)
+    degrees_of_freedom = 0
+    fully_constrained: set[str] = set()
+    for axis in elevation_axes(_depth_axis(unit)):
+        found = axis_freedom(unit, spaces, axis)
+        degrees_of_freedom += found.degrees_of_freedom
+        fully_constrained |= found.fixed_boards
+    return ConstraintStatus(degrees_of_freedom, frozenset(fully_constrained))
 
 
 def require_movable(unit: Unit, board_id: str) -> None:

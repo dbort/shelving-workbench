@@ -100,6 +100,14 @@ class _QR:
         # R by rows; row i has len(self.q) entries, zero below the diagonal.
         self.r: list[list[float]] = []
 
+    def copy(self) -> "_QR":
+        """An independent copy, for appending columns without changing this
+        one."""
+        twin = _QR(self.n)
+        twin.q = [list(column) for column in self.q]
+        twin.r = [list(row) for row in self.r]
+        return twin
+
     def project(
         self, a: Sequence[float]
     ) -> tuple[list[float], list[float], list[float]]:
@@ -199,6 +207,28 @@ class Solved:
     # and the solve treats it as absent.
     redundant: Mapping[ConstraintId, frozenset[ConstraintId]]
     _basis: _Basis = field(repr=False, compare=False)
+
+    def free_count(self, expressions: Sequence[Mapping[PositionId, float]]) -> int:
+        """How many independent values ``expressions`` can still take
+        between them near this solution, under the relations and active
+        bounds: the number of degrees of freedom they see. Zero exactly when
+        :meth:`freedom` reports each of them determined; an expression that
+        is a combination of the others or of the constraints adds nothing,
+        and a position no expression names never counts.
+
+        Raises ``ValueError`` for a position :func:`solve` was not given.
+        """
+        basis = self._basis
+        qr = basis.qr.copy()
+        count = 0
+        for expression in expressions:
+            e = _dense(expression, basis.index, "expression")
+            _, residual, coords = qr.project(e)
+            scale = max((abs(x) for x in e), default=0.0)
+            if max((abs(x) for x in residual), default=0.0) > _ZERO * scale:
+                qr.append(coords, residual)
+                count += 1
+        return count
 
     def freedom(self, expression: Mapping[PositionId, float]) -> Freedom:
         """Whether the relations and active bounds determine ``expression``.

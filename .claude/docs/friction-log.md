@@ -1,5 +1,5 @@
 ---
-next_id: friction-033
+next_id: friction-034
 ---
 
 # Friction log
@@ -97,3 +97,16 @@ the papercut and its fix in its message.
   <path>::<name>` for `tests/freecad_view`. Simpler if: a `pixi run`
   task, or a `run-tests.sh` option, ran one test node under its tier's
   environment.
+- `friction-033` - **a Sketcher preference's default in FreeCAD 1.1**: in
+  sh-057 the plan asked for `FullyConstraintElementColor`'s default from
+  the Sketcher's source, which the environment does not hold, and the
+  preference is unset in a fresh configuration. Loading
+  `lib/SketcherGui.so` with `ctypes` to read the static
+  `DrawingParameters` color segfaulted, since its initializers need
+  FreeCAD's application. The workaround disassembled the library with
+  `objdump`, found the `SbColor` constructor call for the symbol in the
+  static initializer, and decoded its three float operands from
+  `.rodata` with a short Python script. Simpler if: a `tools/` script
+  printed a `DrawingParameters` color's default from the installed
+  library, or the GUI test tier offered a fixture that loads `SketcherGui`
+  and reads it.

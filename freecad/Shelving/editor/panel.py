@@ -743,6 +743,9 @@ class EditUnitPanel:
             )
             combo.blockSignals(False)
         self._refresh_basis()
+        self.constraint_list.show_status(
+            self.session.constraint_status().degrees_of_freedom
+        )
         self.constraint_list.show(
             self.session.constraint_rows(), self.session.selected_constraints
         )

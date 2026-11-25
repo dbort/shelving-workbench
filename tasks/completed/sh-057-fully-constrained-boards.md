@@ -15,8 +15,8 @@ constrained", or how many degrees of freedom are left, and updates after
 every edit.
 
 ## Must Have
-- [ ] `pixi run tests` green; `pyrefly check` clean over the changed code.
-- [ ] Core suite, on sh-046's column of 18 mm boards with fixed point
+- [x] `pixi run tests` green; `pyrefly check` clean over the changed code.
+- [x] Core suite, on sh-046's column of 18 mm boards with fixed point
       `min`: bottom, A 300, shelf s1, B 300, shelf s2, C 300, top (972 mm
       tall):
       - with no Lock or constraint, the degrees of freedom are 2, and
@@ -25,21 +25,21 @@ every edit.
       - with A and B locked: 0, with every board counted;
       - with an Equal on A and B and another on B and C, and no Lock: 0;
       - with A locked and its Lock deactivated: 2.
-- [ ] Elevation plan (`tests/test_editor_elevation.py`): every board
+- [x] Elevation plan (`tests/test_editor_elevation.py`): every board
       counted as fully constrained has an outline with role
       `"constrained"`, unless it is selected, when it keeps the
       `"selected"` outline. No other board has one.
-- [ ] 3D view (`tests/freecad_view/`): a `"constrained"` outline is
+- [x] 3D view (`tests/freecad_view/`): a `"constrained"` outline is
       drawn in the View preference `FullyConstraintElementColor`, read
       with the Sketcher's default, and selecting the board replaces it
       with the selection color. The board's own `ShapeAppearance` is
       unchanged throughout the edit.
-- [ ] GUI (`tests/freecad_gui/test_panel.py`): the panel's constraint
+- [x] GUI (`tests/freecad_gui/test_panel.py`): the panel's constraint
       status reads "Fully constrained" for the A-and-B-locked unit and
       "Degrees of freedom: 2" for the unconstrained one. It updates after
       an edit, after Undo inside the edit, and after a constraint is
       turned off in the list.
-- [ ] `README.md`'s glossary has an entry **Fully constrained**.
+- [x] `README.md`'s glossary has an entry **Fully constrained**.
 
 ## Advice
 - **What counts** (user decision): a board is fully constrained when
@@ -76,6 +76,16 @@ every edit.
   constrained color and its "Fully constrained sketch" and degrees of
   freedom messages.
 - **Users never read the log:** the status is in the panel.
+- **Smoke set** (2026-11-25, review round 1 N3): no main user path is
+  added, changed or removed, and no `smoke` test is touched: the outline
+  and the status line ride on Edit Unit's existing paths, so no mark
+  changes.
+- **Outline legibility deferred** (2026-11-25, user decision after
+  manual QA): this task covers the constraint mechanics only. Thicker
+  lines, and telling the constrained outline from the selection by color,
+  board fill or texture, are `bug-030`'s follow-up. `editor.fully_constrained`
+  keeps its legibility expectations as that bug's acceptance check, so a
+  fail on them alone does not block this task.
 - **Manual QA:** one case, `editor.fully_constrained`, for what no test
   judges: on the default light theme and on a dark preference pack, at
   default zoom and on a HiDPI screen, the constrained outline is plainly
@@ -85,21 +95,34 @@ every edit.
   its shelves. Add no setup action.
 
 ## Plan
-- [ ] **Step 1** (`core/axis_solver.py`, `core/solver.py`, `core/edit.py`,
+- [x] **Step 1** (`core/axis_solver.py`, `core/solver.py`, `core/edit.py`,
       their tests): the degrees-of-freedom count and the per-board fully
       constrained set, from one freedom query per axis.
-- [ ] **Step 2** (`editor/elevation.py`, `tests/test_editor_elevation.py`):
+- [x] **Step 2** (`editor/elevation.py`, `tests/test_editor_elevation.py`):
       the `"constrained"` outline role and its precedence.
-- [ ] **Step 3** (`editor/overlay.py`, `editor/view_editor.py`,
+- [x] **Step 3** (`editor/overlay.py`, `editor/view_editor.py`,
       `tests/freecad_view/test_editor_drawing.py`): the color read from
       the View preferences and the outline drawn in it.
-- [ ] **Step 4** (`editor/session.py`, `editor/panel.py`,
+- [x] **Step 4** (`editor/session.py`, `editor/panel.py`,
       `editor/constraint_list.py`, `tests/freecad_gui/test_panel.py`): the
       status line and its refreshes.
-- [ ] **Step 5** (`README.md`, `docs/scope-and-design.md`,
+- [x] **Step 5** (`README.md`, `docs/scope-and-design.md`,
       `.claude/docs/freecad-notes.md`,
       `freecad/Shelving/qa/cases/30-editor.toml`): the glossary entry, the
       Editing section, the preference note, and the
       `editor.fully_constrained` case.
 
 ## Review log
+
+### Round 1: REJECTED
+- **F1: The degrees-of-freedom count includes seams, which disagrees with the Advice and the docs and has no test** (`freecad/Shelving/core/solver.py:786`, `README.md:205`, `docs/scope-and-design.md:389`): `axis_freedom` returns the solve's `degrees_of_freedom`, which counts every engine position, a seam where two regions meet with no board between them included. The Advice counts "independent interior board positions", and the README and scope-and-design say the same. On a unit of bottom, plinth `Void`, `Bay`, top with no constraints, `constraint_status` gives 1 with every board fully constrained, so the panel reports a freedom nothing visible shows. Count only freedom that reaches board positions, or get a user decision to keep seams and correct the docs; either way add a core test pinning the plinth-seam case.
+- **N1: One `freedom()` projection per board** (`freecad/Shelving/core/solver.py:786`): the Advice says one freedom query per axis, not one per board; the code makes one solve per axis and one projection per board, and the `constraint_status` docstring says "one solve". Say which reading applies.
+- **N2: The holding-over-constrained precedence has no test** (`freecad/Shelving/editor/elevation.py:702`): unreachable for boards on `main` today; sh-050 should add the test when boards can hold.
+- **N3: No Smoke set entry in `## Advice`** (`tasks/active/sh-057-fully-constrained-boards.md:79`): the plan predates the obligation; no smoke mark changed, which looks right, but a one-line entry would meet the never-skipped-silently rule.
+- **N4: Line wrap in scope-and-design** (`docs/scope-and-design.md:390`): one line runs past the paragraph's wrap width; re-wrap it.
+
+### Round 2: APPROVED
+- **N1: Ragged docstring wrap** (`freecad/Shelving/core/edit.py:905`): the round 1 N1 rewording left `constraint_status`'s docstring with short broken lines; re-wrap it to the docstring's normal width.
+
+### Round 3: APPROVED
+- **N1: Ragged docstring wrap still open** (`freecad/Shelving/core/edit.py:905`): round 2's N1 is unchanged; `constraint_status`'s docstring still has short broken lines. Left to `/ship`'s doc-hygiene.

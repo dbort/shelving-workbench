@@ -827,3 +827,152 @@ def test_one_dragger_per_session_kept_on_an_old_coin(
     kept = len(view_editor_module.KEPT_ALIVE)
     click_task_button("Close", driver)
     assert len(view_editor_module.KEPT_ALIVE) == kept + 1
+
+
+_CONSTRAINED_PARAM = "FullyConstraintElementColor"
+# The Sketcher's default for it in FreeCAD 1.1.
+_CONSTRAINED_DEFAULT = 0x80CF9EFF
+
+
+@pytest.fixture(params=["the Sketcher's default", "a color of its own"])
+def constrained_color(request: pytest.FixtureRequest) -> Iterator[int]:
+    """The packed fully constrained element color the View preferences
+    give: unset, so the Sketcher's default applies, or set to one of its
+    own, so a test sees it read."""
+    params = FreeCAD.ParamGet(_VIEW_PARAMS)
+    if request.param == "a color of its own":
+        params.SetUnsigned(_CONSTRAINED_PARAM, 0x2040A0FF)
+    else:
+        params.RemUnsigned(_CONSTRAINED_PARAM)
+    yield params.GetUnsigned(_CONSTRAINED_PARAM, _CONSTRAINED_DEFAULT)
+    params.RemUnsigned(_CONSTRAINED_PARAM)
+
+
+def _unpacked(packed: int) -> tuple[float, float, float]:
+    return (
+        ((packed >> 24) & 0xFF) / 255,
+        ((packed >> 16) & 0xFF) / 255,
+        ((packed >> 8) & 0xFF) / 255,
+    )
+
+
+def _board_front(
+    container: FreeCAD.DocumentObject, panel: EditUnitPanel, board_id: str
+) -> list[FreeCAD.Vector]:
+    """The corners of the board ``board_id``'s front face, its insets
+    applied, in document coordinates."""
+    unit = panel.session.unit
+    frame = elevation_frame(unit)
+    space = board_space(unit, panel.session.spaces, board_id)
+    assert space is not None
+    rect = frame.rect(space)
+    placement = _document_placement(container, frame)
+    return [
+        placement.multVec(FreeCAD.Vector(h_mm, v_mm, 0))
+        for h_mm, v_mm in (
+            (rect.h0_mm, rect.v0_mm),
+            (rect.h1_mm, rect.v0_mm),
+            (rect.h1_mm, rect.v1_mm),
+            (rect.h0_mm, rect.v1_mm),
+        )
+    ]
+
+
+def _outline_colors(
+    container: FreeCAD.DocumentObject,
+    panel: EditUnitPanel,
+    corners: list[FreeCAD.Vector],
+) -> list[tuple[float, float, float]]:
+    """The color of each outline drawn along ``corners``; an outline lies
+    in front of the face, so only its in-plane position is compared."""
+    normal = _front_rotation(container, panel).multVec(FreeCAD.Vector(0, 0, 1))
+
+    def flat(point: FreeCAD.Vector) -> FreeCAD.Vector:
+        return point - normal * point.dot(normal)
+
+    return [
+        outline.rgb
+        for outline in overlay_nodes.outlines(editor_of(panel).root)
+        if len(outline.points) >= len(corners)
+        and all(
+            any(
+                (flat(corner) - flat(point)).Length < _TOL_MM
+                for point in outline.points
+            )
+            for corner in corners
+        )
+    ]
+
+
+def _appearances(doc: FreeCAD.Document) -> dict[str, str]:
+    """Each box's ShapeAppearance, as text that compares by value."""
+    return {
+        obj.Name: repr(
+            [
+                (str(m.DiffuseColor), m.Transparency)
+                for m in cast("_Appearance", obj.ViewObject).ShapeAppearance
+            ]
+        )
+        for obj in doc.Objects
+        if obj.TypeId == "Part::Box"
+    }
+
+
+class _Material(Protocol):
+    DiffuseColor: object
+    Transparency: float
+
+
+class _Appearance(Protocol):
+    ShapeAppearance: list[_Material]
+
+
+def test_a_fully_constrained_board_is_outlined_in_the_sketchers_color(
+    unit: FreeCAD.DocumentObject, driver: ViewDriver, constrained_color: int
+) -> None:
+    """The carcass boards are fully constrained and the new shelf is not;
+    selecting a carcass board outlines it in the selection color instead,
+    and no board's own appearance changes."""
+    doc = unit.Document
+    before = _appearances(doc)
+    panel = edit_unit(unit, driver)
+    add_board(panel, "vertical", driver)
+    session = panel.session
+    constrained = session.constraint_status().fully_constrained
+    (shelf,) = {
+        board.id for board in _boards(session.unit.root) if board.id not in constrained
+    }
+    constrained_rgb = _unpacked(constrained_color)
+    for board_id in constrained:
+        colors = _outline_colors(unit, panel, _board_front(unit, panel, board_id))
+        assert len(colors) == 1, (board_id, colors)
+        assert _close_rgb(colors[0], constrained_rgb), (board_id, colors)
+    assert not any(
+        _close_rgb(rgb, constrained_rgb)
+        for rgb in _outline_colors(unit, panel, _board_front(unit, panel, shelf))
+    )
+    selected = sorted(constrained)[0]
+    session.select(selected)
+    panel._refresh()
+    (selected_rgb,) = _outline_colors(unit, panel, _board_front(unit, panel, selected))
+    assert _close_rgb(selected_rgb, _rgb("SelectionColor", 0x1CAD1CFF))
+    assert not _close_rgb(selected_rgb, constrained_rgb)
+    assert {
+        name: text for name, text in _appearances(doc).items() if name in before
+    } == before
+    click_task_button("Close", driver)
+    assert {
+        name: text for name, text in _appearances(doc).items() if name in before
+    } == before
+
+
+def _boards(region: Region) -> list[Board]:
+    if not isinstance(region, Division):
+        return []
+    found: list[Board] = []
+    for item in region.items:
+        if isinstance(item, Board):
+            found.append(item)
+        else:
+            found.extend(_boards(item))
+    return found

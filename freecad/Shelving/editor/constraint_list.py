@@ -1,6 +1,6 @@
-"""The task panel's Constraints group: one row per constraint, Locks
-included, in the order they were made, in the manner of the Sketcher's
-constraint list.
+"""The task panel's Constraints group: a line saying how constrained the
+unit is, then one row per constraint, Locks included, in the order they
+were made, in the manner of the Sketcher's constraint list.
 
 The widget holds no layout logic. :meth:`ConstraintList.show` takes the
 session's row snapshot and selection, and every user action goes out
@@ -51,6 +51,10 @@ REDUNDANT_TIP = (
     "Redundant: other locks and constraints already fix what this one fixes."
 )
 DELETE_TIP = "Delete"
+FULLY_CONSTRAINED_TEXT = "Fully constrained"
+# The count stays out of the sentence's grammar, so the line is one
+# translatable string whatever the number.
+DEGREES_OF_FREEDOM_TEXT = "Degrees of freedom: {count}"
 _DELETE_ICON = ":/icons/edit-delete.svg"
 # The most rows the list grows to before it scrolls.
 _MAX_VISIBLE_ROWS = 8
@@ -81,6 +85,14 @@ def row_text(row: ConstraintRow) -> str:
         return name
     size = FreeCAD.Units.Quantity(row.size_mm, FreeCAD.Units.Length).UserString
     return f"{name} ({size})"
+
+
+def status_text(degrees_of_freedom: int) -> str:
+    """The status line for a unit with ``degrees_of_freedom`` left, as the
+    Sketcher's solver messages word it: "Fully constrained" at 0."""
+    if degrees_of_freedom == 0:
+        return FULLY_CONSTRAINED_TEXT
+    return DEGREES_OF_FREEDOM_TEXT.format(count=degrees_of_freedom)
 
 
 def kind_icon(
@@ -145,6 +157,8 @@ class ConstraintList:
         self._actions = actions
         self.box = QtWidgets.QGroupBox("Constraints")
         layout = QtWidgets.QVBoxLayout(self.box)
+        self.status = QtWidgets.QLabel()
+        layout.addWidget(self.status)
         self.tree = QtWidgets.QTreeWidget()
         self.tree.setColumnCount(3)
         self.tree.setHeaderHidden(True)
@@ -222,6 +236,11 @@ class ConstraintList:
             self.tree.blockSignals(False)
         self.delete_deactivated_button.setEnabled(any(not r.active for r in rows))
         self._fit_height()
+
+    def show_status(self, degrees_of_freedom: int) -> None:
+        """Show :func:`status_text` for ``degrees_of_freedom`` above the
+        rows."""
+        self.status.setText(status_text(degrees_of_freedom))
 
     def _rebuild(self, rows: Sequence[ConstraintRow]) -> None:
         self.tree.clear()

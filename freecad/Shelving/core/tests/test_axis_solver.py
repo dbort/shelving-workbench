@@ -158,6 +158,31 @@ def test_freedom_counts_an_active_bound() -> None:
     assert held.fixed_by == _ids("floor", "min")
 
 
+def test_free_count_counts_independent_free_expressions() -> None:
+    every = [{X0: 1.0}, {X1: 1.0}, {X2: 1.0}, {X3: 1.0}]
+    assert _solved(solve(CURRENT_MM, [], [])).free_count(every) == 4
+    chained = [_fix("floor", X0, 0.0), _diff("a", X0, X1, 10.0)]
+    assert _solved(solve(CURRENT_MM, chained, [])).free_count(every) == 2
+    implied = [*chained, _diff("b", X1, X2, 15.0), _diff("sum", X0, X2, 25.0)]
+    result = _solved(solve(CURRENT_MM, implied, []))
+    assert result.free_count(every) == 1
+    # X3 alone is free, and an expression repeating it or a determined one
+    # adds nothing.
+    assert result.free_count([{X3: 1.0}, {X3: 2.0}, {X1: 1.0}]) == 1
+    assert result.free_count([{X1: 1.0}, {X2: 1.0, X0: -1.0}]) == 0
+    bounded = _solved(
+        solve(
+            CURRENT_MM,
+            [_fix("floor", X0, 0.0)],
+            [_bound("min", X0, X1, 10.0)],
+            [Target(X1, 2.0)],
+        )
+    )
+    assert bounded.free_count(every) == 2
+    # The count leaves the solve's own freedom queries as they were.
+    assert not result.freedom({X3: 1.0}).determined
+
+
 def test_freedom_rejects_an_unknown_position() -> None:
     result = _solved(solve(CURRENT_MM, [], []))
     with pytest.raises(ValueError, match="nowhere"):
