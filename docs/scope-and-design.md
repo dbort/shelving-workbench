@@ -380,17 +380,19 @@ re-solves an Equal or even spacing, since the relation itself changes; a
 lock's switch moves nothing. The spacing choice is offered only when every
 opening it names has a board after it.
 
-How constrained the unit is reads as the Sketcher shows a sketch's
-state. A board whose place the active locks and constraints fix, with the
-unit's outer faces held, is outlined in the Sketcher's
+How constrained the unit is reads as the Sketcher shows a sketch's state.
+A board whose place the active locks and constraints fix, with the unit's
+outer faces held, is outlined in the Sketcher's
 `FullyConstraintElementColor`, the color of a fully constrained edge; the
 carcass boards always are, since the unit's size places them. It is the
 same freedom test that withholds a held board's drag arrow. The outline is
 drawn over the board and never changes the board's own appearance, and a
-selected board takes the selection outline instead. One line above the constraint list reads "Fully constrained",
-as the Sketcher's solver message does, or "Degrees of freedom: N", where N
-counts the independent board positions the locks and constraints leave
-free along the elevation's width and height together. Keeping the count
+selected board takes the selection outline instead. One line above the
+constraint list reads "Fully constrained", as the Sketcher's solver
+message does, or "Degrees of freedom: N", where N counts the independent
+board positions the locks and constraints leave free along the elevation's
+width and height together; a seam where two openings meet with no board
+between them counts only through the boards it moves. Keeping the count
 out of the sentence's grammar keeps the line one translatable string.
 Redundant and conflicting constraints are reported on their rows and by
 refusals, so the line shows neither. Both the outlines and the count come

@@ -76,6 +76,10 @@ every edit.
   constrained color and its "Fully constrained sketch" and degrees of
   freedom messages.
 - **Users never read the log:** the status is in the panel.
+- **Smoke set** (2026-11-25, review round 1 N3): no main user path is
+  added, changed or removed, and no `smoke` test is touched: the outline
+  and the status line ride on Edit Unit's existing paths, so no mark
+  changes.
 - **Manual QA:** one case, `editor.fully_constrained`, for what no test
   judges: on the default light theme and on a dark preference pack, at
   default zoom and on a HiDPI screen, the constrained outline is plainly

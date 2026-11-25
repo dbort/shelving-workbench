@@ -45,6 +45,7 @@ from freecad.Shelving.core.layout import (
     Region,
     RunEnd,
     Unit,
+    Void,
     constraint_regions,
     is_locked,
     region_lock,
@@ -952,3 +953,26 @@ def test_degrees_of_freedom_sum_over_both_elevation_axes() -> None:
         "right",
         *(f"{column}-{board}" for column in "LMR" for board in ("bottom", "top")),
     }
+
+
+def test_a_seam_between_openings_adds_no_freedom() -> None:
+    """A plinth void and a bay meet with no board between them: the seam
+    can move, but it moves no board, so nothing is left to report."""
+    unit = Unit(
+        size_mm=Vec3(600.0, 300.0, 436.0),
+        root=Division(
+            axis=Axis.Z,
+            id="column",
+            items=[
+                Board(thickness_mm=18.0, id="bottom"),
+                Void(size_mm=100.0, id="plinth"),
+                Bay(size_mm=300.0, id="A"),
+                Board(thickness_mm=18.0, id="top"),
+            ],
+        ),
+        depth_axis=Axis.Y,
+        fixed_point=FixedPoint(z="min"),
+    )
+    status = constraint_status(unit)
+    assert status.degrees_of_freedom == 0
+    assert status.fully_constrained == {"bottom", "top"}

@@ -774,9 +774,9 @@ class AxisFreedom:
     """How constrained one axis of a unit is, as :func:`axis_freedom`
     finds it."""
 
-    # The independent positions along the axis the active constraints leave
-    # free: boards' low faces, and seams where two regions meet with no
-    # board between them.
+    # The independent board positions along the axis the active
+    # constraints leave free. A seam where two regions meet with no board
+    # between them counts only through the boards its freedom moves.
     degrees_of_freedom: int
     # Every board on a run along the axis whose low face is fixed: exactly
     # those for which fixing_locks gives a set rather than None.
@@ -786,7 +786,9 @@ class AxisFreedom:
 def axis_freedom(unit: Unit, spaces: Mapping[str, Space], axis: Axis) -> AxisFreedom:
     """How constrained ``unit`` is along ``axis``, with the unit's outer
     faces held and every region free to take any size, from the one solve
-    :func:`fixing_locks` makes, so the two always agree.
+    :func:`fixing_locks` makes, so the two always agree. Each board then
+    costs one projection against that solve's factorization, not a solve of
+    its own.
 
     ``spaces`` is ``unit`` laid out. A layout that misses its own
     constraints beyond the engine's tolerance counts as fully constrained,
@@ -795,8 +797,9 @@ def axis_freedom(unit: Unit, spaces: Mapping[str, Space], axis: Axis) -> AxisFre
     system, result = _held_solve(unit, spaces, axis)
     if result is None:
         return AxisFreedom(0, frozenset(system.board_low))
+    faces = [{edge.position: 1.0} for edge in system.board_low.values()]
     return AxisFreedom(
-        result.degrees_of_freedom,
+        result.free_count(faces),
         frozenset(
             board_id
             for board_id, edge in system.board_low.items()
