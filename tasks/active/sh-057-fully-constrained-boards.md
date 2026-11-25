@@ -123,3 +123,6 @@ every edit.
 
 ### Round 2: APPROVED
 - **N1: Ragged docstring wrap** (`freecad/Shelving/core/edit.py:905`): the round 1 N1 rewording left `constraint_status`'s docstring with short broken lines; re-wrap it to the docstring's normal width.
+
+### Round 3: APPROVED
+- **N1: Ragged docstring wrap still open** (`freecad/Shelving/core/edit.py:905`): round 2's N1 is unchanged; `constraint_status`'s docstring still has short broken lines. Left to `/ship`'s doc-hygiene.
