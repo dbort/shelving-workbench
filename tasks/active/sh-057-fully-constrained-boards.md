@@ -80,6 +80,12 @@ every edit.
   added, changed or removed, and no `smoke` test is touched: the outline
   and the status line ride on Edit Unit's existing paths, so no mark
   changes.
+- **Outline legibility deferred** (2026-11-25, user decision after
+  manual QA): this task covers the constraint mechanics only. Thicker
+  lines, and telling the constrained outline from the selection by color,
+  board fill or texture, are `bug-030`'s follow-up. `editor.fully_constrained`
+  keeps its legibility expectations as that bug's acceptance check, so a
+  fail on them alone does not block this task.
 - **Manual QA:** one case, `editor.fully_constrained`, for what no test
   judges: on the default light theme and on a dark preference pack, at
   default zoom and on a HiDPI screen, the constrained outline is plainly

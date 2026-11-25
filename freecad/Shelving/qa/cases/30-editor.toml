@@ -726,9 +726,11 @@ color at a glance."""
   instruction = ["Click the middle shelf of the leftmost column."]
   expected = """
 The shelf's outline turns the selection color and the other shelves of the
-column stay light green. The openings holding the shelf are outlined in
-red. Selection, red and light green are three plainly different colors,
-and none of them is mistaken for an opening's thin gray outline."""
+column stay light green. Only the opening just below the shelf is outlined
+in red: the unlocked top opening leaves the shelf room to move up, so
+unlocking that one opening is what would free it. Selection, red and light
+green are three plainly different colors, and none of them is mistaken for
+an opening's thin gray outline."""
 
   [[case.step]]
   id = "hidpi"

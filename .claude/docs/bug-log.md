@@ -1,5 +1,5 @@
 ---
-next_id: bug-030
+next_id: bug-033
 ---
 
 # Bug log
@@ -158,3 +158,40 @@ log happens only when the user asks.
   says "(Command-click on a Mac)" and the rest do not. Found in sh-055's
   manual QA (`editor.constraints`, step undo). Fix: `ad hoc`; a wording
   pass over the case files, plus a line in `.claude/docs/qa-wizard.md`.
+- `bug-030` - **the editor's outlines are hard to read and to tell
+  apart**: on a large HiDPI screen the thin outlines are hard to see at
+  all, and a fully constrained board's light green
+  (`FullyConstraintElementColor`) is too close to the selection color to
+  tell apart at a glance. On the user's FreeCAD 1.1.4 the selection color
+  reads light blue, which bears on `bug-022`. Found in sh-057's manual QA
+  (`editor.fully_constrained`, steps lock_column and select_shelf). The
+  user asked for thicker lines everywhere and suggested coloring the
+  boards or adding textures to tell the states apart. Fix: `sh-XXX task`;
+  line widths, colors and any fill or texture together are a design
+  decision that should follow the Sketcher where it can, and
+  `editor.fully_constrained`'s legibility expectations are its acceptance
+  check.
+- `bug-031` - **the QA Wizard's Pass, Fail and Skip buttons can stop
+  responding**: in sh-057's manual QA on FreeCAD 1.1.4, on the step after
+  `editor.fully_constrained`'s hidpi step, the verdict buttons clicked but
+  recorded nothing, and Back to cases still worked. That step (dark) has the
+  tester apply a dark preference pack. Recording all six steps of that
+  case offscreen works, so the trigger is likely the preference pack or
+  the move between screens. `QAWizard.record` in `freecad/Shelving/qa/dock.py`
+  returns silently when it finds no case or no current step, and an
+  exception raised in a Qt slot shows only in the Report view, so either
+  looks like a dead button. Root cause not traced; the Report view's
+  traceback, if any, is the next thing to read. Fix: `ad hoc` once the
+  cause is known.
+- `bug-032` - **the Edit Unit panel keeps the previous theme's background
+  after a theme switch**: with the panel open, switching from a dark
+  preference pack to a light one leaves its background dark with black
+  text, and switching back leaves it light with light text. Reported by the
+  user during sh-057's manual QA on FreeCAD 1.1.4. No code under
+  `freecad/Shelving/editor/` sets a palette or a stylesheet; the one theme
+  color it reads is the constraint list's `Base`, captured when a row's
+  icon tile is drawn, which explains stale icon tiles but not the whole
+  background. Root cause not traced: whether FreeCAD repolishes an open
+  task panel's form on a theme change, and whether the Sketcher's panels
+  show the same, is the first thing to check. Fix: `ad hoc` if the form
+  only needs repolishing on a style change; otherwise `sh-XXX task`.
